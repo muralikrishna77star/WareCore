@@ -1,15 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 
 export default async function AdminPage() {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('user_profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
 
   const [companies, warehouses, suppliers, customers, materialTypes, materialSizes, users] = await Promise.all([
     supabase.from('companies').select('*').order('name'),

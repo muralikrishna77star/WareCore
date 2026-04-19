@@ -33,11 +33,8 @@ export default function AdminUserInviteForm({ companies, warehouses }: Props) {
     setLoading(true); setError(''); setSuccess('')
     const supabase = createClient()
 
-    // Generate a cryptographically secure temp password — never displayed to the user
-    const randomBytes = new Uint8Array(24)
-    crypto.getRandomValues(randomBytes)
-    const tempPassword = btoa(String.fromCharCode(...randomBytes)).replace(/[+/=]/g, '') + 'A1!'
-
+    // Create the auth user with a temp password — they should reset it
+    const tempPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase() + '!1'
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: form.email,
       password: tempPassword,
@@ -55,12 +52,9 @@ export default function AdminUserInviteForm({ companies, warehouses }: Props) {
         warehouse_id: form.warehouse_id || null,
       })
       if (profileErr) { setError(profileErr.message); setLoading(false); return }
-
-      // Immediately send a password reset email so the user sets their own password
-      await supabase.auth.resetPasswordForEmail(form.email)
     }
 
-    setSuccess(`User ${form.email} created. A confirmation and password-reset email has been sent to them.`)
+    setSuccess(`User ${form.email} created. They will receive a confirmation email. Temp password: ${tempPassword}`)
     setLoading(false)
   }
 

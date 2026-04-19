@@ -29,9 +29,7 @@ export function formatCurrency(amount: number) {
 
 export function generateReferenceNumber(prefix: string) {
   const timestamp = Date.now().toString(36).toUpperCase()
-  const randomBytes = new Uint8Array(4)
-  crypto.getRandomValues(randomBytes)
-  const random = Array.from(randomBytes).map((b) => b.toString(36)).join('').toUpperCase().substring(0, 6)
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase()
   return `${prefix}-${timestamp}-${random}`
 }
 
