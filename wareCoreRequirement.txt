@@ -1,0 +1,260 @@
+You are a senior full-stack architect and product engineer.
+
+Build a production-ready Warehouse Management System (WMS) for a steel processing business with multiple sister companies.
+
+========================================
+1. PROJECT OVERVIEW
+========================================
+Design a centralized warehouse and inventory management system to handle operations across multiple steel-related companies.
+
+The system must manage:
+- Inventory and warehouse tracking
+- Material inward and outward movement
+- Job work (outsourcing) tracking
+- Inter-company stock transfers
+- Sales and dispatch tracking
+
+NOTE:
+- Do NOT include procurement workflows
+- Inventory is created only via purchase bill entry
+
+========================================
+2. CORE OBJECTIVES
+========================================
+- Centralized system for 3–4 sister companies
+- Real-time stock visibility
+- Replace Excel/manual tracking
+- Track stock across warehouses and vendors
+- Provide dashboards and reporting
+
+========================================
+3. KEY MODULES
+========================================
+
+----------------------------------------
+A. BILL ENTRY & STOCK INWARD
+----------------------------------------
+- Manual purchase bill entry
+Fields:
+- Supplier Name
+- Bill Number
+- Date
+- Material Type (CR, GI, GA, HR Coil, Paint, Scrap, etc.)
+- Size (e.g., 0.80x121, 1.40x1165, Over Width)
+- Quantity (in tons or units)
+
+Logic:
+- On bill entry → auto-add stock to selected company + warehouse
+
+----------------------------------------
+B. INVENTORY MANAGEMENT
+----------------------------------------
+- Multi-company support
+- Multi-warehouse support
+
+Stock categorization:
+- Company
+- Warehouse
+- Product Type
+- Size/specification
+
+Features:
+- Real-time stock availability
+- Stock summary view
+- Filter by company / warehouse / size
+
+----------------------------------------
+C. MATERIAL IN / OUT LOGS
+----------------------------------------
+Track ALL movements:
+
+INWARD:
+- Purchase entry
+- Vendor returns
+
+OUTWARD:
+- Sales dispatch
+- Job work dispatch
+- Inter-company transfer
+
+Each log must include:
+- Date
+- Reference number
+- Material details
+- Quantity
+
+Maintain full audit trail.
+
+----------------------------------------
+D. INTER-COMPANY TRANSFERS
+----------------------------------------
+- Transfer stock between companies
+
+Fields:
+- Source company
+- Destination company
+- Material
+- Size
+- Quantity
+- Reference details
+
+Requirements:
+- Reduce stock from source
+- Add stock to destination
+- Maintain audit logs
+
+----------------------------------------
+E. JOB WORK / OUTSOURCING
+----------------------------------------
+- Send materials to vendors for processing
+
+Track:
+- Material sent
+- Expected return
+- Actual received material
+
+Maintain:
+- Check-out entries
+- Check-in entries
+- Pending material at vendor
+
+----------------------------------------
+F. SALES & DISPATCH
+----------------------------------------
+- Track outward finished goods
+
+Fields:
+- Customer details
+- Product details
+- Quantity
+- Invoice reference
+
+Logic:
+- Reduce stock on dispatch
+
+----------------------------------------
+G. DASHBOARD
+----------------------------------------
+Create a unified dashboard showing:
+
+- Total stock (overall + company-wise)
+- Warehouse-wise stock
+- Stock at vendors
+- Material movement summary
+- Sales summary
+- Purchase-based stock history
+
+----------------------------------------
+H. USER ROLES & ACCESS
+----------------------------------------
+Roles:
+
+1. Admin
+   - Full access to all companies
+
+2. Company Manager
+   - Access only assigned company
+
+3. Warehouse Manager / Sales Manager
+   - Operational access
+
+4. Accounts / Billing Staff
+   - Bill entry + reporting
+
+Implement role-based access control.
+
+========================================
+4. PLATFORMS
+========================================
+
+A. Web Application
+- Full system control
+- Dashboard + reporting
+
+B. Mobile Application (via Capacitor.js)
+- Android + iOS support
+- Features:
+  - Stock lookup
+  - Material entry (inward/outward)
+  - Job work updates
+  - Quick warehouse actions
+
+========================================
+5. UI/UX REQUIREMENTS
+========================================
+- Simple and fast interface
+- Optimized for warehouse staff
+- Mobile-first design
+- Minimal training required
+
+========================================
+6. WEBSITE (PUBLIC)
+========================================
+Dynamic website with:
+- Business overview
+- Product showcase:
+  - Steel channels
+  - Sheets
+  - Custom fabrication
+- Inquiry/contact form
+- Admin editable content
+
+========================================
+7. TECH STACK (MANDATORY)
+========================================
+- Frontend: Next.js
+- Backend: Supabase (PostgreSQL + Auth + APIs)
+- Mobile: Capacitor.js
+- Hosting: Vercel (frontend) + Supabase
+
+========================================
+8. DATA MODEL (IMPORTANT)
+========================================
+Design normalized tables for:
+
+- Companies
+- Warehouses
+- Suppliers
+- Customers
+- Materials (type, size)
+- Purchase Bills
+- Stock Ledger (central table)
+- Transfers
+- Job Work
+- Dispatch/Sales
+
+IMPORTANT:
+- Use STOCK LEDGER approach (not static stock)
+- Every movement = ledger entry
+
+========================================
+9. FUTURE EXTENSIONS (Design Ready)
+========================================
+Keep architecture ready for:
+- Barcode / QR scanning
+- GST billing integration
+- Low stock alerts
+- WhatsApp notifications
+- Advanced analytics
+
+========================================
+10. OUTPUT EXPECTATION
+========================================
+Deliver:
+
+1. Full database schema (SQL)
+2. API structure
+3. Frontend pages (Next.js)
+4. Role-based auth system
+5. Mobile-ready APIs
+6. Deployment steps (Vercel + Supabase)
+
+Write clean, scalable, production-ready code.
+
+========================================
+
+Start with:
+1. Database schema
+2. Then backend APIs
+3. Then frontend
+4. Then deployment
