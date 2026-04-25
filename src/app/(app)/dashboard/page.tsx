@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DASHBOARD_STATS_QUERY, RECENT_MOVEMENTS_QUERY } from '@/lib/hasura/queries'
 import { formatNumber } from '@/lib/utils'

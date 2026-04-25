@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   STOCK_STATEMENT_QUERY,

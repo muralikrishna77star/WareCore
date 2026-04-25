@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import AdminUserInviteForm from './AdminUserInviteForm'
 import { hasuraQuery } from '@/lib/hasura/server'

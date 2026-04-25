@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { hasuraQuery } from '@/lib/hasura/server'
 import { REPORTS_QUERY } from '@/lib/hasura/queries'
 import Link from 'next/link'

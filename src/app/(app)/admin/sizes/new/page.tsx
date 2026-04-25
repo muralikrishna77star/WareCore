@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import AdminSizeForm from './AdminSizeForm'
 import { hasuraQuery } from '@/lib/hasura/server'

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { formatDate, getEntryTypeLabel } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { STOCK_LEDGER_FILTERED_QUERY, ACTIVE_COMPANIES_QUERY } from '@/lib/hasura/queries'

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'

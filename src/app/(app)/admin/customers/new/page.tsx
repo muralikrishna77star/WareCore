@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import AdminEntityForm from '../../AdminEntityForm'
 import { hasuraQuery } from '@/lib/hasura/server'
