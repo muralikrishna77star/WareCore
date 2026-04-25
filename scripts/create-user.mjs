@@ -62,7 +62,7 @@ const INSERT_USER = `
       }
       on_conflict: {
         constraint: user_profiles_email_key
-        update_columns: [full_name, role, is_active]
+        update_columns: [full_name, role, is_active, password_hash]
       }
     ) {
       id

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || ''
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || ''
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || ''
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || ''
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET?.trim() || ''
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
+const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL?.trim() || ''
+const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET?.trim() || ''
 
 const FIND_USER_BY_EMAIL = `
   query FindUserByEmail($email: String!) {
@@ -30,19 +30,28 @@ interface GoogleUserInfo {
 }
 
 async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse | null> {
+  const redirectUri = `${APP_URL.trim()}/api/auth/google/callback`
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: `${APP_URL}/api/auth/google/callback`,
+      client_id: GOOGLE_CLIENT_ID.trim(),
+      client_secret: GOOGLE_CLIENT_SECRET.trim(),
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
   })
-  if (!res.ok) return null
-  return res.json()
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '')
+    console.error('[Google OAuth] token exchange failed', res.status, errBody)
+    return null
+  }
+  const json = await res.json()
+  if (!json.access_token) {
+    console.error('[Google OAuth] no access_token in response', JSON.stringify(json))
+  }
+  return json
 }
 
 async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo | null> {

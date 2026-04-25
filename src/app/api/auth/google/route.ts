@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || ''
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || ''
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
 
 export async function GET() {
   if (!GOOGLE_CLIENT_ID) {
