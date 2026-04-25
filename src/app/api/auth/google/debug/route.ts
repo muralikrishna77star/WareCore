@@ -6,12 +6,14 @@ export async function GET() {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || ''
 
   return NextResponse.json({
+    deployed_at: new Date().toISOString(),
     app_url: appUrl,
     redirect_uri: `${appUrl}/api/auth/google/callback`,
     client_id_set: !!clientId,
     client_id_last4: clientId.slice(-4),
     client_secret_set: !!clientSecret,
     client_secret_last4: clientSecret.slice(-4),
+    client_secret_length: clientSecret.length,
     hasura_url_set: !!process.env.NEXT_PUBLIC_HASURA_URL,
     hasura_secret_set: !!process.env.HASURA_ADMIN_SECRET,
     node_env: process.env.NODE_ENV,
