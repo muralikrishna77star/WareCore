@@ -21,6 +21,7 @@ const FIND_USER_BY_EMAIL = `
 interface GoogleTokenResponse {
   access_token: string
   token_type: string
+  _google_error?: string
 }
 
 interface GoogleUserInfo {
@@ -45,11 +46,18 @@ async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse 
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')
     console.error('[Google OAuth] token exchange failed', res.status, errBody)
-    return null
+    // Parse Google error description for debugging
+    try {
+      const parsed = JSON.parse(errBody)
+      return { _google_error: parsed.error_description || parsed.error || errBody } as never
+    } catch {
+      return { _google_error: errBody } as never
+    }
   }
   const json = await res.json()
   if (!json.access_token) {
     console.error('[Google OAuth] no access_token in response', JSON.stringify(json))
+    return { _google_error: json.error_description || json.error || 'no_access_token' } as never
   }
   return json
 }
@@ -103,7 +111,8 @@ export async function GET(request: NextRequest) {
 
   const tokens = await exchangeCodeForTokens(code)
   if (!tokens?.access_token) {
-    return redirectWithError('token_failed')
+    const googleErr = encodeURIComponent((tokens as { _google_error?: string })?._google_error || 'unknown')
+    return NextResponse.redirect(`${APP_URL}/login?error=token_failed&detail=${googleErr}`)
   }
 
   const googleUser = await getGoogleUserInfo(tokens.access_token)
