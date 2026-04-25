@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: warecore-postgres
+    environment:
+      POSTGRES_DB: warecore
+      POSTGRES_USER: warecore
+      POSTGRES_PASSWORD: warecore_password_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warecore"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - warecore-network
+
+  hasura:
+    image: hasura/graphql-engine:latest
+    container_name: warecore-hasura
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HASURA_GRAPHQL_DATABASE_URL: postgresql://warecore:warecore_password_dev@postgres:5432/warecore
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
+      HASURA_GRAPHQL_DEV_MODE: "true"
+      HASURA_GRAPHQL_ADMIN_SECRET: warecore_admin_secret_dev
+      HASURA_GRAPHQL_JWT_SECRET: '{"type":"HS256","key":"your-secret-key-change-in-production"}'
+    ports:
+      - "8080:8080"
+    networks:
+      - warecore-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  next:
+    build:
+      context: .
+      dockerfile: Dockerfile.next
+    container_name: warecore-next
+    depends_on:
+      - hasura
+    environment:
+      NEXT_PUBLIC_HASURA_URL: http://localhost:8080/v1/graphql
+      HASURA_ADMIN_SECRET: warecore_admin_secret_dev
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - warecore-network
+    command: npm run dev
+
+volumes:
+  postgres_data:
+
+networks:
+  warecore-network:
+    driver: bridge

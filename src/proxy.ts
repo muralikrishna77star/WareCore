@@ -1,64 +1,59 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifySessionCookie } from '@/lib/auth/session'
+
+const PUBLIC_PATHS = ['/', '/login', '/products', '/contact', '/about']
+
+const APP_PATH_PREFIXES = [
+  '/dashboard',
+  '/bills',
+  '/inventory',
+  '/movements',
+  '/transfers',
+  '/jobwork',
+  '/dispatch',
+  '/reports',
+  '/admin',
+]
+
+function isAppPath(pathname: string): boolean {
+  return APP_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function isPublicPath(pathname: string): boolean {
+  return (
+    PUBLIC_PATHS.includes(pathname) ||
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon')
+  )
+}
 
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
+  const session = await verifySessionCookie(request)
 
-  // Public paths that don't require auth
-  const publicPaths = ['/', '/login', '/products', '/contact', '/about']
-  const isPublicPath = publicPaths.some(p => pathname === p || pathname.startsWith('/api/'))
-
-  // App paths that require auth
-  const isAppPath = pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/bills') ||
-    pathname.startsWith('/inventory') ||
-    pathname.startsWith('/movements') ||
-    pathname.startsWith('/transfers') ||
-    pathname.startsWith('/jobwork') ||
-    pathname.startsWith('/dispatch') ||
-    pathname.startsWith('/reports') ||
-    pathname.startsWith('/admin')
-
-  if (!user && isAppPath) {
+  if (!session && isAppPath(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && pathname === '/login') {
+  if (session && pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  // Require auth for /api/graphql
+  if (pathname === '/api/graphql' && !session) {
+    return NextResponse.json({ errors: [{ message: 'Unauthorized' }] }, { status: 401 })
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { CREATE_COMPANY_MUTATION } from '@/lib/hasura/queries'
 
 export default function AdminCompanyForm() {
   const router = useRouter()
@@ -18,8 +19,7 @@ export default function AdminCompanyForm() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase.from('companies').insert({
+    const { error: err } = await hasuraFetch(CREATE_COMPANY_MUTATION, {
       name: form.name,
       code: form.code,
       short_name: form.short_name || null,

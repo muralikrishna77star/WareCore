@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { TRANSFERS_QUERY } from '@/lib/hasura/queries'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -10,20 +11,8 @@ const statusColors: Record<string, string> = {
 }
 
 export default async function TransfersPage() {
-  const supabase = await createClient()
-
-  const { data: transfers } = await supabase
-    .from('transfers')
-    .select(`
-      id, transfer_date, status, notes, created_at,
-      from_company:companies!transfers_from_company_id_fkey(name, code),
-      to_company:companies!transfers_to_company_id_fkey(name, code),
-      from_warehouse:warehouses!transfers_from_warehouse_id_fkey(name),
-      to_warehouse:warehouses!transfers_to_warehouse_id_fkey(name),
-      transfer_items(quantity, material_types(name), material_sizes(size_label), size_label)
-    `)
-    .order('transfer_date', { ascending: false })
-    .limit(50)
+  const result = await hasuraQuery(TRANSFERS_QUERY)
+  const transfers = result.transfers ?? []
 
   return (
     <div className="space-y-6">
@@ -63,24 +52,20 @@ export default async function TransfersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {transfers.map((t) => {
-                  const fromCo = t.from_company as { name: string; code: string } | null
-                  const toCo = t.to_company as { name: string; code: string } | null
-                  const fromWh = t.from_warehouse as { name: string } | null
-                  const toWh = t.to_warehouse as { name: string } | null
-                  const items = (t.transfer_items ?? []) as Array<{ quantity: number; material_types: { name: string } | null; material_sizes: { label: string } | null; size_label: string | null }>
-                  const totalQty = items.reduce((s, i) => s + Number(i.quantity), 0)
+                {transfers.map((t: any) => {
+                  const items = t.transfer_items ?? []
+                  const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
 
                   return (
                     <tr key={t.id} className="hover:bg-gray-50">
                       <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(t.transfer_date)}</td>
                       <td className="px-6 py-3">
-                        <p className="font-medium text-gray-900">{fromCo?.code || '—'}</p>
-                        <p className="text-xs text-gray-500">{fromWh?.name || '—'}</p>
+                        <p className="font-medium text-gray-900">{t.companies_from?.code || '—'}</p>
+                        <p className="text-xs text-gray-500">{t.warehouses_from?.name || '—'}</p>
                       </td>
                       <td className="px-6 py-3">
-                        <p className="font-medium text-gray-900">{toCo?.code || '—'}</p>
-                        <p className="text-xs text-gray-500">{toWh?.name || '—'}</p>
+                        <p className="font-medium text-gray-900">{t.companies_to?.code || '—'}</p>
+                        <p className="text-xs text-gray-500">{t.warehouses_to?.name || '—'}</p>
                       </td>
                       <td className="px-6 py-3">
                         <p className="text-gray-700">{items.length} item{items.length !== 1 ? 's' : ''}</p>

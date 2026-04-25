@@ -1,37 +1,21 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY } from '@/lib/hasura/queries'
 
 export default async function DispatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: order } = await supabase
-    .from('dispatch_orders')
-    .select(`
-      *,
-      company:companies(name),
-      warehouse:warehouses(name),
-      customer:customers(name)
-    `)
-    .eq('id', id)
-    .single()
-
+  const [orderResult, itemsResult] = await Promise.all([
+    hasuraQuery(DISPATCH_ORDER_BY_ID_QUERY, { id }),
+    hasuraQuery(DISPATCH_ITEMS_QUERY, { dispatch_order_id: id }),
+  ])
+  const order = orderResult.dispatch_orders_by_pk
   if (!order) notFound()
-
-  const { data: items } = await supabase
-    .from('dispatch_items')
-    .select(`
-      *,
-      material_type:material_types(name),
-      material_size:material_sizes(size_label)
-    `)
-    .eq('dispatch_order_id', id)
-    .order('id')
-
-  const totalAmount = items?.reduce((sum, i) => sum + (i.amount || 0), 0) ?? 0
-  const totalQty = items?.reduce((sum, i) => sum + (i.quantity || 0), 0) ?? 0
+  const items = itemsResult.dispatch_items ?? []
+  const totalAmount = items.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)
+  const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -41,7 +25,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             ← Back to Dispatch
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">
-            Dispatch: {(order as any).invoice_number ?? id.slice(0, 8)}
+            Dispatch: {order.invoice_number ?? id.slice(0, 8)}
           </h1>
         </div>
         <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
@@ -55,33 +39,33 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Dispatch Date</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate((order as any).dispatch_date)}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(order.dispatch_date)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Customer</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).customer?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.customers?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).company?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.companies?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).warehouse?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.warehouses?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Vehicle</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).vehicle_number ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.vehicle_number ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Driver</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).driver_name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.driver_name ?? '—'}</p>
           </div>
         </div>
-        {(order as any).notes && (
+        {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-            <p className="text-sm text-gray-700">{(order as any).notes}</p>
+            <p className="text-sm text-gray-700">{order.notes}</p>
           </div>
         )}
       </div>
@@ -104,11 +88,11 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items?.map((item, idx) => (
+              {items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{(item.material_type as any)?.name ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{(item.material_size as any)?.size_label ?? item.size_label ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_types?.name ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity?.toFixed(3)}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
                     {item.rate ? formatCurrency(item.rate) : '—'}

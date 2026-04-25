@@ -1,37 +1,22 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY } from '@/lib/hasura/queries'
 
 export default async function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: bill } = await supabase
-    .from('purchase_bills')
-    .select(`
-      *,
-      company:companies(name),
-      warehouse:warehouses(name),
-      supplier:suppliers(name)
-    `)
-    .eq('id', id)
-    .single()
-
+  const [billResult, itemsResult] = await Promise.all([
+    hasuraQuery(PURCHASE_BILL_BY_ID_QUERY, { id }),
+    hasuraQuery(PURCHASE_BILL_ITEMS_QUERY, { bill_id: id }),
+  ])
+  const bill = billResult.purchase_bills_by_pk
   if (!bill) notFound()
+  const items = itemsResult.purchase_bill_items ?? []
 
-  const { data: items } = await supabase
-    .from('purchase_bill_items')
-    .select(`
-      *,
-      material_type:material_types(name),
-      material_size:material_sizes(size_label)
-    `)
-    .eq('bill_id', id)
-    .order('id')
-
-  const totalAmount = items?.reduce((sum, i) => sum + (i.amount || 0), 0) ?? 0
-  const totalQty = items?.reduce((sum, i) => sum + (i.quantity || 0), 0) ?? 0
+  const totalAmount = items.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)
+  const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -62,15 +47,15 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Supplier</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(bill.supplier as any)?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{bill.suppliers?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(bill.company as any)?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{bill.companies?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(bill.warehouse as any)?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{bill.warehouses?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created</p>
@@ -103,14 +88,14 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items?.map((item, idx) => (
+              {items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {(item.material_type as any)?.name ?? '—'}
+                    {item.material_types?.name ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
-                    {(item.material_size as any)?.size_label ?? item.size_label ?? '—'}
+                    {item.material_sizes?.size_label ?? item.size_label ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
                     {item.quantity?.toFixed(3)}

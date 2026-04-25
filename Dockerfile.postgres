@@ -1,0 +1,11 @@
+FROM postgres:16-alpine
+
+# Copy initialization scripts
+COPY supabase/migrations/ /docker-entrypoint-initdb.d/
+
+# Set environment for initialization
+ENV POSTGRES_DB=warecore
+ENV POSTGRES_USER=warecore
+ENV POSTGRES_PASSWORD=warecore_password_dev
+
+EXPOSE 5432

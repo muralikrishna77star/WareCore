@@ -1,20 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { PURCHASE_BILLS_QUERY } from '@/lib/hasura/queries'
 
 export default async function BillsPage() {
-  const supabase = await createClient()
-
-  const { data: bills } = await supabase
-    .from('purchase_bills')
-    .select(`
-      id, bill_number, bill_date, total_quantity, total_amount, notes, created_at,
-      company:companies(name, code),
-      warehouse:warehouses(name),
-      supplier:suppliers(name)
-    `)
-    .order('bill_date', { ascending: false })
-    .limit(50)
+  const result = await hasuraQuery(PURCHASE_BILLS_QUERY)
+  const bills = result.purchase_bills ?? []
 
   return (
     <div className="space-y-6">
@@ -65,15 +56,15 @@ export default async function BillsPage() {
                       {formatDate(bill.bill_date)}
                     </td>
                     <td className="px-6 py-3 text-gray-700">
-                      {(bill.supplier as { name: string } | null)?.name || '-'}
+                      {bill.suppliers?.name || '-'}
                     </td>
                     <td className="px-6 py-3">
                       <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                        {(bill.company as { code: string } | null)?.code}
+                        {bill.companies?.code}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-gray-600">
-                      {(bill.warehouse as { name: string } | null)?.name || '-'}
+                      {bill.warehouses?.name || '-'}
                     </td>
                     <td className="px-6 py-3 text-right font-medium text-gray-700">
                       {Number(bill.total_quantity || 0).toFixed(3)}

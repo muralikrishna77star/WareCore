@@ -1,20 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { DISPATCH_ORDERS_QUERY } from '@/lib/hasura/queries'
 
 export default async function DispatchPage() {
-  const supabase = await createClient()
-
-  const { data: orders } = await supabase
-    .from('dispatch_orders')
-    .select(`
-      id, dispatch_date, vehicle_number, driver_name, notes, created_at,
-      company:companies(name, code),
-      customer:customers(name),
-      dispatch_items(quantity, rate, amount, material_types(name), material_sizes(size_label), size_label)
-    `)
-    .order('dispatch_date', { ascending: false })
-    .limit(50)
+  const result = await hasuraQuery(DISPATCH_ORDERS_QUERY)
+  const orders = result.dispatch_orders ?? []
 
   return (
     <div className="space-y-6">
@@ -55,22 +46,20 @@ export default async function DispatchPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {orders.map((o) => {
-                  const company = o.company as { name: string; code: string } | null
-                  const customer = o.customer as { name: string } | null
-                  const items = (o.dispatch_items ?? []) as Array<{ quantity: number; amount: number }>
-                  const totalQty = items.reduce((s, i) => s + Number(i.quantity), 0)
-                  const totalAmt = items.reduce((s, i) => s + Number(i.amount || 0), 0)
+                {orders.map((o: any) => {
+                  const items = o.dispatch_items ?? []
+                  const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
+                  const totalAmt = items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
 
                   return (
                     <tr key={o.id} className="hover:bg-gray-50">
                       <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
                       <td className="px-6 py-3">
                         <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                          {company?.code}
+                          {o.companies?.code}
                         </span>
                       </td>
-                      <td className="px-6 py-3 font-medium text-gray-900">{customer?.name || '—'}</td>
+                      <td className="px-6 py-3 font-medium text-gray-900">{o.customers?.name || '—'}</td>
                       <td className="px-6 py-3 text-gray-600">{o.vehicle_number || '—'}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">{totalQty.toFixed(3)}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">

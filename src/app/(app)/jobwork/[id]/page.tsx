@@ -1,35 +1,20 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY } from '@/lib/hasura/queries'
 import { formatDate } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: order } = await supabase
-    .from('job_work_orders')
-    .select(`
-      *,
-      company:companies(name),
-      warehouse:warehouses(name),
-      vendor:suppliers(name)
-    `)
-    .eq('id', id)
-    .single()
-
+  const [orderResult, itemsResult] = await Promise.all([
+    hasuraQuery(JOB_WORK_ORDER_BY_ID_QUERY, { id }),
+    hasuraQuery(JOB_WORK_ITEMS_QUERY, { job_work_order_id: id }),
+  ])
+  const order = orderResult.job_work_orders_by_pk
   if (!order) notFound()
-
-  const { data: items } = await supabase
-    .from('job_work_items')
-    .select(`
-      *,
-      material_type:material_types(name),
-      material_size:material_sizes(size_label)
-    `)
-    .eq('job_work_order_id', id)
-    .order('id')
+  const items = itemsResult.job_work_items ?? []
 
   const isOverdue =
     order.expected_return_date &&
@@ -44,7 +29,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
             ← Back to Job Work
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">
-            Job Work Order: {(order as any).reference_number ?? id.slice(0, 8)}
+            Job Work Order: {order.reference_number ?? id.slice(0, 8)}
           </h1>
         </div>
         {isOverdue && (
@@ -60,37 +45,37 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Dispatch Date</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate((order as any).dispatch_date)}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(order.dispatch_date)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).company?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.companies?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).warehouse?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.warehouses?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Vendor</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(order as any).vendor?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{order.suppliers?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Expected Return</p>
             <p className={`text-sm font-medium mt-1 ${isOverdue ? 'text-red-600' : 'text-gray-900'}`}>
-              {(order as any).expected_return_date ? formatDate((order as any).expected_return_date) : '—'}
+              {order.expected_return_date ? formatDate(order.expected_return_date) : '—'}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Actual Return</p>
             <p className="text-sm font-medium text-gray-900 mt-1">
-              {(order as any).actual_return_date ? formatDate((order as any).actual_return_date) : 'Pending'}
+              {order.actual_return_date ? formatDate(order.actual_return_date) : 'Pending'}
             </p>
           </div>
         </div>
-        {(order as any).notes && (
+        {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-            <p className="text-sm text-gray-700">{(order as any).notes}</p>
+            <p className="text-sm text-gray-700">{order.notes}</p>
           </div>
         )}
       </div>

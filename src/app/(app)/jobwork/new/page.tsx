@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
+import {
+  ACTIVE_COMPANIES_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_WAREHOUSES_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
+  CREATE_JOB_WORK_ORDER_MUTATION, CREATE_JOB_WORK_ITEMS_MUTATION,
+} from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Supplier, Warehouse, MaterialType, MaterialSize } from '@/types'
 
@@ -18,7 +24,6 @@ const emptyLine = (): JobWorkLine => ({ material_type_id: '', material_size_id: 
 
 export default function NewJobWorkPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -36,24 +41,26 @@ export default function NewJobWorkPage() {
   const [lines, setLines] = useState<JobWorkLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [masterDataLoading, setMasterDataLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       const [c, s, w, mt, ms] = await Promise.all([
-        supabase.from('companies').select('*').eq('is_active', true).order('name'),
-        supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
-        supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_types').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_sizes').select('*').eq('is_active', true).order('size_label'),
+        hasuraFetch(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
+        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
       ])
-      setCompanies(c.data ?? [])
-      setSuppliers(s.data ?? [])
-      setWarehouses(w.data ?? [])
-      setMaterialTypes(mt.data ?? [])
-      setMaterialSizes(ms.data ?? [])
+      setCompanies((c.data as any)?.companies ?? [])
+      setSuppliers((s.data as any)?.suppliers ?? [])
+      setWarehouses((w.data as any)?.warehouses ?? [])
+      setMaterialTypes((mt.data as any)?.material_types ?? [])
+      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setMasterDataLoading(false)
     }
     load()
-  }, [supabase])
+  }, [])
 
   const updateLine = useCallback((index: number, field: keyof JobWorkLine, value: string) => {
     setLines((prev) => {
@@ -78,9 +85,8 @@ export default function NewJobWorkPage() {
       return
     }
 
-    const { data: order, error: oErr } = await supabase
-      .from('job_work_orders')
-      .insert({
+    const { data: orderData, error: oErr } = await hasuraFetch<any>(
+      CREATE_JOB_WORK_ORDER_MUTATION, {
         reference_number: generateReferenceNumber('JW'),
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
@@ -90,17 +96,16 @@ export default function NewJobWorkPage() {
         work_description: workDescription || null,
         status: 'dispatched',
         notes: notes || null,
-      })
-      .select()
-      .single()
-
+      }
+    )
+    const order = orderData?.insert_job_work_orders_one
     if (oErr || !order) {
       setError(oErr?.message ?? 'Failed to create job work order')
       setLoading(false)
       return
     }
 
-    const itemsPayload = validLines.map((l) => ({
+    const items = validLines.map((l) => ({
       job_work_order_id: order.id,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
@@ -108,9 +113,7 @@ export default function NewJobWorkPage() {
       quantity_sent: parseFloat(l.quantity),
       quantity_received: 0,
     }))
-
-    const { error: iErr } = await supabase.from('job_work_items').insert(itemsPayload)
-
+    const { error: iErr } = await hasuraFetch(CREATE_JOB_WORK_ITEMS_MUTATION, { items })
     if (iErr) {
       setError(iErr.message)
       setLoading(false)
@@ -127,6 +130,16 @@ export default function NewJobWorkPage() {
         <h1 className="text-2xl font-bold text-gray-900">New Job Work Order</h1>
         <p className="mt-1 text-sm text-gray-500">Dispatch material to a vendor for processing</p>
       </div>
+
+      <MissingMasterDataBanner
+        loading={masterDataLoading}
+        checks={[
+          { label: 'Companies', count: companies.length, adminPath: '/admin/companies/new' },
+          { label: 'Warehouses', count: warehouses.length, adminPath: '/admin/warehouses/new' },
+          { label: 'Suppliers', count: suppliers.length, adminPath: '/admin/suppliers/new' },
+          { label: 'Material Types', count: materialTypes.length, adminPath: '/admin/materials/new' },
+        ]}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border p-6">

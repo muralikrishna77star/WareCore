@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  /* Hide navigation, sidebar, filters, and action buttons */
+  aside, nav, .print\:hidden { display: none !important; }
+  /* Reset layout for print */
+  body { background: white !important; }
+  .flex.h-screen { display: block !important; }
+  main { padding: 0 !important; overflow: visible !important; }
+  /* Ensure table rows don't break across pages */
+  tr { page-break-inside: avoid; }
+  /* Show full table width */
+  .overflow-x-auto { overflow: visible !important; }
+  /* Add top margin for print header */
+  .space-y-6 > :first-child { margin-top: 0; }
+}
+

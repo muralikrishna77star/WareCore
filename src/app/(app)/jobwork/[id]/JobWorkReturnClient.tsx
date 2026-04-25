@@ -2,7 +2,11 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import {
+  UPDATE_JOB_WORK_ITEM_MUTATION,
+  UPDATE_JOB_WORK_ORDER_STATUS_MUTATION,
+} from '@/lib/hasura/queries'
 
 interface JobWorkReturnClientProps {
   order: any
@@ -22,14 +26,13 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
     setLoading(true)
     setError('')
     setSuccess('')
-    const supabase = createClient()
 
     for (const item of items) {
       const qty = parseFloat(quantities[item.id] ?? '0')
-      const { error: err } = await supabase
-        .from('job_work_items')
-        .update({ quantity_received: qty })
-        .eq('id', item.id)
+      const { error: err } = await hasuraFetch(UPDATE_JOB_WORK_ITEM_MUTATION, {
+        id: item.id,
+        quantity_received: qty,
+      })
       if (err) {
         setError(err.message)
         setLoading(false)
@@ -44,15 +47,17 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
     })
 
     if (allReturned) {
-      await supabase
-        .from('job_work_orders')
-        .update({ status: 'completed', actual_return_date: new Date().toISOString().split('T')[0] })
-        .eq('id', order.id)
+      await hasuraFetch(UPDATE_JOB_WORK_ORDER_STATUS_MUTATION, {
+        id: order.id,
+        status: 'completed',
+        actual_return_date: new Date().toISOString().split('T')[0],
+      })
     } else {
-      await supabase
-        .from('job_work_orders')
-        .update({ status: 'partial_return' })
-        .eq('id', order.id)
+      await hasuraFetch(UPDATE_JOB_WORK_ORDER_STATUS_MUTATION, {
+        id: order.id,
+        status: 'partial_return',
+        actual_return_date: null,
+      })
     }
 
     setSuccess('Return quantities saved.')
@@ -98,8 +103,8 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
               {items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_type?.name ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_size?.size_label ?? item.size_label ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_types?.name ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity_sent?.toFixed(3)}</td>
                   <td className="px-6 py-4 text-right">
                     {order.status === 'completed' ? (

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -58,10 +57,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    await fetch('/api/auth/login', { method: 'DELETE' })
     router.push('/login')
     router.refresh()
   }
@@ -160,10 +158,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-20 lg:pb-6">
           {children}
         </main>
       </div>
+
+      {/* Mobile bottom navigation bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 lg:hidden print:hidden">
+        <div className="grid grid-cols-5 h-16">
+          {[
+            { href: '/dashboard', icon: '📊', label: 'Dashboard' },
+            { href: '/bills/new', icon: '📋', label: 'Bill' },
+            { href: '/dispatch/new', icon: '🚚', label: 'Dispatch' },
+            { href: '/inventory', icon: '📦', label: 'Stock' },
+            { href: '/reports', icon: '📈', label: 'Reports' },
+          ].map((item) => {
+            const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/bills/new' && item.href !== '/dispatch/new' && pathname.startsWith(item.href.split('/new')[0] + '/'))
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors',
+                  isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'
+                )}
+              >
+                <span className="text-xl leading-none">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }

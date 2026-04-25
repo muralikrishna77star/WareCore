@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { UPDATE_TRANSFER_STATUS_MUTATION } from '@/lib/hasura/queries'
 
 interface TransferDetailClientProps {
   transfer: any
@@ -17,11 +18,11 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
   async function updateStatus(newStatus: string) {
     setLoading(true)
     setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase
-      .from('transfers')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', transfer.id)
+    const { error: err } = await hasuraFetch(UPDATE_TRANSFER_STATUS_MUTATION, {
+      id: transfer.id,
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    })
     if (err) {
       setError(err.message)
       setLoading(false)

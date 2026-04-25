@@ -1,5 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { formatDate, getEntryTypeLabel } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { STOCK_LEDGER_FILTERED_QUERY, ACTIVE_COMPANIES_QUERY } from '@/lib/hasura/queries'
 
 export default async function MovementsPage({
   searchParams,
@@ -7,26 +8,19 @@ export default async function MovementsPage({
   searchParams: Promise<{ company?: string; material?: string; from?: string; to?: string }>
 }) {
   const params = await searchParams
-  const supabase = await createClient()
 
-  let query = supabase
-    .from('stock_ledger')
-    .select(`
-      id, entry_type, quantity, entry_date, reference_number, size_label, notes, created_at,
-      company:companies(id, name, code),
-      warehouse:warehouses(name),
-      material_type:material_types(name, unit),
-      material_size:material_sizes(size_label)
-    `)
-    .order('entry_date', { ascending: false })
-    .order('created_at', { ascending: false })
+  const conditions: Record<string, unknown>[] = []
+  if (params.company) conditions.push({ company_id: { _eq: params.company } })
+  if (params.from) conditions.push({ entry_date: { _gte: params.from } })
+  if (params.to) conditions.push({ entry_date: { _lte: params.to } })
+  const where = conditions.length > 0 ? { _and: conditions } : {}
 
-  if (params.company) query = query.eq('company_id', params.company)
-  if (params.from) query = query.gte('entry_date', params.from)
-  if (params.to) query = query.lte('entry_date', params.to)
-
-  const { data: movements } = await query.limit(200)
-  const { data: companies } = await supabase.from('companies').select('id, name, code').eq('is_active', true)
+  const [movResult, compResult] = await Promise.all([
+    hasuraQuery(STOCK_LEDGER_FILTERED_QUERY, { where }),
+    hasuraQuery(ACTIVE_COMPANIES_QUERY),
+  ])
+  const movements = movResult.stock_ledger ?? []
+  const companies = compResult.companies ?? []
 
   const entryColors: Record<string, string> = {
     PURCHASE_IN: 'bg-green-100 text-green-800',
@@ -95,7 +89,7 @@ export default async function MovementsPage({
 
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-x-auto">
-          {!movements || movements.length === 0 ? (
+          {movements.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-500">No movements found.</p>
             </div>
@@ -115,7 +109,7 @@ export default async function MovementsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {movements.map((m) => {
+                {movements.map((m: any) => {
                   const isIn = ['PURCHASE_IN', 'VENDOR_RETURN_IN', 'JOB_WORK_RETURN_IN', 'TRANSFER_IN', 'ADJUSTMENT_IN'].includes(m.entry_type)
                   return (
                     <tr key={m.id} className="hover:bg-gray-50">
@@ -127,12 +121,12 @@ export default async function MovementsPage({
                           {getEntryTypeLabel(m.entry_type)}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-700">{(m.company as { code: string } | null)?.code}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{(m.warehouse as { name: string } | null)?.name}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-900">{(m.material_type as { name: string } | null)?.name}</td>
-                      <td className="px-4 py-2.5 text-gray-600">{m.size_label || (m.material_size as { size_label: string } | null)?.size_label || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-700">{m.companies?.code}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{m.warehouses?.name}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{m.material_types?.name}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{m.size_label || m.material_sizes?.size_label || '—'}</td>
                       <td className={`px-4 py-2.5 text-right font-semibold ${isIn ? 'text-green-700' : 'text-red-700'}`}>
-                        {isIn ? '+' : '-'}{Math.abs(m.quantity).toFixed(3)} {(m.material_type as { unit: string } | null)?.unit}
+                        {isIn ? '+' : '-'}{Math.abs(m.quantity).toFixed(3)} {m.material_types?.unit}
                       </td>
                       <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{m.reference_number || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-500 text-xs">{m.notes || '—'}</td>

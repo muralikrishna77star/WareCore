@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { CREATE_WAREHOUSE_MUTATION } from '@/lib/hasura/queries'
 
 interface Props { companies: { id: string; name: string }[] }
 
@@ -17,8 +18,7 @@ export default function AdminWarehouseForm({ companies }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase.from('warehouses').insert({
+    const { error: err } = await hasuraFetch(CREATE_WAREHOUSE_MUTATION, {
       name: form.name,
       company_id: form.company_id || null,
       address: form.address || null,

@@ -1,12 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { CURRENT_STOCK_QUERY } from '@/lib/hasura/queries'
 
 export default async function InventoryPage() {
-  const supabase = await createClient()
-
-  const { data: stock } = await supabase
-    .from('v_current_stock')
-    .select('*')
-    .order('company_name')
+  const result = await hasuraQuery(CURRENT_STOCK_QUERY)
+  const stock = result.v_current_stock ?? []
 
   // Group by company
   type StockRow = {
@@ -23,7 +20,7 @@ export default async function InventoryPage() {
   }
 
   const grouped: Record<string, { company: string; code: string; rows: StockRow[] }> = {}
-  for (const row of (stock ?? []) as StockRow[]) {
+  for (const row of stock as StockRow[]) {
     if (Number(row.current_stock) === 0) continue
     if (!grouped[row.company_id]) {
       grouped[row.company_id] = { company: row.company_name, code: row.company_code, rows: [] }

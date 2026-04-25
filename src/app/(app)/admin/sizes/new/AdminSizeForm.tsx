@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { CREATE_MATERIAL_SIZE_MUTATION } from '@/lib/hasura/queries'
 
 interface Props {
   materialTypes: { id: string; name: string }[]
@@ -24,8 +25,7 @@ export default function AdminSizeForm({ materialTypes }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase.from('material_sizes').insert({
+    const { error: err } = await hasuraFetch(CREATE_MATERIAL_SIZE_MUTATION, {
       material_type_id: form.material_type_id,
       size_label: form.size_label,
       thickness: form.thickness ? parseFloat(form.thickness) : null,

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { CREATE_SUPPLIER_MUTATION, CREATE_CUSTOMER_MUTATION } from '@/lib/hasura/queries'
 
 // Reusable form for suppliers and customers — both have name, contact, email, phone, address
 interface Props {
@@ -25,8 +26,8 @@ export default function AdminEntityForm({ table, label, companies }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase.from(table).insert({
+    const mutation = table === 'suppliers' ? CREATE_SUPPLIER_MUTATION : CREATE_CUSTOMER_MUTATION
+    const { error: err } = await hasuraFetch(mutation, {
       name: form.name,
       contact_person: form.contact_person || null,
       email: form.email || null,

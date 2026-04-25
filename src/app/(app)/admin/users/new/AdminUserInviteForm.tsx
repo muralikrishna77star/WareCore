@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { CREATE_USER_PROFILE_MUTATION } from '@/lib/hasura/queries'
 
 interface Props {
   companies: { id: string; name: string }[]
@@ -31,30 +32,18 @@ export default function AdminUserInviteForm({ companies, warehouses }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError(''); setSuccess('')
-    const supabase = createClient()
 
-    // Create the auth user with a temp password — they should reset it
-    const tempPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase() + '!1'
-    const { data: authData, error: authErr } = await supabase.auth.signUp({
+    // Dev mode: create user profile directly in database (no auth.signUp)
+    const { error: profileErr } = await hasuraFetch(CREATE_USER_PROFILE_MUTATION, {
+      full_name: form.full_name,
       email: form.email,
-      password: tempPassword,
-      options: { data: { full_name: form.full_name } },
+      role: form.role,
+      company_id: form.company_id || null,
+      warehouse_id: form.warehouse_id || null,
     })
+    if (profileErr) { setError(profileErr.message); setLoading(false); return }
 
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-
-    if (authData.user) {
-      const { error: profileErr } = await supabase.from('user_profiles').upsert({
-        id: authData.user.id,
-        full_name: form.full_name,
-        role: form.role,
-        company_id: form.company_id || null,
-        warehouse_id: form.warehouse_id || null,
-      })
-      if (profileErr) { setError(profileErr.message); setLoading(false); return }
-    }
-
-    setSuccess(`User ${form.email} created. They will receive a confirmation email. Temp password: ${tempPassword}`)
+    setSuccess(`User ${form.email} created successfully.`)
     setLoading(false)
   }
 

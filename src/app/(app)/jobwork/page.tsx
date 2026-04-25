@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { JOB_WORK_ORDERS_QUERY, VENDOR_STOCK_QUERY } from '@/lib/hasura/queries'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -11,18 +12,8 @@ const statusColors: Record<string, string> = {
 }
 
 export default async function JobWorkPage() {
-  const supabase = await createClient()
-
-  const { data: orders } = await supabase
-    .from('job_work_orders')
-    .select(`
-      id, reference_number, dispatch_date, expected_return_date, actual_return_date, status, notes, created_at,
-      company:companies(name, code),
-      vendor:suppliers(name),
-      job_work_items(quantity_sent, quantity_received, material_types(name), material_sizes(size_label), size_label)
-    `)
-    .order('dispatch_date', { ascending: false })
-    .limit(50)
+  const result = await hasuraQuery(JOB_WORK_ORDERS_QUERY)
+  const orders = result.job_work_orders ?? []
 
   return (
     <div className="space-y-6">
@@ -40,7 +31,7 @@ export default async function JobWorkPage() {
       </div>
 
       {/* Stock at Vendors Summary */}
-      <VendorStockSummary supabase={supabase} />
+      <VendorStockSummary />
 
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-x-auto">
@@ -66,12 +57,10 @@ export default async function JobWorkPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {orders.map((o) => {
-                  const company = o.company as { name: string; code: string } | null
-                  const vendor = o.vendor as { name: string } | null
-                  const items = (o.job_work_items ?? []) as Array<{ quantity_sent: number; quantity_received: number; material_types: { name: string } | null; size_label: string | null }>
-                  const totalQty = items.reduce((s, i) => s + Number(i.quantity_sent), 0)
-                  const totalReturned = items.reduce((s, i) => s + Number(i.quantity_received || 0), 0)
+                {orders.map((o: any) => {
+                  const items = o.job_work_items ?? []
+                  const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity_sent), 0)
+                  const totalReturned = items.reduce((s: number, i: any) => s + Number(i.quantity_received || 0), 0)
                   const isOverdue = o.expected_return_date && !o.actual_return_date && new Date(o.expected_return_date) < new Date()
 
                   return (
@@ -79,10 +68,10 @@ export default async function JobWorkPage() {
                       <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
                       <td className="px-6 py-3">
                         <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                          {company?.code}
+                          {o.companies?.code}
                         </span>
                       </td>
-                      <td className="px-6 py-3 font-medium text-gray-900">{vendor?.name || '—'}</td>
+                      <td className="px-6 py-3 font-medium text-gray-900">{o.suppliers?.name || '—'}</td>
                       <td className="px-6 py-3">
                         <p className="text-gray-700">{items.length} item{items.length !== 1 ? 's' : ''}</p>
                         <p className="text-xs text-gray-500">{totalQty.toFixed(3)} dispatched · {totalReturned.toFixed(3)} returned</p>
@@ -113,10 +102,14 @@ export default async function JobWorkPage() {
   )
 }
 
-async function VendorStockSummary({ supabase }: { supabase: Awaited<ReturnType<typeof createClient>> }) {
-  const { data } = await supabase.from('v_stock_at_vendors').select('*')
+async function VendorStockSummary() {
+  let data: any[] = []
+  try {
+    const result = await hasuraQuery(VENDOR_STOCK_QUERY)
+    data = result.v_stock_at_vendors ?? []
+  } catch { /* view may not exist yet */ }
 
-  if (!data || data.length === 0) return null
+  if (data.length === 0) return null
 
   type VendorRow = { vendor_id: string; vendor_name: string; material_type_name: string; size_label: string | null; pending_quantity: number }
 

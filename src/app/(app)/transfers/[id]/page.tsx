@@ -1,36 +1,20 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { formatDate } from '@/lib/utils'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { TRANSFER_BY_ID_QUERY, TRANSFER_ITEMS_QUERY } from '@/lib/hasura/queries'
 import TransferDetailClient from './TransferDetailClient'
 
 export default async function TransferDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: transfer } = await supabase
-    .from('transfers')
-    .select(`
-      *,
-      from_company:companies!transfers_from_company_id_fkey(name),
-      to_company:companies!transfers_to_company_id_fkey(name),
-      from_warehouse:warehouses!transfers_from_warehouse_id_fkey(name),
-      to_warehouse:warehouses!transfers_to_warehouse_id_fkey(name)
-    `)
-    .eq('id', id)
-    .single()
-
+  const [transferResult, itemsResult] = await Promise.all([
+    hasuraQuery(TRANSFER_BY_ID_QUERY, { id }),
+    hasuraQuery(TRANSFER_ITEMS_QUERY, { transfer_id: id }),
+  ])
+  const transfer = transferResult.transfers_by_pk
   if (!transfer) notFound()
-
-  const { data: items } = await supabase
-    .from('transfer_items')
-    .select(`
-      *,
-      material_type:material_types(name),
-      material_size:material_sizes(size_label)
-    `)
-    .eq('transfer_id', id)
-    .order('id')
+  const items = itemsResult.transfer_items ?? []
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -39,7 +23,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           <Link href="/transfers" className="text-sm text-blue-600 hover:underline mb-1 block">
             ← Back to Transfers
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Transfer #{(transfer as any).reference_number ?? id.slice(0, 8)}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Transfer #{transfer.reference_number ?? id.slice(0, 8)}</h1>
         </div>
       </div>
 
@@ -49,33 +33,33 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Transfer Date</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate((transfer as any).transfer_date)}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(transfer.transfer_date)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">From Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(transfer as any).from_company?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{transfer.companies_from?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">To Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(transfer as any).to_company?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{transfer.companies_to?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">From Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(transfer as any).from_warehouse?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{transfer.warehouses_from?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">To Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{(transfer as any).to_warehouse?.name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{transfer.warehouses_to?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate((transfer as any).created_at)}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(transfer.created_at)}</p>
           </div>
         </div>
-        {(transfer as any).notes && (
+        {transfer.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-            <p className="text-sm text-gray-700">{(transfer as any).notes}</p>
+            <p className="text-sm text-gray-700">{transfer.notes}</p>
           </div>
         )}
       </div>

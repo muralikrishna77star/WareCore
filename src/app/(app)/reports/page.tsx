@@ -1,20 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { REPORTS_QUERY } from '@/lib/hasura/queries'
+import Link from 'next/link'
 
 export default async function ReportsPage() {
-  const supabase = await createClient()
+  const result = await hasuraQuery(REPORTS_QUERY)
 
-  const [stockResult, billsResult, dispatchResult, jwResult] = await Promise.all([
-    supabase.from('v_current_stock').select('*'),
-    supabase.from('purchase_bills').select('bill_date, total_quantity, total_amount, companies(name, code)').order('bill_date', { ascending: false }),
-    supabase.from('dispatch_orders').select('dispatch_date, total_quantity, total_amount, companies(name, code)').order('dispatch_date', { ascending: false }),
-    supabase.from('v_stock_at_vendors').select('*'),
-  ])
-
-  type StockRow = { company_name: string; company_code: string; material_type_name: string; unit: string; size_label: string | null; current_stock: number }
-  type JWRow = { vendor_name: string; material_type_name: string; size_label: string | null; pending_quantity: number }
-
-  const stockRows = (stockResult.data ?? []) as StockRow[]
-  const jwRows = (jwResult.data ?? []) as JWRow[]
+  const stockRows = (result.v_current_stock ?? []) as any[]
+  const jwRows = (result.v_stock_at_vendors ?? []) as any[]
+  const bills = (result.purchase_bills ?? []) as any[]
+  const dispatches = (result.dispatch_orders ?? []) as any[]
 
   // Group inventory by company/material
   const inventoryByCompany: Record<string, { code: string; materials: Record<string, number> }> = {}
@@ -26,24 +20,82 @@ export default async function ReportsPage() {
   }
 
   // Bills summary
-  type BillRow = { bill_date: string; total_quantity: number; total_amount: number; companies: { name: string; code: string } | null }
-  const bills = (billsResult.data ?? []) as unknown as BillRow[]
-  const totalPurchased = bills.reduce((s, b) => s + Number(b.total_quantity || 0), 0)
-  const totalPurchaseAmt = bills.reduce((s, b) => s + Number(b.total_amount || 0), 0)
-
-  type DispatchRow = { dispatch_date: string; total_quantity: number; total_amount: number; companies: { name: string; code: string } | null }
-  const dispatches = (dispatchResult.data ?? []) as unknown as DispatchRow[]
-  const totalDispatched = dispatches.reduce((s, d) => s + Number(d.total_quantity || 0), 0)
-  const totalDispatchAmt = dispatches.reduce((s, d) => s + Number(d.total_amount || 0), 0)
-
-  const totalCurrentStock = stockRows.reduce((s, r) => s + Number(r.current_stock), 0)
-  const totalAtVendors = jwRows.reduce((s, r) => s + Number(r.pending_quantity), 0)
+  const totalPurchased = bills.reduce((s: number, b: any) => s + Number(b.total_quantity || 0), 0)
+  const totalPurchaseAmt = bills.reduce((s: number, b: any) => s + Number(b.total_amount || 0), 0)
+  const totalDispatched = dispatches.reduce((s: number, d: any) => s + Number(d.total_quantity || 0), 0)
+  const totalDispatchAmt = dispatches.reduce((s: number, d: any) => s + Number(d.total_amount || 0), 0)
+  const totalCurrentStock = stockRows.reduce((s: number, r: any) => s + Number(r.current_stock), 0)
+  const totalAtVendors = jwRows.reduce((s: number, r: any) => s + Number(r.pending_quantity), 0)
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
         <p className="mt-1 text-sm text-gray-500">Summary reports and analytics</p>
+      </div>
+
+      {/* Quick Links */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Link
+          href="/reports/stock-statement"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-blue-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">�</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-blue-700">Stock Statement</p>
+            <p className="text-sm text-gray-500 mt-0.5">Opening · Purchases · Transfers · Dispatch · Closing stock</p>
+          </div>
+        </Link>
+        <Link
+          href="/reports/billing"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-green-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🧾</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-green-700">Billing Report</p>
+            <p className="text-sm text-gray-500 mt-0.5">Purchase bills with supplier, materials, quantities and amounts</p>
+          </div>
+        </Link>
+        <Link
+          href="/reports/transfers"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-indigo-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">↔️</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-indigo-700">Transfers Report</p>
+            <p className="text-sm text-gray-500 mt-0.5">Inter-company and inter-warehouse material transfers</p>
+          </div>
+        </Link>
+        <Link
+          href="/reports/movements"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-orange-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🔄</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-orange-700">Movements Report</p>
+            <p className="text-sm text-gray-500 mt-0.5">All stock ledger entries: purchase, dispatch, transfers, job work</p>
+          </div>
+        </Link>
+        <Link
+          href="/reports/jobwork"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-purple-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🏭</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-purple-700">Job Work Report</p>
+            <p className="text-sm text-gray-500 mt-0.5">Material sent to vendors: sent, received, and pending quantities</p>
+          </div>
+        </Link>
+        <Link
+          href="/reports/dispatch"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-red-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🚚</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-red-700">Dispatch Report</p>
+            <p className="text-sm text-gray-500 mt-0.5">Customer dispatch orders with invoice, vehicle, and item details</p>
+          </div>
+        </Link>
       </div>
 
       {/* Summary Cards */}

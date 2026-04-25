@@ -2,8 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
+import {
+  ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
+  CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
+} from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
+import type { Company, Warehouse, Customer, MaterialType, MaterialSize } from '@/types'
 
 type DispatchLine = {
   material_type_id: string
@@ -19,7 +26,6 @@ const emptyLine = (): DispatchLine => ({ material_type_id: '', material_size_id:
 
 export default function NewDispatchPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
@@ -37,24 +43,26 @@ export default function NewDispatchPage() {
   const [lines, setLines] = useState<DispatchLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [masterDataLoading, setMasterDataLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       const [c, w, cu, mt, ms] = await Promise.all([
-        supabase.from('companies').select('*').eq('is_active', true).order('name'),
-        supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-        supabase.from('customers').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_types').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_sizes').select('*').eq('is_active', true).order('size_label'),
+        hasuraFetch(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
       ])
-      setCompanies(c.data ?? [])
-      setWarehouses(w.data ?? [])
-      setCustomers(cu.data ?? [])
-      setMaterialTypes(mt.data ?? [])
-      setMaterialSizes(ms.data ?? [])
+      setCompanies((c.data as any)?.companies ?? [])
+      setWarehouses((w.data as any)?.warehouses ?? [])
+      setCustomers((cu.data as any)?.customers ?? [])
+      setMaterialTypes((mt.data as any)?.material_types ?? [])
+      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setMasterDataLoading(false)
     }
     load()
-  }, [supabase])
+  }, [])
 
   const updateLine = useCallback((index: number, field: keyof DispatchLine, value: string) => {
     setLines((prev) => {
@@ -86,9 +94,8 @@ export default function NewDispatchPage() {
       return
     }
 
-    const { data: order, error: oErr } = await supabase
-      .from('dispatch_orders')
-      .insert({
+    const { data: orderData, error: oErr } = await hasuraFetch<any>(
+      CREATE_DISPATCH_ORDER_MUTATION, {
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
         customer_id: customerId || null,
@@ -99,17 +106,16 @@ export default function NewDispatchPage() {
         total_quantity: totalQty,
         total_amount: totalAmt || null,
         notes: notes || null,
-      })
-      .select()
-      .single()
-
+      }
+    )
+    const order = orderData?.insert_dispatch_orders_one
     if (oErr || !order) {
       setError(oErr?.message ?? 'Failed to create dispatch')
       setLoading(false)
       return
     }
 
-    const itemsPayload = validLines.map((l) => ({
+    const items = validLines.map((l) => ({
       dispatch_order_id: order.id,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
@@ -119,9 +125,7 @@ export default function NewDispatchPage() {
       amount: l.amount ? parseFloat(l.amount) : null,
       notes: l.notes || null,
     }))
-
-    const { error: iErr } = await supabase.from('dispatch_items').insert(itemsPayload)
-
+    const { error: iErr } = await hasuraFetch(CREATE_DISPATCH_ITEMS_MUTATION, { items })
     if (iErr) {
       setError(iErr.message)
       setLoading(false)
@@ -138,6 +142,16 @@ export default function NewDispatchPage() {
         <h1 className="text-2xl font-bold text-gray-900">New Dispatch Order</h1>
         <p className="mt-1 text-sm text-gray-500">Create a new sales dispatch</p>
       </div>
+
+      <MissingMasterDataBanner
+        loading={masterDataLoading}
+        checks={[
+          { label: 'Companies', count: companies.length, adminPath: '/admin/companies/new' },
+          { label: 'Warehouses', count: warehouses.length, adminPath: '/admin/warehouses/new' },
+          { label: 'Customers', count: customers.length, adminPath: '/admin/customers/new' },
+          { label: 'Material Types', count: materialTypes.length, adminPath: '/admin/materials/new' },
+        ]}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border p-6">

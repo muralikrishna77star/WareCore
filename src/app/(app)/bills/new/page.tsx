@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
+import {
+  ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
+  CREATE_PURCHASE_BILL_MUTATION, CREATE_PURCHASE_BILL_ITEMS_MUTATION,
+} from '@/lib/hasura/queries'
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize } from '@/types'
 
 type LineItem = {
@@ -27,7 +33,6 @@ const emptyLine = (): LineItem => ({
 
 export default function NewBillPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
@@ -44,24 +49,26 @@ export default function NewBillPage() {
   const [lines, setLines] = useState<LineItem[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [masterDataLoading, setMasterDataLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       const [c, w, s, mt, ms] = await Promise.all([
-        supabase.from('companies').select('*').eq('is_active', true).order('name'),
-        supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-        supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_types').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_sizes').select('*').eq('is_active', true).order('size_label'),
+        hasuraFetch(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
       ])
-      setCompanies(c.data ?? [])
-      setWarehouses(w.data ?? [])
-      setSuppliers(s.data ?? [])
-      setMaterialTypes(mt.data ?? [])
-      setMaterialSizes(ms.data ?? [])
+      setCompanies((c.data as any)?.companies ?? [])
+      setWarehouses((w.data as any)?.warehouses ?? [])
+      setSuppliers((s.data as any)?.suppliers ?? [])
+      setMaterialTypes((mt.data as any)?.material_types ?? [])
+      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setMasterDataLoading(false)
     }
     load()
-  }, [supabase])
+  }, [])
 
   const filteredWarehouses = warehouseId
     ? warehouses
@@ -102,9 +109,8 @@ export default function NewBillPage() {
     }
 
     // Create bill
-    const { data: bill, error: billError } = await supabase
-      .from('purchase_bills')
-      .insert({
+    const { data: billData, error: billError } = await hasuraFetch<any>(
+      CREATE_PURCHASE_BILL_MUTATION, {
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
         supplier_id: supplierId || null,
@@ -113,10 +119,9 @@ export default function NewBillPage() {
         total_quantity: totalQty,
         total_amount: totalAmt,
         notes: notes || null,
-      })
-      .select()
-      .single()
-
+      }
+    )
+    const bill = billData?.insert_purchase_bills_one
     if (billError || !bill) {
       setError(billError?.message ?? 'Failed to create bill')
       setLoading(false)
@@ -124,7 +129,7 @@ export default function NewBillPage() {
     }
 
     // Insert line items
-    const itemsPayload = validLines.map((l) => ({
+    const items = validLines.map((l) => ({
       bill_id: bill.id,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
@@ -134,9 +139,7 @@ export default function NewBillPage() {
       amount: l.amount ? parseFloat(l.amount) : null,
       notes: l.notes || null,
     }))
-
-    const { error: itemsError } = await supabase.from('purchase_bill_items').insert(itemsPayload)
-
+    const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { items })
     if (itemsError) {
       setError(itemsError.message)
       setLoading(false)
@@ -153,6 +156,16 @@ export default function NewBillPage() {
         <h1 className="text-2xl font-bold text-gray-900">New Purchase Bill</h1>
         <p className="mt-1 text-sm text-gray-500">Record a new inward purchase</p>
       </div>
+
+      <MissingMasterDataBanner
+        loading={masterDataLoading}
+        checks={[
+          { label: 'Companies', count: companies.length, adminPath: '/admin/companies/new' },
+          { label: 'Warehouses', count: warehouses.length, adminPath: '/admin/warehouses/new' },
+          { label: 'Suppliers', count: suppliers.length, adminPath: '/admin/suppliers/new' },
+          { label: 'Material Types', count: materialTypes.length, adminPath: '/admin/materials/new' },
+        ]}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Header Details */}

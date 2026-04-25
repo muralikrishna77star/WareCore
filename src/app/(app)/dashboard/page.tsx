@@ -1,27 +1,28 @@
-import { createClient } from '@/lib/supabase/server'
+import { hasuraQuery } from '@/lib/hasura/server'
+import { DASHBOARD_STATS_QUERY, RECENT_MOVEMENTS_QUERY } from '@/lib/hasura/queries'
 import { formatNumber } from '@/lib/utils'
 
-async function getDashboardStats(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const [stockResult, billsResult, transfersResult, jobWorkResult, dispatchResult] = await Promise.all([
-    supabase.from('v_current_stock').select('*'),
-    supabase.from('purchase_bills').select('id', { count: 'exact', head: true }),
-    supabase.from('transfers').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('job_work_orders').select('id', { count: 'exact', head: true }).in('status', ['dispatched', 'partial_return']),
-    supabase.from('dispatch_orders').select('id', { count: 'exact', head: true }),
-  ])
+async function getDashboardStats() {
+  try {
+    const result = await hasuraQuery(DASHBOARD_STATS_QUERY)
+    
+    const stockByCompany = result.v_current_stock || []
+    const totalBills = result.purchase_bills_aggregate?.aggregate?.count || 0
+    const pendingTransfers = result.transfers_aggregate?.aggregate?.count || 0
+    const pendingJobWork = result.job_work_orders_aggregate?.aggregate?.count || 0
+    const totalDispatches = result.dispatch_orders_aggregate?.aggregate?.count || 0
 
-  const totalStock = (stockResult.data ?? []).reduce((sum, row) => sum + (Number(row.current_stock) || 0), 0)
-  const totalBills = billsResult.count ?? 0
-  const pendingTransfers = transfersResult.count ?? 0
-  const pendingJobWork = jobWorkResult.count ?? 0
-  const totalDispatches = dispatchResult.count ?? 0
+    const totalStock = stockByCompany.reduce((sum: number, row: any) => sum + (Number(row.current_stock) || 0), 0)
 
-  return { totalStock, totalBills, pendingTransfers, pendingJobWork, totalDispatches, stockByCompany: stockResult.data ?? [] }
+    return { totalStock, totalBills, pendingTransfers, pendingJobWork, totalDispatches, stockByCompany }
+  } catch (error) {
+    console.error('Failed to fetch dashboard stats:', error)
+    return { totalStock: 0, totalBills: 0, pendingTransfers: 0, pendingJobWork: 0, totalDispatches: 0, stockByCompany: [] }
+  }
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { totalStock, totalBills, pendingTransfers, pendingJobWork, totalDispatches, stockByCompany } = await getDashboardStats(supabase)
+  const { totalStock, totalBills, pendingTransfers, pendingJobWork, totalDispatches, stockByCompany } = await getDashboardStats()
 
   // Group stock by company
   const companyStock: Record<string, { name: string; code: string; stock: number }> = {}
@@ -107,22 +108,19 @@ export default async function DashboardPage() {
       </div>
 
       {/* Recent Movements (top 10 from stock ledger) */}
-      <RecentMovements supabase={supabase} />
+      <RecentMovements />
     </div>
   )
 }
 
-async function RecentMovements({ supabase }: { supabase: Awaited<ReturnType<typeof createClient>> }) {
-  const { data } = await supabase
-    .from('stock_ledger')
-    .select(`
-      id, entry_type, quantity, entry_date, reference_number, size_label,
-      company:companies(name),
-      warehouse:warehouses(name),
-      material_type:material_types(name, unit)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(10)
+async function RecentMovements() {
+  let data: any[] = []
+  try {
+    const result = await hasuraQuery(RECENT_MOVEMENTS_QUERY)
+    data = result.stock_ledger ?? []
+  } catch {
+    // ignore errors — show empty state
+  }
 
   const entryTypeColors: Record<string, string> = {
     PURCHASE_IN: 'bg-green-100 text-green-800',
@@ -182,14 +180,14 @@ async function RecentMovements({ supabase }: { supabase: Awaited<ReturnType<type
                     </span>
                   </td>
                   <td className="px-6 py-3 text-gray-700">
-                    {(entry.material_type as { name: string } | null)?.name}
+                    {entry.material_types?.name}
                   </td>
                   <td className="px-6 py-3 text-gray-600">{entry.size_label || '-'}</td>
                   <td className={`px-6 py-3 font-medium ${entry.quantity >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                    {entry.quantity >= 0 ? '+' : ''}{formatNumber(Math.abs(entry.quantity), 3)} {(entry.material_type as { unit: string } | null)?.unit}
+                    {entry.quantity >= 0 ? '+' : ''}{formatNumber(Math.abs(entry.quantity), 3)} {entry.material_types?.unit}
                   </td>
-                  <td className="px-6 py-3 text-gray-700">{(entry.company as { name: string } | null)?.name}</td>
-                  <td className="px-6 py-3 text-gray-600">{(entry.warehouse as { name: string } | null)?.name}</td>
+                  <td className="px-6 py-3 text-gray-700">{entry.companies?.name}</td>
+                  <td className="px-6 py-3 text-gray-600">{entry.warehouses?.name}</td>
                   <td className="px-6 py-3 text-gray-500 font-mono text-xs">{entry.reference_number || '-'}</td>
                 </tr>
               ))}
@@ -201,6 +199,4 @@ async function RecentMovements({ supabase }: { supabase: Awaited<ReturnType<type
   )
 }
 
-function formatNumber(n: number, d: number) {
-  return new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: d }).format(n)
-}
+

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { CREATE_MATERIAL_TYPE_MUTATION } from '@/lib/hasura/queries'
 
 export default function AdminMaterialForm() {
   const router = useRouter()
@@ -15,8 +16,7 @@ export default function AdminMaterialForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase.from('material_types').insert({
+    const { error: err } = await hasuraFetch(CREATE_MATERIAL_TYPE_MUTATION, {
       name: form.name,
       unit: form.unit,
       description: form.description || null,

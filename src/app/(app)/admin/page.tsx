@@ -1,27 +1,44 @@
-import { createClient } from '@/lib/supabase/server'
+import { hasuraQuery } from '@/lib/hasura/server'
+import {
+  COMPANIES_QUERY,
+  WAREHOUSES_QUERY,
+  SUPPLIERS_QUERY,
+  CUSTOMERS_QUERY,
+  MATERIAL_TYPES_QUERY,
+  MATERIAL_SIZES_QUERY,
+  USER_PROFILES_QUERY,
+} from '@/lib/hasura/queries'
 import Link from 'next/link'
 
 export default async function AdminPage() {
-  const supabase = await createClient()
+  // Fetch all data in parallel using Hasura GraphQL
+  const [companiesRes, warehousesRes, suppliersRes, customersRes, materialTypesRes, materialSizesRes, usersRes] =
+    await Promise.all([
+      hasuraQuery(COMPANIES_QUERY).catch(() => ({ companies: [] })),
+      hasuraQuery(WAREHOUSES_QUERY).catch(() => ({ warehouses: [] })),
+      hasuraQuery(SUPPLIERS_QUERY).catch(() => ({ suppliers: [] })),
+      hasuraQuery(CUSTOMERS_QUERY).catch(() => ({ customers: [] })),
+      hasuraQuery(MATERIAL_TYPES_QUERY).catch(() => ({ material_types: [] })),
+      hasuraQuery(MATERIAL_SIZES_QUERY).catch(() => ({ material_sizes: [] })),
+      hasuraQuery(USER_PROFILES_QUERY).catch(() => ({ user_profiles: [] })),
+    ])
 
-  const [companies, warehouses, suppliers, customers, materialTypes, materialSizes, users] = await Promise.all([
-    supabase.from('companies').select('*').order('name'),
-    supabase.from('warehouses').select('*, companies(name)').order('name'),
-    supabase.from('suppliers').select('*').order('name'),
-    supabase.from('customers').select('*').order('name'),
-    supabase.from('material_types').select('*').order('name'),
-    supabase.from('material_sizes').select('*, material_types(name)').order('size_label'),
-    supabase.from('user_profiles').select('*, companies(name)').order('full_name'),
-  ])
+  const companies = (companiesRes as any).companies ?? []
+  const warehouses = (warehousesRes as any).warehouses ?? []
+  const suppliers = (suppliersRes as any).suppliers ?? []
+  const customers = (customersRes as any).customers ?? []
+  const materialTypes = (materialTypesRes as any).material_types ?? []
+  const materialSizes = (materialSizesRes as any).material_sizes ?? []
+  const users = (usersRes as any).user_profiles ?? []
 
   const sections = [
-    { title: 'Companies', data: companies.data ?? [], count: (companies.data ?? []).length, icon: '🏢', href: '/admin/companies' },
-    { title: 'Warehouses', data: warehouses.data ?? [], count: (warehouses.data ?? []).length, icon: '🏭', href: '/admin/warehouses' },
-    { title: 'Suppliers / Vendors', data: suppliers.data ?? [], count: (suppliers.data ?? []).length, icon: '🏪', href: '/admin/suppliers' },
-    { title: 'Customers', data: customers.data ?? [], count: (customers.data ?? []).length, icon: '👥', href: '/admin/customers' },
-    { title: 'Material Types', data: materialTypes.data ?? [], count: (materialTypes.data ?? []).length, icon: '📦', href: '/admin/materials' },
-    { title: 'Material Sizes', data: materialSizes.data ?? [], count: (materialSizes.data ?? []).length, icon: '📐', href: '/admin/sizes' },
-    { title: 'Users', data: users.data ?? [], count: (users.data ?? []).length, icon: '👤', href: '/admin/users' },
+    { title: 'Companies', data: companies, count: companies.length, icon: '🏢', href: '/admin/companies' },
+    { title: 'Warehouses', data: warehouses, count: warehouses.length, icon: '🏭', href: '/admin/warehouses' },
+    { title: 'Suppliers / Vendors', data: suppliers, count: suppliers.length, icon: '🏪', href: '/admin/suppliers' },
+    { title: 'Customers', data: customers, count: customers.length, icon: '👥', href: '/admin/customers' },
+    { title: 'Material Types', data: materialTypes, count: materialTypes.length, icon: '📦', href: '/admin/materials' },
+    { title: 'Material Sizes', data: materialSizes, count: materialSizes.length, icon: '📐', href: '/admin/sizes' },
+    { title: 'Users', data: users, count: users.length, icon: '👤', href: '/admin/users' },
   ]
 
   return (
@@ -51,7 +68,7 @@ export default async function AdminPage() {
           icon="🏢"
           addHref="/admin/companies/new"
           columns={['Name', 'Code', 'Status']}
-          rows={(companies.data ?? []).map((c) => [c.name, c.code, c.is_active ? '✅ Active' : '❌ Inactive'])}
+          rows={companies.map((c: any) => [c.name, c.code, c.is_active ? '✅ Active' : '❌ Inactive'])}
         />
 
         {/* Warehouses */}
@@ -60,7 +77,7 @@ export default async function AdminPage() {
           icon="🏭"
           addHref="/admin/warehouses/new"
           columns={['Name', 'Company', 'Status']}
-          rows={(warehouses.data ?? []).map((w) => [w.name, (w.companies as { name: string } | null)?.name || '—', w.is_active ? '✅ Active' : '❌ Inactive'])}
+          rows={warehouses.map((w: any) => [w.name, w.companies?.name || '—', w.is_active ? '✅ Active' : '❌ Inactive'])}
         />
 
         {/* Suppliers */}
@@ -69,7 +86,7 @@ export default async function AdminPage() {
           icon="🏪"
           addHref="/admin/suppliers/new"
           columns={['Name', 'Contact', 'GST']}
-          rows={(suppliers.data ?? []).map((s) => [s.name, s.contact_person || '—', s.gstin || '—'])}
+          rows={suppliers.map((s: any) => [s.name, s.contact_person || '—', s.gstin || '—'])}
         />
 
         {/* Customers */}
@@ -78,7 +95,7 @@ export default async function AdminPage() {
           icon="👥"
           addHref="/admin/customers/new"
           columns={['Name', 'Contact', 'GST']}
-          rows={(customers.data ?? []).map((c) => [c.name, c.contact_person || '—', c.gstin || '—'])}
+          rows={customers.map((c: any) => [c.name, c.contact_person || '—', c.gstin || '—'])}
         />
 
         {/* Material Types */}
@@ -87,7 +104,7 @@ export default async function AdminPage() {
           icon="📦"
           addHref="/admin/materials/new"
           columns={['Name', 'Unit', 'Description']}
-          rows={(materialTypes.data ?? []).map((m) => [m.name, m.unit, m.description || '—'])}
+          rows={materialTypes.map((m: any) => [m.name, m.unit, m.description || '—'])}
         />
 
         {/* Material Sizes */}
@@ -96,7 +113,7 @@ export default async function AdminPage() {
           icon="📐"
           addHref="/admin/sizes/new"
           columns={['Label', 'Thickness', 'Width']}
-          rows={(materialSizes.data ?? []).map((s) => [s.size_label, s.thickness?.toString() || '—', s.width?.toString() || '—'])}
+          rows={materialSizes.map((s: any) => [s.size_label, s.thickness?.toString() || '—', s.width?.toString() || '—'])}
         />
 
       </div>
@@ -117,10 +134,10 @@ export default async function AdminPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {(users.data ?? []).length === 0 ? (
+              {users.length === 0 ? (
                 <tr><td colSpan={3} className="px-6 py-4 text-gray-500 text-center">No users yet.</td></tr>
               ) : (
-                (users.data ?? []).map((u) => (
+                users.map((u: any) => (
                   <tr key={u.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 font-medium text-gray-900">{u.full_name || '—'}</td>
                     <td className="px-6 py-3">
@@ -128,7 +145,7 @@ export default async function AdminPage() {
                         {u.role?.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-gray-600">{(u.companies as { name: string } | null)?.name || 'All Companies'}</td>
+                    <td className="px-6 py-3 text-gray-600">{u.companies?.name || 'All Companies'}</td>
                   </tr>
                 ))
               )}

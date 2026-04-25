@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
 
 interface Props {
   table: string
@@ -31,7 +31,6 @@ export default function AdminSimpleForm({ table, label, fields }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
     const payload: Record<string, string | number | null> = {}
     for (const f of fields) {
       const val = form[f]
@@ -39,7 +38,13 @@ export default function AdminSimpleForm({ table, label, fields }: Props) {
       else if (!isNaN(Number(val)) && val !== '') payload[f] = parseFloat(val)
       else payload[f] = val
     }
-    const { error: err } = await supabase.from(table).insert(payload)
+    // Build dynamic insert mutation for the given table
+    const mutation = `
+      mutation Insert_${table}($object: ${table}_insert_input!) {
+        insert_${table}_one(object: $object) { id }
+      }
+    `
+    const { error: err } = await hasuraFetch(mutation, { object: payload })
     if (err) { setError(err.message); setLoading(false) }
     else router.push('/admin')
   }

@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { hasuraFetch } from '@/lib/hasura/fetcher'
+import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
+import {
+  ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
+  CREATE_TRANSFER_MUTATION, CREATE_TRANSFER_ITEMS_MUTATION,
+} from '@/lib/hasura/queries'
 import type { Company, Warehouse, MaterialType, MaterialSize } from '@/types'
 
 type TransferLine = {
@@ -23,7 +29,6 @@ const emptyLine = (): TransferLine => ({
 
 export default function NewTransferPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
@@ -39,22 +44,24 @@ export default function NewTransferPage() {
   const [lines, setLines] = useState<TransferLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [masterDataLoading, setMasterDataLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
       const [c, w, mt, ms] = await Promise.all([
-        supabase.from('companies').select('*').eq('is_active', true).order('name'),
-        supabase.from('warehouses').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_types').select('*').eq('is_active', true).order('name'),
-        supabase.from('material_sizes').select('*').eq('is_active', true).order('size_label'),
+        hasuraFetch(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
       ])
-      setCompanies(c.data ?? [])
-      setWarehouses(w.data ?? [])
-      setMaterialTypes(mt.data ?? [])
-      setMaterialSizes(ms.data ?? [])
+      setCompanies((c.data as any)?.companies ?? [])
+      setWarehouses((w.data as any)?.warehouses ?? [])
+      setMaterialTypes((mt.data as any)?.material_types ?? [])
+      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setMasterDataLoading(false)
     }
     load()
-  }, [supabase])
+  }, [])
 
   const updateLine = useCallback((index: number, field: keyof TransferLine, value: string) => {
     setLines((prev) => {
@@ -79,9 +86,8 @@ export default function NewTransferPage() {
       return
     }
 
-    const { data: transfer, error: tErr } = await supabase
-      .from('transfers')
-      .insert({
+    const { data: transferData, error: tErr } = await hasuraFetch<any>(
+      CREATE_TRANSFER_MUTATION, {
         from_company_id: fromCompanyId || null,
         to_company_id: toCompanyId || null,
         from_warehouse_id: fromWarehouseId || null,
@@ -89,17 +95,16 @@ export default function NewTransferPage() {
         transfer_date: transferDate,
         status: 'pending',
         notes: notes || null,
-      })
-      .select()
-      .single()
-
+      }
+    )
+    const transfer = transferData?.insert_transfers_one
     if (tErr || !transfer) {
       setError(tErr?.message ?? 'Failed to create transfer')
       setLoading(false)
       return
     }
 
-    const itemsPayload = validLines.map((l) => ({
+    const items = validLines.map((l) => ({
       transfer_id: transfer.id,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
@@ -107,9 +112,7 @@ export default function NewTransferPage() {
       quantity: parseFloat(l.quantity),
       notes: l.notes || null,
     }))
-
-    const { error: iErr } = await supabase.from('transfer_items').insert(itemsPayload)
-
+    const { error: iErr } = await hasuraFetch(CREATE_TRANSFER_ITEMS_MUTATION, { items })
     if (iErr) {
       setError(iErr.message)
       setLoading(false)
@@ -126,6 +129,15 @@ export default function NewTransferPage() {
         <h1 className="text-2xl font-bold text-gray-900">New Transfer</h1>
         <p className="mt-1 text-sm text-gray-500">Transfer material between companies or warehouses</p>
       </div>
+
+      <MissingMasterDataBanner
+        loading={masterDataLoading}
+        checks={[
+          { label: 'Companies', count: companies.length, adminPath: '/admin/companies/new' },
+          { label: 'Warehouses', count: warehouses.length, adminPath: '/admin/warehouses/new' },
+          { label: 'Material Types', count: materialTypes.length, adminPath: '/admin/materials/new' },
+        ]}
+      />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border p-6">
