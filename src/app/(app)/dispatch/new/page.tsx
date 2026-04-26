@@ -13,6 +13,7 @@ import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize } from '@/types'
 
 type DispatchLine = {
+  item_name: string
   material_type_id: string
   material_size_id: string
   size_label: string
@@ -22,7 +23,7 @@ type DispatchLine = {
   notes: string
 }
 
-const emptyLine = (): DispatchLine => ({ material_type_id: '', material_size_id: '', size_label: '', quantity: '', rate: '', amount: '', notes: '' })
+const emptyLine = (): DispatchLine => ({ item_name: '', material_type_id: '', material_size_id: '', size_label: '', quantity: '', rate: '', amount: '', notes: '' })
 
 export default function NewDispatchPage() {
   const router = useRouter()
@@ -68,6 +69,11 @@ export default function NewDispatchPage() {
     setLines((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
+      // Auto-fill item_name when material type changes
+      if (field === 'material_type_id') {
+        const mt = materialTypes.find((m) => m.id === value)
+        if (mt && !updated[index].item_name) updated[index].item_name = mt.name
+      }
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
@@ -75,7 +81,7 @@ export default function NewDispatchPage() {
       }
       return updated
     })
-  }, [])
+  }, [materialTypes])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -117,6 +123,7 @@ export default function NewDispatchPage() {
 
     const items = validLines.map((l) => ({
       dispatch_order_id: order.id,
+      item_name: l.item_name || null,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
       size_label: l.size_label || null,
@@ -139,8 +146,8 @@ export default function NewDispatchPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">New Dispatch Order</h1>
-        <p className="mt-1 text-sm text-gray-500">Create a new sales dispatch</p>
+        <h1 className="text-2xl font-bold text-gray-900">New Sale Entry</h1>
+        <p className="mt-1 text-sm text-gray-500">Create a new sale invoice / customer dispatch</p>
       </div>
 
       <MissingMasterDataBanner
@@ -214,6 +221,7 @@ export default function NewDispatchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
@@ -229,6 +237,11 @@ export default function NewDispatchPage() {
                   const sizesForType = materialSizes.filter((s) => !s.material_type_id || s.material_type_id === line.material_type_id)
                   return (
                     <tr key={i}>
+                      <td className="pr-3 py-2">
+                        <input type="text" value={line.item_name} onChange={(e) => updateLine(i, 'item_name', e.target.value)}
+                          placeholder="Item name"
+                          className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                      </td>
                       <td className="pr-3 py-2">
                         <select value={line.material_type_id} onChange={(e) => updateLine(i, 'material_type_id', e.target.value)} required
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
@@ -278,7 +291,7 @@ export default function NewDispatchPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={3} className="py-3 text-sm font-semibold text-right pr-3">Totals:</td>
+                  <td colSpan={4} className="py-3 text-sm font-semibold text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-sm font-bold">{totalQty.toFixed(3)}</td>
                   <td></td>
                   <td className="py-3 pr-3 text-sm font-bold">₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -298,7 +311,7 @@ export default function NewDispatchPage() {
         <div className="flex gap-3">
           <button type="submit" disabled={loading}
             className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Create Dispatch'}
+            {loading ? 'Saving...' : '✓ Create Sale'}
           </button>
           <button type="button" onClick={() => router.back()}
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">

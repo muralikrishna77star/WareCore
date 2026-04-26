@@ -12,6 +12,7 @@ import {
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize } from '@/types'
 
 type LineItem = {
+  item_name: string
   material_type_id: string
   material_size_id: string
   size_label: string
@@ -22,6 +23,7 @@ type LineItem = {
 }
 
 const emptyLine = (): LineItem => ({
+  item_name: '',
   material_type_id: '',
   material_size_id: '',
   size_label: '',
@@ -80,6 +82,11 @@ export default function NewBillPage() {
     setLines((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
+      // Auto-fill item_name when material type changes
+      if (field === 'material_type_id') {
+        const mt = materialTypes.find((m) => m.id === value)
+        if (mt && !updated[index].item_name) updated[index].item_name = mt.name
+      }
       // Auto-calculate amount
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
@@ -88,7 +95,7 @@ export default function NewBillPage() {
       }
       return updated
     })
-  }, [])
+  }, [materialTypes])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -104,6 +111,11 @@ export default function NewBillPage() {
     const validLines = lines.filter((l) => l.material_type_id && l.quantity)
     if (!validLines.length) {
       setError('Add at least one line item with material and quantity.')
+      setLoading(false)
+      return
+    }
+    if (!warehouseId) {
+      setError('Please select a warehouse before saving.')
       setLoading(false)
       return
     }
@@ -131,6 +143,7 @@ export default function NewBillPage() {
     // Insert line items
     const items = validLines.map((l) => ({
       bill_id: bill.id,
+      item_name: l.item_name || null,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
       size_label: l.size_label || null,
@@ -191,6 +204,7 @@ export default function NewBillPage() {
               <select
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
+                required
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">— Select Warehouse —</option>
@@ -266,6 +280,7 @@ export default function NewBillPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
@@ -283,6 +298,15 @@ export default function NewBillPage() {
                   )
                   return (
                     <tr key={i} className="py-1">
+                      <td className="pr-3 py-2">
+                        <input
+                          type="text"
+                          value={line.item_name}
+                          onChange={(e) => updateLine(i, 'item_name', e.target.value)}
+                          placeholder="Item name"
+                          className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                        />
+                      </td>
                       <td className="pr-3 py-2">
                         <select
                           value={line.material_type_id}
@@ -381,7 +405,7 @@ export default function NewBillPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={3} className="py-3 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
+                  <td colSpan={4} className="py-3 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-sm font-bold text-gray-900">{totalQty.toFixed(3)}</td>
                   <td className="py-3 pr-3"></td>
                   <td className="py-3 pr-3 text-sm font-bold text-gray-900">₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>

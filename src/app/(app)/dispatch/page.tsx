@@ -13,14 +13,14 @@ export default async function DispatchPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dispatch Orders</h1>
-          <p className="mt-1 text-sm text-gray-500">Sales dispatches to customers</p>
+          <h1 className="text-2xl font-bold text-gray-900">Sale Entry</h1>
+          <p className="mt-1 text-sm text-gray-500">Sales invoices and customer dispatches</p>
         </div>
         <Link
           href="/dispatch/new"
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
-          + New Dispatch
+          + New Sale
         </Link>
       </div>
 
@@ -29,9 +29,9 @@ export default async function DispatchPage() {
           {!orders || orders.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-400 text-4xl mb-3">🚚</p>
-              <p className="text-gray-500">No dispatch orders yet.</p>
+              <p className="text-gray-500">No sale entries yet.</p>
               <Link href="/dispatch/new" className="mt-4 inline-block text-blue-600 hover:underline text-sm">
-                Create first dispatch →
+                Create first sale →
               </Link>
             </div>
           ) : (

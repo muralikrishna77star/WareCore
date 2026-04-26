@@ -290,14 +290,15 @@ export const CREATE_MATERIAL_SIZE_MUTATION = `
 `
 
 export const CREATE_USER_PROFILE_MUTATION = `
-  mutation CreateUserProfile($id: uuid!, $full_name: String!, $role: String!, $company_id: uuid, $warehouse_id: uuid, $phone: String) {
+  mutation CreateUserProfile($id: uuid!, $email: String!, $password_hash: String!, $full_name: String!, $role: String!, $company_id: uuid, $warehouse_id: uuid) {
     insert_user_profiles_one(object: {
       id: $id
+      email: $email
+      password_hash: $password_hash
       full_name: $full_name
       role: $role
       company_id: $company_id
       warehouse_id: $warehouse_id
-      phone: $phone
     }) {
       id
       full_name
@@ -306,7 +307,7 @@ export const CREATE_USER_PROFILE_MUTATION = `
 `
 
 export const CREATE_PURCHASE_BILL_MUTATION = `
-  mutation CreatePurchaseBill($supplier_id: uuid!, $company_id: uuid!, $warehouse_id: uuid!, $bill_number: String!, $bill_date: date!, $total_quantity: numeric, $total_amount: numeric, $notes: String) {
+  mutation CreatePurchaseBill($supplier_id: uuid, $company_id: uuid, $warehouse_id: uuid, $bill_number: String!, $bill_date: date!, $total_quantity: numeric, $total_amount: numeric, $notes: String) {
     insert_purchase_bills_one(object: {
       supplier_id: $supplier_id
       company_id: $company_id
@@ -400,7 +401,7 @@ export const PURCHASE_BILL_BY_ID_QUERY = `
 export const PURCHASE_BILL_ITEMS_QUERY = `
   query GetPurchaseBillItems($bill_id: uuid!) {
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
-      id bill_id quantity rate amount notes size_label
+      id bill_id quantity rate amount notes size_label item_name
       material_types { name }
       material_sizes { size_label }
     }
@@ -411,6 +412,7 @@ export const CREATE_PURCHASE_BILL_ITEMS_MUTATION = `
   mutation CreatePurchaseBillItems($objects: [purchase_bill_items_insert_input!]!) {
     insert_purchase_bill_items(objects: $objects) {
       affected_rows
+      returning { id item_name material_types { name } }
     }
   }
 `
@@ -541,6 +543,24 @@ export const CREATE_DISPATCH_ORDER_MUTATION = `
 export const CREATE_DISPATCH_ITEMS_MUTATION = `
   mutation CreateDispatchItems($objects: [dispatch_items_insert_input!]!) {
     insert_dispatch_items(objects: $objects) { affected_rows }
+  }
+`
+
+// ─── Suppliers & Customers admin list queries ────────────────────────────────
+
+export const SUPPLIERS_LIST_QUERY = `
+  query GetSuppliersList {
+    suppliers(order_by: {name: asc}) {
+      id name contact_person phone email city state gstin is_active created_at
+    }
+  }
+`
+
+export const CUSTOMERS_LIST_QUERY = `
+  query GetCustomersList {
+    customers(order_by: {name: asc}) {
+      id name contact_person phone email city state gstin is_active created_at
+    }
   }
 `
 

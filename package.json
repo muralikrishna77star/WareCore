@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:dev": "node scripts/seed-dev.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.0",

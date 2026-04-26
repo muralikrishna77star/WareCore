@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { hasuraFetch } from '@/lib/hasura/fetcher'
-import { CREATE_USER_PROFILE_MUTATION } from '@/lib/hasura/queries'
 
 interface Props {
   companies: { id: string; name: string }[]
@@ -24,7 +22,7 @@ export default function AdminUserInviteForm({ companies, warehouses }: Props) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [form, setForm] = useState({
-    email: '', full_name: '', role: 'billing_staff', company_id: '', warehouse_id: '',
+    email: '', password: '', full_name: '', role: 'billing_staff', company_id: '', warehouse_id: '',
   })
 
   function set(field: string, value: string) { setForm((p) => ({ ...p, [field]: value })) }
@@ -33,15 +31,20 @@ export default function AdminUserInviteForm({ companies, warehouses }: Props) {
     e.preventDefault()
     setLoading(true); setError(''); setSuccess('')
 
-    // Dev mode: create user profile directly in database (no auth.signUp)
-    const { error: profileErr } = await hasuraFetch(CREATE_USER_PROFILE_MUTATION, {
-      full_name: form.full_name,
-      email: form.email,
-      role: form.role,
-      company_id: form.company_id || null,
-      warehouse_id: form.warehouse_id || null,
+    const res = await fetch('/api/auth/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: form.email,
+        password: form.password,
+        full_name: form.full_name,
+        role: form.role,
+        company_id: form.company_id || null,
+        warehouse_id: form.warehouse_id || null,
+      }),
     })
-    if (profileErr) { setError(profileErr.message); setLoading(false); return }
+    const json = await res.json()
+    if (!res.ok) { setError(json.error ?? 'Failed to create user'); setLoading(false); return }
 
     setSuccess(`User ${form.email} created successfully.`)
     setLoading(false)
@@ -67,6 +70,12 @@ export default function AdminUserInviteForm({ companies, warehouses }: Props) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
           <input required value={form.full_name} onChange={(e) => set('full_name', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+          <input required type="password" minLength={8} value={form.password} onChange={(e) => set('password', e.target.value)}
+            placeholder="Min 8 characters"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div>

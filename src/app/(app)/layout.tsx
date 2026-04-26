@@ -37,9 +37,9 @@ const navItems = [
     icon: '🏭',
   },
   {
-    title: 'Dispatch',
+    title: 'Sale Entry',
     href: '/dispatch',
-    icon: '🚚',
+    icon: '🧾',
   },
   {
     title: 'Reports',
