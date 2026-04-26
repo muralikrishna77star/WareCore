@@ -29,20 +29,20 @@ const CHECK_EMAIL_QUERY = `
 `
 
 export async function POST(request: NextRequest) {
-  let body: { email?: string; password?: string; full_name?: string; role?: string; company_id?: string; warehouse_id?: string }
+  let body: { email?: string; password?: string; google_only?: boolean; full_name?: string; role?: string; company_id?: string; warehouse_id?: string }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { email, password, full_name, role, company_id, warehouse_id } = body
+  const { email, password, google_only, full_name, role, company_id, warehouse_id } = body
 
-  if (!email || !password || !full_name || !role) {
-    return NextResponse.json({ error: 'email, password, full_name and role are required' }, { status: 400 })
+  if (!email || !full_name || !role) {
+    return NextResponse.json({ error: 'email, full_name and role are required' }, { status: 400 })
   }
 
-  if (password.length < 8) {
+  if (!google_only && (!password || password.length < 8)) {
     return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
   }
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 })
   }
 
-  const password_hash = await bcrypt.hash(password, 12)
+  const password_hash = google_only ? '' : await bcrypt.hash(password!, 12)
   const id = crypto.randomUUID()
 
   const res = await fetch(HASURA_URL, {
