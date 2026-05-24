@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
+import { getAppUrl, getGoogleRedirectUri, GOOGLE_CLIENT_ID } from '@/lib/env'
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || ''
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
-
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const appUrl = getAppUrl(request)
+  const redirectUri = getGoogleRedirectUri(request)
   if (!GOOGLE_CLIENT_ID) {
-    return NextResponse.redirect(`${APP_URL}/login?error=google_not_configured`)
+    return NextResponse.redirect(`${appUrl}/login?error=google_not_configured`)
   }
 
   // Random state token for CSRF protection
@@ -14,7 +14,7 @@ export async function GET() {
 
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: `${APP_URL}/api/auth/google/callback`,
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: 'openid email profile',
     state,

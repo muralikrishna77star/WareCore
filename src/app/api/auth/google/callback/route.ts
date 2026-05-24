@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import {
+  getAppRedirectUrl,
+  getGoogleRedirectUri,
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  HASURA_URL,
+  HASURA_ADMIN_SECRET,
+} from '@/lib/env'
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID?.trim() || ''
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET?.trim() || ''
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL?.trim() || ''
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET?.trim() || ''
+const CLIENT_ID = GOOGLE_CLIENT_ID
+const CLIENT_SECRET = GOOGLE_CLIENT_SECRET
+const HASURA_ADMIN_SECRET_VALUE = HASURA_ADMIN_SECRET
+const HASURA_GRAPHQL_URL = HASURA_URL
 
 const FIND_USER_BY_EMAIL = `
   query FindUserByEmail($email: String!) {
@@ -30,15 +37,14 @@ interface GoogleUserInfo {
   verified_email: boolean
 }
 
-async function exchangeCodeForTokens(code: string): Promise<GoogleTokenResponse | null> {
-  const redirectUri = `${APP_URL.trim()}/api/auth/google/callback`
+async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<GoogleTokenResponse | null> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: GOOGLE_CLIENT_ID.trim(),
-      client_secret: GOOGLE_CLIENT_SECRET.trim(),
+      client_id: CLIENT_ID.trim(),
+      client_secret: CLIENT_SECRET.trim(),
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
@@ -71,11 +77,11 @@ async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo | 
 }
 
 async function findUserByEmail(email: string) {
-  const res = await fetch(HASURA_URL, {
+  const res = await fetch(HASURA_GRAPHQL_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_SECRET,
+      'x-hasura-admin-secret': HASURA_ADMIN_SECRET_VALUE,
     },
     body: JSON.stringify({ query: FIND_USER_BY_EMAIL, variables: { email } }),
     cache: 'no-store',
@@ -84,8 +90,8 @@ async function findUserByEmail(email: string) {
   return json?.data?.user_profiles?.[0] ?? null
 }
 
-function redirectWithError(error: string) {
-  return NextResponse.redirect(`${APP_URL}/login?error=${error}`)
+function redirectWithError(error: string, request?: NextRequest) {
+  return NextResponse.redirect(getAppRedirectUrl(`/login?error=${error}`, request))
 }
 
 export async function GET(request: NextRequest) {
@@ -96,34 +102,35 @@ export async function GET(request: NextRequest) {
 
   // User denied Google permission
   if (googleError) {
-    return redirectWithError('google_denied')
+    return redirectWithError('google_denied', request)
   }
 
   // CSRF state validation
   const storedState = request.cookies.get('oauth_state')?.value
   if (!state || !storedState || state !== storedState) {
-    return redirectWithError('invalid_state')
+    return redirectWithError('invalid_state', request)
   }
 
   if (!code) {
-    return redirectWithError('no_code')
+    return redirectWithError('no_code', request)
   }
 
-  const tokens = await exchangeCodeForTokens(code)
+  const redirectUri = getGoogleRedirectUri(request)
+  const tokens = await exchangeCodeForTokens(code, redirectUri)
   if (!tokens?.access_token) {
     const googleErr = encodeURIComponent((tokens as { _google_error?: string })?._google_error || 'unknown')
-    return NextResponse.redirect(`${APP_URL}/login?error=token_failed&detail=${googleErr}`)
+    return NextResponse.redirect(getAppRedirectUrl(`/login?error=token_failed&detail=${googleErr}`, request))
   }
 
   const googleUser = await getGoogleUserInfo(tokens.access_token)
   if (!googleUser?.email || !googleUser.verified_email) {
-    return redirectWithError('unverified_email')
+    return redirectWithError('unverified_email', request)
   }
 
   const user = await findUserByEmail(googleUser.email.toLowerCase())
   if (!user) {
     // Google email is not registered in WareCore — admin must create the account first
-    return redirectWithError('not_registered')
+    return redirectWithError('not_registered', request)
   }
 
   const sessionToken = signSession({
@@ -133,7 +140,7 @@ export async function GET(request: NextRequest) {
     fullName: user.full_name,
   })
 
-  const response = NextResponse.redirect(`${APP_URL}/dashboard`)
+  const response = NextResponse.redirect(getAppRedirectUrl('/dashboard', request))
 
   // Clear the OAuth state cookie
   response.cookies.delete('oauth_state')

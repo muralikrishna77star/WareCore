@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import nodemailer from 'nodemailer'
+import { getAppUrl, HASURA_URL, HASURA_ADMIN_SECRET } from '@/lib/env'
 
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const APP_URL = getAppUrl()
+const HASURA_SECRET = HASURA_ADMIN_SECRET
 
 const TOKEN_EXPIRY_HOURS = 1
 
