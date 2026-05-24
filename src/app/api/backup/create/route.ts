@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Update metadata with user info and notes
-    metadata.createdBy = session.user?.email || 'unknown'
+    metadata.createdBy = session.email || 'unknown'
     if (notes) {
       metadata.notes = notes
     }
