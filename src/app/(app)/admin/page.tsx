@@ -8,13 +8,25 @@ import {
   CUSTOMERS_QUERY,
   MATERIAL_TYPES_QUERY,
   MATERIAL_SIZES_QUERY,
+  ITEM_GROUPS_QUERY,
+  ITEM_MASTERS_QUERY,
   USER_PROFILES_QUERY,
 } from '@/lib/hasura/queries'
 import Link from 'next/link'
 
 export default async function AdminPage() {
   // Fetch all data in parallel using Hasura GraphQL
-  const [companiesRes, warehousesRes, suppliersRes, customersRes, materialTypesRes, materialSizesRes, usersRes] =
+  const [
+    companiesRes,
+    warehousesRes,
+    suppliersRes,
+    customersRes,
+    materialTypesRes,
+    materialSizesRes,
+    itemGroupsRes,
+    itemMastersRes,
+    usersRes,
+  ] =
     await Promise.all([
       hasuraQuery(COMPANIES_QUERY).catch(() => ({ companies: [] })),
       hasuraQuery(WAREHOUSES_QUERY).catch(() => ({ warehouses: [] })),
@@ -22,6 +34,8 @@ export default async function AdminPage() {
       hasuraQuery(CUSTOMERS_QUERY).catch(() => ({ customers: [] })),
       hasuraQuery(MATERIAL_TYPES_QUERY).catch(() => ({ material_types: [] })),
       hasuraQuery(MATERIAL_SIZES_QUERY).catch(() => ({ material_sizes: [] })),
+      hasuraQuery(ITEM_GROUPS_QUERY).catch(() => ({ item_groups: [] })),
+      hasuraQuery(ITEM_MASTERS_QUERY).catch(() => ({ item_master: [] })),
       hasuraQuery(USER_PROFILES_QUERY).catch(() => ({ user_profiles: [] })),
     ])
 
@@ -31,6 +45,8 @@ export default async function AdminPage() {
   const customers = (customersRes as any).customers ?? []
   const materialTypes = (materialTypesRes as any).material_types ?? []
   const materialSizes = (materialSizesRes as any).material_sizes ?? []
+  const itemGroups = (itemGroupsRes as any).item_groups ?? []
+  const itemMasters = (itemMastersRes as any).item_master ?? []
   const users = (usersRes as any).user_profiles ?? []
 
   const sections = [
@@ -40,6 +56,8 @@ export default async function AdminPage() {
     { title: 'Customers', data: customers, count: customers.length, icon: '👥', href: '/admin/customers' },
     { title: 'Material Types', data: materialTypes, count: materialTypes.length, icon: '📦', href: '/admin/materials' },
     { title: 'Material Sizes', data: materialSizes, count: materialSizes.length, icon: '📐', href: '/admin/sizes' },
+    { title: 'Item Groups', data: itemGroups, count: itemGroups.length, icon: '🧭', href: '/admin/item-groups' },
+    { title: 'Item Master', data: itemMasters, count: itemMasters.length, icon: '📋', href: '/admin/items' },
     { title: 'Users', data: users, count: users.length, icon: '👤', href: '/admin/users' },
   ]
 
@@ -116,6 +134,22 @@ export default async function AdminPage() {
           addHref="/admin/sizes/new"
           columns={['Label', 'Thickness', 'Width']}
           rows={materialSizes.map((s: any) => [s.size_label, s.thickness?.toString() || '—', s.width?.toString() || '—'])}
+        />
+
+        <MasterTable
+          title="Item Groups"
+          icon="🧭"
+          addHref="/admin/item-groups/new"
+          columns={['Group Code', 'Description', 'Status']}
+          rows={itemGroups.map((g: any) => [g.group_code, g.group_desc || '—', g.is_active ? 'Active' : 'Inactive'])}
+        />
+
+        <MasterTable
+          title="Item Master"
+          icon="📋"
+          addHref="/admin/items/new"
+          columns={['Code', 'Name', 'Group']}
+          rows={itemMasters.map((item: any) => [item.item_code, item.item_name, item.item_groups?.group_code || '—'])}
         />
 
       </div>

@@ -12,11 +12,15 @@ interface Props {
 
 const fieldLabels: Record<string, string> = {
   name: 'Name',
+  group_code: 'Group Code',
+  group_desc: 'Group Description',
   description: 'Description',
   size_label: 'Label (e.g. 0.80x121)',
   thickness_mm: 'Thickness (mm)',
   width_mm: 'Width (mm)',
 }
+
+const requiredFields = new Set(['name', 'size_label', 'group_code'])
 
 export default function AdminSimpleForm({ table, label, fields }: Props) {
   const router = useRouter()
@@ -56,10 +60,10 @@ export default function AdminSimpleForm({ table, label, fields }: Props) {
         <div key={field}>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {fieldLabels[field] ?? field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-            {field === 'name' || field === 'size_label' ? ' *' : ''}
+            {requiredFields.has(field) ? ' *' : ''}
           </label>
           <input
-            required={field === 'name' || field === 'size_label'}
+            required={requiredFields.has(field)}
             value={form[field]}
             onChange={(e) => set(field, e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"

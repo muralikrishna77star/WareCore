@@ -12,7 +12,7 @@ const navItems = [
     icon: '📊',
   },
   {
-    title: 'Bill Entry',
+    title: 'Purchase Entry',
     href: '/bills',
     icon: '📋',
   },
