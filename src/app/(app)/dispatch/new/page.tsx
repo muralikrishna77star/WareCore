@@ -9,6 +9,7 @@ import {
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
   CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
   PURCHASE_LINE_STOCK_QUERY,
+  CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize } from '@/types'
@@ -124,6 +125,56 @@ export default function NewDispatchPage() {
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
   const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
   const totalAmt = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+
+  const handleCreateMaterialType = async () => {
+    if (!newMaterialTypeName.trim()) return
+    setMaterialTypeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
+      name: newMaterialTypeName.trim(), unit: newMaterialTypeUnit.trim() || null, description: null,
+    })
+    if (err) { setError(err.message); setMaterialTypeDialogLoading(false); return }
+    const newType = data?.insert_material_types_one
+    if (newType) {
+      setMaterialTypes((prev) => [...prev, newType])
+      if (activeLineIndexForNewType !== null) {
+        updateLine(activeLineIndexForNewType, 'material_type_id', newType.id)
+        updateLine(activeLineIndexForNewType, 'material_size_id', '')
+        updateLine(activeLineIndexForNewType, 'size_label', '')
+      }
+      setShowMaterialTypeDialog(false); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons'); setActiveLineIndexForNewType(null)
+    }
+    setMaterialTypeDialogLoading(false)
+  }
+
+  const handleCreateSize = async () => {
+    const materialTypeId = newSizeMaterialTypeId || (activeLineIndexForNewSize !== null ? lines[activeLineIndexForNewSize].material_type_id : '')
+    if (!materialTypeId || !newSizeLabel.trim()) return
+    setSizeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_sizes_one: MaterialSize }>(CREATE_MATERIAL_SIZE_MUTATION, {
+      material_type_id: materialTypeId, size_label: newSizeLabel.trim(),
+      thickness: newSizeThickness ? parseFloat(newSizeThickness) : null,
+      width: newSizeWidth ? parseFloat(newSizeWidth) : null,
+    })
+    if (err) { setError(err.message); setSizeDialogLoading(false); return }
+    const newSize = data?.insert_material_sizes_one
+    if (newSize) {
+      setMaterialSizes((prev) => [...prev, newSize])
+      if (activeLineIndexForNewSize !== null) {
+        updateLine(activeLineIndexForNewSize, 'material_size_id', newSize.id)
+        updateLine(activeLineIndexForNewSize, 'size_label', newSize.size_label)
+      }
+      setShowSizeDialog(false); setNewSizeMaterialTypeId(''); setNewSizeLabel(''); setNewSizeThickness(''); setNewSizeWidth(''); setActiveLineIndexForNewSize(null)
+    }
+    setSizeDialogLoading(false)
+  }
+
+  const handleCancelNewType = () => {
+    setShowMaterialTypeDialog(false); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons'); setActiveLineIndexForNewType(null)
+  }
+
+  const handleCancelNewSize = () => {
+    setShowSizeDialog(false); setNewSizeMaterialTypeId(''); setNewSizeLabel(''); setNewSizeThickness(''); setNewSizeWidth(''); setActiveLineIndexForNewSize(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

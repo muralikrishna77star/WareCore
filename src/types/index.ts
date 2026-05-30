@@ -170,6 +170,8 @@ export interface FinancialEntry {
 export interface PurchaseBillItem {
   id: string
   bill_id: string
+  item_name?: string
+  item_master_id?: string
   material_type_id: string
   material_size_id?: string
   size_label?: string
@@ -178,6 +180,7 @@ export interface PurchaseBillItem {
   rate?: number
   amount?: number
   purchase_line_id?: string
+  line_number?: number
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize

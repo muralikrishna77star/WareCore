@@ -87,7 +87,7 @@ export default async function AdminPage() {
     }
   }
 
-  const adminWarnings = []
+  const adminWarnings: string[] = []
   if (itemGroupsRes.status === 'rejected') {
     adminWarnings.push(`Item Groups data is currently unavailable: ${formatReason(itemGroupsRes.reason)}`)
   }
