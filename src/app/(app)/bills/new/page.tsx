@@ -28,6 +28,11 @@ type LineItem = {
   notes: string
 }
 
+function generatePurchaseLineId(lineNumber: number): string {
+  const ts = Date.now().toString(36).slice(-5).toUpperCase()
+  return `PL-${ts}-${String(lineNumber).padStart(3, '0')}`
+}
+
 const emptyLine = (): LineItem => ({
   purchase_line_id: '',
   item_master_id: '',
@@ -61,7 +66,9 @@ export default function NewBillPage() {
   const [billNumber, setBillNumber] = useState('')
   const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState<LineItem[]>([emptyLine()])
+  const [lines, setLines] = useState<LineItem[]>(() => [
+    { ...emptyLine(), purchase_line_id: generatePurchaseLineId(1) },
+  ])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [masterDataLoading, setMasterDataLoading] = useState(true)
@@ -139,7 +146,7 @@ export default function NewBillPage() {
       return Number.isFinite(n) ? Math.max(max, n) : max
     }, 0)
 
-    return `${prefix}${String(sequence + 1).padStart(3, '0')}`
+    return `${prefix}${String(sequence + 1).padStart(4, '0')}`
   }
 
   useEffect(() => {
@@ -187,6 +194,30 @@ export default function NewBillPage() {
         }
       }
 
+      // When material type changes, clear item selection and size
+      if (field === 'material_type_id') {
+        updated[index].material_size_id = ''
+        updated[index].size_label = ''
+        updated[index].item_master_id = ''
+        updated[index].item_name = ''
+        updated[index].item_code = ''
+      }
+
+      // When material size changes, set size_label and clear item if it no longer matches
+      if (field === 'material_size_id') {
+        const sz = materialSizes.find((s) => s.id === value)
+        updated[index].size_label = sz?.size_label || ''
+        // if an item was selected but doesn't match the size, clear it
+        if (updated[index].item_master_id) {
+          const sel = itemMasters.find((im) => im.id === updated[index].item_master_id)
+          if (!sel || (sel.material_size_id && sel.material_size_id !== value)) {
+            updated[index].item_master_id = ''
+            updated[index].item_name = ''
+            updated[index].item_code = ''
+          }
+        }
+      }
+
       // Auto-calculate amount
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
@@ -196,9 +227,13 @@ export default function NewBillPage() {
 
       return updated
     })
-  }, [itemMasters])
+  }, [itemMasters, materialSizes])
 
-  const addLine = () => setLines((prev) => [...prev, emptyLine()])
+  const addLine = () =>
+    setLines((prev) => [
+      ...prev,
+      { ...emptyLine(), purchase_line_id: generatePurchaseLineId(prev.length + 1) },
+    ])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
 
   const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
@@ -218,7 +253,19 @@ export default function NewBillPage() {
     })
 
     if (err) {
-      alert(`Error: ${err.message}`)
+      const msg = err.message || ''
+      const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
+      if (missingInsertMatch && /insert_material_types_one/i.test(missingInsertMatch[1])) {
+        alert(
+          'Server error: material type creation mutation is not available.\n' +
+            'Possible causes: the `material_types` table is not present or not tracked in Hasura.\n' +
+            'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
+        )
+        setMaterialTypeDialogLoading(false)
+        return
+      }
+
+      alert(`Error: ${msg}`)
       setMaterialTypeDialogLoading(false)
       return
     }
@@ -250,7 +297,19 @@ export default function NewBillPage() {
     })
 
     if (err) {
-      alert(`Error: ${err.message}`)
+      const msg = err.message || ''
+      const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
+      if (missingInsertMatch && /insert_material_sizes_one/i.test(missingInsertMatch[1])) {
+        alert(
+          'Server error: material size creation mutation is not available.\n' +
+            'Possible causes: the `material_sizes` table is not present or not tracked in Hasura.\n' +
+            'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
+        )
+        setSizeDialogLoading(false)
+        return
+      }
+
+      alert(`Error: ${msg}`)
       setSizeDialogLoading(false)
       return
     }
@@ -293,7 +352,19 @@ export default function NewBillPage() {
     })
 
     if (err) {
-      alert(`Error: ${err.message}`)
+      const msg = err.message || ''
+      const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
+      if (missingInsertMatch && /insert_item_master_one/i.test(missingInsertMatch[1])) {
+        alert(
+          'Server error: item creation mutation is not available.\n' +
+            'Possible causes: the `item_master` table is not present or not tracked in Hasura.\n' +
+            'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
+        )
+        setNewItemDialogLoading(false)
+        return
+      }
+
+      alert(`Error: ${msg}`)
       setNewItemDialogLoading(false)
       return
     }
@@ -370,6 +441,7 @@ export default function NewBillPage() {
     // Insert line items
     const items = validLines.map((l) => ({
       bill_id: bill.id,
+      purchase_line_id: l.purchase_line_id || null,
       item_name: l.item_name || null,
       item_master_id: l.item_master_id || null,
       material_type_id: l.material_type_id || null,
@@ -508,7 +580,7 @@ export default function NewBillPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">PurchaseLineID</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Code</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
@@ -525,17 +597,16 @@ export default function NewBillPage() {
                   const sizesForType = materialSizes.filter(
                     (s) => !s.material_type_id || s.material_type_id === line.material_type_id
                   )
-                  const itemsForType = getItemsForMaterialType(line.material_type_id)
+                  const itemsForType = itemMasters.filter((im) =>
+                    im.material_type_id === line.material_type_id &&
+                    (!line.material_size_id || !im.material_size_id || im.material_size_id === line.material_size_id)
+                  )
                   return (
                     <tr key={i} className="py-1">
                       <td className="pr-3 py-2">
-                        <input
-                          type="text"
-                          value={line.purchase_line_id}
-                          onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
-                          placeholder="Auto-generated"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        />
+                        <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-xs font-mono font-medium text-blue-700 whitespace-nowrap select-all">
+                          {line.purchase_line_id}
+                        </span>
                       </td>
                       <td className="pr-3 py-2">
                         <input
@@ -961,10 +1032,12 @@ export default function NewBillPage() {
               <input
                 type="text"
                 value={newGroupCode}
-                onChange={(e) => setNewGroupCode(e.target.value)}
-                placeholder="e.g. X"
+                onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())}
+                maxLength={2}
+                placeholder="e.g. AA"
                 className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               />
+              <p className="mt-1 text-xs text-slate-500">Enter exactly 2 characters for the group code.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Group Description</label>
@@ -987,24 +1060,44 @@ export default function NewBillPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!newGroupCode.trim()) {
+                  const code = newGroupCode.trim().toUpperCase()
+                  if (!code) {
                     alert('Group code is required.')
+                    return
+                  }
+                  if (code.length !== 2) {
+                    alert('Group code must be exactly 2 characters.')
                     return
                   }
                   setNewGroupDialogLoading(true)
                   const { data, error: err } = await hasuraFetch<{ insert_item_groups_one: ItemGroup }>(CREATE_ITEM_GROUP_MUTATION, {
-                    group_code: newGroupCode,
+                    group_code: code,
                     group_desc: newGroupDesc || null,
                   })
                   setNewGroupDialogLoading(false)
                   if (err) {
-                    alert(`Error: ${err.message}`)
+                    // Detect Hasura missing field / untracked table error
+                    const msg = err.message || ''
+                    const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
+                    if (missingInsertMatch && /insert_item_groups_one/i.test(missingInsertMatch[1])) {
+                      alert(
+                        'Server error: item group creation mutation is not available.\n' +
+                          'Possible causes: the `item_groups` table is not present or not tracked in Hasura.\n' +
+                          'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
+                      )
+                      return
+                    }
+
+                    // Fallback generic message
+                    alert(`Error: ${msg}`)
                     return
                   }
                   const created = data?.insert_item_groups_one
                   if (created) {
                     setItemGroups((prev) => [...prev, created])
                     setNewItemGroupId(created.id)
+                    setNewGroupCode('')
+                    setNewGroupDesc('')
                     setShowNewGroupDialog(false)
                   }
                 }}

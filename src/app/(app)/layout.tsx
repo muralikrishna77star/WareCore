@@ -12,9 +12,19 @@ const navItems = [
     icon: '📊',
   },
   {
+    title: 'Admin',
+    href: '/admin',
+    icon: '⚙️',
+  },
+  {
     title: 'Purchase Entry',
     href: '/bills',
     icon: '📋',
+  },
+  {
+    title: 'Accounts',
+    href: '/accounts',
+    icon: '💰',
   },
   {
     title: 'Inventory',
@@ -47,9 +57,14 @@ const navItems = [
     icon: '📈',
   },
   {
-    title: 'Admin',
-    href: '/admin',
-    icon: '⚙️',
+    title: 'Change Password',
+    href: '/profile',
+    icon: '🔑',
+  },
+  {
+    title: 'Sign Out',
+    icon: '🚪',
+    action: 'signout',
   },
 ]
 
@@ -100,11 +115,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-8rem)]">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            const isActive = item.href ? pathname === item.href || pathname.startsWith(item.href + '/') : false
+            if (item.action === 'signout') {
+              return (
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={async () => {
+                    setSidebarOpen(false)
+                    await handleSignOut()
+                  }}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+                >
+                  <span className="text-base">{item.icon}</span>
+                  {item.title}
+                </button>
+              )
+            }
+
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={item.href!}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
@@ -120,23 +152,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Sign out */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-800 space-y-1">
-          <Link
-            href="/profile"
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-          >
-            <span>🔑</span>
-            Change Password
-          </Link>
-          <button
-            onClick={handleSignOut}
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-          >
-            <span>🚪</span>
-            Sign Out
-          </button>
-        </div>
       </aside>
 
       {/* Main content */}

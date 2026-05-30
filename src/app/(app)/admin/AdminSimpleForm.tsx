@@ -42,6 +42,11 @@ export default function AdminSimpleForm({ table, label, fields }: Props) {
       else if (!isNaN(Number(val)) && val !== '') payload[f] = parseFloat(val)
       else payload[f] = val
     }
+    if (table === 'item_groups' && form.group_code.trim().length !== 2) {
+      setError('Group code must be exactly 2 characters.')
+      setLoading(false)
+      return
+    }
     // Build dynamic insert mutation for the given table
     const mutation = `
       mutation Insert_${table}($object: ${table}_insert_input!) {
@@ -65,7 +70,11 @@ export default function AdminSimpleForm({ table, label, fields }: Props) {
           <input
             required={requiredFields.has(field)}
             value={form[field]}
-            onChange={(e) => set(field, e.target.value)}
+            onChange={(e) => {
+              const value = field === 'group_code' ? e.target.value.toUpperCase() : e.target.value
+              set(field, value)
+            }}
+            maxLength={field === 'group_code' ? 2 : undefined}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>

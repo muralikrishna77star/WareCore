@@ -498,7 +498,7 @@ export const PURCHASE_BILL_BY_ID_QUERY = `
 export const PURCHASE_BILL_ITEMS_QUERY = `
   query GetPurchaseBillItems($bill_id: uuid!) {
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
-      id bill_id quantity rate amount notes size_label item_name
+      id bill_id quantity rate amount notes size_label item_name purchase_line_id
       material_types { name }
       material_sizes { size_label }
     }
@@ -658,9 +658,21 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
 export const DISPATCH_ITEMS_QUERY = `
   query GetDispatchItems($dispatch_order_id: uuid!) {
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
-      id dispatch_order_id quantity rate amount notes size_label
+      id dispatch_order_id purchase_line_id sub_purchase_line_id quantity rate amount notes size_label
       material_types { name }
       material_sizes { size_label }
+    }
+  }
+`
+
+export const PURCHASE_LINE_STOCK_QUERY = `
+  query GetPurchaseLineStock($purchase_line_id: String!) {
+    stock_ledger_aggregate(where: {purchase_line_id: {_eq: $purchase_line_id}}) {
+      aggregate {
+        sum {
+          quantity
+        }
+      }
     }
   }
 `
@@ -687,7 +699,79 @@ export const CREATE_DISPATCH_ITEMS_MUTATION = `
     insert_dispatch_items(objects: $objects) { affected_rows }
   }
 `
+export const FINANCIAL_ENTRIES_QUERY = `
+  query GetFinancialEntries {
+    financial_entries(order_by: {entry_date: desc, created_at: desc}, limit: 100) {
+      id
+      company_id
+      supplier_id
+      customer_id
+      entry_type
+      reference_type
+      reference_id
+      reference_number
+      purchase_line_id
+      sub_purchase_line_id
+      amount
+      entry_date
+      payment_mode
+      notes
+      created_at
+      updated_at
+    }
+  }
+`
 
+export const CREATE_FINANCIAL_ENTRY_MUTATION = `
+  mutation CreateFinancialEntry(
+    $company_id: uuid!,
+    $supplier_id: uuid,
+    $customer_id: uuid,
+    $entry_type: String!,
+    $reference_type: String!,
+    $reference_id: uuid,
+    $reference_number: String,
+    $purchase_line_id: String,
+    $sub_purchase_line_id: String,
+    $amount: numeric!,
+    $entry_date: date!,
+    $payment_mode: String,
+    $notes: String
+  ) {
+    insert_financial_entries_one(object: {
+      company_id: $company_id
+      supplier_id: $supplier_id
+      customer_id: $customer_id
+      entry_type: $entry_type
+      reference_type: $reference_type
+      reference_id: $reference_id
+      reference_number: $reference_number
+      purchase_line_id: $purchase_line_id
+      sub_purchase_line_id: $sub_purchase_line_id
+      amount: $amount
+      entry_date: $entry_date
+      payment_mode: $payment_mode
+      notes: $notes
+    }) {
+      id
+      company_id
+      supplier_id
+      customer_id
+      entry_type
+      reference_type
+      reference_id
+      reference_number
+      purchase_line_id
+      sub_purchase_line_id
+      amount
+      entry_date
+      payment_mode
+      notes
+      created_at
+      updated_at
+    }
+  }
+`
 // ─── Suppliers & Customers admin list queries ────────────────────────────────
 
 export const SUPPLIERS_LIST_QUERY = `
@@ -737,7 +821,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id quantity_sent quantity_received size_label
+      id job_work_order_id purchase_line_id sub_purchase_line_id quantity_sent quantity_received size_label
       material_types { name }
       material_sizes { size_label }
     }
@@ -802,7 +886,7 @@ export const STOCK_LEDGER_QUERY = `
       order_by: [{entry_date: desc}, {created_at: desc}]
       limit: 200
     ) {
-      id entry_type quantity entry_date reference_number size_label notes created_at
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
       companies { id name code }
       warehouses { name }
       material_types { name unit }
@@ -818,7 +902,7 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
       order_by: [{entry_date: desc}, {created_at: desc}]
       limit: 200
     ) {
-      id entry_type quantity entry_date reference_number size_label notes created_at
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
       companies { id name code }
       warehouses { name }
       material_types { name unit }
@@ -830,7 +914,7 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
 export const RECENT_MOVEMENTS_QUERY = `
   query GetRecentMovements {
     stock_ledger(order_by: {created_at: desc}, limit: 10) {
-      id entry_type quantity entry_date reference_number size_label
+      id entry_type quantity entry_date reference_number reference_type size_label
       companies { name }
       warehouses { name }
       material_types { name unit }
@@ -971,7 +1055,7 @@ export const JOB_WORK_REPORT_QUERY = `
 export const MOVEMENTS_REPORT_QUERY = `
   query GetMovementsReport($where: stock_ledger_bool_exp = {}) {
     stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 2000) {
-      id entry_type quantity entry_date reference_number reference_type size_label notes
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
       companies { name code }
       warehouses { name }
       material_types { name unit }

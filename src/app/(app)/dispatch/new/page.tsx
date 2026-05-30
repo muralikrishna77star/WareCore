@@ -8,11 +8,14 @@ import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
   CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
+  PURCHASE_LINE_STOCK_QUERY,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize } from '@/types'
 
 type DispatchLine = {
+  purchase_line_id: string
+  available_quantity: string
   item_name: string
   material_type_id: string
   material_size_id: string
@@ -23,7 +26,7 @@ type DispatchLine = {
   notes: string
 }
 
-const emptyLine = (): DispatchLine => ({ item_name: '', material_type_id: '', material_size_id: '', size_label: '', quantity: '', rate: '', amount: '', notes: '' })
+const emptyLine = (): DispatchLine => ({ purchase_line_id: '', available_quantity: '', item_name: '', material_type_id: '', material_size_id: '', size_label: '', quantity: '', rate: '', amount: '', notes: '' })
 
 export default function NewDispatchPage() {
   const router = useRouter()
@@ -33,6 +36,20 @@ export default function NewDispatchPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
+
+  const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
+  const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
+  const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
+  const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
+  const [activeLineIndexForNewType, setActiveLineIndexForNewType] = useState<number | null>(null)
+
+  const [showSizeDialog, setShowSizeDialog] = useState(false)
+  const [newSizeMaterialTypeId, setNewSizeMaterialTypeId] = useState('')
+  const [newSizeLabel, setNewSizeLabel] = useState('')
+  const [newSizeThickness, setNewSizeThickness] = useState('')
+  const [newSizeWidth, setNewSizeWidth] = useState('')
+  const [sizeDialogLoading, setSizeDialogLoading] = useState(false)
+  const [activeLineIndexForNewSize, setActiveLineIndexForNewSize] = useState<number | null>(null)
 
   const [companyId, setCompanyId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
@@ -65,6 +82,20 @@ export default function NewDispatchPage() {
     load()
   }, [])
 
+  const fetchPurchaseLineAvailability = async (purchaseLineId: string, index: number) => {
+    if (!purchaseLineId) return
+    const { data, error: err } = await hasuraFetch<any>(PURCHASE_LINE_STOCK_QUERY, { purchase_line_id: purchaseLineId })
+    const qty = Number(data?.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
+    setLines((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], available_quantity: qty.toFixed(3) }
+      return updated
+    })
+    if (err) {
+      console.error('Could not fetch purchase line availability', err)
+    }
+  }
+
   const updateLine = useCallback((index: number, field: keyof DispatchLine, value: string) => {
     setLines((prev) => {
       const updated = [...prev]
@@ -79,8 +110,14 @@ export default function NewDispatchPage() {
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
         updated[index].amount = (qty * rate).toFixed(2)
       }
+      if (field === 'purchase_line_id') {
+        updated[index].available_quantity = ''
+      }
       return updated
     })
+    if (field === 'purchase_line_id') {
+      fetchPurchaseLineAvailability(value, index)
+    }
   }, [materialTypes])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
@@ -123,6 +160,7 @@ export default function NewDispatchPage() {
 
     const items = validLines.map((l) => ({
       dispatch_order_id: order.id,
+      purchase_line_id: l.purchase_line_id || null,
       item_name: l.item_name || null,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
@@ -221,6 +259,7 @@ export default function NewDispatchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">PurchaseLineID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
@@ -238,23 +277,54 @@ export default function NewDispatchPage() {
                   return (
                     <tr key={i}>
                       <td className="pr-3 py-2">
+                        <div>
+                          <input type="text" value={line.purchase_line_id} onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
+                            placeholder="PurchaseLineID"
+                            className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          {line.available_quantity ? (
+                            <p className="text-[10px] text-gray-500 mt-1">Available: {line.available_quantity}</p>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="pr-3 py-2">
                         <input type="text" value={line.item_name} onChange={(e) => updateLine(i, 'item_name', e.target.value)}
                           placeholder="Item name"
                           className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="pr-3 py-2">
-                        <select value={line.material_type_id} onChange={(e) => updateLine(i, 'material_type_id', e.target.value)} required
+                        <select value={line.material_type_id} onChange={(e) => {
+                          if (e.target.value === 'NEW_TYPE') {
+                            setActiveLineIndexForNewType(i)
+                            setShowMaterialTypeDialog(true)
+                            return
+                          }
+                          updateLine(i, 'material_type_id', e.target.value)
+                          updateLine(i, 'material_size_id', '')
+                          updateLine(i, 'size_label', '')
+                        }} required
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
                       <td className="pr-3 py-2">
                         <select value={line.material_size_id}
-                          onChange={(e) => { const sz = materialSizes.find(s => s.id === e.target.value); updateLine(i, 'material_size_id', e.target.value); if (sz) updateLine(i, 'size_label', sz.size_label) }}
+                          onChange={(e) => {
+                            if (e.target.value === 'NEW_SIZE') {
+                              setActiveLineIndexForNewSize(i)
+                              setNewSizeMaterialTypeId(line.material_type_id)
+                              setShowSizeDialog(true)
+                              return
+                            }
+                            const sz = materialSizes.find(s => s.id === e.target.value)
+                            updateLine(i, 'material_size_id', e.target.value)
+                            if (sz) updateLine(i, 'size_label', sz.size_label)
+                          }}
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           {sizesForType.map((s) => <option key={s.id} value={s.id}>{s.size_label}</option>)}
+                          <option value="NEW_SIZE" className="font-semibold">+ New Size</option>
                         </select>
                       </td>
                       <td className="pr-3 py-2">
@@ -302,6 +372,84 @@ export default function NewDispatchPage() {
           </div>
         </div>
 
+        {showMaterialTypeDialog && (
+          <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-blue-900">Create New Material Type</h2>
+                <p className="text-sm text-blue-700">Add a material type and assign it to the current line.</p>
+              </div>
+              <button type="button" onClick={handleCancelNewType} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Material Type Name</label>
+                <input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Enter material type" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Unit</label>
+                <input value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="tons" />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button type="button" onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {materialTypeDialogLoading ? 'Creating…' : 'Create Material Type'}
+              </button>
+            </div>
+          </div>
+        )}
+        {showSizeDialog && (
+          <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-blue-900">Create New Size</h2>
+                <p className="text-sm text-blue-700">Add a size for the selected material type.</p>
+              </div>
+              <button type="button" onClick={handleCancelNewSize} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Material Type</label>
+                <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">— Select Material Type —</option>
+                  {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Size Label</label>
+                <input value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Enter size label" />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Thickness</label>
+                <input value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Width</label>
+                <input value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  placeholder="Optional" />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button type="button" onClick={handleCreateSize} disabled={sizeDialogLoading}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {sizeDialogLoading ? 'Creating…' : 'Create Size'}
+              </button>
+            </div>
+          </div>
+        )}
         {error && (
           <div className="rounded-md bg-red-50 border border-red-200 p-4">
             <p className="text-sm text-red-800">{error}</p>

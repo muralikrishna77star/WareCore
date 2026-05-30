@@ -77,9 +77,9 @@ EXECUTE FUNCTION generate_purchase_line_id();
 -- ============================================================
 ALTER TABLE purchase_bill_items ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable read access for all users"
+CREATE POLICY "Enable read access for authenticated users"
   ON purchase_bill_items FOR SELECT
-  USING (TRUE);
+  USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable insert for authenticated users"
   ON purchase_bill_items FOR INSERT

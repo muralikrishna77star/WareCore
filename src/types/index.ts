@@ -146,6 +146,27 @@ export interface PurchaseBill {
   items?: PurchaseBillItem[]
 }
 
+export type FinancialEntryType = 'RECEIPT' | 'PAYMENT'
+
+export interface FinancialEntry {
+  id: string
+  company_id: string
+  supplier_id?: string
+  customer_id?: string
+  entry_type: FinancialEntryType
+  reference_type: 'purchase_bill' | 'dispatch_order'
+  reference_id?: string
+  reference_number?: string
+  purchase_line_id?: string
+  sub_purchase_line_id?: string
+  amount: number
+  entry_date: string
+  payment_mode?: string
+  notes?: string
+  created_at: string
+  updated_at?: string
+}
+
 export interface PurchaseBillItem {
   id: string
   bill_id: string
@@ -156,6 +177,7 @@ export interface PurchaseBillItem {
   unit: string
   rate?: number
   amount?: number
+  purchase_line_id?: string
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
@@ -281,6 +303,8 @@ export interface DispatchItem {
   unit: string
   rate?: number
   amount?: number
+  purchase_line_id?: string
+  sub_purchase_line_id?: string
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
