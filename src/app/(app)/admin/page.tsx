@@ -11,6 +11,7 @@ import {
   ITEM_GROUPS_QUERY,
   ITEM_MASTERS_QUERY,
   USER_PROFILES_QUERY,
+  TAX_RATES_QUERY,
 } from '@/lib/hasura/queries'
 import CollapsibleSection from './CollapsibleSection'
 
@@ -25,6 +26,7 @@ export default async function AdminPage() {
     hasuraQuery(MATERIAL_SIZES_QUERY),
     hasuraQuery(ITEM_GROUPS_QUERY, undefined, { suppressError: true }),
     hasuraQuery(ITEM_MASTERS_QUERY, undefined, { suppressError: true }),
+    hasuraQuery(TAX_RATES_QUERY, undefined, { suppressError: true }),
     hasuraQuery(USER_PROFILES_QUERY),
   ])
 
@@ -37,6 +39,7 @@ export default async function AdminPage() {
     materialSizesRes,
     itemGroupsRes,
     itemMastersRes,
+    taxRatesRes,
     usersRes,
   ] = queryResults
 
@@ -71,6 +74,10 @@ export default async function AdminPage() {
   const itemMasters =
     itemMastersRes.status === 'fulfilled'
       ? (itemMastersRes.value as any).item_master ?? []
+      : []
+  const taxRates =
+    taxRatesRes.status === 'fulfilled'
+      ? (taxRatesRes.value as any).tax_rates ?? []
       : []
   const users =
     usersRes.status === 'fulfilled'
@@ -146,6 +153,19 @@ export default async function AdminPage() {
       addHref: '/admin/items/new', href: '/admin/items',
       columns: ['Code', 'Name', 'Group'],
       rows: itemMasters.map((item: any) => [item.item_code, item.item_name, item.item_groups?.group_code || '—']),
+    },
+    {
+      title: 'Tax Rates', icon: '🧾',
+      addHref: '/admin/tax-rates/new', href: '/admin/tax-rates',
+      columns: ['Name', 'CGST%', 'SGST%', 'TDS%', 'TCS%', 'Applies To'],
+      rows: taxRates.map((t: any) => [
+        t.name,
+        `${Number(t.cgst_rate).toFixed(2)}%`,
+        `${Number(t.sgst_rate).toFixed(2)}%`,
+        Number(t.tds_rate) > 0 ? `${Number(t.tds_rate).toFixed(2)}%` : '—',
+        Number(t.tcs_rate) > 0 ? `${Number(t.tcs_rate).toFixed(2)}%` : '—',
+        t.applicable_to === 'BOTH' ? 'Both' : t.applicable_to,
+      ]),
     },
     {
       title: 'Users', icon: '👤',

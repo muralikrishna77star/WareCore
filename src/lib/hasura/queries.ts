@@ -1064,3 +1064,75 @@ export const MOVEMENTS_REPORT_QUERY = `
   }
 `
 
+// ─── Tax Rates (Control Database) ────────────────────────────────────────────
+
+export const TAX_RATES_QUERY = `
+  query GetTaxRates {
+    tax_rates(order_by: {name: asc}) {
+      id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to is_active created_at updated_at
+    }
+  }
+`
+
+export const ACTIVE_TAX_RATES_QUERY = `
+  query GetActiveTaxRates {
+    tax_rates(where: {is_active: {_eq: true}}, order_by: {name: asc}) {
+      id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to
+    }
+  }
+`
+
+export const ACTIVE_PURCHASE_TAX_RATES_QUERY = `
+  query GetActivePurchaseTaxRates {
+    tax_rates(
+      where: {is_active: {_eq: true}, applicable_to: {_in: ["BOTH","PURCHASE"]}}
+      order_by: {name: asc}
+    ) {
+      id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to
+    }
+  }
+`
+
+export const ACTIVE_SALES_TAX_RATES_QUERY = `
+  query GetActiveSalesTaxRates {
+    tax_rates(
+      where: {is_active: {_eq: true}, applicable_to: {_in: ["BOTH","SALES"]}}
+      order_by: {name: asc}
+    ) {
+      id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to
+    }
+  }
+`
+
+export const CREATE_TAX_RATE_MUTATION = `
+  mutation CreateTaxRate(
+    $name: String!, $cgst_rate: numeric!, $sgst_rate: numeric!,
+    $tds_rate: numeric!, $tcs_rate: numeric!, $applicable_to: String!
+  ) {
+    insert_tax_rates_one(object: {
+      name: $name, cgst_rate: $cgst_rate, sgst_rate: $sgst_rate,
+      tds_rate: $tds_rate, tcs_rate: $tcs_rate, applicable_to: $applicable_to
+    }) {
+      id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to is_active
+    }
+  }
+`
+
+export const UPDATE_TAX_RATE_MUTATION = `
+  mutation UpdateTaxRate(
+    $id: uuid!, $name: String!, $cgst_rate: numeric!, $sgst_rate: numeric!,
+    $tds_rate: numeric!, $tcs_rate: numeric!, $applicable_to: String!, $is_active: Boolean!
+  ) {
+    update_tax_rates_by_pk(
+      pk_columns: {id: $id}
+      _set: {
+        name: $name, cgst_rate: $cgst_rate, sgst_rate: $sgst_rate,
+        tds_rate: $tds_rate, tcs_rate: $tcs_rate,
+        applicable_to: $applicable_to, is_active: $is_active
+      }
+    ) {
+      id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to is_active
+    }
+  }
+`
+

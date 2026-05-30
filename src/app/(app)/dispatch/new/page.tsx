@@ -8,11 +8,11 @@ import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
   CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
-  PURCHASE_LINE_STOCK_QUERY,
+  PURCHASE_LINE_STOCK_QUERY, ACTIVE_SALES_TAX_RATES_QUERY,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
-import type { Company, Warehouse, Customer, MaterialType, MaterialSize } from '@/types'
+import type { Company, Warehouse, Customer, MaterialType, MaterialSize, TaxRate } from '@/types'
 
 type DispatchLine = {
   purchase_line_id: string
@@ -25,9 +25,42 @@ type DispatchLine = {
   rate: string
   amount: string
   notes: string
+  tax_rate_id: string
+  taxable_value: number
+  cgst_rate: number
+  cgst_amount: number
+  sgst_rate: number
+  sgst_amount: number
+  tcs_rate: number
+  tcs_amount: number
+  total_with_tax: number
 }
 
-const emptyLine = (): DispatchLine => ({ purchase_line_id: '', available_quantity: '', item_name: '', material_type_id: '', material_size_id: '', size_label: '', quantity: '', rate: '', amount: '', notes: '' })
+function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<DispatchLine> {
+  const taxable = (parseFloat(line.quantity) || 0) * (parseFloat(line.rate) || 0)
+  if (!line.tax_rate_id) return { taxable_value: taxable, cgst_amount: 0, sgst_amount: 0, tcs_amount: 0, total_with_tax: taxable }
+  const tr = taxRates.find((t) => t.id === line.tax_rate_id)
+  if (!tr) return { taxable_value: taxable }
+  const cgst = (taxable * Number(tr.cgst_rate)) / 100
+  const sgst = (taxable * Number(tr.sgst_rate)) / 100
+  const tcsBase = taxable + cgst + sgst
+  const tcs = (tcsBase * Number(tr.tcs_rate)) / 100
+  return {
+    taxable_value: taxable,
+    cgst_rate: Number(tr.cgst_rate), cgst_amount: cgst,
+    sgst_rate: Number(tr.sgst_rate), sgst_amount: sgst,
+    tcs_rate: Number(tr.tcs_rate), tcs_amount: tcs,
+    total_with_tax: taxable + cgst + sgst + tcs,
+  }
+}
+
+const emptyLine = (): DispatchLine => ({
+  purchase_line_id: '', available_quantity: '', item_name: '',
+  material_type_id: '', material_size_id: '', size_label: '',
+  quantity: '', rate: '', amount: '', notes: '',
+  tax_rate_id: '', taxable_value: 0, cgst_rate: 0, cgst_amount: 0,
+  sgst_rate: 0, sgst_amount: 0, tcs_rate: 0, tcs_amount: 0, total_with_tax: 0,
+})
 
 export default function NewDispatchPage() {
   const router = useRouter()
@@ -37,6 +70,7 @@ export default function NewDispatchPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([])
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
@@ -66,18 +100,20 @@ export default function NewDispatchPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, w, cu, mt, ms] = await Promise.all([
+      const [c, w, cu, mt, ms, tr] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
       setCustomers((cu.data as any)?.customers ?? [])
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setTaxRates((tr.data as any)?.tax_rates ?? [])
       setMasterDataLoading(false)
     }
     load()
@@ -111,6 +147,9 @@ export default function NewDispatchPage() {
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
         updated[index].amount = (qty * rate).toFixed(2)
       }
+      if (field === 'quantity' || field === 'rate' || field === 'tax_rate_id') {
+        Object.assign(updated[index], calcSalesTax(updated[index], taxRates))
+      }
       if (field === 'purchase_line_id') {
         updated[index].available_quantity = ''
       }
@@ -119,7 +158,7 @@ export default function NewDispatchPage() {
     if (field === 'purchase_line_id') {
       fetchPurchaseLineAvailability(value, index)
     }
-  }, [materialTypes])
+  }, [materialTypes, taxRates])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -220,6 +259,15 @@ export default function NewDispatchPage() {
       rate: l.rate ? parseFloat(l.rate) : null,
       amount: l.amount ? parseFloat(l.amount) : null,
       notes: l.notes || null,
+      tax_rate_id: l.tax_rate_id || null,
+      taxable_value: l.taxable_value || null,
+      cgst_rate: l.cgst_rate || null,
+      cgst_amount: l.cgst_amount || null,
+      sgst_rate: l.sgst_rate || null,
+      sgst_amount: l.sgst_amount || null,
+      tcs_rate: l.tcs_rate || null,
+      tcs_amount: l.tcs_amount || null,
+      total_with_tax: l.total_with_tax || null,
     }))
     const { error: iErr } = await hasuraFetch(CREATE_DISPATCH_ITEMS_MUTATION, { items })
     if (iErr) {
@@ -310,14 +358,19 @@ export default function NewDispatchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">PurchaseLineID</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Quantity</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Rate (₹)</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Amount (₹)</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Taxable (₹)</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Tax Rate</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">CGST</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">SGST</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">TCS</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">Total</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Notes</th>
                   <th></th>
                 </tr>
@@ -392,14 +445,61 @@ export default function NewDispatchPage() {
                           step="0.01" min="0" placeholder="0.00"
                           className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
+                      {/* Taxable value */}
                       <td className="pr-3 py-2">
-                        <input type="number" value={line.amount} onChange={(e) => updateLine(i, 'amount', e.target.value)}
-                          step="0.01" min="0" placeholder="0.00"
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                        <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 text-right">
+                          {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
+                        </span>
+                      </td>
+                      {/* Tax Rate */}
+                      <td className="pr-3 py-2">
+                        <select
+                          value={line.tax_rate_id}
+                          onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
+                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="">No Tax</option>
+                          {taxRates.map((tr) => (
+                            <option key={tr.id} value={tr.id}>{tr.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      {/* CGST */}
+                      <td className="pr-3 py-2 text-right">
+                        {line.cgst_amount > 0 ? (
+                          <span className="text-xs text-orange-700">
+                            <span className="block text-gray-400">{line.cgst_rate}%</span>
+                            ₹{line.cgst_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      {/* SGST */}
+                      <td className="pr-3 py-2 text-right">
+                        {line.sgst_amount > 0 ? (
+                          <span className="text-xs text-orange-700">
+                            <span className="block text-gray-400">{line.sgst_rate}%</span>
+                            ₹{line.sgst_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      {/* TCS */}
+                      <td className="pr-3 py-2 text-right">
+                        {line.tcs_amount > 0 ? (
+                          <span className="text-xs text-blue-700">
+                            <span className="block text-gray-400">{line.tcs_rate}%</span>
+                            +₹{line.tcs_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      {/* Total with tax */}
+                      <td className="pr-3 py-2 text-right">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
+                        </span>
                       </td>
                       <td className="pr-3 py-2">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         {lines.length > 1 && (

@@ -21,6 +21,9 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   CreateWarehouse:  ADMIN,
   // User management
   CreateUserProfile: ADMIN,
+  // Tax rate control database
+  CreateTaxRate:    ADMIN,
+  UpdateTaxRate:    ADMIN,
   // Item catalogue hierarchy
   CreateItemGroup:   ADMIN,
   // Material catalogue

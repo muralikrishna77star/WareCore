@@ -7,12 +7,12 @@ import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
-  ACTIVE_ITEM_GROUPS_QUERY,
+  ACTIVE_ITEM_GROUPS_QUERY, ACTIVE_PURCHASE_TAX_RATES_QUERY,
   CREATE_PURCHASE_BILL_MUTATION, CREATE_PURCHASE_BILL_ITEMS_MUTATION,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
   CREATE_ITEM_MASTER_MUTATION, CREATE_ITEM_GROUP_MUTATION,
 } from '@/lib/hasura/queries'
-import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, ItemGroup } from '@/types'
+import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate } from '@/types'
 
 type LineItem = {
   purchase_line_id: string
@@ -26,6 +26,16 @@ type LineItem = {
   rate: string
   amount: string
   notes: string
+  // Tax
+  tax_rate_id: string
+  taxable_value: number
+  cgst_rate: number
+  cgst_amount: number
+  sgst_rate: number
+  sgst_amount: number
+  tds_rate: number
+  tds_amount: number
+  total_with_tax: number
 }
 
 function generatePurchaseLineId(lineNumber: number): string {
@@ -45,7 +55,34 @@ const emptyLine = (): LineItem => ({
   rate: '',
   amount: '',
   notes: '',
+  tax_rate_id: '',
+  taxable_value: 0,
+  cgst_rate: 0,
+  cgst_amount: 0,
+  sgst_rate: 0,
+  sgst_amount: 0,
+  tds_rate: 0,
+  tds_amount: 0,
+  total_with_tax: 0,
 })
+
+function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
+  const taxable = (parseFloat(line.quantity) || 0) * (parseFloat(line.rate) || 0)
+  if (!line.tax_rate_id) return { taxable_value: taxable, cgst_amount: 0, sgst_amount: 0, tds_amount: 0, total_with_tax: taxable }
+  const tr = taxRates.find((t) => t.id === line.tax_rate_id)
+  if (!tr) return { taxable_value: taxable }
+  const cgst = (taxable * Number(tr.cgst_rate)) / 100
+  const sgst = (taxable * Number(tr.sgst_rate)) / 100
+  const tdsBase = taxable + cgst + sgst
+  const tds = (tdsBase * Number(tr.tds_rate)) / 100
+  return {
+    taxable_value: taxable,
+    cgst_rate: Number(tr.cgst_rate), cgst_amount: cgst,
+    sgst_rate: Number(tr.sgst_rate), sgst_amount: sgst,
+    tds_rate: Number(tr.tds_rate), tds_amount: tds,
+    total_with_tax: taxable + cgst + sgst - tds,
+  }
+}
 
 export default function NewBillPage() {
   const router = useRouter()
@@ -58,6 +95,7 @@ export default function NewBillPage() {
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
   const [itemGroups, setItemGroups] = useState<ItemGroup[]>([])
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([])
 
   // Form state
   const [companyId, setCompanyId] = useState('')
@@ -104,7 +142,7 @@ export default function NewBillPage() {
   // Load master data
   useEffect(() => {
     const load = async () => {
-      const [c, w, s, mt, ms, ig, im] = await Promise.all([
+      const [c, w, s, mt, ms, ig, im, tr] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
@@ -112,6 +150,7 @@ export default function NewBillPage() {
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
         hasuraFetch(ACTIVE_ITEM_GROUPS_QUERY),
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
@@ -120,6 +159,7 @@ export default function NewBillPage() {
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
       setItemGroups((ig.data as any)?.item_groups ?? [])
       setItemMasters((im.data as any)?.item_master ?? [])
+      setTaxRates((tr.data as any)?.tax_rates ?? [])
       setMasterDataLoading(false)
     }
     load()
@@ -218,16 +258,19 @@ export default function NewBillPage() {
         }
       }
 
-      // Auto-calculate amount
+      // Auto-calculate amount and tax
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
         updated[index].amount = (qty * rate).toFixed(2)
       }
+      if (field === 'quantity' || field === 'rate' || field === 'tax_rate_id') {
+        Object.assign(updated[index], calcTax(updated[index], taxRates))
+      }
 
       return updated
     })
-  }, [itemMasters, materialSizes])
+  }, [itemMasters, materialSizes, taxRates])
 
   const addLine = () =>
     setLines((prev) => [
@@ -451,6 +494,15 @@ export default function NewBillPage() {
       rate: l.rate ? parseFloat(l.rate) : null,
       amount: l.amount ? parseFloat(l.amount) : null,
       notes: l.notes || null,
+      tax_rate_id: l.tax_rate_id || null,
+      taxable_value: l.taxable_value || null,
+      cgst_rate: l.cgst_rate || null,
+      cgst_amount: l.cgst_amount || null,
+      sgst_rate: l.sgst_rate || null,
+      sgst_amount: l.sgst_amount || null,
+      tds_rate: l.tds_rate || null,
+      tds_amount: l.tds_amount || null,
+      total_with_tax: l.total_with_tax || null,
     }))
     const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { items })
     if (itemsError) {
@@ -585,9 +637,14 @@ export default function NewBillPage() {
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Quantity</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Rate (₹)</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Amount (₹)</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Taxable (₹)</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Tax Rate</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">CGST</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">SGST</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">TDS</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">Total</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Notes</th>
                   <th className="pb-2"></th>
                 </tr>
@@ -707,16 +764,57 @@ export default function NewBillPage() {
                           className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                         />
                       </td>
+                      {/* Taxable Value (read-only = qty×rate) */}
                       <td className="pr-3 py-2">
-                        <input
-                          type="number"
-                          value={line.amount}
-                          onChange={(e) => updateLine(i, 'amount', e.target.value)}
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        />
+                        <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 text-right">
+                          {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
+                        </span>
+                      </td>
+                      {/* Tax Rate selector */}
+                      <td className="pr-3 py-2">
+                        <select
+                          value={line.tax_rate_id}
+                          onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
+                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="">No Tax</option>
+                          {taxRates.map((tr) => (
+                            <option key={tr.id} value={tr.id}>{tr.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      {/* CGST */}
+                      <td className="pr-3 py-2 text-right">
+                        {line.cgst_amount > 0 ? (
+                          <span className="text-xs text-orange-700">
+                            <span className="block text-gray-400">{line.cgst_rate}%</span>
+                            ₹{line.cgst_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      {/* SGST */}
+                      <td className="pr-3 py-2 text-right">
+                        {line.sgst_amount > 0 ? (
+                          <span className="text-xs text-orange-700">
+                            <span className="block text-gray-400">{line.sgst_rate}%</span>
+                            ₹{line.sgst_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      {/* TDS */}
+                      <td className="pr-3 py-2 text-right">
+                        {line.tds_amount > 0 ? (
+                          <span className="text-xs text-red-700">
+                            <span className="block text-gray-400">{line.tds_rate}%</span>
+                            −₹{line.tds_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      {/* Total with tax */}
+                      <td className="pr-3 py-2 text-right">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
+                        </span>
                       </td>
                       <td className="pr-3 py-2">
                         <input
@@ -747,7 +845,22 @@ export default function NewBillPage() {
                   <td colSpan={5} className="py-3 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-sm font-bold text-gray-900">{totalQty.toFixed(3)}</td>
                   <td className="py-3 pr-3"></td>
-                  <td className="py-3 pr-3 text-sm font-bold text-gray-900">₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td className="py-3 pr-3 text-sm text-gray-600">
+                    ₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}
+                  </td>
+                  <td className="py-3 pr-3"></td>
+                  <td className="py-3 pr-3 text-right text-sm text-orange-700">
+                    ₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}
+                  </td>
+                  <td className="py-3 pr-3 text-right text-sm text-orange-700">
+                    ₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}
+                  </td>
+                  <td className="py-3 pr-3 text-right text-sm text-red-700">
+                    {lines.some(l=>l.tds_amount>0) ? `−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}` : '—'}
+                  </td>
+                  <td className="py-3 pr-3 text-right text-sm font-bold text-gray-900">
+                    ₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}
+                  </td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>

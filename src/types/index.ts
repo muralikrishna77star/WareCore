@@ -167,6 +167,19 @@ export interface FinancialEntry {
   updated_at?: string
 }
 
+export interface TaxRate {
+  id: string
+  name: string
+  cgst_rate: number
+  sgst_rate: number
+  tds_rate: number
+  tcs_rate: number
+  applicable_to: 'BOTH' | 'PURCHASE' | 'SALES'
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface PurchaseBillItem {
   id: string
   bill_id: string
@@ -181,9 +194,20 @@ export interface PurchaseBillItem {
   amount?: number
   purchase_line_id?: string
   line_number?: number
+  // Tax fields
+  tax_rate_id?: string
+  taxable_value?: number
+  cgst_rate?: number
+  cgst_amount?: number
+  sgst_rate?: number
+  sgst_amount?: number
+  tds_rate?: number
+  tds_amount?: number
+  total_with_tax?: number
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
+  tax_rates?: TaxRate
 }
 
 export interface StockLedgerEntry {
@@ -308,9 +332,20 @@ export interface DispatchItem {
   amount?: number
   purchase_line_id?: string
   sub_purchase_line_id?: string
+  // Tax fields
+  tax_rate_id?: string
+  taxable_value?: number
+  cgst_rate?: number
+  cgst_amount?: number
+  sgst_rate?: number
+  sgst_amount?: number
+  tcs_rate?: number
+  tcs_amount?: number
+  total_with_tax?: number
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
+  tax_rates?: TaxRate
 }
 
 export interface CurrentStock {
