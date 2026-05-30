@@ -914,7 +914,7 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
 export const RECENT_MOVEMENTS_QUERY = `
   query GetRecentMovements {
     stock_ledger(order_by: {created_at: desc}, limit: 10) {
-      id entry_type quantity entry_date reference_number reference_type size_label
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label
       companies { name }
       warehouses { name }
       material_types { name unit }
