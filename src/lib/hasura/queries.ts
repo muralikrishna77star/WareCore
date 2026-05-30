@@ -112,6 +112,32 @@ export const MATERIAL_SIZES_QUERY = `
   }
 `
 
+export const ITEM_GROUPS_QUERY = `
+  query GetItemGroups {
+    item_groups(order_by: {group_code: asc}) {
+      id
+      group_code
+      group_desc
+      is_active
+      created_at
+      updated_at
+    }
+  }
+`
+
+export const ACTIVE_ITEM_GROUPS_QUERY = `
+  query GetActiveItemGroups {
+    item_groups(where: {is_active: {_eq: true}}, order_by: {group_code: asc}) {
+      id
+      group_code
+      group_desc
+      is_active
+      created_at
+      updated_at
+    }
+  }
+`
+
 export const USER_PROFILES_QUERY = `
   query GetUserProfiles {
     user_profiles(order_by: {full_name: asc}) {
@@ -262,33 +288,6 @@ export const CREATE_CUSTOMER_MUTATION = `
   }
 `
 
-export const CREATE_MATERIAL_TYPE_MUTATION = `
-  mutation CreateMaterialType($name: String!, $unit: String!, $description: String) {
-    insert_material_types_one(object: {
-      name: $name
-      unit: $unit
-      description: $description
-    }) {
-      id
-      name
-    }
-  }
-`
-
-export const CREATE_MATERIAL_SIZE_MUTATION = `
-  mutation CreateMaterialSize($material_type_id: uuid!, $size_label: String!, $thickness: numeric, $width: numeric) {
-    insert_material_sizes_one(object: {
-      material_type_id: $material_type_id
-      size_label: $size_label
-      thickness: $thickness
-      width: $width
-    }) {
-      id
-      size_label
-    }
-  }
-`
-
 export const CREATE_USER_PROFILE_MUTATION = `
   mutation CreateUserProfile($id: uuid!, $email: String!, $password_hash: String!, $full_name: String!, $role: String!, $company_id: uuid, $warehouse_id: uuid) {
     insert_user_profiles_one(object: {
@@ -374,6 +373,104 @@ export const ACTIVE_MATERIAL_SIZES_QUERY = `
   }
 `
 
+export const ACTIVE_ITEM_MASTER_QUERY = `
+  query GetActiveItemMaster {
+    item_master(where: {is_active: {_eq: true}}, order_by: {item_name: asc}) {
+      id
+      item_code
+      item_name
+      item_group_id
+      material_type_id
+      material_size_id
+      size_label
+      unit
+      is_active
+      created_at
+      item_groups {
+        id
+        group_code
+        group_desc
+      }
+      material_types { name }
+      material_sizes { id size_label }
+    }
+  }
+`
+
+export const ITEM_MASTER_BY_MATERIAL_TYPE_QUERY = `
+  query GetItemMasterByMaterialType($material_type_id: uuid!) {
+    item_master(where: {material_type_id: {_eq: $material_type_id}, is_active: {_eq: true}}, order_by: {item_name: asc}) {
+      id
+      item_code
+      item_name
+      item_group_id
+      material_type_id
+      material_size_id
+      size_label
+      unit
+      is_active
+      created_at
+      item_groups {
+        id
+        group_code
+      }
+      material_types { name }
+      material_sizes { id size_label }
+    }
+  }
+`
+
+export const CREATE_ITEM_MASTER_MUTATION = `
+  mutation CreateItemMaster($item_code: String!, $item_name: String!, $item_group_id: uuid!, $material_type_id: uuid!, $material_size_id: uuid, $size_label: String, $unit: String, $description: String) {
+    insert_item_master_one(object: {
+      item_code: $item_code
+      item_name: $item_name
+      item_group_id: $item_group_id
+      material_type_id: $material_type_id
+      material_size_id: $material_size_id
+      size_label: $size_label
+      unit: $unit
+      description: $description
+    }) {
+      id
+      item_code
+      item_name
+      item_group_id
+      material_size_id
+      size_label
+    }
+  }
+`
+
+export const ITEM_MASTERS_QUERY = `
+  query GetItemMasters {
+    item_master(order_by: {item_code: asc}) {
+      id
+      item_code
+      item_name
+      item_group_id
+      material_type_id
+      material_size_id
+      size_label
+      unit
+      is_active
+      item_groups {
+        id
+        group_code
+        group_desc
+      }
+      material_types {
+        id
+        name
+      }
+      material_sizes {
+        id
+        size_label
+      }
+    }
+  }
+`
+
 // ─── Purchase Bills ──────────────────────────────────────────────────────────
 
 export const PURCHASE_BILLS_QUERY = `
@@ -401,7 +498,7 @@ export const PURCHASE_BILL_BY_ID_QUERY = `
 export const PURCHASE_BILL_ITEMS_QUERY = `
   query GetPurchaseBillItems($bill_id: uuid!) {
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
-      id bill_id quantity rate amount notes size_label item_name
+      id bill_id quantity rate amount notes size_label item_name purchase_line_id
       material_types { name }
       material_sizes { size_label }
     }
@@ -412,7 +509,52 @@ export const CREATE_PURCHASE_BILL_ITEMS_MUTATION = `
   mutation CreatePurchaseBillItems($objects: [purchase_bill_items_insert_input!]!) {
     insert_purchase_bill_items(objects: $objects) {
       affected_rows
-      returning { id item_name material_types { name } }
+      returning { 
+        id 
+        purchase_line_id
+        item_name 
+        material_types { name } 
+      }
+    }
+  }
+`
+
+// ─── Material Management ─────────────────────────────────────────────────────
+
+export const CREATE_MATERIAL_TYPE_MUTATION = `
+  mutation CreateMaterialType($name: String!, $unit: String, $description: String) {
+    insert_material_types_one(object: {
+      name: $name
+      unit: $unit
+      description: $description
+    }) {
+      id name unit
+    }
+  }
+`
+
+export const CREATE_MATERIAL_SIZE_MUTATION = `
+  mutation CreateMaterialSize($material_type_id: uuid!, $size_label: String!, $thickness: numeric, $width: numeric) {
+    insert_material_sizes_one(object: {
+      material_type_id: $material_type_id
+      size_label: $size_label
+      thickness: $thickness
+      width: $width
+    }) {
+      id material_type_id size_label thickness width
+    }
+  }
+`
+
+export const CREATE_ITEM_GROUP_MUTATION = `
+  mutation CreateItemGroup($group_code: String!, $group_desc: String) {
+    insert_item_groups_one(object: {
+      group_code: $group_code
+      group_desc: $group_desc
+    }) {
+      id
+      group_code
+      group_desc
     }
   }
 `
@@ -516,9 +658,21 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
 export const DISPATCH_ITEMS_QUERY = `
   query GetDispatchItems($dispatch_order_id: uuid!) {
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
-      id dispatch_order_id quantity rate amount notes size_label
+      id dispatch_order_id purchase_line_id sub_purchase_line_id quantity rate amount notes size_label
       material_types { name }
       material_sizes { size_label }
+    }
+  }
+`
+
+export const PURCHASE_LINE_STOCK_QUERY = `
+  query GetPurchaseLineStock($purchase_line_id: String!) {
+    stock_ledger_aggregate(where: {purchase_line_id: {_eq: $purchase_line_id}}) {
+      aggregate {
+        sum {
+          quantity
+        }
+      }
     }
   }
 `
@@ -545,7 +699,79 @@ export const CREATE_DISPATCH_ITEMS_MUTATION = `
     insert_dispatch_items(objects: $objects) { affected_rows }
   }
 `
+export const FINANCIAL_ENTRIES_QUERY = `
+  query GetFinancialEntries {
+    financial_entries(order_by: {entry_date: desc, created_at: desc}, limit: 100) {
+      id
+      company_id
+      supplier_id
+      customer_id
+      entry_type
+      reference_type
+      reference_id
+      reference_number
+      purchase_line_id
+      sub_purchase_line_id
+      amount
+      entry_date
+      payment_mode
+      notes
+      created_at
+      updated_at
+    }
+  }
+`
 
+export const CREATE_FINANCIAL_ENTRY_MUTATION = `
+  mutation CreateFinancialEntry(
+    $company_id: uuid!,
+    $supplier_id: uuid,
+    $customer_id: uuid,
+    $entry_type: String!,
+    $reference_type: String!,
+    $reference_id: uuid,
+    $reference_number: String,
+    $purchase_line_id: String,
+    $sub_purchase_line_id: String,
+    $amount: numeric!,
+    $entry_date: date!,
+    $payment_mode: String,
+    $notes: String
+  ) {
+    insert_financial_entries_one(object: {
+      company_id: $company_id
+      supplier_id: $supplier_id
+      customer_id: $customer_id
+      entry_type: $entry_type
+      reference_type: $reference_type
+      reference_id: $reference_id
+      reference_number: $reference_number
+      purchase_line_id: $purchase_line_id
+      sub_purchase_line_id: $sub_purchase_line_id
+      amount: $amount
+      entry_date: $entry_date
+      payment_mode: $payment_mode
+      notes: $notes
+    }) {
+      id
+      company_id
+      supplier_id
+      customer_id
+      entry_type
+      reference_type
+      reference_id
+      reference_number
+      purchase_line_id
+      sub_purchase_line_id
+      amount
+      entry_date
+      payment_mode
+      notes
+      created_at
+      updated_at
+    }
+  }
+`
 // ─── Suppliers & Customers admin list queries ────────────────────────────────
 
 export const SUPPLIERS_LIST_QUERY = `
@@ -595,7 +821,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id quantity_sent quantity_received size_label
+      id job_work_order_id purchase_line_id sub_purchase_line_id quantity_sent quantity_received size_label
       material_types { name }
       material_sizes { size_label }
     }
@@ -660,7 +886,7 @@ export const STOCK_LEDGER_QUERY = `
       order_by: [{entry_date: desc}, {created_at: desc}]
       limit: 200
     ) {
-      id entry_type quantity entry_date reference_number size_label notes created_at
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
       companies { id name code }
       warehouses { name }
       material_types { name unit }
@@ -676,7 +902,7 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
       order_by: [{entry_date: desc}, {created_at: desc}]
       limit: 200
     ) {
-      id entry_type quantity entry_date reference_number size_label notes created_at
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
       companies { id name code }
       warehouses { name }
       material_types { name unit }
@@ -688,7 +914,7 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
 export const RECENT_MOVEMENTS_QUERY = `
   query GetRecentMovements {
     stock_ledger(order_by: {created_at: desc}, limit: 10) {
-      id entry_type quantity entry_date reference_number size_label
+      id entry_type quantity entry_date reference_number reference_type size_label
       companies { name }
       warehouses { name }
       material_types { name unit }
@@ -829,7 +1055,7 @@ export const JOB_WORK_REPORT_QUERY = `
 export const MOVEMENTS_REPORT_QUERY = `
   query GetMovementsReport($where: stock_ledger_bool_exp = {}) {
     stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 2000) {
-      id entry_type quantity entry_date reference_number reference_type size_label notes
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
       companies { name code }
       warehouses { name }
       material_types { name unit }

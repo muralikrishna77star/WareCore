@@ -8,6 +8,7 @@ import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
   CREATE_TRANSFER_MUTATION, CREATE_TRANSFER_ITEMS_MUTATION,
+  CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, MaterialType, MaterialSize } from '@/types'
 
@@ -34,6 +35,20 @@ export default function NewTransferPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
+
+  const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
+  const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
+  const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
+  const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
+  const [activeLineIndexForNewType, setActiveLineIndexForNewType] = useState<number | null>(null)
+
+  const [showSizeDialog, setShowSizeDialog] = useState(false)
+  const [newSizeMaterialTypeId, setNewSizeMaterialTypeId] = useState('')
+  const [newSizeLabel, setNewSizeLabel] = useState('')
+  const [newSizeThickness, setNewSizeThickness] = useState('')
+  const [newSizeWidth, setNewSizeWidth] = useState('')
+  const [sizeDialogLoading, setSizeDialogLoading] = useState(false)
+  const [activeLineIndexForNewSize, setActiveLineIndexForNewSize] = useState<number | null>(null)
 
   const [fromCompanyId, setFromCompanyId] = useState('')
   const [toCompanyId, setToCompanyId] = useState('')
@@ -62,6 +77,91 @@ export default function NewTransferPage() {
     }
     load()
   }, [])
+
+  const handleCreateMaterialType = async () => {
+    if (!newMaterialTypeName.trim()) return
+
+    setMaterialTypeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
+      name: newMaterialTypeName.trim(),
+      unit: newMaterialTypeUnit.trim() || null,
+      description: null,
+    })
+
+    if (err) {
+      setError(err.message)
+      setMaterialTypeDialogLoading(false)
+      return
+    }
+
+    const newType = data?.insert_material_types_one
+    if (newType) {
+      setMaterialTypes((prev) => [...prev, newType])
+      if (activeLineIndexForNewType !== null) {
+        updateLine(activeLineIndexForNewType, 'material_type_id', newType.id)
+        updateLine(activeLineIndexForNewType, 'material_size_id', '')
+        updateLine(activeLineIndexForNewType, 'size_label', '')
+      }
+      setShowMaterialTypeDialog(false)
+      setNewMaterialTypeName('')
+      setNewMaterialTypeUnit('tons')
+      setActiveLineIndexForNewType(null)
+    }
+
+    setMaterialTypeDialogLoading(false)
+  }
+
+  const handleCreateSize = async () => {
+    const materialTypeId = newSizeMaterialTypeId || (activeLineIndexForNewSize !== null ? lines[activeLineIndexForNewSize].material_type_id : '')
+    if (!materialTypeId || !newSizeLabel.trim()) return
+
+    setSizeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_sizes_one: MaterialSize }>(CREATE_MATERIAL_SIZE_MUTATION, {
+      material_type_id: materialTypeId,
+      size_label: newSizeLabel.trim(),
+      thickness: newSizeThickness ? parseFloat(newSizeThickness) : null,
+      width: newSizeWidth ? parseFloat(newSizeWidth) : null,
+    })
+
+    if (err) {
+      setError(err.message)
+      setSizeDialogLoading(false)
+      return
+    }
+
+    const newSize = data?.insert_material_sizes_one
+    if (newSize) {
+      setMaterialSizes((prev) => [...prev, newSize])
+      if (activeLineIndexForNewSize !== null) {
+        updateLine(activeLineIndexForNewSize, 'material_size_id', newSize.id)
+        updateLine(activeLineIndexForNewSize, 'size_label', newSize.size_label)
+      }
+      setShowSizeDialog(false)
+      setNewSizeMaterialTypeId('')
+      setNewSizeLabel('')
+      setNewSizeThickness('')
+      setNewSizeWidth('')
+      setActiveLineIndexForNewSize(null)
+    }
+
+    setSizeDialogLoading(false)
+  }
+
+  const handleCancelNewType = () => {
+    setShowMaterialTypeDialog(false)
+    setNewMaterialTypeName('')
+    setNewMaterialTypeUnit('tons')
+    setActiveLineIndexForNewType(null)
+  }
+
+  const handleCancelNewSize = () => {
+    setShowSizeDialog(false)
+    setNewSizeMaterialTypeId('')
+    setNewSizeLabel('')
+    setNewSizeThickness('')
+    setNewSizeWidth('')
+    setActiveLineIndexForNewSize(null)
+  }
 
   const updateLine = useCallback((index: number, field: keyof TransferLine, value: string) => {
     setLines((prev) => {
@@ -239,18 +339,34 @@ export default function NewTransferPage() {
                       <td className="pr-3 py-2">
                         <select
                           value={line.material_type_id}
-                          onChange={(e) => updateLine(i, 'material_type_id', e.target.value)}
+                          onChange={(e) => {
+                            if (e.target.value === 'NEW_TYPE') {
+                              setActiveLineIndexForNewType(i)
+                              setShowMaterialTypeDialog(true)
+                              return
+                            }
+                            updateLine(i, 'material_type_id', e.target.value)
+                            updateLine(i, 'material_size_id', '')
+                            updateLine(i, 'size_label', '')
+                          }}
                           required
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                         >
                           <option value="">Select</option>
                           {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
                       <td className="pr-3 py-2">
                         <select
                           value={line.material_size_id}
                           onChange={(e) => {
+                            if (e.target.value === 'NEW_SIZE') {
+                              setActiveLineIndexForNewSize(i)
+                              setNewSizeMaterialTypeId(line.material_type_id)
+                              setShowSizeDialog(true)
+                              return
+                            }
                             const size = materialSizes.find(s => s.id === e.target.value)
                             updateLine(i, 'material_size_id', e.target.value)
                             if (size) updateLine(i, 'size_label', size.size_label)
@@ -259,6 +375,7 @@ export default function NewTransferPage() {
                         >
                           <option value="">Select</option>
                           {sizesForType.map((s) => <option key={s.id} value={s.id}>{s.size_label}</option>)}
+                          <option value="NEW_SIZE" className="font-semibold">+ New Size</option>
                         </select>
                       </td>
                       <td className="pr-3 py-2">
@@ -301,7 +418,85 @@ export default function NewTransferPage() {
               </tbody>
             </table>
           </div>
-        </div>
+
+          {showMaterialTypeDialog && (
+            <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-blue-900">Create New Material Type</h2>
+                  <p className="text-sm text-blue-700">Add a material type and assign it to the selected line.</p>
+                </div>
+                <button type="button" onClick={handleCancelNewType} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-1">Material Type Name</label>
+                  <input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                    className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Enter material type" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-1">Unit</label>
+                  <input value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
+                    className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="tons" />
+                </div>
+              </div>
+              <div className="mt-4 flex gap-3">
+                <button type="button" onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                  {materialTypeDialogLoading ? 'Creating…' : 'Create Material Type'}
+                </button>
+              </div>
+            </div>
+          )}
+          {showSizeDialog && (
+            <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-blue-900">Create New Size</h2>
+                  <p className="text-sm text-blue-700">Add a size for the selected material type.</p>
+                </div>
+                <button type="button" onClick={handleCancelNewSize} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-1">Material Type</label>
+                  <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
+                    className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                    <option value="">— Select Material Type —</option>
+                    {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-1">Size Label</label>
+                  <input value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)}
+                    className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Enter size label" />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 mt-4">
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-1">Thickness</label>
+                  <input value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)}
+                    className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Optional" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-blue-900 mb-1">Width</label>
+                  <input value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)}
+                    className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Optional" />
+                </div>
+              </div>
+              <div className="mt-4 flex gap-3">
+                <button type="button" onClick={handleCreateSize} disabled={sizeDialogLoading}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                  {sizeDialogLoading ? 'Creating…' : 'Create Size'}
+                </button>
+              </div>
+            </div>
+          )}
 
         {error && (
           <div className="rounded-md bg-red-50 border border-red-200 p-4">

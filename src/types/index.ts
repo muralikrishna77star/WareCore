@@ -70,6 +70,15 @@ export interface Customer {
   updated_at: string
 }
 
+export interface ItemGroup {
+  id: string
+  group_code: string
+  group_desc?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface MaterialType {
   id: string
   name: string
@@ -88,6 +97,24 @@ export interface MaterialSize {
   is_active: boolean
   created_at: string
   material_type?: MaterialType
+}
+
+export interface ItemMaster {
+  id: string
+  item_code: string
+  item_name: string
+  item_group_id?: string
+  material_type_id: string
+  material_size_id?: string
+  size_label?: string
+  description?: string
+  unit: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  material_type?: MaterialType
+  material_size?: MaterialSize
+  item_group?: ItemGroup
 }
 
 export interface UserProfile {
@@ -119,6 +146,27 @@ export interface PurchaseBill {
   items?: PurchaseBillItem[]
 }
 
+export type FinancialEntryType = 'RECEIPT' | 'PAYMENT'
+
+export interface FinancialEntry {
+  id: string
+  company_id: string
+  supplier_id?: string
+  customer_id?: string
+  entry_type: FinancialEntryType
+  reference_type: 'purchase_bill' | 'dispatch_order'
+  reference_id?: string
+  reference_number?: string
+  purchase_line_id?: string
+  sub_purchase_line_id?: string
+  amount: number
+  entry_date: string
+  payment_mode?: string
+  notes?: string
+  created_at: string
+  updated_at?: string
+}
+
 export interface PurchaseBillItem {
   id: string
   bill_id: string
@@ -129,6 +177,7 @@ export interface PurchaseBillItem {
   unit: string
   rate?: number
   amount?: number
+  purchase_line_id?: string
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
@@ -254,6 +303,8 @@ export interface DispatchItem {
   unit: string
   rate?: number
   amount?: number
+  purchase_line_id?: string
+  sub_purchase_line_id?: string
   created_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
