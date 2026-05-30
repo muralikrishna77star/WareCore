@@ -17,6 +17,11 @@ const navItems = [
     icon: '⚙️',
   },
   {
+    title: 'Backup & Restore',
+    href: '/admin/backups',
+    icon: '🗄️',
+  },
+  {
     title: 'Purchase Entry',
     href: '/bills',
     icon: '📋',
