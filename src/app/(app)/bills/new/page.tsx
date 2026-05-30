@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
@@ -38,9 +38,17 @@ type LineItem = {
   total_with_tax: number
 }
 
-function generatePurchaseLineId(lineNumber: number): string {
-  const ts = Date.now().toString(36).slice(-5).toUpperCase()
-  return `PL-${ts}-${String(lineNumber).padStart(3, '0')}`
+function generatePurchaseId(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
+  return `PB-${y}${m}${d}-${rand}`
+}
+
+function makePurchaseLineId(purchaseId: string, lineNumber: number): string {
+  return `${purchaseId}-L${String(lineNumber).padStart(2, '0')}`
 }
 
 const emptyLine = (): LineItem => ({
@@ -86,6 +94,8 @@ function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
 
 export default function NewBillPage() {
   const router = useRouter()
+  // Stable initial purchase ID shared between billNumber and first line
+  const initialPurchaseId = useRef(generatePurchaseId())
 
   // Master data
   const [companies, setCompanies] = useState<Company[]>([])
@@ -101,11 +111,11 @@ export default function NewBillPage() {
   const [companyId, setCompanyId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [supplierId, setSupplierId] = useState('')
-  const [billNumber, setBillNumber] = useState('')
+  const [billNumber, setBillNumber] = useState(() => initialPurchaseId.current)
   const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineItem[]>(() => [
-    { ...emptyLine(), purchase_line_id: generatePurchaseLineId(1) },
+    { ...emptyLine(), purchase_line_id: makePurchaseLineId(initialPurchaseId.current, 1) },
   ])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -164,6 +174,18 @@ export default function NewBillPage() {
     }
     load()
   }, [])
+
+  // Regenerate all line IDs whenever the Purchase ID changes
+  useEffect(() => {
+    const pid = billNumber.trim()
+    if (!pid) return
+    setLines((prev) =>
+      prev.map((line, idx) => ({
+        ...line,
+        purchase_line_id: makePurchaseLineId(pid, idx + 1),
+      }))
+    )
+  }, [billNumber])
 
   const filteredWarehouses = warehouseId
     ? warehouses
@@ -275,7 +297,7 @@ export default function NewBillPage() {
   const addLine = () =>
     setLines((prev) => [
       ...prev,
-      { ...emptyLine(), purchase_line_id: generatePurchaseLineId(prev.length + 1) },
+      { ...emptyLine(), purchase_line_id: makePurchaseLineId(billNumber || 'PB', prev.length + 1) },
     ])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
 
@@ -451,12 +473,28 @@ export default function NewBillPage() {
 
     const validLines = lines.filter((l) => l.material_type_id && l.quantity)
     if (!validLines.length) {
-      setError('Add at least one line item with material and quantity.')
+      setError('Add at least one line item with material type and quantity.')
       setLoading(false)
       return
     }
+
+    // Validate item name on every line
+    for (let i = 0; i < validLines.length; i++) {
+      if (!validLines[i].item_name.trim()) {
+        setError(`Line ${i + 1}: Item Name is required. Please select an item or enter a name before saving.`)
+        setLoading(false)
+        return
+      }
+    }
+
     if (!warehouseId) {
       setError('Please select a warehouse before saving.')
+      setLoading(false)
+      return
+    }
+
+    if (!billNumber.trim()) {
+      setError('Purchase ID is required.')
       setLoading(false)
       return
     }
@@ -581,14 +619,27 @@ export default function NewBillPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bill Number</label>
-              <input
-                type="text"
-                value={billNumber}
-                onChange={(e) => setBillNumber(e.target.value)}
-                placeholder="e.g. INV-2024-001"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Purchase ID
+                <span className="ml-2 text-xs font-normal text-gray-400">(auto-generated — edit to override)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={billNumber}
+                  onChange={(e) => setBillNumber(e.target.value)}
+                  placeholder="PB-YYYYMMDD-XXXX"
+                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setBillNumber(generatePurchaseId())}
+                  title="Generate new Purchase ID"
+                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                >
+                  ↻ New ID
+                </button>
+              </div>
             </div>
 
             <div>
@@ -634,7 +685,7 @@ export default function NewBillPage() {
                 <tr className="border-b text-left">
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Code</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
@@ -691,9 +742,13 @@ export default function NewBillPage() {
                               updateLine(i, 'item_master_id', e.target.value)
                             }
                           }}
-                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                          className={`block w-32 rounded border px-2 py-1.5 text-sm focus:outline-none ${
+                            line.material_type_id && line.quantity && !line.item_name
+                              ? 'border-red-400 bg-red-50 focus:border-red-500'
+                              : 'border-gray-300 focus:border-blue-500'
+                          }`}
                         >
-                          <option value="">Select Item</option>
+                          <option value="">Select Item *</option>
                           {itemsForType.map((im) => (
                             <option key={im.id} value={im.id}>{im.item_name}</option>
                           ))}
