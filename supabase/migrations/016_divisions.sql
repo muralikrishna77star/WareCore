@@ -29,9 +29,9 @@ CREATE POLICY "Enable read access for authenticated users"
   ON divisions FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable insert for authenticated users"
-  ON divisions FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+  ON divisions FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable update for authenticated users"
   ON divisions FOR UPDATE
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);

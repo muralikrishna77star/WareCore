@@ -40,15 +40,15 @@ CREATE POLICY "Enable read for authenticated users"
   ON custom_roles FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable insert for authenticated users"
-  ON custom_roles FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+  ON custom_roles FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable update for authenticated users"
   ON custom_roles FOR UPDATE
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable delete for authenticated users"
-  ON custom_roles FOR DELETE USING (auth.role() = 'authenticated');
+  ON custom_roles FOR DELETE USING (auth.uid() IS NOT NULL);
 
 ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;
 
@@ -56,12 +56,12 @@ CREATE POLICY "Enable read for authenticated users"
   ON role_permissions FOR SELECT USING (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable insert for authenticated users"
-  ON role_permissions FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+  ON role_permissions FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable update for authenticated users"
   ON role_permissions FOR UPDATE
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Enable delete for authenticated users"
-  ON role_permissions FOR DELETE USING (auth.role() = 'authenticated');
+  ON role_permissions FOR DELETE USING (auth.uid() IS NOT NULL);
