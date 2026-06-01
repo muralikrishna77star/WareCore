@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { APP_VERSION } from '@/lib/version'
 
 const navItems = [
   {
@@ -118,7 +119,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Navigation */}
-        <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-8rem)]">
+        <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-10rem)]">
           {navItems.map((item) => {
             const isActive = item.href ? pathname === item.href || pathname.startsWith(item.href + '/') : false
             if (item.action === 'signout') {
@@ -157,6 +158,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {/* Version footer */}
+        <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t border-gray-800 bg-gray-900">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">WareCore WMS</span>
+            <span className="inline-flex items-center rounded bg-gray-800 border border-gray-700 px-2 py-0.5 text-[10px] font-mono text-gray-400">
+              v{APP_VERSION}
+            </span>
+          </div>
+        </div>
       </aside>
 
       {/* Main content */}
@@ -174,6 +184,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
 
           <div className="flex items-center gap-4 ml-auto">
+            <span className="hidden sm:inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-mono font-medium text-blue-600">
+              v{APP_VERSION}
+            </span>
             <Link
               href="/"
               className="text-sm text-gray-500 hover:text-blue-600 transition-colors"

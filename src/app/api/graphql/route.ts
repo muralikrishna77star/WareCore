@@ -51,6 +51,12 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   UpdateJobWorkOrderStatus: ALL_STAFF,
   // Financial entries
   CreateFinancialEntry: ALL_STAFF,
+  // Roles & permissions management
+  CreateCustomRole:          ADMIN_MANAGER,
+  InsertRolePermissions:     ADMIN_MANAGER,
+  UpsertRolePermissions:     ADMIN_MANAGER,
+  // Division / item hierarchy
+  CreateDivision:            ADMIN_MANAGER,
 }
 
 /** Returns the operation type and name from a GraphQL query string. */
