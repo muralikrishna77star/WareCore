@@ -125,12 +125,40 @@ export const ITEM_GROUPS_QUERY = `
   }
 `
 
+export const ACTIVE_DIVISIONS_QUERY = `
+  query GetActiveDivisions {
+    divisions(where: {is_active: {_eq: true}}, order_by: {division_code: asc}) {
+      id
+      division_code
+      division_name
+      is_active
+      created_at
+    }
+  }
+`
+
+export const CREATE_DIVISION_MUTATION = `
+  mutation CreateDivision($division_code: String!, $division_name: String!) {
+    insert_divisions_one(object: {
+      division_code: $division_code
+      division_name: $division_name
+    }) {
+      id
+      division_code
+      division_name
+      is_active
+      created_at
+    }
+  }
+`
+
 export const ACTIVE_ITEM_GROUPS_QUERY = `
   query GetActiveItemGroups {
     item_groups(where: {is_active: {_eq: true}}, order_by: {group_code: asc}) {
       id
       group_code
       group_desc
+      division_id
       is_active
       created_at
       updated_at
@@ -547,14 +575,19 @@ export const CREATE_MATERIAL_SIZE_MUTATION = `
 `
 
 export const CREATE_ITEM_GROUP_MUTATION = `
-  mutation CreateItemGroup($group_code: String!, $group_desc: String) {
+  mutation CreateItemGroup($group_code: String!, $group_desc: String, $division_id: uuid) {
     insert_item_groups_one(object: {
       group_code: $group_code
       group_desc: $group_desc
+      division_id: $division_id
     }) {
       id
       group_code
       group_desc
+      division_id
+      is_active
+      created_at
+      updated_at
     }
   }
 `
@@ -697,6 +730,67 @@ export const CREATE_DISPATCH_ORDER_MUTATION = `
 export const CREATE_DISPATCH_ITEMS_MUTATION = `
   mutation CreateDispatchItems($objects: [dispatch_items_insert_input!]!) {
     insert_dispatch_items(objects: $objects) { affected_rows }
+  }
+`
+
+// ─── Available purchase lines for sale dispatch ──────────────────────────────
+
+export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
+  query GetPurchaseBillItemsForDispatch {
+    purchase_bill_items(
+      where: { purchase_line_id: { _is_null: false } }
+      order_by: { created_at: desc }
+    ) {
+      purchase_line_id
+      item_name
+      item_master_id
+      material_type_id
+      material_size_id
+      size_label
+    }
+  }
+`
+
+export const STOCK_LEDGER_LINE_QUANTITIES_QUERY = `
+  query GetStockLedgerLineQuantities {
+    stock_ledger(where: { purchase_line_id: { _is_null: false } }) {
+      purchase_line_id
+      quantity
+    }
+  }
+`
+
+// ─── Sequence helpers (fetch existing IDs to compute next global counter) ────
+
+export const ALL_BILL_NUMBERS_QUERY = `
+  query GetAllBillNumbers {
+    purchase_bills(order_by: {created_at: desc}) {
+      bill_number
+    }
+  }
+`
+
+export const ALL_PURCHASE_LINE_IDS_QUERY = `
+  query GetAllPurchaseLineIds {
+    purchase_bill_items {
+      purchase_line_id
+    }
+  }
+`
+
+export const ALL_INVOICE_NUMBERS_QUERY = `
+  query GetAllInvoiceNumbers {
+    dispatch_orders(order_by: {created_at: desc}) {
+      invoice_number
+    }
+  }
+`
+
+export const ALL_SALE_LINE_IDS_QUERY = `
+  query GetAllSaleLineIds {
+    dispatch_items {
+      sale_line_id
+    }
   }
 `
 export const FINANCIAL_ENTRIES_QUERY = `
@@ -1132,6 +1226,68 @@ export const UPDATE_TAX_RATE_MUTATION = `
       }
     ) {
       id name cgst_rate sgst_rate tds_rate tcs_rate applicable_to is_active
+    }
+  }
+`
+
+// ─── Custom Roles & Permissions ──────────────────────────────────────────────
+
+export const CUSTOM_ROLES_QUERY = `
+  query GetCustomRoles {
+    custom_roles(order_by: {created_at: desc}) {
+      id
+      role_name
+      role_code
+      description
+      is_active
+      created_at
+    }
+  }
+`
+
+export const ROLE_PERMISSIONS_QUERY = `
+  query GetRolePermissions($role_id: uuid!) {
+    role_permissions(where: {role_id: {_eq: $role_id}}) {
+      id
+      screen_code
+      can_read
+      can_write
+    }
+  }
+`
+
+export const CREATE_CUSTOM_ROLE_MUTATION = `
+  mutation CreateCustomRole($role_name: String!, $role_code: String!, $description: String) {
+    insert_custom_roles_one(object: {
+      role_name: $role_name
+      role_code: $role_code
+      description: $description
+    }) {
+      id
+      role_name
+      role_code
+    }
+  }
+`
+
+export const INSERT_ROLE_PERMISSIONS_MUTATION = `
+  mutation InsertRolePermissions($objects: [role_permissions_insert_input!]!) {
+    insert_role_permissions(objects: $objects) {
+      affected_rows
+    }
+  }
+`
+
+export const UPSERT_ROLE_PERMISSIONS_MUTATION = `
+  mutation UpsertRolePermissions($objects: [role_permissions_insert_input!]!) {
+    insert_role_permissions(
+      objects: $objects
+      on_conflict: {
+        constraint: role_permissions_role_id_screen_code_key
+        update_columns: [can_read, can_write]
+      }
+    ) {
+      affected_rows
     }
   }
 `

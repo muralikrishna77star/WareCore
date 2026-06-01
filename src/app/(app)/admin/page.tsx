@@ -12,6 +12,7 @@ import {
   ITEM_MASTERS_QUERY,
   USER_PROFILES_QUERY,
   TAX_RATES_QUERY,
+  CUSTOM_ROLES_QUERY,
 } from '@/lib/hasura/queries'
 import CollapsibleSection from './CollapsibleSection'
 
@@ -28,6 +29,7 @@ export default async function AdminPage() {
     hasuraQuery(ITEM_MASTERS_QUERY, undefined, { suppressError: true }),
     hasuraQuery(TAX_RATES_QUERY, undefined, { suppressError: true }),
     hasuraQuery(USER_PROFILES_QUERY),
+    hasuraQuery(CUSTOM_ROLES_QUERY, undefined, { suppressError: true }),
   ])
 
   const [
@@ -41,6 +43,7 @@ export default async function AdminPage() {
     itemMastersRes,
     taxRatesRes,
     usersRes,
+    customRolesRes,
   ] = queryResults
 
   const companies =
@@ -82,6 +85,10 @@ export default async function AdminPage() {
   const users =
     usersRes.status === 'fulfilled'
       ? (usersRes.value as any).user_profiles ?? []
+      : []
+  const customRoles =
+    customRolesRes.status === 'fulfilled'
+      ? (customRolesRes.value as any).custom_roles ?? []
       : []
 
   const formatReason = (reason: unknown) => {
@@ -172,6 +179,12 @@ export default async function AdminPage() {
       addHref: '/admin/users/new', href: '/admin/users',
       columns: ['Name', 'Role', 'Company'],
       rows: users.map((u: any) => [u.full_name || '—', u.role?.replace(/_/g, ' ') || '—', u.companies?.name || 'All']),
+    },
+    {
+      title: 'Roles & Permissions', icon: '🔐',
+      addHref: '/admin/roles/new', href: '/admin/roles',
+      columns: ['Role Name', 'Code', 'Status'],
+      rows: customRoles.map((r: any) => [r.role_name, r.role_code, r.is_active ? '✅ Active' : '❌ Inactive']),
     },
   ]
 

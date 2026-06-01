@@ -1,18 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
-  ACTIVE_ITEM_GROUPS_QUERY, ACTIVE_PURCHASE_TAX_RATES_QUERY,
+  ACTIVE_ITEM_GROUPS_QUERY, ACTIVE_PURCHASE_TAX_RATES_QUERY, ACTIVE_DIVISIONS_QUERY,
+  ALL_BILL_NUMBERS_QUERY, ALL_PURCHASE_LINE_IDS_QUERY,
   CREATE_PURCHASE_BILL_MUTATION, CREATE_PURCHASE_BILL_ITEMS_MUTATION,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
   CREATE_ITEM_MASTER_MUTATION, CREATE_ITEM_GROUP_MUTATION,
+  CREATE_COMPANY_MUTATION, CREATE_WAREHOUSE_MUTATION, CREATE_SUPPLIER_MUTATION,
+  CREATE_DIVISION_MUTATION,
 } from '@/lib/hasura/queries'
-import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate } from '@/types'
+import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate, Division } from '@/types'
 
 type LineItem = {
   purchase_line_id: string
@@ -26,7 +29,6 @@ type LineItem = {
   rate: string
   amount: string
   notes: string
-  // Tax
   tax_rate_id: string
   taxable_value: number
   cgst_rate: number
@@ -38,40 +40,42 @@ type LineItem = {
   total_with_tax: number
 }
 
-function generatePurchaseId(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
-  return `PB-${y}${m}${d}-${rand}`
+// ─── ID generation helpers ────────────────────────────────────────────────────
+
+function getMMYY(date: Date = new Date()): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const yy = String(date.getFullYear()).slice(-2)
+  return `${mm}${yy}`
 }
 
-function makePurchaseLineId(purchaseId: string, lineNumber: number): string {
-  return `${purchaseId}-L${String(lineNumber).padStart(2, '0')}`
+function computeNextSeq(ids: string[], pattern: RegExp): number {
+  return ids.reduce((max, id) => {
+    if (!id) return max
+    const m = id.match(pattern)
+    return m ? Math.max(max, parseInt(m[1], 10)) : max
+  }, 0)
 }
+
+function generatePurchaseId(existingBillNumbers: string[]): string {
+  const seq = computeNextSeq(existingBillNumbers, /^\d{4}-(\d+)$/)
+  return `${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+}
+
+function generatePurchaseLineId(groupCode: string, allLineIds: string[]): string {
+  const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
+  const prefix = groupCode.slice(0, 2).toUpperCase()
+  return `${prefix}${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const emptyLine = (): LineItem => ({
-  purchase_line_id: '',
-  item_master_id: '',
-  item_name: '',
-  item_code: '',
-  material_type_id: '',
-  material_size_id: '',
-  size_label: '',
-  quantity: '',
-  rate: '',
-  amount: '',
-  notes: '',
-  tax_rate_id: '',
-  taxable_value: 0,
-  cgst_rate: 0,
-  cgst_amount: 0,
-  sgst_rate: 0,
-  sgst_amount: 0,
-  tds_rate: 0,
-  tds_amount: 0,
-  total_with_tax: 0,
+  purchase_line_id: '', item_master_id: '', item_name: '', item_code: '',
+  material_type_id: '', material_size_id: '', size_label: '',
+  quantity: '', rate: '', amount: '', notes: '',
+  tax_rate_id: '', taxable_value: 0,
+  cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0,
+  tds_rate: 0, tds_amount: 0, total_with_tax: 0,
 })
 
 function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
@@ -94,10 +98,8 @@ function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
 
 export default function NewBillPage() {
   const router = useRouter()
-  // Stable initial purchase ID shared between billNumber and first line
-  const initialPurchaseId = useRef(generatePurchaseId())
 
-  // Master data
+  // ── Master data ──────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState<Company[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -105,28 +107,53 @@ export default function NewBillPage() {
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
   const [itemGroups, setItemGroups] = useState<ItemGroup[]>([])
+  const [divisions, setDivisions] = useState<Division[]>([])
   const [taxRates, setTaxRates] = useState<TaxRate[]>([])
 
-  // Form state
+  // Existing IDs for sequence computation
+  const [existingBillNumbers, setExistingBillNumbers] = useState<string[]>([])
+  const [existingLineIds, setExistingLineIds] = useState<string[]>([])
+
+  // ── Header form state ────────────────────────────────────────────────────
   const [companyId, setCompanyId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [supplierId, setSupplierId] = useState('')
-  const [billNumber, setBillNumber] = useState(() => initialPurchaseId.current)
+  const [billNumber, setBillNumber] = useState('')
   const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState<LineItem[]>(() => [
-    { ...emptyLine(), purchase_line_id: makePurchaseLineId(initialPurchaseId.current, 1) },
-  ])
+  const [lines, setLines] = useState<LineItem[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [masterDataLoading, setMasterDataLoading] = useState(true)
 
-  // Dialog states
+  // ── New Company dialog ───────────────────────────────────────────────────
+  const [showNewCompanyDialog, setShowNewCompanyDialog] = useState(false)
+  const [newCoName, setNewCoName] = useState('')
+  const [newCoCode, setNewCoCode] = useState('')
+  const [newCoShortName, setNewCoShortName] = useState('')
+  const [newCoGstin, setNewCoGstin] = useState('')
+  const [newCoLoading, setNewCoLoading] = useState(false)
+
+  // ── New Warehouse dialog ─────────────────────────────────────────────────
+  const [showNewWarehouseDialog, setShowNewWarehouseDialog] = useState(false)
+  const [newWhName, setNewWhName] = useState('')
+  const [newWhCompanyId, setNewWhCompanyId] = useState('')
+  const [newWhLoading, setNewWhLoading] = useState(false)
+
+  // ── New Supplier dialog ──────────────────────────────────────────────────
+  const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false)
+  const [newSpName, setNewSpName] = useState('')
+  const [newSpPhone, setNewSpPhone] = useState('')
+  const [newSpGstin, setNewSpGstin] = useState('')
+  const [newSpLoading, setNewSpLoading] = useState(false)
+
+  // ── Material Type dialog ─────────────────────────────────────────────────
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
   const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
   const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
 
+  // ── Size dialog ──────────────────────────────────────────────────────────
   const [showSizeDialog, setShowSizeDialog] = useState(false)
   const [newSizeMaterialTypeId, setNewSizeMaterialTypeId] = useState('')
   const [newSizeLabel, setNewSizeLabel] = useState('')
@@ -134,8 +161,10 @@ export default function NewBillPage() {
   const [newSizeWidth, setNewSizeWidth] = useState('')
   const [sizeDialogLoading, setSizeDialogLoading] = useState(false)
 
+  // ── New Item dialog ──────────────────────────────────────────────────────
   const [showNewItemDialog, setShowNewItemDialog] = useState(false)
   const [newItemLineIndex, setNewItemLineIndex] = useState<number | null>(null)
+  const [newItemDivisionId, setNewItemDivisionId] = useState('')
   const [newItemGroupId, setNewItemGroupId] = useState('')
   const [newItemMaterialTypeId, setNewItemMaterialTypeId] = useState('')
   const [newItemMaterialSizeId, setNewItemMaterialSizeId] = useState('')
@@ -144,15 +173,24 @@ export default function NewBillPage() {
   const [newItemDescription, setNewItemDescription] = useState('')
   const [newItemCode, setNewItemCode] = useState('')
   const [newItemDialogLoading, setNewItemDialogLoading] = useState(false)
+
+  // ── New Group sub-dialog (inside Item dialog) ────────────────────────────
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false)
   const [newGroupCode, setNewGroupCode] = useState('')
   const [newGroupDesc, setNewGroupDesc] = useState('')
+  const [newGroupDivisionId, setNewGroupDivisionId] = useState('')
   const [newGroupDialogLoading, setNewGroupDialogLoading] = useState(false)
 
-  // Load master data
+  // ── New Division sub-dialog (inside Item dialog) ─────────────────────────
+  const [showNewDivisionDialog, setShowNewDivisionDialog] = useState(false)
+  const [newDivCode, setNewDivCode] = useState('')
+  const [newDivName, setNewDivName] = useState('')
+  const [newDivLoading, setNewDivLoading] = useState(false)
+
+  // ── Load master data ─────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
-      const [c, w, s, mt, ms, ig, im, tr] = await Promise.all([
+      const [c, w, s, mt, ms, ig, im, tr, div, bns, lis] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
@@ -161,6 +199,9 @@ export default function NewBillPage() {
         hasuraFetch(ACTIVE_ITEM_GROUPS_QUERY),
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
         hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
+        hasuraFetch(ACTIVE_DIVISIONS_QUERY),
+        hasuraFetch(ALL_BILL_NUMBERS_QUERY),
+        hasuraFetch(ALL_PURCHASE_LINE_IDS_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
@@ -170,26 +211,21 @@ export default function NewBillPage() {
       setItemGroups((ig.data as any)?.item_groups ?? [])
       setItemMasters((im.data as any)?.item_master ?? [])
       setTaxRates((tr.data as any)?.tax_rates ?? [])
+      setDivisions((div.data as any)?.divisions ?? [])
+
+      const bills: string[] = ((bns.data as any)?.purchase_bills ?? []).map((b: any) => b.bill_number)
+      const lineIds: string[] = ((lis.data as any)?.purchase_bill_items ?? [])
+        .map((i: any) => i.purchase_line_id).filter(Boolean)
+
+      setExistingBillNumbers(bills)
+      setExistingLineIds(lineIds)
+      setBillNumber(generatePurchaseId(bills))
       setMasterDataLoading(false)
     }
     load()
   }, [])
 
-  // Regenerate all line IDs whenever the Purchase ID changes
-  useEffect(() => {
-    const pid = billNumber.trim()
-    if (!pid) return
-    setLines((prev) =>
-      prev.map((line, idx) => ({
-        ...line,
-        purchase_line_id: makePurchaseLineId(pid, idx + 1),
-      }))
-    )
-  }, [billNumber])
-
-  const filteredWarehouses = warehouseId
-    ? warehouses
-    : companyId
+  const filteredWarehouses = companyId
     ? warehouses.filter((w) => w.company_id === companyId || !w.company_id)
     : warehouses
 
@@ -197,9 +233,7 @@ export default function NewBillPage() {
     const group = itemGroups.find((g) => g.id === groupId)
     if (!group?.group_code) return ''
     const prefix = group.group_code.trim().toUpperCase()
-    if (!prefix) return ''
     const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
     const sequence = itemMasters.reduce((max, item) => {
       if (!item.item_code?.startsWith(prefix)) return max
       const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
@@ -207,80 +241,88 @@ export default function NewBillPage() {
       const n = Number(match[1])
       return Number.isFinite(n) ? Math.max(max, n) : max
     }, 0)
-
     return `${prefix}${String(sequence + 1).padStart(4, '0')}`
   }
 
   useEffect(() => {
-    if (!newItemGroupId) {
-      setNewItemCode('')
-      return
-    }
-    setNewItemCode(generateItemCode(newItemGroupId))
+    setNewItemCode(newItemGroupId ? generateItemCode(newItemGroupId) : '')
   }, [newItemGroupId, itemMasters])
 
   useEffect(() => {
     const materialType = materialTypes.find((mt) => mt.id === newItemMaterialTypeId)
-    if (materialType) {
-      setNewItemUnit(materialType.unit || 'tons')
-    }
+    if (materialType) setNewItemUnit(materialType.unit || 'tons')
   }, [newItemMaterialTypeId, materialTypes])
 
   useEffect(() => {
-    if (!newItemMaterialTypeId) {
-      setNewItemMaterialSizeId('')
-    }
+    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
   }, [newItemMaterialTypeId])
+
+  // When division changes in item dialog, reset group if it no longer belongs to that division
+  useEffect(() => {
+    if (newItemDivisionId && newItemGroupId) {
+      const group = itemGroups.find(g => g.id === newItemGroupId)
+      if (group && group.division_id && group.division_id !== newItemDivisionId) {
+        setNewItemGroupId('')
+        setNewItemCode('')
+      }
+    }
+  }, [newItemDivisionId])
 
   const selectedNewItemSize = materialSizes.find((s) => s.id === newItemMaterialSizeId)
 
-  // Get items for selected material type
-  const getItemsForMaterialType = (materialTypeId: string) => {
-    return itemMasters.filter((im) => im.material_type_id === materialTypeId)
-  }
-
+  // ── updateLine ───────────────────────────────────────────────────────────
   const updateLine = useCallback((index: number, field: keyof LineItem, value: string) => {
     setLines((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
 
-      // Auto-populate from Item Master when selected
       if (field === 'item_master_id') {
-        const item = itemMasters.find((im) => im.id === value)
-        if (item) {
-          updated[index].item_name = item.item_name
-          updated[index].item_code = item.item_code
-          updated[index].material_type_id = item.material_type_id
-          updated[index].material_size_id = item.material_size_id || ''
-          updated[index].size_label = item.size_label || ''
+        if (value) {
+          const item = itemMasters.find((im) => im.id === value)
+          if (item) {
+            updated[index].item_name = item.item_name
+            updated[index].item_code = item.item_code
+            updated[index].material_type_id = item.material_type_id
+            updated[index].material_size_id = item.material_size_id || ''
+            updated[index].size_label = item.size_label || ''
+            const group = itemGroups.find((g) => g.id === item.item_group_id)
+            if (group) {
+              const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.purchase_line_id).filter(Boolean)
+              updated[index].purchase_line_id = generatePurchaseLineId(
+                group.group_code, [...existingLineIds, ...currentAssigned]
+              )
+            }
+          }
+        } else {
+          updated[index].item_name = ''
+          updated[index].item_code = ''
+          updated[index].purchase_line_id = ''
         }
       }
 
-      // When material type changes, clear item selection and size
       if (field === 'material_type_id') {
         updated[index].material_size_id = ''
         updated[index].size_label = ''
         updated[index].item_master_id = ''
         updated[index].item_name = ''
         updated[index].item_code = ''
+        updated[index].purchase_line_id = ''
       }
 
-      // When material size changes, set size_label and clear item if it no longer matches
       if (field === 'material_size_id') {
         const sz = materialSizes.find((s) => s.id === value)
         updated[index].size_label = sz?.size_label || ''
-        // if an item was selected but doesn't match the size, clear it
         if (updated[index].item_master_id) {
           const sel = itemMasters.find((im) => im.id === updated[index].item_master_id)
           if (!sel || (sel.material_size_id && sel.material_size_id !== value)) {
             updated[index].item_master_id = ''
             updated[index].item_name = ''
             updated[index].item_code = ''
+            updated[index].purchase_line_id = ''
           }
         }
       }
 
-      // Auto-calculate amount and tax
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
@@ -289,269 +331,243 @@ export default function NewBillPage() {
       if (field === 'quantity' || field === 'rate' || field === 'tax_rate_id') {
         Object.assign(updated[index], calcTax(updated[index], taxRates))
       }
-
       return updated
     })
-  }, [itemMasters, materialSizes, taxRates])
+  }, [itemMasters, itemGroups, materialSizes, taxRates, existingLineIds])
 
-  const addLine = () =>
-    setLines((prev) => [
-      ...prev,
-      { ...emptyLine(), purchase_line_id: makePurchaseLineId(billNumber || 'PB', prev.length + 1) },
-    ])
+  const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
-
   const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
   const totalAmt = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
-  // Create Material Type
-  const handleCreateMaterialType = async () => {
-    if (!newMaterialTypeName.trim()) {
-      alert('Material Type name is required')
-      return
-    }
-
-    setMaterialTypeDialogLoading(true)
-    const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
-      name: newMaterialTypeName,
-      unit: newMaterialTypeUnit,
+  // ── Inline Company creation ──────────────────────────────────────────────
+  const handleCreateCompany = async () => {
+    if (!newCoName.trim() || !newCoCode.trim()) { alert('Name and Code are required'); return }
+    setNewCoLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_companies_one: Company }>(CREATE_COMPANY_MUTATION, {
+      name: newCoName.trim(), code: newCoCode.trim().toUpperCase(),
+      short_name: newCoShortName || null, gstin: newCoGstin || null,
     })
-
-    if (err) {
-      const msg = err.message || ''
-      const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
-      if (missingInsertMatch && /insert_material_types_one/i.test(missingInsertMatch[1])) {
-        alert(
-          'Server error: material type creation mutation is not available.\n' +
-            'Possible causes: the `material_types` table is not present or not tracked in Hasura.\n' +
-            'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
-        )
-        setMaterialTypeDialogLoading(false)
-        return
-      }
-
-      alert(`Error: ${msg}`)
-      setMaterialTypeDialogLoading(false)
-      return
+    setNewCoLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_companies_one
+    if (created) {
+      setCompanies(prev => [...prev, created])
+      setCompanyId(created.id)
+      setNewCoName(''); setNewCoCode(''); setNewCoShortName(''); setNewCoGstin('')
+      setShowNewCompanyDialog(false)
     }
-
-    const newMT = data?.insert_material_types_one
-    if (newMT) {
-      setMaterialTypes((prev) => [...prev, newMT])
-      setNewMaterialTypeName('')
-      setNewMaterialTypeUnit('tons')
-      setShowMaterialTypeDialog(false)
-    }
-
-    setMaterialTypeDialogLoading(false)
   }
 
-  // Create Material Size
-  const handleCreateSize = async () => {
-    if (!newSizeMaterialTypeId || !newSizeLabel.trim()) {
-      alert('Material Type and Size Label are required')
-      return
+  // ── Inline Warehouse creation ────────────────────────────────────────────
+  const handleCreateWarehouse = async () => {
+    if (!newWhName.trim()) { alert('Warehouse name is required'); return }
+    const effectiveCompanyId = newWhCompanyId || companyId
+    if (!effectiveCompanyId) { alert('Please select a company first or pick one above'); return }
+    setNewWhLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_warehouses_one: Warehouse }>(CREATE_WAREHOUSE_MUTATION, {
+      name: newWhName.trim(), company_id: effectiveCompanyId,
+    })
+    setNewWhLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_warehouses_one
+    if (created) {
+      setWarehouses(prev => [...prev, { ...created, company_id: effectiveCompanyId, is_active: true, created_at: '', updated_at: '' }])
+      setWarehouseId(created.id)
+      setNewWhName(''); setNewWhCompanyId('')
+      setShowNewWarehouseDialog(false)
     }
+  }
 
+  // ── Inline Supplier creation ─────────────────────────────────────────────
+  const handleCreateSupplier = async () => {
+    if (!newSpName.trim()) { alert('Supplier name is required'); return }
+    setNewSpLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_suppliers_one: Supplier }>(CREATE_SUPPLIER_MUTATION, {
+      name: newSpName.trim(), phone: newSpPhone || null, gstin: newSpGstin || null,
+    })
+    setNewSpLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_suppliers_one
+    if (created) {
+      setSuppliers(prev => [...prev, created])
+      setSupplierId(created.id)
+      setNewSpName(''); setNewSpPhone(''); setNewSpGstin('')
+      setShowNewSupplierDialog(false)
+    }
+  }
+
+  // ── Material Type creation ───────────────────────────────────────────────
+  const handleCreateMaterialType = async () => {
+    if (!newMaterialTypeName.trim()) { alert('Material Type name is required'); return }
+    setMaterialTypeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
+      name: newMaterialTypeName, unit: newMaterialTypeUnit,
+    })
+    setMaterialTypeDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const newMT = data?.insert_material_types_one
+    if (newMT) {
+      setMaterialTypes(prev => [...prev, newMT])
+      setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons')
+      setShowMaterialTypeDialog(false)
+    }
+  }
+
+  // ── Size creation ────────────────────────────────────────────────────────
+  const handleCreateSize = async () => {
+    if (!newSizeMaterialTypeId || !newSizeLabel.trim()) { alert('Material Type and Size Label are required'); return }
     setSizeDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_sizes_one: MaterialSize }>(CREATE_MATERIAL_SIZE_MUTATION, {
-      material_type_id: newSizeMaterialTypeId,
-      size_label: newSizeLabel,
+      material_type_id: newSizeMaterialTypeId, size_label: newSizeLabel,
       thickness: newSizeThickness ? parseFloat(newSizeThickness) : null,
       width: newSizeWidth ? parseFloat(newSizeWidth) : null,
     })
-
-    if (err) {
-      const msg = err.message || ''
-      const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
-      if (missingInsertMatch && /insert_material_sizes_one/i.test(missingInsertMatch[1])) {
-        alert(
-          'Server error: material size creation mutation is not available.\n' +
-            'Possible causes: the `material_sizes` table is not present or not tracked in Hasura.\n' +
-            'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
-        )
-        setSizeDialogLoading(false)
-        return
-      }
-
-      alert(`Error: ${msg}`)
-      setSizeDialogLoading(false)
-      return
-    }
-
+    setSizeDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
     const newSize = data?.insert_material_sizes_one
     if (newSize) {
-      setMaterialSizes((prev) => [...prev, newSize])
-      setNewSizeMaterialTypeId('')
-      setNewSizeLabel('')
-      setNewSizeThickness('')
-      setNewSizeWidth('')
+      setMaterialSizes(prev => [...prev, newSize])
+      setNewSizeMaterialTypeId(''); setNewSizeLabel(''); setNewSizeThickness(''); setNewSizeWidth('')
       setShowSizeDialog(false)
     }
-
-    setSizeDialogLoading(false)
   }
 
+  // ── Division creation (inside Item dialog) ───────────────────────────────
+  const handleCreateDivision = async () => {
+    if (!newDivCode.trim() || !newDivName.trim()) { alert('Division code and name are required'); return }
+    setNewDivLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_divisions_one: Division }>(CREATE_DIVISION_MUTATION, {
+      division_code: newDivCode.trim().toUpperCase(),
+      division_name: newDivName.trim(),
+    })
+    setNewDivLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_divisions_one
+    if (created) {
+      setDivisions(prev => [...prev, created])
+      setNewItemDivisionId(created.id)
+      setNewGroupDivisionId(created.id)
+      setNewDivCode(''); setNewDivName('')
+      setShowNewDivisionDialog(false)
+    }
+  }
+
+  // ── New Item Group creation (inside Item dialog) ─────────────────────────
+  const handleCreateGroup = async () => {
+    const code = newGroupCode.trim().toUpperCase()
+    if (!code) { alert('Group code is required'); return }
+    if (code.length !== 2) { alert('Group code must be exactly 2 characters'); return }
+    setNewGroupDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_item_groups_one: ItemGroup }>(CREATE_ITEM_GROUP_MUTATION, {
+      group_code: code,
+      group_desc: newGroupDesc || null,
+      division_id: newGroupDivisionId || newItemDivisionId || null,
+    })
+    setNewGroupDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_item_groups_one
+    if (created) {
+      setItemGroups(prev => [...prev, created])
+      setNewItemGroupId(created.id)
+      setNewGroupCode(''); setNewGroupDesc(''); setNewGroupDivisionId('')
+      setShowNewGroupDialog(false)
+    }
+  }
+
+  // ── New Item creation ────────────────────────────────────────────────────
   const handleCreateNewItem = async () => {
     if (!newItemGroupId || !newItemMaterialTypeId || !newItemName.trim()) {
       alert('Group, material type, and item name are required.')
       return
     }
-
-    if (!newItemCode) {
-      alert('Select a group first to generate an item code.')
-      return
-    }
-
+    if (!newItemCode) { alert('Select a group first to generate an item code.'); return }
     setNewItemDialogLoading(true)
-
     const { data, error: err } = await hasuraFetch<{ insert_item_master_one: ItemMaster }>(CREATE_ITEM_MASTER_MUTATION, {
-      item_code: newItemCode,
-      item_name: newItemName,
-      item_group_id: newItemGroupId,
-      material_type_id: newItemMaterialTypeId,
+      item_code: newItemCode, item_name: newItemName,
+      item_group_id: newItemGroupId, material_type_id: newItemMaterialTypeId,
       material_size_id: newItemMaterialSizeId || null,
       size_label: selectedNewItemSize?.size_label || null,
-      unit: newItemUnit,
-      description: newItemDescription || null,
+      unit: newItemUnit, description: newItemDescription || null,
     })
-
-    if (err) {
-      const msg = err.message || ''
-      const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
-      if (missingInsertMatch && /insert_item_master_one/i.test(missingInsertMatch[1])) {
-        alert(
-          'Server error: item creation mutation is not available.\n' +
-            'Possible causes: the `item_master` table is not present or not tracked in Hasura.\n' +
-            'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
-        )
-        setNewItemDialogLoading(false)
-        return
-      }
-
-      alert(`Error: ${msg}`)
-      setNewItemDialogLoading(false)
-      return
-    }
-
+    setNewItemDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
     const created = data?.insert_item_master_one
     if (created) {
-      setItemMasters((prev) => [...prev, created])
+      setItemMasters(prev => [...prev, created])
       if (newItemLineIndex !== null) {
-        setLines((prev) => {
+        const group = itemGroups.find(g => g.id === newItemGroupId)
+        setLines(prev => {
           const updated = [...prev]
+          const currentAssigned = prev.filter((_, i) => i !== newItemLineIndex).map(l => l.purchase_line_id).filter(Boolean)
           updated[newItemLineIndex] = {
             ...updated[newItemLineIndex],
-            item_master_id: created.id,
-            item_name: created.item_name,
-            item_code: created.item_code,
-            material_type_id: newItemMaterialTypeId,
+            item_master_id: created.id, item_name: created.item_name,
+            item_code: created.item_code, material_type_id: newItemMaterialTypeId,
             material_size_id: created.material_size_id || '',
             size_label: created.size_label || '',
+            purchase_line_id: group
+              ? generatePurchaseLineId(group.group_code, [...existingLineIds, ...currentAssigned])
+              : '',
           }
           return updated
         })
       }
       setShowNewItemDialog(false)
-      setNewItemLineIndex(null)
-      setNewItemGroupId('')
-      setNewItemMaterialTypeId('')
-      setNewItemMaterialSizeId('')
-      setNewItemName('')
-      setNewItemUnit('tons')
-      setNewItemDescription('')
-      setNewItemCode('')
+      setNewItemLineIndex(null); setNewItemDivisionId(''); setNewItemGroupId('')
+      setNewItemMaterialTypeId(''); setNewItemMaterialSizeId(''); setNewItemName('')
+      setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
     }
-
-    setNewItemDialogLoading(false)
   }
 
+  // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
 
     const validLines = lines.filter((l) => l.material_type_id && l.quantity)
-    if (!validLines.length) {
-      setError('Add at least one line item with material type and quantity.')
-      setLoading(false)
-      return
-    }
+    if (!validLines.length) { setError('Add at least one line item with material type and quantity.'); setLoading(false); return }
 
-    // Validate item name on every line
     for (let i = 0; i < validLines.length; i++) {
       if (!validLines[i].item_name.trim()) {
-        setError(`Line ${i + 1}: Item Name is required. Please select an item or enter a name before saving.`)
-        setLoading(false)
-        return
+        setError(`Line ${i + 1}: Item Name is required.`); setLoading(false); return
       }
     }
+    if (!warehouseId) { setError('Please select a warehouse before saving.'); setLoading(false); return }
+    if (!billNumber.trim()) { setError('Purchase ID is required.'); setLoading(false); return }
 
-    if (!warehouseId) {
-      setError('Please select a warehouse before saving.')
-      setLoading(false)
-      return
-    }
-
-    if (!billNumber.trim()) {
-      setError('Purchase ID is required.')
-      setLoading(false)
-      return
-    }
-
-    // Create bill
-    const { data: billData, error: billError } = await hasuraFetch<any>(
-      CREATE_PURCHASE_BILL_MUTATION, {
-        company_id: companyId || null,
-        warehouse_id: warehouseId || null,
-        supplier_id: supplierId || null,
-        bill_number: billNumber,
-        bill_date: billDate,
-        total_quantity: totalQty,
-        total_amount: totalAmt,
-        notes: notes || null,
-      }
-    )
+    const { data: billData, error: billError } = await hasuraFetch<any>(CREATE_PURCHASE_BILL_MUTATION, {
+      company_id: companyId || null, warehouse_id: warehouseId || null,
+      supplier_id: supplierId || null, bill_number: billNumber,
+      bill_date: billDate, total_quantity: totalQty, total_amount: totalAmt, notes: notes || null,
+    })
     const bill = billData?.insert_purchase_bills_one
-    if (billError || !bill) {
-      setError(billError?.message ?? 'Failed to create bill')
-      setLoading(false)
-      return
-    }
+    if (billError || !bill) { setError(billError?.message ?? 'Failed to create bill'); setLoading(false); return }
 
-    // Insert line items
     const items = validLines.map((l) => ({
       bill_id: bill.id,
-      purchase_line_id: l.purchase_line_id || null,
-      item_name: l.item_name || null,
-      item_master_id: l.item_master_id || null,
-      material_type_id: l.material_type_id || null,
-      material_size_id: l.material_size_id || null,
-      size_label: l.size_label || null,
-      quantity: parseFloat(l.quantity),
-      rate: l.rate ? parseFloat(l.rate) : null,
-      amount: l.amount ? parseFloat(l.amount) : null,
-      notes: l.notes || null,
-      tax_rate_id: l.tax_rate_id || null,
-      taxable_value: l.taxable_value || null,
-      cgst_rate: l.cgst_rate || null,
-      cgst_amount: l.cgst_amount || null,
-      sgst_rate: l.sgst_rate || null,
-      sgst_amount: l.sgst_amount || null,
-      tds_rate: l.tds_rate || null,
-      tds_amount: l.tds_amount || null,
+      purchase_line_id: l.purchase_line_id || null, item_name: l.item_name || null,
+      item_master_id: l.item_master_id || null, material_type_id: l.material_type_id || null,
+      material_size_id: l.material_size_id || null, size_label: l.size_label || null,
+      quantity: parseFloat(l.quantity), rate: l.rate ? parseFloat(l.rate) : null,
+      amount: l.amount ? parseFloat(l.amount) : null, notes: l.notes || null,
+      tax_rate_id: l.tax_rate_id || null, taxable_value: l.taxable_value || null,
+      cgst_rate: l.cgst_rate || null, cgst_amount: l.cgst_amount || null,
+      sgst_rate: l.sgst_rate || null, sgst_amount: l.sgst_amount || null,
+      tds_rate: l.tds_rate || null, tds_amount: l.tds_amount || null,
       total_with_tax: l.total_with_tax || null,
     }))
     const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { items })
-    if (itemsError) {
-      setError(itemsError.message)
-      setLoading(false)
-      return
-    }
+    if (itemsError) { setError(itemsError.message); setLoading(false); return }
 
     router.push('/bills')
     router.refresh()
   }
+
+  // Groups visible in item dialog (filter by division if selected)
+  const groupsForItemDialog = newItemDivisionId
+    ? itemGroups.filter(g => !g.division_id || g.division_id === newItemDivisionId)
+    : itemGroups
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -571,121 +587,104 @@ export default function NewBillPage() {
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Header Details */}
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border p-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Bill Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+            {/* Company */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">My Companies</label>
-              <select
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+              <select value={companyId}
+                onChange={(e) => {
+                  if (e.target.value === 'NEW') { setShowNewCompanyDialog(true) }
+                  else { setCompanyId(e.target.value) }
+                }}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Company —</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                ))}
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+                <option value="NEW" className="font-semibold text-blue-600">+ New Company</option>
               </select>
             </div>
 
+            {/* Warehouse */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
-              <select
-                value={warehouseId}
-                onChange={(e) => setWarehouseId(e.target.value)}
-                required
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+              <select value={warehouseId} required
+                onChange={(e) => {
+                  if (e.target.value === 'NEW') {
+                    setNewWhCompanyId(companyId)
+                    setShowNewWarehouseDialog(true)
+                  } else {
+                    setWarehouseId(e.target.value)
+                  }
+                }}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Warehouse —</option>
-                {filteredWarehouses.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
+                {filteredWarehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                <option value="NEW" className="font-semibold text-blue-600">+ New Warehouse</option>
               </select>
             </div>
 
+            {/* Supplier */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-              <select
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
+              <select value={supplierId}
+                onChange={(e) => {
+                  if (e.target.value === 'NEW') { setShowNewSupplierDialog(true) }
+                  else { setSupplierId(e.target.value) }
+                }}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Supplier —</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <option value="NEW" className="font-semibold text-blue-600">+ New Supplier</option>
               </select>
             </div>
 
+            {/* Purchase ID */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Purchase ID
-                <span className="ml-2 text-xs font-normal text-gray-400">(auto-generated — edit to override)</span>
+                Purchase ID <span className="ml-1 text-xs font-normal text-gray-400">(auto-generated)</span>
               </label>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={billNumber}
-                  onChange={(e) => setBillNumber(e.target.value)}
-                  placeholder="PB-YYYYMMDD-XXXX"
-                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setBillNumber(generatePurchaseId())}
-                  title="Generate new Purchase ID"
-                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"
-                >
-                  ↻ New ID
-                </button>
+                <input type="text" value={billNumber} onChange={(e) => setBillNumber(e.target.value)}
+                  placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
+                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+                <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers))}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">↻ New ID</button>
               </div>
             </div>
 
+            {/* Bill Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Bill Date</label>
-              <input
-                type="date"
-                value={billDate}
-                onChange={(e) => setBillDate(e.target.value)}
-                required
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} required
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
 
+            {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional notes"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
           </div>
         </div>
 
-        {/* Line Items */}
+        {/* ── Line Items ─────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-gray-800">Line Items</h2>
-            <button
-              type="button"
-              onClick={addLine}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-            >
-              + Add Line
-            </button>
+            <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Code</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
@@ -702,193 +701,138 @@ export default function NewBillPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {lines.map((line, i) => {
-                  const sizesForType = materialSizes.filter(
-                    (s) => !s.material_type_id || s.material_type_id === line.material_type_id
-                  )
-                  const itemsForType = itemMasters.filter((im) =>
+                  const sizesForType = materialSizes.filter(s => !s.material_type_id || s.material_type_id === line.material_type_id)
+                  const itemsForType = itemMasters.filter(im =>
                     im.material_type_id === line.material_type_id &&
                     (!line.material_size_id || !im.material_size_id || im.material_size_id === line.material_size_id)
                   )
                   return (
                     <tr key={i} className="py-1">
+                      {/* Item Name */}
                       <td className="pr-3 py-2">
-                        <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-xs font-mono font-medium text-blue-700 whitespace-nowrap select-all">
-                          {line.purchase_line_id}
-                        </span>
-                      </td>
-                      <td className="pr-3 py-2">
-                        <input
-                          type="text"
-                          value={line.item_code}
-                          readOnly
-                          placeholder="Item code"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm bg-gray-50"
-                        />
-                      </td>
-                      <td className="pr-3 py-2">
-                        <select
-                          value={line.item_master_id}
+                        <select value={line.item_master_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') {
                               setNewItemLineIndex(i)
                               setShowNewItemDialog(true)
                               setNewItemMaterialTypeId(line.material_type_id)
                               setNewItemMaterialSizeId(line.material_size_id)
-                              setNewItemName('')
-                              setNewItemDescription('')
-                              setNewItemGroupId('')
-                              setNewItemCode('')
+                              setNewItemName(''); setNewItemDescription(''); setNewItemGroupId(''); setNewItemCode(''); setNewItemDivisionId('')
                             } else {
                               updateLine(i, 'item_master_id', e.target.value)
                             }
                           }}
-                          className={`block w-32 rounded border px-2 py-1.5 text-sm focus:outline-none ${
+                          className={`block w-36 rounded border px-2 py-1.5 text-sm focus:outline-none ${
                             line.material_type_id && line.quantity && !line.item_name
-                              ? 'border-red-400 bg-red-50 focus:border-red-500'
-                              : 'border-gray-300 focus:border-blue-500'
-                          }`}
-                        >
+                              ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
+                          }`}>
                           <option value="">Select Item *</option>
-                          {itemsForType.map((im) => (
-                            <option key={im.id} value={im.id}>{im.item_name}</option>
-                          ))}
+                          {itemsForType.map(im => <option key={im.id} value={im.id}>{im.item_name}</option>)}
+                          {itemMasters.filter(im => !itemsForType.find(x => x.id === im.id))
+                            .map(im => <option key={im.id} value={im.id} className="text-gray-400">{im.item_name}</option>)}
                           <option value="NEW" className="font-semibold">+ New Item</option>
                         </select>
                       </td>
+                      {/* Line ID */}
                       <td className="pr-3 py-2">
-                        <select
-                          value={line.material_type_id}
+                        {line.purchase_line_id
+                          ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-xs font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
+                          : <span className="text-xs text-gray-400 italic">— select item —</span>}
+                      </td>
+                      {/* Item Code */}
+                      <td className="pr-3 py-2">
+                        <input type="text" value={line.item_code} readOnly placeholder="—"
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm bg-gray-50" />
+                      </td>
+                      {/* Material Type */}
+                      <td className="pr-3 py-2">
+                        <select value={line.material_type_id}
                           onChange={(e) => {
-                            if (e.target.value === 'NEW') {
-                              setShowMaterialTypeDialog(true)
-                            } else {
-                              updateLine(i, 'material_type_id', e.target.value)
-                            }
+                            if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
+                            else { updateLine(i, 'material_type_id', e.target.value) }
                           }}
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        >
+                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {materialTypes.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
+                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
+                      {/* Size */}
                       <td className="pr-3 py-2">
-                        <select
-                          value={line.material_size_id}
+                        <select value={line.material_size_id}
                           onChange={(e) => {
-                            if (e.target.value === 'NEW') {
-                              setNewSizeMaterialTypeId(line.material_type_id)
-                              setShowSizeDialog(true)
-                            } else {
+                            if (e.target.value === 'NEW') { setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true) }
+                            else {
                               const size = materialSizes.find(s => s.id === e.target.value)
                               updateLine(i, 'material_size_id', e.target.value)
                               if (size) updateLine(i, 'size_label', size.size_label)
                             }
                           }}
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        >
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {sizesForType.map((s) => (
-                            <option key={s.id} value={s.id}>{s.size_label}</option>
-                          ))}
+                          {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                           <option value="NEW" className="font-semibold">+ New Size</option>
                         </select>
                       </td>
+                      {/* Qty */}
                       <td className="pr-3 py-2">
-                        <input
-                          type="number"
-                          value={line.quantity}
-                          onChange={(e) => updateLine(i, 'quantity', e.target.value)}
-                          step="0.001"
-                          min="0"
-                          required
-                          placeholder="0.000"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        />
+                        <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
+                          step="0.001" min="0" required placeholder="0.000"
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
+                      {/* Rate */}
                       <td className="pr-3 py-2">
-                        <input
-                          type="number"
-                          value={line.rate}
-                          onChange={(e) => updateLine(i, 'rate', e.target.value)}
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        />
+                        <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
+                          step="0.01" min="0" placeholder="0.00"
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
-                      {/* Taxable Value (read-only = qty×rate) */}
+                      {/* Taxable */}
                       <td className="pr-3 py-2">
                         <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 text-right">
                           {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
                         </span>
                       </td>
-                      {/* Tax Rate selector */}
+                      {/* Tax Rate */}
                       <td className="pr-3 py-2">
-                        <select
-                          value={line.tax_rate_id}
-                          onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
-                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        >
+                        <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
+                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
-                          {taxRates.map((tr) => (
-                            <option key={tr.id} value={tr.id}>{tr.name}</option>
-                          ))}
+                          {taxRates.map(tr => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
                         </select>
                       </td>
                       {/* CGST */}
                       <td className="pr-3 py-2 text-right">
-                        {line.cgst_amount > 0 ? (
-                          <span className="text-xs text-orange-700">
-                            <span className="block text-gray-400">{line.cgst_rate}%</span>
-                            ₹{line.cgst_amount.toFixed(2)}
-                          </span>
-                        ) : <span className="text-gray-300 text-xs">—</span>}
+                        {line.cgst_amount > 0
+                          ? <span className="text-xs text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
+                          : <span className="text-gray-300 text-xs">—</span>}
                       </td>
                       {/* SGST */}
                       <td className="pr-3 py-2 text-right">
-                        {line.sgst_amount > 0 ? (
-                          <span className="text-xs text-orange-700">
-                            <span className="block text-gray-400">{line.sgst_rate}%</span>
-                            ₹{line.sgst_amount.toFixed(2)}
-                          </span>
-                        ) : <span className="text-gray-300 text-xs">—</span>}
+                        {line.sgst_amount > 0
+                          ? <span className="text-xs text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
+                          : <span className="text-gray-300 text-xs">—</span>}
                       </td>
                       {/* TDS */}
                       <td className="pr-3 py-2 text-right">
-                        {line.tds_amount > 0 ? (
-                          <span className="text-xs text-red-700">
-                            <span className="block text-gray-400">{line.tds_rate}%</span>
-                            −₹{line.tds_amount.toFixed(2)}
-                          </span>
-                        ) : <span className="text-gray-300 text-xs">—</span>}
+                        {line.tds_amount > 0
+                          ? <span className="text-xs text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
+                          : <span className="text-gray-300 text-xs">—</span>}
                       </td>
-                      {/* Total with tax */}
+                      {/* Total */}
                       <td className="pr-3 py-2 text-right">
                         <span className="text-sm font-semibold text-gray-900">
                           {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
                         </span>
                       </td>
+                      {/* Notes */}
                       <td className="pr-3 py-2">
-                        <input
-                          type="text"
-                          value={line.notes}
-                          onChange={(e) => updateLine(i, 'notes', e.target.value)}
+                        <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                        />
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         {lines.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeLine(i)}
-                            className="text-red-400 hover:text-red-600 font-bold px-2"
-                          >
-                            ×
-                          </button>
+                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 font-bold px-2">×</button>
                         )}
                       </td>
                     </tr>
@@ -900,22 +844,12 @@ export default function NewBillPage() {
                   <td colSpan={5} className="py-3 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-sm font-bold text-gray-900">{totalQty.toFixed(3)}</td>
                   <td className="py-3 pr-3"></td>
-                  <td className="py-3 pr-3 text-sm text-gray-600">
-                    ₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}
-                  </td>
+                  <td className="py-3 pr-3 text-sm text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
                   <td className="py-3 pr-3"></td>
-                  <td className="py-3 pr-3 text-right text-sm text-orange-700">
-                    ₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}
-                  </td>
-                  <td className="py-3 pr-3 text-right text-sm text-orange-700">
-                    ₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}
-                  </td>
-                  <td className="py-3 pr-3 text-right text-sm text-red-700">
-                    {lines.some(l=>l.tds_amount>0) ? `−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}` : '—'}
-                  </td>
-                  <td className="py-3 pr-3 text-right text-sm font-bold text-gray-900">
-                    ₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}
-                  </td>
+                  <td className="py-3 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
+                  <td className="py-3 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
+                  <td className="py-3 pr-3 text-right text-sm text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
+                  <td className="py-3 pr-3 text-right text-sm font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
@@ -923,70 +857,153 @@ export default function NewBillPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="rounded-md bg-red-50 border border-red-200 p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
+        {error && <div className="rounded-md bg-red-50 border border-red-200 p-4"><p className="text-sm text-red-800">{error}</p></div>}
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <button type="submit" disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {loading ? 'Saving...' : '✓ Save Bill'}
           </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
+          <button type="button" onClick={() => router.back()}
+            className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             Cancel
           </button>
         </div>
       </form>
 
-      {/* Material Type Creation Dialog */}
+      {/* ════════════════════════════════════════════════════════════════════
+          INLINE CREATION DIALOGS
+          ════════════════════════════════════════════════════════════════════ */}
+
+      {/* ── New Company ─────────────────────────────────────────────────── */}
+      {showNewCompanyDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Create New Company</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Company Name *</label>
+                <input type="text" value={newCoName} onChange={(e) => setNewCoName(e.target.value)} autoFocus
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC Steels Ltd" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Code *</label>
+                <input type="text" value={newCoCode} onChange={(e) => setNewCoCode(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Short Name</label>
+                <input type="text" value={newCoShortName} onChange={(e) => setNewCoShortName(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">GSTIN</label>
+                <input type="text" value={newCoGstin} onChange={(e) => setNewCoGstin(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewCompanyDialog(false); setNewCoName(''); setNewCoCode('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateCompany} disabled={newCoLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newCoLoading ? 'Creating...' : 'Create Company'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Warehouse ────────────────────────────────────────────────── */}
+      {showNewWarehouseDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Create New Warehouse</h2>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Warehouse Name *</label>
+              <input type="text" value={newWhName} onChange={(e) => setNewWhName(e.target.value)} autoFocus
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. Main Warehouse" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Company *</label>
+              <select value={newWhCompanyId || companyId} onChange={(e) => setNewWhCompanyId(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">— Select Company —</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+              </select>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewWarehouseDialog(false); setNewWhName(''); setNewWhCompanyId('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateWarehouse} disabled={newWhLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newWhLoading ? 'Creating...' : 'Create Warehouse'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Supplier ─────────────────────────────────────────────────── */}
+      {showNewSupplierDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Create New Supplier</h2>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Supplier Name *</label>
+              <input type="text" value={newSpName} onChange={(e) => setNewSpName(e.target.value)} autoFocus
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. Steel Supplies Co." />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Phone</label>
+                <input type="text" value={newSpPhone} onChange={(e) => setNewSpPhone(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">GSTIN</label>
+                <input type="text" value={newSpGstin} onChange={(e) => setNewSpGstin(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewSupplierDialog(false); setNewSpName(''); setNewSpPhone(''); setNewSpGstin('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateSupplier} disabled={newSpLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newSpLoading ? 'Creating...' : 'Create Supplier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Material Type ────────────────────────────────────────────────── */}
       {showMaterialTypeDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
             <h2 className="text-lg font-bold text-gray-900">Create New Material Type</h2>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Material Type Name</label>
-              <input
-                type="text"
-                value={newMaterialTypeName}
-                onChange={(e) => setNewMaterialTypeName(e.target.value)}
-                placeholder="e.g., CR, GI, GA, HR Coil"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input type="text" value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                placeholder="e.g., CR, GI, HR Coil"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-              <select
-                value={newMaterialTypeUnit}
-                onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              >
+              <select value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                 <option value="tons">Tons</option>
                 <option value="kg">Kilograms</option>
                 <option value="units">Units</option>
                 <option value="meters">Meters</option>
               </select>
             </div>
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                onClick={() => setShowMaterialTypeDialog(false)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateMaterialType}
-                disabled={materialTypeDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => setShowMaterialTypeDialog(false)}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {materialTypeDialogLoading ? 'Creating...' : 'Create'}
               </button>
             </div>
@@ -994,70 +1011,41 @@ export default function NewBillPage() {
         </div>
       )}
 
-      {/* Size Creation Dialog */}
+      {/* ── Size ─────────────────────────────────────────────────────────── */}
       {showSizeDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
             <h2 className="text-lg font-bold text-gray-900">Create New Size</h2>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Material Type</label>
-              <select
-                value={newSizeMaterialTypeId}
-                onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">— Select Material Type —</option>
-                {materialTypes.map((mt) => (
-                  <option key={mt.id} value={mt.id}>{mt.name}</option>
-                ))}
+              <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">— Select —</option>
+                {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Size Label</label>
-              <input
-                type="text"
-                value={newSizeLabel}
-                onChange={(e) => setNewSizeLabel(e.target.value)}
-                placeholder="e.g., 0.80x121"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
+              <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="e.g., 0.80x121"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Thickness</label>
-                <input
-                  type="number"
-                  value={newSizeThickness}
-                  onChange={(e) => setNewSizeThickness(e.target.value)}
-                  step="0.01"
-                  placeholder="Optional"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
+                <input type="number" value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)} step="0.01" placeholder="Optional"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Width</label>
-                <input
-                  type="number"
-                  value={newSizeWidth}
-                  onChange={(e) => setNewSizeWidth(e.target.value)}
-                  step="0.01"
-                  placeholder="Optional"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
+                <input type="number" value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)} step="0.01" placeholder="Optional"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                onClick={() => setShowSizeDialog(false)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateSize}
-                disabled={sizeDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => setShowSizeDialog(false)}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateSize} disabled={sizeDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {sizeDialogLoading ? 'Creating...' : 'Create'}
               </button>
             </div>
@@ -1065,125 +1053,97 @@ export default function NewBillPage() {
         </div>
       )}
 
+      {/* ── New Item (with Division hierarchy) ──────────────────────────── */}
       {showNewItemDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
             <h2 className="text-lg font-bold text-gray-900">Create New Item</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+
+            {/* Row 1: Division → Group Code → Item Code */}
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Group Code *</label>
-                <select
-                  value={newItemGroupId}
+                <label className="block text-xs font-medium text-gray-700 mb-1">Division</label>
+                <select value={newItemDivisionId}
+                  onChange={(e) => {
+                    if (e.target.value === 'NEW_DIV') { setShowNewDivisionDialog(true) }
+                    else { setNewItemDivisionId(e.target.value) }
+                  }}
+                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">— All Divisions —</option>
+                  {divisions.map(d => <option key={d.id} value={d.id}>{d.division_code} — {d.division_name}</option>)}
+                  <option value="NEW_DIV" className="font-semibold text-blue-600">+ New Division</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Group Code *</label>
+                <select value={newItemGroupId}
                   onChange={(e) => {
                     if (e.target.value === 'NEW_GROUP') {
+                      setNewGroupDivisionId(newItemDivisionId)
                       setShowNewGroupDialog(true)
-                      setNewGroupCode('')
-                      setNewGroupDesc('')
                     } else {
                       setNewItemGroupId(e.target.value)
                     }
                   }}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                >
+                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">— Select Group —</option>
-                  {itemGroups.map((group) => (
-                    <option key={group.id} value={group.id}>{group.group_code}</option>
-                  ))}
-                  <option value="NEW_GROUP" className="font-semibold">+ Add New Group</option>
+                  {groupsForItemDialog.map(g => <option key={g.id} value={g.id}>{g.group_code}{g.group_desc ? ` (${g.group_desc})` : ''}</option>)}
+                  <option value="NEW_GROUP" className="font-semibold text-blue-600">+ New Group</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Code</label>
-                <input
-                  readOnly
-                  value={newItemCode}
-                  className="block w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm"
-                  placeholder="Select group to generate code"
-                />
+                <label className="block text-xs font-medium text-gray-700 mb-1">Item Code</label>
+                <input readOnly value={newItemCode} placeholder="Auto-generated"
+                  className="block w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm" />
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+
+            {/* Row 2: Item Name + Material Type */}
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
-                <input
-                  type="text"
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
+                <label className="block text-xs font-medium text-gray-700 mb-1">Item Name *</label>
+                <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Material Type *</label>
-                <select
-                  value={newItemMaterialTypeId}
-                  onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">— Select Material Type —</option>
-                  {materialTypes.map((mt) => (
-                    <option key={mt.id} value={mt.id}>{mt.name}</option>
-                  ))}
+                <label className="block text-xs font-medium text-gray-700 mb-1">Material Type *</label>
+                <select value={newItemMaterialTypeId} onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">— Select —</option>
+                  {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Size</label>
-                <select
-                  value={newItemMaterialSizeId}
-                  onChange={(e) => setNewItemMaterialSizeId(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">— Select Size —</option>
-                  {materialSizes
-                    .filter((size) => size.material_type_id === newItemMaterialTypeId)
-                    .map((size) => (
-                      <option key={size.id} value={size.id}>{size.size_label}</option>
-                    ))}
+                <label className="block text-xs font-medium text-gray-700 mb-1">Size</label>
+                <select value={newItemMaterialSizeId} onChange={(e) => setNewItemMaterialSizeId(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <option value="">— None —</option>
+                  {materialSizes.filter(s => s.material_type_id === newItemMaterialTypeId).map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                 </select>
               </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                <input
-                  type="text"
-                  value={newItemUnit}
-                  onChange={(e) => setNewItemUnit(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <input
-                  type="text"
-                  value={newItemDescription}
-                  onChange={(e) => setNewItemDescription(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
+                <label className="block text-xs font-medium text-gray-700 mb-1">Unit</label>
+                <input type="text" value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <input type="text" value={newItemDescription} onChange={(e) => setNewItemDescription(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+            </div>
+
+            <div className="flex gap-3 justify-end pt-2">
+              <button type="button"
                 onClick={() => {
-                  setShowNewItemDialog(false)
-                  setNewItemLineIndex(null)
-                  setNewItemGroupId('')
-                  setNewItemMaterialTypeId('')
-                  setNewItemName('')
-                  setNewItemUnit('tons')
-                  setNewItemDescription('')
-                  setNewItemCode('')
+                  setShowNewItemDialog(false); setNewItemLineIndex(null)
+                  setNewItemDivisionId(''); setNewItemGroupId(''); setNewItemMaterialTypeId('')
+                  setNewItemMaterialSizeId(''); setNewItemName(''); setNewItemUnit('tons')
+                  setNewItemDescription(''); setNewItemCode('')
                 }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateNewItem}
-                disabled={newItemDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={handleCreateNewItem} disabled={newItemDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newItemDialogLoading ? 'Creating...' : 'Create Item'}
               </button>
             </div>
@@ -1191,87 +1151,63 @@ export default function NewBillPage() {
         </div>
       )}
 
+      {/* ── New Division (inside Item dialog) ───────────────────────────── */}
+      {showNewDivisionDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg max-w-sm w-full p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Create New Division</h2>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Division Code *</label>
+              <input type="text" value={newDivCode} onChange={(e) => setNewDivCode(e.target.value.toUpperCase())} autoFocus
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="e.g. STL" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Division Name *</label>
+              <input type="text" value={newDivName} onChange={(e) => setNewDivName(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                placeholder="e.g. Steel Products" />
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewDivisionDialog(false); setNewDivCode(''); setNewDivName('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateDivision} disabled={newDivLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newDivLoading ? 'Creating...' : 'Create Division'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Group (inside Item dialog) ───────────────────────────────── */}
       {showNewGroupDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg max-w-sm w-full p-6 space-y-4">
             <h2 className="text-lg font-bold text-gray-900">Create New Item Group</h2>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Group Code *</label>
-              <input
-                type="text"
-                value={newGroupCode}
-                onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())}
-                maxLength={2}
-                placeholder="e.g. AA"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
-              <p className="mt-1 text-xs text-slate-500">Enter exactly 2 characters for the group code.</p>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Division</label>
+              <select value={newGroupDivisionId} onChange={(e) => setNewGroupDivisionId(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">— None —</option>
+                {divisions.map(d => <option key={d.id} value={d.id}>{d.division_code} — {d.division_name}</option>)}
+              </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Group Description</label>
-              <input
-                type="text"
-                value={newGroupDesc}
-                onChange={(e) => setNewGroupDesc(e.target.value)}
-                placeholder="Optional description"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Group Code * <span className="font-normal text-gray-400">(2 chars)</span></label>
+              <input type="text" value={newGroupCode} onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())} maxLength={2} autoFocus
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. MS" />
             </div>
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={() => setShowNewGroupDialog(false)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const code = newGroupCode.trim().toUpperCase()
-                  if (!code) {
-                    alert('Group code is required.')
-                    return
-                  }
-                  if (code.length !== 2) {
-                    alert('Group code must be exactly 2 characters.')
-                    return
-                  }
-                  setNewGroupDialogLoading(true)
-                  const { data, error: err } = await hasuraFetch<{ insert_item_groups_one: ItemGroup }>(CREATE_ITEM_GROUP_MUTATION, {
-                    group_code: code,
-                    group_desc: newGroupDesc || null,
-                  })
-                  setNewGroupDialogLoading(false)
-                  if (err) {
-                    // Detect Hasura missing field / untracked table error
-                    const msg = err.message || ''
-                    const missingInsertMatch = msg.match(/field\s+'([^']+)'\s+not found/i)
-                    if (missingInsertMatch && /insert_item_groups_one/i.test(missingInsertMatch[1])) {
-                      alert(
-                        'Server error: item group creation mutation is not available.\n' +
-                          'Possible causes: the `item_groups` table is not present or not tracked in Hasura.\n' +
-                          'Please run DB migrations and reload Hasura metadata (or ask your admin to do so).'
-                      )
-                      return
-                    }
-
-                    // Fallback generic message
-                    alert(`Error: ${msg}`)
-                    return
-                  }
-                  const created = data?.insert_item_groups_one
-                  if (created) {
-                    setItemGroups((prev) => [...prev, created])
-                    setNewItemGroupId(created.id)
-                    setNewGroupCode('')
-                    setNewGroupDesc('')
-                    setShowNewGroupDialog(false)
-                  }
-                }}
-                disabled={newGroupDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              >
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <input type="text" value={newGroupDesc} onChange={(e) => setNewGroupDesc(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewGroupDialog(false); setNewGroupCode(''); setNewGroupDesc(''); setNewGroupDivisionId('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateGroup} disabled={newGroupDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newGroupDialogLoading ? 'Creating...' : 'Create Group'}
               </button>
             </div>

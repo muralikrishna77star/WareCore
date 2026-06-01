@@ -7,14 +7,28 @@ import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
+  ACTIVE_ITEM_MASTER_QUERY, ACTIVE_ITEM_GROUPS_QUERY,
   CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
-  PURCHASE_LINE_STOCK_QUERY, ACTIVE_SALES_TAX_RATES_QUERY,
+  ACTIVE_SALES_TAX_RATES_QUERY,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
+  ALL_INVOICE_NUMBERS_QUERY, ALL_SALE_LINE_IDS_QUERY,
+  PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY, STOCK_LEDGER_LINE_QUANTITIES_QUERY,
 } from '@/lib/hasura/queries'
-import { generateReferenceNumber } from '@/lib/utils'
-import type { Company, Warehouse, Customer, MaterialType, MaterialSize, TaxRate } from '@/types'
+import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate } from '@/types'
+
+type AvailablePurchaseLine = {
+  purchase_line_id: string
+  item_name: string | null
+  item_master_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+  available_quantity: number
+}
 
 type DispatchLine = {
+  item_master_id: string
+  sale_line_id: string
   purchase_line_id: string
   available_quantity: string
   item_name: string
@@ -36,6 +50,35 @@ type DispatchLine = {
   total_with_tax: number
 }
 
+// ─── ID generation helpers ────────────────────────────────────────────────────
+
+function getMMYY(date: Date = new Date()): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const yy = String(date.getFullYear()).slice(-2)
+  return `${mm}${yy}`
+}
+
+function computeNextSeq(ids: string[], pattern: RegExp): number {
+  return ids.reduce((max, id) => {
+    if (!id) return max
+    const m = id.match(pattern)
+    return m ? Math.max(max, parseInt(m[1], 10)) : max
+  }, 0)
+}
+
+function generateSaleId(existingInvoiceNumbers: string[]): string {
+  const seq = computeNextSeq(existingInvoiceNumbers, /^\d{4}-(\d+)$/)
+  return `${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+}
+
+function generateSaleLineId(groupCode: string, allLineIds: string[]): string {
+  const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
+  const prefix = groupCode.slice(0, 2).toUpperCase()
+  return `${prefix}${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<DispatchLine> {
   const taxable = (parseFloat(line.quantity) || 0) * (parseFloat(line.rate) || 0)
   if (!line.tax_rate_id) return { taxable_value: taxable, cgst_amount: 0, sgst_amount: 0, tcs_amount: 0, total_with_tax: taxable }
@@ -55,11 +98,27 @@ function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<Dispatch
 }
 
 const emptyLine = (): DispatchLine => ({
-  purchase_line_id: '', available_quantity: '', item_name: '',
-  material_type_id: '', material_size_id: '', size_label: '',
-  quantity: '', rate: '', amount: '', notes: '',
-  tax_rate_id: '', taxable_value: 0, cgst_rate: 0, cgst_amount: 0,
-  sgst_rate: 0, sgst_amount: 0, tcs_rate: 0, tcs_amount: 0, total_with_tax: 0,
+  item_master_id: '',
+  sale_line_id: '',
+  purchase_line_id: '',
+  available_quantity: '',
+  item_name: '',
+  material_type_id: '',
+  material_size_id: '',
+  size_label: '',
+  quantity: '',
+  rate: '',
+  amount: '',
+  notes: '',
+  tax_rate_id: '',
+  taxable_value: 0,
+  cgst_rate: 0,
+  cgst_amount: 0,
+  sgst_rate: 0,
+  sgst_amount: 0,
+  tcs_rate: 0,
+  tcs_amount: 0,
+  total_with_tax: 0,
 })
 
 export default function NewDispatchPage() {
@@ -70,7 +129,16 @@ export default function NewDispatchPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
+  const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
+  const [itemGroups, setItemGroups] = useState<ItemGroup[]>([])
   const [taxRates, setTaxRates] = useState<TaxRate[]>([])
+
+  // Pre-loaded purchase lines with available stock > 0
+  const [availablePurchaseLines, setAvailablePurchaseLines] = useState<AvailablePurchaseLine[]>([])
+
+  // Existing IDs for sequence computation
+  const [existingInvoiceNumbers, setExistingInvoiceNumbers] = useState<string[]>([])
+  const [existingLineIds, setExistingLineIds] = useState<string[]>([])
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
@@ -89,6 +157,7 @@ export default function NewDispatchPage() {
   const [companyId, setCompanyId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
+  const [saleId, setSaleId] = useState('')
   const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
   const [vehicleNumber, setVehicleNumber] = useState('')
   const [driverName, setDriverName] = useState('')
@@ -100,44 +169,123 @@ export default function NewDispatchPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, w, cu, mt, ms, tr] = await Promise.all([
+      const [c, w, cu, mt, ms, im, ig, tr, invs, slis, pbiRes, slRes] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch(ACTIVE_ITEM_GROUPS_QUERY),
         hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
+        hasuraFetch(ALL_INVOICE_NUMBERS_QUERY),
+        hasuraFetch(ALL_SALE_LINE_IDS_QUERY),
+        hasuraFetch(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
+        hasuraFetch(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
       setCustomers((cu.data as any)?.customers ?? [])
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setItemMasters((im.data as any)?.item_master ?? [])
+      setItemGroups((ig.data as any)?.item_groups ?? [])
       setTaxRates((tr.data as any)?.tax_rates ?? [])
+
+      const invoiceNums: string[] = ((invs.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
+      const lineIds: string[] = ((slis.data as any)?.dispatch_items ?? []).map((i: any) => i.sale_line_id).filter(Boolean)
+
+      setExistingInvoiceNumbers(invoiceNums)
+      setExistingLineIds(lineIds)
+      setSaleId(generateSaleId(invoiceNums))
+
+      // Compute available stock per purchase_line_id
+      const stockMap: Record<string, number> = {}
+      for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
+        if (!entry.purchase_line_id) continue
+        stockMap[entry.purchase_line_id] = (stockMap[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
+      }
+
+      // Build available purchase lines: unique by purchase_line_id, stock > 0
+      const seen = new Set<string>()
+      const avail: AvailablePurchaseLine[] = []
+      for (const item of (pbiRes.data as any)?.purchase_bill_items ?? []) {
+        if (!item.purchase_line_id || seen.has(item.purchase_line_id)) continue
+        const qty = stockMap[item.purchase_line_id] ?? 0
+        if (qty > 0) {
+          seen.add(item.purchase_line_id)
+          avail.push({ ...item, available_quantity: qty })
+        }
+      }
+      setAvailablePurchaseLines(avail)
       setMasterDataLoading(false)
     }
     load()
   }, [])
 
-  const fetchPurchaseLineAvailability = async (purchaseLineId: string, index: number) => {
-    if (!purchaseLineId) return
-    const { data, error: err } = await hasuraFetch<any>(PURCHASE_LINE_STOCK_QUERY, { purchase_line_id: purchaseLineId })
-    const qty = Number(data?.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
-    setLines((prev) => {
-      const updated = [...prev]
-      updated[index] = { ...updated[index], available_quantity: qty.toFixed(3) }
-      return updated
-    })
-    if (err) {
-      console.error('Could not fetch purchase line availability', err)
-    }
-  }
-
   const updateLine = useCallback((index: number, field: keyof DispatchLine, value: string) => {
     setLines((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
-      // Auto-fill item_name when material type changes
+
+      // When item is selected from item master: auto-populate + generate sale_line_id
+      if (field === 'item_master_id') {
+        if (value) {
+          const item = itemMasters.find((im) => im.id === value)
+          if (item) {
+            updated[index].item_name = item.item_name
+            updated[index].material_type_id = item.material_type_id
+            updated[index].material_size_id = item.material_size_id || ''
+            updated[index].size_label = item.size_label || ''
+
+            const group = itemGroups.find((g) => g.id === item.item_group_id)
+            if (group) {
+              const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
+              updated[index].sale_line_id = generateSaleLineId(group.group_code, [...existingLineIds, ...currentAssigned])
+            }
+          }
+          // Clear purchase_line_id if it belongs to a different item
+          const currentPL = updated[index].purchase_line_id
+          if (currentPL) {
+            const pl = availablePurchaseLines.find((l) => l.purchase_line_id === currentPL)
+            if (pl?.item_master_id && pl.item_master_id !== value) {
+              updated[index].purchase_line_id = ''
+              updated[index].available_quantity = ''
+            }
+          }
+        } else {
+          updated[index].item_name = ''
+          updated[index].sale_line_id = ''
+          updated[index].purchase_line_id = ''
+          updated[index].available_quantity = ''
+        }
+      }
+
+      // When purchase line is selected from dropdown: populate details + available qty
+      if (field === 'purchase_line_id') {
+        const pl = availablePurchaseLines.find((l) => l.purchase_line_id === value)
+        if (pl) {
+          updated[index].available_quantity = pl.available_quantity.toFixed(3)
+          // Fill item details if not already set via item master selection
+          if (!updated[index].item_name) updated[index].item_name = pl.item_name || ''
+          if (!updated[index].material_type_id) updated[index].material_type_id = pl.material_type_id || ''
+          if (!updated[index].material_size_id && pl.material_size_id) updated[index].material_size_id = pl.material_size_id
+          if (!updated[index].size_label && pl.size_label) updated[index].size_label = pl.size_label
+          // If item_master_id not yet set and purchase line has one → set it + generate sale_line_id
+          if (!updated[index].item_master_id && pl.item_master_id) {
+            updated[index].item_master_id = pl.item_master_id
+            const item = itemMasters.find((im) => im.id === pl.item_master_id)
+            const group = item ? itemGroups.find((g) => g.id === item.item_group_id) : null
+            if (group) {
+              const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
+              updated[index].sale_line_id = generateSaleLineId(group.group_code, [...existingLineIds, ...currentAssigned])
+            }
+          }
+        } else {
+          updated[index].available_quantity = ''
+        }
+      }
+
       if (field === 'material_type_id') {
         const mt = materialTypes.find((m) => m.id === value)
         if (mt && !updated[index].item_name) updated[index].item_name = mt.name
@@ -150,15 +298,9 @@ export default function NewDispatchPage() {
       if (field === 'quantity' || field === 'rate' || field === 'tax_rate_id') {
         Object.assign(updated[index], calcSalesTax(updated[index], taxRates))
       }
-      if (field === 'purchase_line_id') {
-        updated[index].available_quantity = ''
-      }
       return updated
     })
-    if (field === 'purchase_line_id') {
-      fetchPurchaseLineAvailability(value, index)
-    }
-  }, [materialTypes, taxRates])
+  }, [itemMasters, itemGroups, materialTypes, taxRates, existingLineIds, availablePurchaseLines])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -227,12 +369,18 @@ export default function NewDispatchPage() {
       return
     }
 
+    if (!saleId.trim()) {
+      setError('Sale ID is required.')
+      setLoading(false)
+      return
+    }
+
     const { data: orderData, error: oErr } = await hasuraFetch<any>(
       CREATE_DISPATCH_ORDER_MUTATION, {
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
         customer_id: customerId || null,
-        invoice_number: generateReferenceNumber('INV'),
+        invoice_number: saleId,
         dispatch_date: dispatchDate,
         vehicle_number: vehicleNumber || null,
         driver_name: driverName || null,
@@ -250,6 +398,8 @@ export default function NewDispatchPage() {
 
     const items = validLines.map((l) => ({
       dispatch_order_id: order.id,
+      item_master_id: l.item_master_id || null,
+      sale_line_id: l.sale_line_id || null,
       purchase_line_id: l.purchase_line_id || null,
       item_name: l.item_name || null,
       material_type_id: l.material_type_id || null,
@@ -326,6 +476,29 @@ export default function NewDispatchPage() {
               </select>
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Sale ID
+                <span className="ml-2 text-xs font-normal text-gray-400">(auto-generated — edit to override)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={saleId}
+                  onChange={(e) => setSaleId(e.target.value)}
+                  placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
+                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers))}
+                  title="Generate new Sale ID"
+                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"
+                >
+                  ↻ New ID
+                </button>
+              </div>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Date</label>
               <input type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)} required
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
@@ -351,15 +524,20 @@ export default function NewDispatchPage() {
 
         <div className="bg-white rounded-xl border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-800">Items</h2>
+            <div>
+              <h2 className="text-base font-semibold text-gray-800">Items</h2>
+              {availablePurchaseLines.length > 0 && (
+                <p className="text-xs text-gray-500 mt-0.5">{availablePurchaseLines.length} purchase line{availablePurchaseLines.length !== 1 ? 's' : ''} with available stock</p>
+              )}
+            </div>
             <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line ID</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item / Sale Line ID</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
@@ -378,23 +556,65 @@ export default function NewDispatchPage() {
               <tbody className="divide-y divide-gray-50">
                 {lines.map((line, i) => {
                   const sizesForType = materialSizes.filter((s) => !s.material_type_id || s.material_type_id === line.material_type_id)
+
+                  // Filter purchase lines: when item is selected, show only matching lines (+ unlinked)
+                  const purchaseLinesForRow = line.item_master_id
+                    ? availablePurchaseLines.filter((pl) => !pl.item_master_id || pl.item_master_id === line.item_master_id)
+                    : availablePurchaseLines
+
                   return (
                     <tr key={i}>
+                      {/* ── Item + Sale Line ID (stacked in one cell) ── */}
+                      <td className="pr-3 py-2">
+                        <div className="space-y-1">
+                          <select
+                            value={line.item_master_id}
+                            onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
+                            className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="">Select Item</option>
+                            {itemMasters.map((im) => (
+                              <option key={im.id} value={im.id}>{im.item_name}</option>
+                            ))}
+                          </select>
+                          {line.sale_line_id ? (
+                            <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">
+                              {line.sale_line_id}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 italic">no line ID yet</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* ── Purchase Line dropdown (stock > 0 only) ── */}
                       <td className="pr-3 py-2">
                         <div>
-                          <input type="text" value={line.purchase_line_id} onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
-                            placeholder="PurchaseLineID"
-                            className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          <select
+                            value={line.purchase_line_id}
+                            onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
+                            className={`block w-44 rounded border px-2 py-1.5 text-sm focus:outline-none ${
+                              purchaseLinesForRow.length === 0
+                                ? 'border-gray-200 bg-gray-50 text-gray-400'
+                                : 'border-gray-300 focus:border-blue-500'
+                            }`}
+                          >
+                            <option value="">— Select —</option>
+                            {purchaseLinesForRow.map((pl) => (
+                              <option key={pl.purchase_line_id} value={pl.purchase_line_id}>
+                                {pl.purchase_line_id} ({pl.available_quantity.toFixed(2)})
+                              </option>
+                            ))}
+                          </select>
                           {line.available_quantity ? (
-                            <p className="text-[10px] text-gray-500 mt-1">Available: {line.available_quantity}</p>
+                            <p className="text-[10px] text-green-600 mt-0.5 font-medium">
+                              ✓ {line.available_quantity} avail
+                            </p>
+                          ) : purchaseLinesForRow.length === 0 && !masterDataLoading ? (
+                            <p className="text-[10px] text-amber-600 mt-0.5">No stock</p>
                           ) : null}
                         </div>
                       </td>
-                      <td className="pr-3 py-2">
-                        <input type="text" value={line.item_name} onChange={(e) => updateLine(i, 'item_name', e.target.value)}
-                          placeholder="Item name"
-                          className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
-                      </td>
+                      {/* ── Material ── */}
                       <td className="pr-3 py-2">
                         <select value={line.material_type_id} onChange={(e) => {
                           if (e.target.value === 'NEW_TYPE') {
@@ -412,6 +632,7 @@ export default function NewDispatchPage() {
                           <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
+                      {/* ── Size ── */}
                       <td className="pr-3 py-2">
                         <select value={line.material_size_id}
                           onChange={(e) => {
@@ -431,15 +652,18 @@ export default function NewDispatchPage() {
                           <option value="NEW_SIZE" className="font-semibold">+ New Size</option>
                         </select>
                       </td>
+                      {/* ── Custom Size ── */}
                       <td className="pr-3 py-2">
                         <input type="text" value={line.size_label} onChange={(e) => updateLine(i, 'size_label', e.target.value)}
                           placeholder="Custom" className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
+                      {/* ── Qty ── */}
                       <td className="pr-3 py-2">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
                           className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
+                      {/* ── Rate ── */}
                       <td className="pr-3 py-2">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
@@ -512,7 +736,7 @@ export default function NewDispatchPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={4} className="py-3 text-sm font-semibold text-right pr-3">Totals:</td>
+                  <td colSpan={5} className="py-3 text-sm font-semibold text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-sm font-bold">{totalQty.toFixed(3)}</td>
                   <td></td>
                   <td className="py-3 pr-3 text-sm font-bold">₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>

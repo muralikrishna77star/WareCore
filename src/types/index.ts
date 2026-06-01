@@ -70,10 +70,19 @@ export interface Customer {
   updated_at: string
 }
 
+export interface Division {
+  id: string
+  division_code: string
+  division_name: string
+  is_active: boolean
+  created_at: string
+}
+
 export interface ItemGroup {
   id: string
   group_code: string
   group_desc?: string
+  division_id?: string
   is_active: boolean
   created_at: string
   updated_at: string
