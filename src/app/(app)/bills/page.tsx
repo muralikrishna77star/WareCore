@@ -45,13 +45,16 @@ export default async function BillsPage() {
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Warehouse</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Quantity</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Amount</th>
+                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {bills.map((bill) => (
-                  <tr key={bill.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 font-medium text-blue-600 whitespace-nowrap">
+                {bills.map((bill: any) => {
+                  const cancelled = bill.status === 'cancelled'
+                  return (
+                  <tr key={bill.id} className={`hover:bg-gray-50 ${cancelled ? 'opacity-60' : ''}`}>
+                    <td className={`px-6 py-3 font-medium whitespace-nowrap ${cancelled ? 'text-gray-400 line-through' : 'text-blue-600'}`}>
                       {bill.bill_number}
                     </td>
                     <td className="px-6 py-3 text-gray-700 whitespace-nowrap">
@@ -75,6 +78,17 @@ export default async function BillsPage() {
                       ₹{Number(bill.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-3">
+                      {cancelled ? (
+                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 border border-red-200">
+                          Cancelled
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                          Active
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3">
                       <Link
                         href={`/bills/${bill.id}`}
                         className="text-blue-600 hover:text-blue-800 text-xs font-medium"
@@ -83,7 +97,8 @@ export default async function BillsPage() {
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           )}

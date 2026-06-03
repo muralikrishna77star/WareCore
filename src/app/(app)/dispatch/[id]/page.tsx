@@ -1,8 +1,11 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY } from '@/lib/hasura/queries'
+import CancelDispatchButton from './CancelDispatchButton'
 
 export default async function DispatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,27 +17,52 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
   const order = orderResult.dispatch_orders_by_pk
   if (!order) notFound()
   const items = itemsResult.dispatch_items ?? []
-  const totalAmount = items.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)
-  const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0)
+
+  const totalAmount = items.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
+  const totalQty = items.reduce((sum: number, i: any) => sum + (Number(i.quantity) || 0), 0)
+
+  const isCancelled = order.status === 'cancelled'
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <Link href="/dispatch" className="text-sm text-blue-600 hover:underline mb-1 block">
             ← Back to Dispatch
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className={`text-2xl font-bold ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
             Dispatch: {order.invoice_number ?? id.slice(0, 8)}
           </h1>
         </div>
-        <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-          Dispatch Order
-        </span>
+        {isCancelled ? (
+          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
+            Cancelled
+          </span>
+        ) : (
+          <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            Dispatch Order
+          </span>
+        )}
       </div>
 
+      {/* Cancellation notice */}
+      {isCancelled && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="text-sm font-semibold text-red-700 mb-1">
+            This sale was cancelled on {formatDate(order.cancelled_at)}
+          </p>
+          {order.cancelled_notes && (
+            <p className="text-sm text-red-600">Reason: {order.cancelled_notes}</p>
+          )}
+          <p className="text-xs text-red-500 mt-2">
+            All stock deducted by this sale has been restored in the stock ledger.
+          </p>
+        </div>
+      )}
+
       {/* Order Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className={`bg-white rounded-xl border border-gray-200 p-6 mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Dispatch Details</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
@@ -71,7 +99,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
       </div>
 
       {/* Line Items */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+      <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Dispatched Items</h2>
         </div>
@@ -92,13 +120,13 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_types?.name ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity?.toFixed(3)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.size_label ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
-                    {item.rate ? formatCurrency(item.rate) : '—'}
+                    {item.rate ? formatCurrency(Number(item.rate)) : '—'}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                    {item.amount ? formatCurrency(item.amount) : '—'}
+                    {item.amount ? formatCurrency(Number(item.amount)) : '—'}
                   </td>
                 </tr>
               ))}
@@ -115,13 +143,15 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      <div className="flex gap-3">
+      {/* Actions */}
+      <div className="flex gap-3 flex-wrap">
         <Link href="/dispatch/new" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
           New Dispatch
         </Link>
         <Link href="/dispatch" className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           All Dispatches
         </Link>
+        {!isCancelled && <CancelDispatchButton orderId={order.id} />}
       </div>
     </div>
   )

@@ -44,28 +44,43 @@ export default async function DispatchPage() {
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Vehicle</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Qty</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Amount</th>
+                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {orders.map((o: any) => {
-                  const items = o.dispatch_items ?? []
-                  const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
-                  const totalAmt = items.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+                  const dispItems = o.dispatch_items ?? []
+                  const totalQty = dispItems.reduce((s: number, i: any) => s + Number(i.quantity), 0)
+                  const totalAmt = dispItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+                  const cancelled = o.status === 'cancelled'
 
                   return (
-                    <tr key={o.id} className="hover:bg-gray-50">
+                    <tr key={o.id} className={`hover:bg-gray-50 ${cancelled ? 'opacity-60' : ''}`}>
                       <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
                       <td className="px-6 py-3">
                         <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
                           {o.companies?.code}
                         </span>
                       </td>
-                      <td className="px-6 py-3 font-medium text-gray-900">{o.customers?.name || '—'}</td>
+                      <td className={`px-6 py-3 font-medium ${cancelled ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                        {o.customers?.name || '—'}
+                      </td>
                       <td className="px-6 py-3 text-gray-600">{o.vehicle_number || '—'}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">{totalQty.toFixed(3)}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">
                         {totalAmt > 0 ? `₹${totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td className="px-6 py-3">
+                        {cancelled ? (
+                          <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 border border-red-200">
+                            Cancelled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                            Active
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-3">
                         <Link href={`/dispatch/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">

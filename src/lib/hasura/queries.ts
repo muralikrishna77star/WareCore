@@ -504,7 +504,7 @@ export const ITEM_MASTERS_QUERY = `
 export const PURCHASE_BILLS_QUERY = `
   query GetPurchaseBills {
     purchase_bills(order_by: {bill_date: desc}, limit: 50) {
-      id bill_number bill_date total_quantity total_amount notes created_at
+      id bill_number bill_date total_quantity total_amount notes created_at status
       companies { id name code }
       warehouses { id name }
       suppliers { id name }
@@ -516,6 +516,7 @@ export const PURCHASE_BILL_BY_ID_QUERY = `
   query GetPurchaseBillById($id: uuid!) {
     purchase_bills_by_pk(id: $id) {
       id bill_number bill_date total_quantity total_amount notes created_at
+      status cancelled_at cancelled_notes
       companies { name }
       warehouses { name }
       suppliers { name }
@@ -528,7 +529,6 @@ export const PURCHASE_BILL_ITEMS_QUERY = `
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
       id bill_id quantity rate amount notes size_label item_name purchase_line_id
       material_types { name }
-      material_sizes { size_label }
     }
   }
 `
@@ -666,7 +666,7 @@ export const UPDATE_TRANSFER_STATUS_MUTATION = `
 export const DISPATCH_ORDERS_QUERY = `
   query GetDispatchOrders {
     dispatch_orders(order_by: {dispatch_date: desc}, limit: 50) {
-      id dispatch_date vehicle_number driver_name notes created_at
+      id dispatch_date vehicle_number driver_name notes created_at status
       companies { name code }
       customers { name }
       dispatch_items {
@@ -680,7 +680,7 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
   query GetDispatchOrderById($id: uuid!) {
     dispatch_orders_by_pk(id: $id) {
       id dispatch_date vehicle_number driver_name notes created_at
-      invoice_number
+      invoice_number status cancelled_at cancelled_notes
       companies { name }
       warehouses { name }
       customers { name }
@@ -693,7 +693,6 @@ export const DISPATCH_ITEMS_QUERY = `
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
       id dispatch_order_id purchase_line_id sub_purchase_line_id quantity rate amount notes size_label
       material_types { name }
-      material_sizes { size_label }
     }
   }
 `

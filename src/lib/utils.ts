@@ -44,12 +44,16 @@ export function getEntryTypeLabel(entryType: string) {
     TRANSFER_IN: 'Transfer In',
     ADJUSTMENT_IN: 'Adjustment In',
     ADJUSTMENT_OUT: 'Adjustment Out',
+    PURCHASE_CANCEL: 'Purchase Cancelled',
+    SALE_CANCEL: 'Sale Cancelled',
   }
   return labels[entryType] || entryType
 }
 
 export function getEntryTypeColor(entryType: string) {
-  const inTypes = ['PURCHASE_IN', 'VENDOR_RETURN_IN', 'JOB_WORK_RETURN_IN', 'TRANSFER_IN', 'ADJUSTMENT_IN']
+  const inTypes = ['PURCHASE_IN', 'VENDOR_RETURN_IN', 'JOB_WORK_RETURN_IN', 'TRANSFER_IN', 'ADJUSTMENT_IN', 'SALE_CANCEL']
+  const cancelTypes = ['PURCHASE_CANCEL']
+  if (cancelTypes.includes(entryType)) return 'text-red-500'
   return inTypes.includes(entryType) ? 'text-green-600' : 'text-red-600'
 }
 

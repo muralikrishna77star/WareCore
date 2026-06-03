@@ -1,8 +1,11 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY } from '@/lib/hasura/queries'
+import CancelBillButton from './CancelBillButton'
 
 export default async function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -15,8 +18,10 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
   if (!bill) notFound()
   const items = itemsResult.purchase_bill_items ?? []
 
-  const totalAmount = items.reduce((sum: number, i: any) => sum + (i.amount || 0), 0)
-  const totalQty = items.reduce((sum: number, i: any) => sum + (i.quantity || 0), 0)
+  const totalAmount = items.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
+  const totalQty = items.reduce((sum: number, i: any) => sum + (Number(i.quantity) || 0), 0)
+
+  const isCancelled = bill.status === 'cancelled'
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -26,15 +31,38 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
           <Link href="/bills" className="text-sm text-blue-600 hover:underline mb-1 block">
             ← Back to Bills
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Bill #{bill.bill_number}</h1>
+          <h1 className={`text-2xl font-bold ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
+            Bill #{bill.bill_number}
+          </h1>
         </div>
-        <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-          Purchase Bill
-        </span>
+        {isCancelled ? (
+          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
+            Cancelled
+          </span>
+        ) : (
+          <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+            Purchase Bill
+          </span>
+        )}
       </div>
 
+      {/* Cancellation notice */}
+      {isCancelled && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="text-sm font-semibold text-red-700 mb-1">
+            This bill was cancelled on {formatDate(bill.cancelled_at)}
+          </p>
+          {bill.cancelled_notes && (
+            <p className="text-sm text-red-600">Reason: {bill.cancelled_notes}</p>
+          )}
+          <p className="text-xs text-red-500 mt-2">
+            All stock movements from this bill have been reversed in the stock ledger.
+          </p>
+        </div>
+      )}
+
       {/* Bill Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className={`bg-white rounded-xl border border-gray-200 p-6 mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Bill Details</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
@@ -71,7 +99,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       {/* Line Items */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+      <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Line Items</h2>
         </div>
@@ -80,7 +108,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
@@ -92,19 +120,19 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {item.material_types?.name ?? '—'}
+                    {item.item_name ?? item.material_types?.name ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
-                    {item.material_sizes?.size_label ?? item.size_label ?? '—'}
+                    {item.size_label ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
-                    {item.quantity?.toFixed(3)}
+                    {Number(item.quantity).toFixed(3)}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
-                    {item.rate ? formatCurrency(item.rate) : '—'}
+                    {item.rate ? formatCurrency(Number(item.rate)) : '—'}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                    {item.amount ? formatCurrency(item.amount) : '—'}
+                    {item.amount ? formatCurrency(Number(item.amount)) : '—'}
                   </td>
                 </tr>
               ))}
@@ -122,7 +150,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <Link
           href="/bills/new"
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
@@ -135,6 +163,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
         >
           All Bills
         </Link>
+        {!isCancelled && <CancelBillButton billId={bill.id} />}
       </div>
     </div>
   )
