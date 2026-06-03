@@ -23,6 +23,29 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
 
   const isCancelled = bill.status === 'cancelled'
 
+  // Check if any purchase line IDs from this bill are used in an active sale entry
+  let canCancel = true
+  let dispatchedLineCount = 0
+  if (!isCancelled) {
+    const purchaseLineIds = items
+      .map((i: any) => i.purchase_line_id)
+      .filter(Boolean) as string[]
+
+    if (purchaseLineIds.length > 0) {
+      const usageResult = await hasuraQuery(
+        `query CheckBillLinesInDispatch($line_ids: [String!]!) {
+          dispatch_items_aggregate(where: {
+            purchase_line_id: { _in: $line_ids }
+            dispatch_order: { status: { _eq: "active" } }
+          }) { aggregate { count } }
+        }`,
+        { line_ids: purchaseLineIds }
+      )
+      dispatchedLineCount = Number(usageResult.dispatch_items_aggregate?.aggregate?.count ?? 0)
+      canCancel = dispatchedLineCount === 0
+    }
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -57,6 +80,17 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
           )}
           <p className="text-xs text-red-500 mt-2">
             All stock movements from this bill have been reversed in the stock ledger.
+          </p>
+        </div>
+      )}
+
+      {/* Cannot-cancel notice */}
+      {!isCancelled && !canCancel && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+          <p className="text-sm font-semibold text-amber-800 mb-1">Cannot Cancel</p>
+          <p className="text-sm text-amber-700">
+            {dispatchedLineCount} line item{dispatchedLineCount !== 1 ? 's have' : ' has'} been
+            dispatched in an active sale entry. Cancel the related sale entries first, then cancel this bill.
           </p>
         </div>
       )}
@@ -116,7 +150,13 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items.map((item: any, idx: number) => (
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">
+                    No line items recorded.
+                  </td>
+                </tr>
+              ) : items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
@@ -150,7 +190,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-center">
         <Link
           href="/bills/new"
           className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
@@ -163,7 +203,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
         >
           All Bills
         </Link>
-        {!isCancelled && <CancelBillButton billId={bill.id} />}
+        {!isCancelled && canCancel && <CancelBillButton billId={bill.id} />}
       </div>
     </div>
   )
