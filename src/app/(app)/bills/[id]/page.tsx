@@ -97,37 +97,37 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
 
       {/* Bill Info */}
       <div className={`bg-white rounded-xl border border-gray-200 p-6 mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
-        <h2 className="text-[1.1875rem] font-semibold text-gray-900 mb-4">Bill Details</h2>
+        <h2 className="text-[1.0625rem] font-semibold text-gray-900 mb-4">Bill Details</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Bill Number</p>
-            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.bill_number}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{bill.bill_number}</p>
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Date</p>
-            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{formatDate(bill.bill_date)}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{formatDate(bill.bill_date)}</p>
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Supplier</p>
-            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.suppliers?.name ?? '—'}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{bill.suppliers?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Company</p>
-            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.companies?.name ?? '—'}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{bill.companies?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Warehouse</p>
-            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.warehouses?.name ?? '—'}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{bill.warehouses?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Created</p>
-            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{formatDate(bill.created_at)}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{formatDate(bill.created_at)}</p>
           </div>
         </div>
         {bill.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-            <p className="text-[0.9375rem] text-gray-700">{bill.notes}</p>
+            <p className="text-[0.8125rem] text-gray-700">{bill.notes}</p>
           </div>
         )}
       </div>
