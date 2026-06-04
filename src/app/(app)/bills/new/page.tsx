@@ -18,6 +18,7 @@ import {
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate, Division } from '@/types'
 
 type LineItem = {
+  rowId: string
   purchase_line_id: string
   item_master_id: string
   item_name: string
@@ -70,6 +71,7 @@ function generatePurchaseLineId(groupCode: string, billNumber: string, allLineId
 // ─────────────────────────────────────────────────────────────────────────────
 
 const emptyLine = (): LineItem => ({
+  rowId: Math.random().toString(36).slice(2, 8),
   purchase_line_id: '', item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   quantity: '', rate: '', amount: '', notes: '',
@@ -194,6 +196,15 @@ export default function NewBillPage() {
   const [companyOpen, setCompanyOpen] = useState(false)
   const [warehouseOpen, setWarehouseOpen] = useState(false)
   const [supplierOpen, setSupplierOpen] = useState(false)
+
+  const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
+  const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
+  const [materialTypeSearch, setMaterialTypeSearch] = useState<Record<string, string>>({})
+  const [materialTypeOpen, setMaterialTypeOpen] = useState<Record<string, boolean>>({})
+  const [sizeSearch, setSizeSearch] = useState<Record<string, string>>({})
+  const [sizeOpen, setSizeOpen] = useState<Record<string, boolean>>({})
+  const [taxRateSearch, setTaxRateSearch] = useState<Record<string, string>>({})
+  const [taxRateOpen, setTaxRateOpen] = useState<Record<string, boolean>>({})
 
   // ── Load master data ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -772,32 +783,60 @@ export default function NewBillPage() {
                     im.material_type_id === line.material_type_id &&
                     (!line.material_size_id || !im.material_size_id || im.material_size_id === line.material_size_id)
                   )
+                  const itemSearchValue = itemSearch[line.rowId] ?? line.item_name
+                  const materialTypeSearchValue = materialTypeSearch[line.rowId] ?? (materialTypes.find(mt => mt.id === line.material_type_id)?.name ?? '')
+                  const sizeSearchValue = sizeSearch[line.rowId] ?? (materialSizes.find(s => s.id === line.material_size_id)?.size_label ?? '')
+                  const taxRateSearchValue = taxRateSearch[line.rowId] ?? (taxRates.find(tr => tr.id === line.tax_rate_id)?.name ?? '')
                   return (
                     <tr key={i} className="py-1">
                       {/* Item Name */}
                       <td className="pr-3 py-2">
-                        <select value={line.item_master_id}
-                          onChange={(e) => {
-                            if (e.target.value === 'NEW') {
-                              setNewItemLineIndex(i)
-                              setShowNewItemDialog(true)
-                              setNewItemMaterialTypeId(line.material_type_id)
-                              setNewItemMaterialSizeId(line.material_size_id)
-                              setNewItemName(''); setNewItemDescription(''); setNewItemGroupId(''); setNewItemCode(''); setNewItemDivisionId('')
-                            } else {
-                              updateLine(i, 'item_master_id', e.target.value)
-                            }
-                          }}
-                          className={`block w-36 rounded border px-2 py-1.5 text-[0.8125rem] focus:outline-none ${
-                            line.material_type_id && line.quantity && !line.item_name
-                              ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
-                          }`}>
-                          <option value="">Select Item *</option>
-                          {itemsForType.map(im => <option key={im.id} value={im.id}>{im.item_name}</option>)}
-                          {itemMasters.filter(im => !itemsForType.find(x => x.id === im.id))
-                            .map(im => <option key={im.id} value={im.id} className="text-gray-400">{im.item_name}</option>)}
-                          <option value="NEW" className="font-semibold">+ New Item</option>
-                        </select>
+                        <div className="relative">
+                          <input type="text" value={itemSearchValue}
+                            onChange={(e) => {
+                              setItemSearch((prev) => ({ ...prev, [line.rowId]: e.target.value }))
+                              setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))
+                            }}
+                            onFocus={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))}
+                            onBlur={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))}
+                            placeholder="Search item..."
+                            className={`block w-36 rounded border px-2 py-1.5 text-[0.8125rem] focus:outline-none ${
+                              line.material_type_id && line.quantity && !line.item_name
+                                ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
+                            }`} />
+                          {itemOpen[line.rowId] && (
+                            <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+                              {itemsForType
+                                .filter(im => im.item_name.toLowerCase().includes(itemSearchValue.toLowerCase()))
+                                .map(im => (
+                                  <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      updateLine(i, 'item_master_id', im.id)
+                                      setItemSearch((prev) => ({ ...prev, [line.rowId]: im.item_name }))
+                                      setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
+                                    }}
+                                    className="w-full text-left px-2 py-2 text-[0.8125rem] hover:bg-gray-100">
+                                    {im.item_name}
+                                  </button>
+                                ))}
+                              {itemsForType.filter(im => im.item_name.toLowerCase().includes(itemSearchValue.toLowerCase())).length === 0 && (
+                                <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
+                              )}
+                              <button type="button" onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setNewItemLineIndex(i)
+                                  setShowNewItemDialog(true)
+                                  setNewItemMaterialTypeId(line.material_type_id)
+                                  setNewItemMaterialSizeId(line.material_size_id)
+                                  setNewItemName(''); setNewItemDescription(''); setNewItemGroupId(''); setNewItemCode(''); setNewItemDivisionId('')
+                                  setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
+                                }}
+                                className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold">
+                                + New Item
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       {/* Line ID */}
                       <td className="pr-3 py-2">
