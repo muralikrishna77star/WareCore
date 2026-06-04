@@ -722,7 +722,7 @@ export default function NewBillPage() {
                               updateLine(i, 'item_master_id', e.target.value)
                             }
                           }}
-                          className={`block w-36 rounded border px-2 py-1.5 text-[0.9375rem] focus:outline-none ${
+                          className={`block w-36 rounded border px-2 py-1.5 text-[0.8125rem] focus:outline-none ${
                             line.material_type_id && line.quantity && !line.item_name
                               ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
                           }`}>
@@ -742,7 +742,7 @@ export default function NewBillPage() {
                       {/* Item Code */}
                       <td className="pr-3 py-2">
                         <input type="text" value={line.item_code} readOnly placeholder="—"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] bg-gray-50" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] bg-gray-50" />
                       </td>
                       {/* Material Type */}
                       <td className="pr-3 py-2">
@@ -751,7 +751,7 @@ export default function NewBillPage() {
                             if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
                             else { updateLine(i, 'material_type_id', e.target.value) }
                           }}
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           {materialTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
@@ -768,7 +768,7 @@ export default function NewBillPage() {
                               if (size) updateLine(i, 'size_label', size.size_label)
                             }
                           }}
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                           <option value="NEW" className="font-semibold">+ New Size</option>
@@ -778,13 +778,13 @@ export default function NewBillPage() {
                       <td className="pr-3 py-2">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Rate */}
                       <td className="pr-3 py-2">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Taxable */}
                       <td className="pr-3 py-2">
@@ -795,7 +795,7 @@ export default function NewBillPage() {
                       {/* Tax Rate */}
                       <td className="pr-3 py-2">
                         <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
-                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
                           {taxRates.map(tr => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
                         </select>
@@ -828,7 +828,7 @@ export default function NewBillPage() {
                       <td className="pr-3 py-2">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         {lines.length > 1 && (
