@@ -21,7 +21,7 @@ const GET_USER_QUERY = `
 
 export async function DELETE(request: NextRequest) {
   const session = await verifySessionCookie(request)
-  if (!session || session.role !== 'admin') {
+  if (!session || (session.role !== 'admin' && session.role !== 'developer')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
