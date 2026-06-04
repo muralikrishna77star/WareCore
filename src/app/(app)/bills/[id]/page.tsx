@@ -51,19 +51,19 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/bills" className="text-sm text-blue-600 hover:underline mb-1 block">
+          <Link href="/bills" className="text-[0.9375rem] text-blue-600 hover:underline mb-1 block">
             ← Back to Bills
           </Link>
-          <h1 className={`text-2xl font-bold ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
+          <h1 className={`text-[1.4375rem] font-bold ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
             Bill #{bill.bill_number}
           </h1>
         </div>
         {isCancelled ? (
-          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
+          <span className="px-3 py-1 rounded-full text-[0.9375rem] font-semibold bg-red-100 text-red-700 border border-red-200">
             Cancelled
           </span>
         ) : (
-          <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+          <span className="px-3 py-1 rounded-full text-[0.9375rem] font-medium bg-green-100 text-green-800">
             Purchase Bill
           </span>
         )}
@@ -72,13 +72,13 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       {/* Cancellation notice */}
       {isCancelled && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-          <p className="text-sm font-semibold text-red-700 mb-1">
+          <p className="text-[0.9375rem] font-semibold text-red-700 mb-1">
             This bill was cancelled on {formatDate(bill.cancelled_at)}
           </p>
           {bill.cancelled_notes && (
-            <p className="text-sm text-red-600">Reason: {bill.cancelled_notes}</p>
+            <p className="text-[0.9375rem] text-red-600">Reason: {bill.cancelled_notes}</p>
           )}
-          <p className="text-xs text-red-500 mt-2">
+          <p className="text-[0.6875rem] text-red-500 mt-2">
             All stock movements from this bill have been reversed in the stock ledger.
           </p>
         </div>
@@ -87,8 +87,8 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       {/* Cannot-cancel notice */}
       {!isCancelled && !canCancel && (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
-          <p className="text-sm font-semibold text-amber-800 mb-1">Cannot Cancel</p>
-          <p className="text-sm text-amber-700">
+          <p className="text-[0.9375rem] font-semibold text-amber-800 mb-1">Cannot Cancel</p>
+          <p className="text-[0.9375rem] text-amber-700">
             {dispatchedLineCount} line item{dispatchedLineCount !== 1 ? 's have' : ' has'} been
             dispatched in an active sale entry. Cancel the related sale entries first, then cancel this bill.
           </p>
@@ -97,37 +97,37 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
 
       {/* Bill Info */}
       <div className={`bg-white rounded-xl border border-gray-200 p-6 mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Bill Details</h2>
+        <h2 className="text-[1.1875rem] font-semibold text-gray-900 mb-4">Bill Details</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Bill Number</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{bill.bill_number}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Bill Number</p>
+            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.bill_number}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Date</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(bill.bill_date)}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Date</p>
+            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{formatDate(bill.bill_date)}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Supplier</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{bill.suppliers?.name ?? '—'}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Supplier</p>
+            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.suppliers?.name ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{bill.companies?.name ?? '—'}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Company</p>
+            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.companies?.name ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{bill.warehouses?.name ?? '—'}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Warehouse</p>
+            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{bill.warehouses?.name ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Created</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(bill.created_at)}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Created</p>
+            <p className="text-[0.9375rem] font-medium text-gray-900 mt-1">{formatDate(bill.created_at)}</p>
           </div>
         </div>
         {bill.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-            <p className="text-sm text-gray-700">{bill.notes}</p>
+            <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide mb-1">Notes</p>
+            <p className="text-[0.9375rem] text-gray-700">{bill.notes}</p>
           </div>
         )}
       </div>
@@ -135,43 +135,43 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       {/* Line Items */}
       <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
         <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Line Items</h2>
+          <h2 className="text-[1.1875rem] font-semibold text-gray-900">Line Items</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
+                <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
+                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
+                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">
+                  <td colSpan={6} className="px-6 py-8 text-center text-[0.9375rem] text-gray-400">
                     No line items recorded.
                   </td>
                 </tr>
               ) : items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  <td className="px-6 py-4 text-[0.9375rem] text-gray-500">{idx + 1}</td>
+                  <td className="px-6 py-4 text-[0.9375rem] font-medium text-gray-900">
                     {item.item_name ?? item.material_types?.name ?? '—'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">
+                  <td className="px-6 py-4 text-[0.9375rem] text-gray-700">
                     {item.size_label ?? '—'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                  <td className="px-6 py-4 text-[0.9375rem] text-gray-900 text-right">
                     {Number(item.quantity).toFixed(3)}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                  <td className="px-6 py-4 text-[0.9375rem] text-gray-900 text-right">
                     {item.rate ? formatCurrency(Number(item.rate)) : '—'}
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
+                  <td className="px-6 py-4 text-[0.9375rem] font-medium text-gray-900 text-right">
                     {item.amount ? formatCurrency(Number(item.amount)) : '—'}
                   </td>
                 </tr>
@@ -179,10 +179,10 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 border-gray-200">
               <tr>
-                <td colSpan={3} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Totals</td>
-                <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
+                <td colSpan={3} className="px-6 py-4 text-[0.9375rem] font-semibold text-gray-900 text-right">Totals</td>
+                <td className="px-6 py-4 text-[0.9375rem] font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
                 <td></td>
-                <td className="px-6 py-4 text-sm font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>
+                <td className="px-6 py-4 text-[0.9375rem] font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>
               </tr>
             </tfoot>
           </table>
@@ -193,13 +193,13 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       <div className="flex gap-3 flex-wrap items-center">
         <Link
           href="/bills/new"
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 bg-blue-600 text-white text-[0.9375rem] font-medium rounded-lg hover:bg-blue-700"
         >
           New Bill
         </Link>
         <Link
           href="/bills"
-          className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50"
+          className="px-4 py-2 bg-white text-gray-700 text-[0.9375rem] font-medium rounded-lg border border-gray-300 hover:bg-gray-50"
         >
           All Bills
         </Link>

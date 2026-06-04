@@ -572,8 +572,8 @@ export default function NewBillPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">New Purchase Bill</h1>
-        <p className="mt-1 text-sm text-gray-500">Record a new inward purchase</p>
+        <h1 className="text-[1.4375rem] font-bold text-gray-900">New Purchase Bill</h1>
+        <p className="mt-1 text-[0.9375rem] text-gray-500">Record a new inward purchase</p>
       </div>
 
       <MissingMasterDataBanner
@@ -589,18 +589,18 @@ export default function NewBillPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-4">Bill Details</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-gray-800 mb-4">Bill Details</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
             {/* Company */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">My Companies</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">My Companies</label>
               <select value={companyId}
                 onChange={(e) => {
                   if (e.target.value === 'NEW') { setShowNewCompanyDialog(true) }
                   else { setCompanyId(e.target.value) }
                 }}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Company —</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
                 <option value="NEW" className="font-semibold text-blue-600">+ New Company</option>
@@ -609,7 +609,7 @@ export default function NewBillPage() {
 
             {/* Warehouse */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Warehouse</label>
               <select value={warehouseId} required
                 onChange={(e) => {
                   if (e.target.value === 'NEW') {
@@ -619,7 +619,7 @@ export default function NewBillPage() {
                     setWarehouseId(e.target.value)
                   }
                 }}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Warehouse —</option>
                 {filteredWarehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 <option value="NEW" className="font-semibold text-blue-600">+ New Warehouse</option>
@@ -628,13 +628,13 @@ export default function NewBillPage() {
 
             {/* Supplier */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Supplier</label>
               <select value={supplierId}
                 onChange={(e) => {
                   if (e.target.value === 'NEW') { setShowNewSupplierDialog(true) }
                   else { setSupplierId(e.target.value) }
                 }}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Supplier —</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 <option value="NEW" className="font-semibold text-blue-600">+ New Supplier</option>
@@ -643,31 +643,31 @@ export default function NewBillPage() {
 
             {/* Purchase ID */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Purchase ID <span className="ml-1 text-xs font-normal text-gray-400">(auto-generated)</span>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">
+                Purchase ID <span className="ml-1 text-[0.6875rem] font-normal text-gray-400">(auto-generated)</span>
               </label>
               <div className="flex gap-2">
                 <input type="text" value={billNumber} onChange={(e) => setBillNumber(e.target.value)}
                   placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
-                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] font-mono focus:border-blue-500 focus:outline-none" />
                 <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">↻ New ID</button>
+                  className="rounded-md border border-gray-300 px-3 py-2 text-[0.6875rem] text-gray-600 hover:bg-gray-50">↻ New ID</button>
               </div>
             </div>
 
             {/* Bill Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bill Date</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Bill Date</label>
               <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} required
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
 
             {/* Notes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Notes</label>
               <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional notes"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
           </div>
         </div>
@@ -675,27 +675,27 @@ export default function NewBillPage() {
         {/* ── Line Items ─────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-800">Line Items</h2>
-            <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
+            <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
+            <button type="button" onClick={addLine} className="text-[0.9375rem] text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-[0.9375rem]">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Line ID</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item Code</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Rate (₹)</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Taxable (₹)</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Tax Rate</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">CGST</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">SGST</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">TDS</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">Total</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Notes</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Line ID</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Code</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Material Type</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Size</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Qty</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Rate (₹)</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Taxable (₹)</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Tax Rate</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">CGST</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">SGST</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">TDS</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">Total</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Notes</th>
                   <th className="pb-2"></th>
                 </tr>
               </thead>
@@ -722,7 +722,7 @@ export default function NewBillPage() {
                               updateLine(i, 'item_master_id', e.target.value)
                             }
                           }}
-                          className={`block w-36 rounded border px-2 py-1.5 text-sm focus:outline-none ${
+                          className={`block w-36 rounded border px-2 py-1.5 text-[0.9375rem] focus:outline-none ${
                             line.material_type_id && line.quantity && !line.item_name
                               ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
                           }`}>
@@ -736,13 +736,13 @@ export default function NewBillPage() {
                       {/* Line ID */}
                       <td className="pr-3 py-2">
                         {line.purchase_line_id
-                          ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-xs font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
-                          : <span className="text-xs text-gray-400 italic">— select item —</span>}
+                          ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-[0.6875rem] font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
+                          : <span className="text-[0.6875rem] text-gray-400 italic">— select item —</span>}
                       </td>
                       {/* Item Code */}
                       <td className="pr-3 py-2">
                         <input type="text" value={line.item_code} readOnly placeholder="—"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm bg-gray-50" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] bg-gray-50" />
                       </td>
                       {/* Material Type */}
                       <td className="pr-3 py-2">
@@ -751,7 +751,7 @@ export default function NewBillPage() {
                             if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
                             else { updateLine(i, 'material_type_id', e.target.value) }
                           }}
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           {materialTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
@@ -768,7 +768,7 @@ export default function NewBillPage() {
                               if (size) updateLine(i, 'size_label', size.size_label)
                             }
                           }}
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                           <option value="NEW" className="font-semibold">+ New Size</option>
@@ -778,24 +778,24 @@ export default function NewBillPage() {
                       <td className="pr-3 py-2">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Rate */}
                       <td className="pr-3 py-2">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Taxable */}
                       <td className="pr-3 py-2">
-                        <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 text-right">
+                        <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[0.9375rem] text-gray-700 text-right">
                           {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
                         </span>
                       </td>
                       {/* Tax Rate */}
                       <td className="pr-3 py-2">
                         <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
-                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
                           {taxRates.map(tr => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
                         </select>
@@ -803,24 +803,24 @@ export default function NewBillPage() {
                       {/* CGST */}
                       <td className="pr-3 py-2 text-right">
                         {line.cgst_amount > 0
-                          ? <span className="text-xs text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
-                          : <span className="text-gray-300 text-xs">—</span>}
+                          ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
+                          : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* SGST */}
                       <td className="pr-3 py-2 text-right">
                         {line.sgst_amount > 0
-                          ? <span className="text-xs text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
-                          : <span className="text-gray-300 text-xs">—</span>}
+                          ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
+                          : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* TDS */}
                       <td className="pr-3 py-2 text-right">
                         {line.tds_amount > 0
-                          ? <span className="text-xs text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
-                          : <span className="text-gray-300 text-xs">—</span>}
+                          ? <span className="text-[0.6875rem] text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
+                          : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* Total */}
                       <td className="pr-3 py-2 text-right">
-                        <span className="text-sm font-semibold text-gray-900">
+                        <span className="text-[0.9375rem] font-semibold text-gray-900">
                           {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
                         </span>
                       </td>
@@ -828,7 +828,7 @@ export default function NewBillPage() {
                       <td className="pr-3 py-2">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         {lines.length > 1 && (
@@ -841,15 +841,15 @@ export default function NewBillPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={5} className="py-3 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
-                  <td className="py-3 pr-3 text-sm font-bold text-gray-900">{totalQty.toFixed(3)}</td>
+                  <td colSpan={5} className="py-3 text-[0.9375rem] font-semibold text-gray-700 text-right pr-3">Totals:</td>
+                  <td className="py-3 pr-3 text-[0.9375rem] font-bold text-gray-900">{totalQty.toFixed(3)}</td>
                   <td className="py-3 pr-3"></td>
-                  <td className="py-3 pr-3 text-sm text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
+                  <td className="py-3 pr-3 text-[0.9375rem] text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
                   <td className="py-3 pr-3"></td>
-                  <td className="py-3 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
-                  <td className="py-3 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
-                  <td className="py-3 pr-3 text-right text-sm text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
-                  <td className="py-3 pr-3 text-right text-sm font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</td>
+                  <td className="py-3 pr-3 text-right text-[0.9375rem] text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
+                  <td className="py-3 pr-3 text-right text-[0.9375rem] text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
+                  <td className="py-3 pr-3 text-right text-[0.9375rem] text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
+                  <td className="py-3 pr-3 text-right text-[0.9375rem] font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
@@ -857,15 +857,15 @@ export default function NewBillPage() {
           </div>
         </div>
 
-        {error && <div className="rounded-md bg-red-50 border border-red-200 p-4"><p className="text-sm text-red-800">{error}</p></div>}
+        {error && <div className="rounded-md bg-red-50 border border-red-200 p-4"><p className="text-[0.9375rem] text-red-800">{error}</p></div>}
 
         <div className="flex gap-3">
           <button type="submit" disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {loading ? 'Saving...' : '✓ Save Bill'}
           </button>
           <button type="button" onClick={() => router.back()}
-            className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-gray-300 px-6 py-2.5 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             Cancel
           </button>
         </div>
@@ -879,34 +879,34 @@ export default function NewBillPage() {
       {showNewCompanyDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Company</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Company</h2>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Company Name *</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Company Name *</label>
                 <input type="text" value={newCoName} onChange={(e) => setNewCoName(e.target.value)} autoFocus
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC Steels Ltd" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC Steels Ltd" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Code *</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Code *</label>
                 <input type="text" value={newCoCode} onChange={(e) => setNewCoCode(e.target.value.toUpperCase())}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Short Name</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Short Name</label>
                 <input type="text" value={newCoShortName} onChange={(e) => setNewCoShortName(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">GSTIN</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">GSTIN</label>
                 <input type="text" value={newCoGstin} onChange={(e) => setNewCoGstin(e.target.value.toUpperCase())}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
               </div>
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => { setShowNewCompanyDialog(false); setNewCoName(''); setNewCoCode('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateCompany} disabled={newCoLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newCoLoading ? 'Creating...' : 'Create Company'}
               </button>
             </div>
@@ -918,25 +918,25 @@ export default function NewBillPage() {
       {showNewWarehouseDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Warehouse</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Warehouse</h2>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Warehouse Name *</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Warehouse Name *</label>
               <input type="text" value={newWhName} onChange={(e) => setNewWhName(e.target.value)} autoFocus
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. Main Warehouse" />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. Main Warehouse" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Company *</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Company *</label>
               <select value={newWhCompanyId || companyId} onChange={(e) => setNewWhCompanyId(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— Select Company —</option>
                 {companies.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
               </select>
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => { setShowNewWarehouseDialog(false); setNewWhName(''); setNewWhCompanyId('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateWarehouse} disabled={newWhLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newWhLoading ? 'Creating...' : 'Create Warehouse'}
               </button>
             </div>
@@ -948,29 +948,29 @@ export default function NewBillPage() {
       {showNewSupplierDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Supplier</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Supplier</h2>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Supplier Name *</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Supplier Name *</label>
               <input type="text" value={newSpName} onChange={(e) => setNewSpName(e.target.value)} autoFocus
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. Steel Supplies Co." />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. Steel Supplies Co." />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Phone</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Phone</label>
                 <input type="text" value={newSpPhone} onChange={(e) => setNewSpPhone(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">GSTIN</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">GSTIN</label>
                 <input type="text" value={newSpGstin} onChange={(e) => setNewSpGstin(e.target.value.toUpperCase())}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
               </div>
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => { setShowNewSupplierDialog(false); setNewSpName(''); setNewSpPhone(''); setNewSpGstin('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateSupplier} disabled={newSpLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newSpLoading ? 'Creating...' : 'Create Supplier'}
               </button>
             </div>
@@ -982,17 +982,17 @@ export default function NewBillPage() {
       {showMaterialTypeDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Material Type</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Material Type</h2>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Name</label>
               <input type="text" value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
                 placeholder="e.g., CR, GI, HR Coil"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Unit</label>
               <select value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="tons">Tons</option>
                 <option value="kg">Kilograms</option>
                 <option value="units">Units</option>
@@ -1001,9 +1001,9 @@ export default function NewBillPage() {
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => setShowMaterialTypeDialog(false)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {materialTypeDialogLoading ? 'Creating...' : 'Create'}
               </button>
             </div>
@@ -1015,37 +1015,37 @@ export default function NewBillPage() {
       {showSizeDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Size</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Size</h2>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Material Type</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Material Type</label>
               <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— Select —</option>
                 {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Size Label</label>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Size Label</label>
               <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="e.g., 0.80x121"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Thickness</label>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Thickness</label>
                 <input type="number" value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)} step="0.01" placeholder="Optional"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Width</label>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Width</label>
                 <input type="number" value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)} step="0.01" placeholder="Optional"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => setShowSizeDialog(false)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateSize} disabled={sizeDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {sizeDialogLoading ? 'Creating...' : 'Create'}
               </button>
             </div>
@@ -1057,25 +1057,25 @@ export default function NewBillPage() {
       {showNewItemDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Item</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Item</h2>
 
             {/* Row 1: Division → Group Code → Item Code */}
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Division</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division</label>
                 <select value={newItemDivisionId}
                   onChange={(e) => {
                     if (e.target.value === 'NEW_DIV') { setShowNewDivisionDialog(true) }
                     else { setNewItemDivisionId(e.target.value) }
                   }}
-                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                   <option value="">— All Divisions —</option>
                   {divisions.map(d => <option key={d.id} value={d.id}>{d.division_code} — {d.division_name}</option>)}
                   <option value="NEW_DIV" className="font-semibold text-blue-600">+ New Division</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Group Code *</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Group Code *</label>
                 <select value={newItemGroupId}
                   onChange={(e) => {
                     if (e.target.value === 'NEW_GROUP') {
@@ -1085,52 +1085,52 @@ export default function NewBillPage() {
                       setNewItemGroupId(e.target.value)
                     }
                   }}
-                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                   <option value="">— Select Group —</option>
                   {groupsForItemDialog.map(g => <option key={g.id} value={g.id}>{g.group_code}{g.group_desc ? ` (${g.group_desc})` : ''}</option>)}
                   <option value="NEW_GROUP" className="font-semibold text-blue-600">+ New Group</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Item Code</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Item Code</label>
                 <input readOnly value={newItemCode} placeholder="Auto-generated"
-                  className="block w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-sm" />
+                  className="block w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-[0.9375rem]" />
               </div>
             </div>
 
             {/* Row 2: Item Name + Material Type */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Item Name *</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Item Name *</label>
                 <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Material Type *</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Material Type *</label>
                 <select value={newItemMaterialTypeId} onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                   <option value="">— Select —</option>
                   {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Size</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Size</label>
                 <select value={newItemMaterialSizeId} onChange={(e) => setNewItemMaterialSizeId(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                   <option value="">— None —</option>
                   {materialSizes.filter(s => s.material_type_id === newItemMaterialTypeId).map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Unit</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Unit</label>
                 <input type="text" value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Description</label>
               <input type="text" value={newItemDescription} onChange={(e) => setNewItemDescription(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
 
             <div className="flex gap-3 justify-end pt-2">
@@ -1141,9 +1141,9 @@ export default function NewBillPage() {
                   setNewItemMaterialSizeId(''); setNewItemName(''); setNewItemUnit('tons')
                   setNewItemDescription(''); setNewItemCode('')
                 }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={handleCreateNewItem} disabled={newItemDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newItemDialogLoading ? 'Creating...' : 'Create Item'}
               </button>
             </div>
@@ -1155,24 +1155,24 @@ export default function NewBillPage() {
       {showNewDivisionDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg max-w-sm w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Division</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Division</h2>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Division Code *</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division Code *</label>
               <input type="text" value={newDivCode} onChange={(e) => setNewDivCode(e.target.value.toUpperCase())} autoFocus
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
                 placeholder="e.g. STL" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Division Name *</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division Name *</label>
               <input type="text" value={newDivName} onChange={(e) => setNewDivName(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
                 placeholder="e.g. Steel Products" />
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => { setShowNewDivisionDialog(false); setNewDivCode(''); setNewDivName('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateDivision} disabled={newDivLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newDivLoading ? 'Creating...' : 'Create Division'}
               </button>
             </div>
@@ -1184,30 +1184,30 @@ export default function NewBillPage() {
       {showNewGroupDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg max-w-sm w-full p-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Create New Item Group</h2>
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Item Group</h2>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Division</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division</label>
               <select value={newGroupDivisionId} onChange={(e) => setNewGroupDivisionId(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— None —</option>
                 {divisions.map(d => <option key={d.id} value={d.id}>{d.division_code} — {d.division_name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Group Code * <span className="font-normal text-gray-400">(2 chars)</span></label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Group Code * <span className="font-normal text-gray-400">(2 chars)</span></label>
               <input type="text" value={newGroupCode} onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())} maxLength={2} autoFocus
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="e.g. MS" />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. MS" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Description</label>
               <input type="text" value={newGroupDesc} onChange={(e) => setNewGroupDesc(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
             </div>
             <div className="flex gap-3 justify-end pt-2">
               <button onClick={() => { setShowNewGroupDialog(false); setNewGroupCode(''); setNewGroupDesc(''); setNewGroupDivisionId('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateGroup} disabled={newGroupDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newGroupDialogLoading ? 'Creating...' : 'Create Group'}
               </button>
             </div>
