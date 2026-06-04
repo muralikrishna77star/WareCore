@@ -1,9 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
+// Backup service — uses Hasura run_sql API (no Supabase client needed)
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const HASURA_BASE = (process.env.NEXT_PUBLIC_HASURA_URL || '').replace('/v1/graphql', '')
+const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
 
-// List of all tables in the database
 const TABLES = [
   'companies',
   'warehouses',
@@ -11,7 +10,10 @@ const TABLES = [
   'customers',
   'material_types',
   'material_sizes',
+  'item_groups',
+  'item_master',
   'user_profiles',
+  'tax_rates',
   'purchase_bills',
   'purchase_bill_items',
   'stock_ledger',
@@ -39,93 +41,87 @@ export interface BackupData {
 }
 
 export interface RestoreOptions {
-  timestamp?: string // For point-in-time restore
-  tables?: string[] // Specific tables to restore
-  truncateFirst?: boolean // Whether to truncate tables before restore
+  timestamp?: string
+  tables?: string[]
+  truncateFirst?: boolean
 }
 
-/**
- * Get all data from specified tables
- */
+// ─── Hasura run_sql helper ─────────────────────────────────────────────────
+
+async function runSQL(sql: string, readOnly = true): Promise<{ result_type: string; result: string[][] }> {
+  const res = await fetch(`${HASURA_BASE}/v2/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-hasura-admin-secret': HASURA_SECRET,
+    },
+    body: JSON.stringify({
+      type: 'run_sql',
+      args: { source: 'warecore', sql, read_only: readOnly, cascade: false },
+    }),
+    cache: 'no-store',
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Hasura ${res.status}: ${text}`)
+  }
+
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  if (json.code) throw new Error(`${json.code}: ${json.error ?? JSON.stringify(json)}`)
+  return json
+}
+
+/** Convert Hasura result rows (array-of-arrays with header row) to objects */
+function toObjects(result: string[][]): Record<string, any>[] {
+  if (!result || result.length < 2) return []
+  const headers = result[0]
+  return result.slice(1).map(row =>
+    Object.fromEntries(headers.map((h, i) => [h, row[i]]))
+  )
+}
+
+/** Escape single quotes for SQL string literals */
+function esc(value: string): string {
+  return value.replace(/'/g, "''")
+}
+
+// ─── Public API ────────────────────────────────────────────────────────────
+
 export async function getAllTableData(
   tables: string[] = TABLES,
   beforeTimestamp?: string
 ): Promise<BackupData> {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
   const backupData: BackupData = {}
 
   for (const table of tables) {
     try {
-      let query = supabase.from(table).select('*')
-
-      // If timestamp provided, filter for records created before that time
+      let sql = `SELECT * FROM ${table}`
       if (beforeTimestamp) {
-        query = query.lte('created_at', beforeTimestamp)
+        sql += ` WHERE created_at <= '${esc(beforeTimestamp)}'`
       }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error(`Error fetching ${table}:`, error)
-        continue
-      }
-
-      backupData[table] = data || []
-    } catch (error) {
-      console.error(`Error fetching ${table}:`, error)
+      const { result } = await runSQL(sql)
+      backupData[table] = toObjects(result)
+    } catch (err) {
+      console.error(`Backup: error fetching ${table}:`, err)
+      backupData[table] = []
     }
   }
 
   return backupData
 }
 
-/**
- * Convert data to CSV format
- */
-export function dataToCSV(data: any[], tableName: string): string {
-  if (data.length === 0) {
-    return `"Table: ${tableName}"\n"No data found"`
-  }
-
-  const headers = Object.keys(data[0])
-  const csvContent = [
-    headers.map((h) => `"${h}"`).join(','),
-    ...data.map((row) =>
-      headers
-        .map((header) => {
-          const value = row[header]
-          if (value === null || value === undefined) return ''
-          if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`
-          if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '""')}"`
-          return value.toString()
-        })
-        .join(',')
-    ),
-  ].join('\n')
-
-  return csvContent
-}
-
-/**
- * Create a backup ZIP file with all tables as CSV files
- */
 export async function createBackup(
   tables: string[] = TABLES,
   backupName?: string
-): Promise<{
-  filename: string
-  metadata: BackupMetadata
-  backupData: BackupData
-}> {
+): Promise<{ filename: string; metadata: BackupMetadata; backupData: BackupData }> {
   const timestamp = new Date().toISOString()
   const formattedDate = timestamp.replace(/[:.]/g, '-')
-  const filename = `backup_${backupName || formattedDate}.json`
+  const filename = `backup_${backupName ? esc(backupName) : formattedDate}.json`
 
-  // Fetch all data
   const backupData = await getAllTableData(tables)
-
-  // Calculate total rows
-  const totalRows = Object.values(backupData).reduce((sum, tableData) => sum + tableData.length, 0)
+  const totalRows = Object.values(backupData).reduce((sum, rows) => sum + rows.length, 0)
 
   const metadata: BackupMetadata = {
     id: crypto.randomUUID(),
@@ -137,96 +133,116 @@ export async function createBackup(
     createdBy: 'system',
   }
 
-  return {
-    filename,
-    metadata,
-    backupData,
-  }
+  return { filename, metadata, backupData }
 }
 
-/**
- * Save backup metadata to database
- */
 export async function saveBackupMetadata(metadata: BackupMetadata): Promise<void> {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+  const tablesArray = `ARRAY[${metadata.tables.map(t => `'${esc(t)}'`).join(', ')}]::TEXT[]`
+  const sql = `
+    INSERT INTO backup_history (id, name, timestamp, tables, total_rows, backup_path, created_by, notes)
+    VALUES (
+      '${esc(metadata.id)}',
+      '${esc(metadata.name)}',
+      '${esc(metadata.timestamp)}',
+      ${tablesArray},
+      ${metadata.totalRows},
+      '${esc(metadata.backupPath)}',
+      '${esc(metadata.createdBy)}',
+      ${metadata.notes ? `'${esc(metadata.notes)}'` : 'NULL'}
+    )
+  `
+  await runSQL(sql, false)
+}
 
-  const { error } = await supabase
-    .from('backup_history')
-    .insert([
-      {
-        id: metadata.id,
-        name: metadata.name,
-        timestamp: metadata.timestamp,
-        tables: metadata.tables,
-        total_rows: metadata.totalRows,
-        backup_path: metadata.backupPath,
-        created_by: metadata.createdBy,
-        notes: metadata.notes,
-      },
-    ])
+export async function listBackups(): Promise<BackupMetadata[]> {
+  const { result } = await runSQL(
+    `SELECT id, name, timestamp, tables, total_rows, backup_path, created_by, notes
+     FROM backup_history
+     WHERE deleted_at IS NULL
+     ORDER BY timestamp DESC`
+  )
+  return toObjects(result).map(r => ({
+    id: r.id,
+    name: r.name,
+    timestamp: r.timestamp,
+    tables: r.tables ?? [],
+    totalRows: Number(r.total_rows ?? 0),
+    backupPath: r.backup_path,
+    createdBy: r.created_by,
+    notes: r.notes ?? undefined,
+  }))
+}
 
-  if (error) {
-    console.error('Error saving backup metadata:', error)
-    throw error
+export async function getBackup(backupId: string): Promise<BackupMetadata | null> {
+  const { result } = await runSQL(
+    `SELECT id, name, timestamp, tables, total_rows, backup_path, created_by, notes
+     FROM backup_history WHERE id = '${esc(backupId)}' LIMIT 1`
+  )
+  const rows = toObjects(result)
+  if (!rows.length) return null
+  const r = rows[0]
+  return {
+    id: r.id,
+    name: r.name,
+    timestamp: r.timestamp,
+    tables: r.tables ?? [],
+    totalRows: Number(r.total_rows ?? 0),
+    backupPath: r.backup_path,
+    createdBy: r.created_by,
+    notes: r.notes ?? undefined,
   }
 }
 
-/**
- * Restore data from backup
- */
+export async function deleteBackup(backupId: string): Promise<void> {
+  await runSQL(
+    `UPDATE backup_history SET deleted_at = NOW() WHERE id = '${esc(backupId)}'`,
+    false
+  )
+}
+
 export async function restoreFromBackup(
   backupData: BackupData,
   options: RestoreOptions = {}
 ): Promise<{ success: boolean; message: string; restored: number }> {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
   const tablesToRestore = options.tables || Object.keys(backupData)
   let restoredCount = 0
 
   for (const table of tablesToRestore) {
-    if (!backupData[table]) continue
+    const data = backupData[table]
+    if (!data?.length) continue
 
     try {
-      const data = backupData[table]
-
-      // Truncate table if requested
-      if (options.truncateFirst && data.length > 0) {
-        const { error: truncateError } = await supabase.rpc('truncate_table', {
-          table_name: table,
-        })
-
-        if (truncateError) {
-          console.warn(`Could not truncate ${table}, proceeding with insert:`, truncateError)
-        }
+      if (options.truncateFirst) {
+        await runSQL(`TRUNCATE TABLE ${table} CASCADE`, false)
       }
 
-      // Insert data in batches
-      const batchSize = 1000
+      const batchSize = 500
       for (let i = 0; i < data.length; i += batchSize) {
         const batch = data.slice(i, i + batchSize)
-        const { error } = await supabase.from(table).insert(batch)
-
-        if (error) {
-          console.error(`Error restoring ${table}:`, error)
-          continue
-        }
-
+        const cols = Object.keys(batch[0]).map(c => `"${c}"`).join(', ')
+        const vals = batch.map(row =>
+          '(' + Object.values(row).map(v => {
+            if (v === null || v === undefined) return 'NULL'
+            if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
+            if (typeof v === 'number') return v
+            if (Array.isArray(v)) return `ARRAY[${v.map(x => `'${esc(String(x))}'`).join(', ')}]`
+            return `'${esc(String(v))}'`
+          }).join(', ') + ')'
+        ).join(', ')
+        await runSQL(
+          `INSERT INTO ${table} (${cols}) VALUES ${vals} ON CONFLICT DO NOTHING`,
+          false
+        )
         restoredCount += batch.length
       }
-    } catch (error) {
-      console.error(`Error processing ${table}:`, error)
+    } catch (err) {
+      console.error(`Restore: error processing ${table}:`, err)
     }
   }
 
-  return {
-    success: restoredCount > 0,
-    message: `Restored ${restoredCount} records`,
-    restored: restoredCount,
-  }
+  return { success: restoredCount > 0, message: `Restored ${restoredCount} records`, restored: restoredCount }
 }
 
-/**
- * Get point-in-time backup (records as they existed at a specific time)
- */
 export async function getPointInTimeBackup(
   timestamp: string,
   tables: string[] = TABLES
@@ -234,75 +250,19 @@ export async function getPointInTimeBackup(
   return getAllTableData(tables, timestamp)
 }
 
-/**
- * List all available backups
- */
-export async function listBackups(): Promise<BackupMetadata[]> {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-  const { data, error } = await supabase
-    .from('backup_history')
-    .select('*')
-    .order('timestamp', { ascending: false })
-
-  if (error) {
-    console.error('Error listing backups:', error)
-    throw error
-  }
-
-  return (data || []).map((backup: any) => ({
-    id: backup.id,
-    name: backup.name,
-    timestamp: backup.timestamp,
-    tables: backup.tables,
-    totalRows: backup.total_rows,
-    backupPath: backup.backup_path,
-    createdBy: backup.created_by,
-    notes: backup.notes,
-  }))
-}
-
-/**
- * Get specific backup metadata
- */
-export async function getBackup(backupId: string): Promise<BackupMetadata | null> {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-  const { data, error } = await supabase
-    .from('backup_history')
-    .select('*')
-    .eq('id', backupId)
-    .single()
-
-  if (error) {
-    console.error('Error getting backup:', error)
-    return null
-  }
-
-  if (!data) return null
-
-  return {
-    id: data.id,
-    name: data.name,
-    timestamp: data.timestamp,
-    tables: data.tables,
-    totalRows: data.total_rows,
-    backupPath: data.backup_path,
-    createdBy: data.created_by,
-    notes: data.notes,
-  }
-}
-
-/**
- * Delete backup record
- */
-export async function deleteBackup(backupId: string): Promise<void> {
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-  const { error } = await supabase.from('backup_history').delete().eq('id', backupId)
-
-  if (error) {
-    console.error('Error deleting backup:', error)
-    throw error
-  }
+export function dataToCSV(data: any[], tableName: string): string {
+  if (!data.length) return `"Table: ${tableName}"\n"No data found"`
+  const headers = Object.keys(data[0])
+  return [
+    headers.map(h => `"${h}"`).join(','),
+    ...data.map(row =>
+      headers.map(h => {
+        const v = row[h]
+        if (v === null || v === undefined) return ''
+        if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`
+        if (typeof v === 'object') return `"${JSON.stringify(v).replace(/"/g, '""')}"`
+        return v.toString()
+      }).join(',')
+    ),
+  ].join('\n')
 }
