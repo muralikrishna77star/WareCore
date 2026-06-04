@@ -33,7 +33,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 })
   }
 
-  // Prevent deleting other admins (safety guard)
   const checkRes = await fetch(HASURA_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
@@ -43,6 +42,11 @@ export async function DELETE(request: NextRequest) {
   const checkJson = await checkRes.json()
   const target = checkJson?.data?.user_profiles_by_pk
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  // Only developers can delete another developer
+  if (target.role === 'developer' && session.role !== 'developer') {
+    return NextResponse.json({ error: 'Only a Developer can delete another Developer account' }, { status: 403 })
+  }
 
   const res = await fetch(HASURA_URL, {
     method: 'POST',

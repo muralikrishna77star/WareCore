@@ -22,6 +22,7 @@ interface Props {
 }
 
 const ROLES = [
+  { value: 'developer', label: 'Developer (Super Admin)' },
   { value: 'admin', label: 'Admin' },
   { value: 'company_manager', label: 'Company Manager' },
   { value: 'warehouse_manager', label: 'Warehouse Manager' },

@@ -6,9 +6,9 @@ const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
 
 type RoleSet = ReadonlySet<string>
 
-const ADMIN: RoleSet = new Set(['admin'])
-const ADMIN_MANAGER: RoleSet = new Set(['admin', 'company_manager'])
-const ALL_STAFF: RoleSet = new Set(['admin', 'company_manager', 'billing_staff', 'sales_manager'])
+const ADMIN: RoleSet = new Set(['admin', 'developer'])
+const ADMIN_MANAGER: RoleSet = new Set(['admin', 'developer', 'company_manager'])
+const ALL_STAFF: RoleSet = new Set(['admin', 'developer', 'company_manager', 'billing_staff', 'sales_manager'])
 
 // Mutation operation name → roles permitted to execute it.
 // Mutations absent from this map are queries (read-only) and pass through freely.

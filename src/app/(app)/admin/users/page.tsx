@@ -15,6 +15,7 @@ const USERS_QUERY = `
 `
 
 const ROLE_LABELS: Record<string, string> = {
+  developer: 'Developer',
   admin: 'Admin',
   company_manager: 'Company Manager',
   warehouse_manager: 'Warehouse Manager',
@@ -23,6 +24,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 const ROLE_COLORS: Record<string, string> = {
+  developer: 'bg-rose-100 text-rose-800 ring-1 ring-rose-300',
   admin: 'bg-purple-100 text-purple-800',
   company_manager: 'bg-blue-100 text-blue-800',
   warehouse_manager: 'bg-cyan-100 text-cyan-800',
