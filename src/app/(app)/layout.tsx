@@ -1,12 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
 
-const navItems = [
+type NavItem = {
+  title: string
+  href: string
+  icon: string
+}
+
+const navItems: NavItem[] = [
   {
     title: 'Dashboard',
     href: '/dashboard',
@@ -62,20 +68,12 @@ const navItems = [
     href: '/reports',
     icon: '📈',
   },
-  {
-    title: 'Change Password',
-    href: '/profile',
-    icon: '🔑',
-  },
-  {
-    title: 'Sign Out',
-    icon: '🚪',
-    action: 'signout',
-  },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [userEmail, setUserEmail] = useState('')
   const pathname = usePathname()
   const router = useRouter()
 
@@ -84,6 +82,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.push('/login')
     router.refresh()
   }
+
+  useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const res = await fetch('/api/auth/session')
+        if (!res.ok) return
+        const data = await res.json()
+        setUserEmail(data.email || '')
+      } catch (error) {
+        console.error('Session fetch failed', error)
+      }
+    }
+    loadSession()
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100">
@@ -121,28 +133,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-10rem)]">
           {navItems.map((item) => {
-            const isActive = item.href ? pathname === item.href || pathname.startsWith(item.href + '/') : false
-            if (item.action === 'signout') {
-              return (
-                <button
-                  key={item.title}
-                  type="button"
-                  onClick={async () => {
-                    setSidebarOpen(false)
-                    await handleSignOut()
-                  }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-                >
-                  <span className="text-base">{item.icon}</span>
-                  {item.title}
-                </button>
-              )
-            }
-
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
               <Link
                 key={item.href}
-                href={item.href!}
+                href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
@@ -183,7 +178,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </svg>
           </button>
 
-          <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-4 ml-auto relative">
             <span className="hidden sm:inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-mono font-medium text-blue-600">
               v{APP_VERSION}
             </span>
@@ -194,6 +189,47 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               View Website →
             </Link>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileOpen((prev) => !prev)}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 hover:bg-gray-50 transition-colors"
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">
+                  {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                </span>
+                <span className="hidden sm:inline-flex truncate max-w-[10rem]">{userEmail || 'User Profile'}</span>
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-900">Signed in as</p>
+                    <p className="truncate text-sm text-gray-600">{userEmail || 'Unknown user'}</p>
+                  </div>
+                  <div className="flex flex-col gap-1 p-2">
+                    <Link
+                      href="/profile"
+                      onClick={() => setProfileOpen(false)}
+                      className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <span>🔑</span>
+                      Change Password
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setProfileOpen(false)
+                        await handleSignOut()
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <span>🚪</span>
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
