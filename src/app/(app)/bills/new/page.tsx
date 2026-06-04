@@ -61,10 +61,10 @@ function generatePurchaseId(existingBillNumbers: string[]): string {
   return `${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
 }
 
-function generatePurchaseLineId(groupCode: string, allLineIds: string[]): string {
-  const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
-  const prefix = groupCode.slice(0, 2).toUpperCase()
-  return `${prefix}${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+function generatePurchaseLineId(groupCode: string, billNumber: string, allLineIds: string[]): string {
+  const prefix = `${groupCode.slice(0, 2).toUpperCase()}${billNumber}-`
+  const count = allLineIds.filter(id => id && id.startsWith(prefix)).length
+  return `${prefix}${String(count + 1).padStart(4, '0')}`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ export default function NewBillPage() {
             if (group) {
               const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.purchase_line_id).filter(Boolean)
               updated[index].purchase_line_id = generatePurchaseLineId(
-                group.group_code, [...existingLineIds, ...currentAssigned]
+                group.group_code, billNumber, [...existingLineIds, ...currentAssigned]
               )
             }
           }
@@ -507,7 +507,7 @@ export default function NewBillPage() {
             material_size_id: created.material_size_id || '',
             size_label: created.size_label || '',
             purchase_line_id: group
-              ? generatePurchaseLineId(group.group_code, [...existingLineIds, ...currentAssigned])
+              ? generatePurchaseLineId(group.group_code, billNumber, [...existingLineIds, ...currentAssigned])
               : '',
           }
           return updated
