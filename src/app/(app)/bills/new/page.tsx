@@ -187,6 +187,14 @@ export default function NewBillPage() {
   const [newDivName, setNewDivName] = useState('')
   const [newDivLoading, setNewDivLoading] = useState(false)
 
+  // ── Autocomplete search state ────────────────────────────────────────────
+  const [companySearch, setCompanySearch] = useState('')
+  const [warehouseSearch, setWarehouseSearch] = useState('')
+  const [supplierSearch, setSupplierSearch] = useState('')
+  const [companyOpen, setCompanyOpen] = useState(false)
+  const [warehouseOpen, setWarehouseOpen] = useState(false)
+  const [supplierOpen, setSupplierOpen] = useState(false)
+
   // ── Load master data ─────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
@@ -595,50 +603,108 @@ export default function NewBillPage() {
             {/* Company */}
             <div>
               <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">My Companies</label>
-              <select value={companyId}
-                onChange={(e) => {
-                  if (e.target.value === 'NEW') { setShowNewCompanyDialog(true) }
-                  else { setCompanyId(e.target.value) }
-                }}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                <option value="">— Select Company —</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-                <option value="NEW" className="font-semibold text-blue-600">+ New Company</option>
-              </select>
+              <div className="relative">
+                <input type="text" value={companySearch}
+                  onChange={(e) => setCompanySearch(e.target.value)}
+                  onFocus={() => setCompanyOpen(true)}
+                  placeholder="Search company..."
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
+                />
+                {companyOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    {companies
+                      .filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.code.toLowerCase().includes(companySearch.toLowerCase()))
+                      .map(c => (
+                        <button key={c.id} type="button"
+                          onClick={() => {
+                            setCompanyId(c.id)
+                            setCompanySearch(c.name)
+                            setCompanyOpen(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-[0.9375rem] hover:bg-gray-100 flex justify-between">
+                          <span>{c.name}</span>
+                          <span className="text-gray-500">{c.code}</span>
+                        </button>
+                      ))}
+                    <button type="button"
+                      onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold">
+                      + New Company
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Warehouse */}
             <div>
               <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Warehouse</label>
-              <select value={warehouseId} required
-                onChange={(e) => {
-                  if (e.target.value === 'NEW') {
-                    setNewWhCompanyId(companyId)
-                    setShowNewWarehouseDialog(true)
-                  } else {
-                    setWarehouseId(e.target.value)
-                  }
-                }}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                <option value="">— Select Warehouse —</option>
-                {filteredWarehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                <option value="NEW" className="font-semibold text-blue-600">+ New Warehouse</option>
-              </select>
+              <div className="relative">
+                <input type="text" value={warehouseSearch}
+                  onChange={(e) => setWarehouseSearch(e.target.value)}
+                  onFocus={() => setWarehouseOpen(true)}
+                  placeholder="Search warehouse..."
+                  required
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
+                />
+                {warehouseOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    {filteredWarehouses
+                      .filter(w => w.name.toLowerCase().includes(warehouseSearch.toLowerCase()))
+                      .map(w => (
+                        <button key={w.id} type="button"
+                          onClick={() => {
+                            setWarehouseId(w.id)
+                            setWarehouseSearch(w.name)
+                            setWarehouseOpen(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-[0.9375rem] hover:bg-gray-100">
+                          {w.name}
+                        </button>
+                      ))}
+                    <button type="button"
+                      onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold">
+                      + New Warehouse
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Supplier */}
             <div>
               <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Supplier</label>
-              <select value={supplierId}
-                onChange={(e) => {
-                  if (e.target.value === 'NEW') { setShowNewSupplierDialog(true) }
-                  else { setSupplierId(e.target.value) }
-                }}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                <option value="">— Select Supplier —</option>
-                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                <option value="NEW" className="font-semibold text-blue-600">+ New Supplier</option>
-              </select>
+              <div className="relative">
+                <input type="text" value={supplierSearch}
+                  onChange={(e) => setSupplierSearch(e.target.value)}
+                  onFocus={() => setSupplierOpen(true)}
+                  placeholder="Search supplier..."
+                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
+                />
+                {supplierOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    {suppliers
+                      .filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
+                      .map(s => (
+                        <button key={s.id} type="button"
+                          onClick={() => {
+                            setSupplierId(s.id)
+                            setSupplierSearch(s.name)
+                            setSupplierOpen(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-[0.9375rem] hover:bg-gray-100">
+                          {s.name}
+                        </button>
+                      ))}
+                    <button type="button"
+                      onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold">
+                      + New Supplier
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Purchase ID */}
