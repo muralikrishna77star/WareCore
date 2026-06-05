@@ -200,6 +200,7 @@ export default function NewBillPage() {
 
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
+  const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
   const [materialTypeSearch, setMaterialTypeSearch] = useState<Record<string, string>>({})
   const [materialTypeOpen, setMaterialTypeOpen] = useState<Record<string, boolean>>({})
   const [sizeSearch, setSizeSearch] = useState<Record<string, string>>({})
@@ -829,6 +830,7 @@ export default function NewBillPage() {
                               const val = e.target.value
                               setItemSearch((prev) => ({ ...prev, [line.rowId]: val }))
                               setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))
+                              setItemHighlight((prev) => ({ ...prev, [line.rowId]: -1 }))
                               if (val && !line.material_type_id) {
                                 const q = val.toLowerCase()
                                 const matches = itemMasters.filter(im =>
@@ -836,6 +838,38 @@ export default function NewBillPage() {
                                 )
                                 const typeIds = [...new Set(matches.map(im => im.material_type_id))]
                                 if (typeIds.length === 1) updateLine(i, 'material_type_id', typeIds[0])
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              const count = filteredDropdownItems.length
+                              const cur = itemHighlight[line.rowId] ?? -1
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault()
+                                if (!itemOpen[line.rowId]) {
+                                  setItemOpen(prev => ({ ...prev, [line.rowId]: true }))
+                                  setItemHighlight(prev => ({ ...prev, [line.rowId]: 0 }))
+                                  return
+                                }
+                                const next = Math.min(cur + 1, count - 1)
+                                setItemHighlight(prev => ({ ...prev, [line.rowId]: next }))
+                                document.getElementById(`item-opt-${line.rowId}-${next}`)?.scrollIntoView({ block: 'nearest' })
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault()
+                                const next = Math.max(cur - 1, 0)
+                                setItemHighlight(prev => ({ ...prev, [line.rowId]: next }))
+                                document.getElementById(`item-opt-${line.rowId}-${next}`)?.scrollIntoView({ block: 'nearest' })
+                              } else if (e.key === 'Enter') {
+                                e.preventDefault()
+                                if (cur >= 0 && cur < count) {
+                                  const im = filteredDropdownItems[cur]
+                                  updateLine(i, 'item_master_id', im.id)
+                                  setItemSearch(prev => ({ ...prev, [line.rowId]: im.item_name }))
+                                  setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
+                                  setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
+                                }
+                              } else if (e.key === 'Escape') {
+                                setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
+                                setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
                               }
                             }}
                             onFocus={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))}
@@ -847,14 +881,15 @@ export default function NewBillPage() {
                             }`} />
                           {itemOpen[line.rowId] && (
                             <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
-                              {filteredDropdownItems.map(im => (
-                                  <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
+                              {filteredDropdownItems.map((im, idx) => (
+                                  <button key={im.id} id={`item-opt-${line.rowId}-${idx}`} type="button" onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => {
                                       updateLine(i, 'item_master_id', im.id)
                                       setItemSearch((prev) => ({ ...prev, [line.rowId]: im.item_name }))
                                       setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
+                                      setItemHighlight((prev) => ({ ...prev, [line.rowId]: -1 }))
                                     }}
-                                    className="w-full text-left px-2 py-2 text-[0.8125rem] hover:bg-gray-100">
+                                    className={`w-full text-left px-2 py-2 text-[0.8125rem] ${itemHighlight[line.rowId] === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}>
                                     {im.item_name}
                                   </button>
                                 ))}
