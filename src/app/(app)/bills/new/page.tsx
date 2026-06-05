@@ -243,7 +243,7 @@ export default function NewBillPage() {
       const n = Number(match[1])
       return Number.isFinite(n) ? Math.max(max, n) : max
     }, 0)
-    setNewItemCode(`${prefix}${String(sequence + 1).padStart(4, '0')}`)
+    setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
   }, [newItemMaterialTypeId, materialTypes, itemMasters])
 
   const selectedNewItemSize = materialSizes.find((s) => s.id === newItemMaterialSizeId)

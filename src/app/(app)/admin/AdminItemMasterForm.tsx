@@ -67,7 +67,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
       const n = Number(match[1])
       return Number.isFinite(n) ? Math.max(max, n) : max
     }, 0)
-    setItemCode(`${prefix}${String(sequence + 1).padStart(4, '0')}`)
+    setItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
   }, [selectedMaterialType, existingItems])
 
   async function handleSubmit(event: React.FormEvent) {
