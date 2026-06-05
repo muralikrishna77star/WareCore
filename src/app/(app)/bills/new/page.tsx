@@ -803,10 +803,12 @@ export default function NewBillPage() {
               <tbody className="divide-y divide-gray-50">
                 {lines.map((line, i) => {
                   const sizesForType = materialSizes.filter(s => !s.material_type_id || s.material_type_id === line.material_type_id)
-                  const itemsForType = itemMasters.filter(im =>
-                    im.material_type_id === line.material_type_id &&
-                    (!line.material_size_id || !im.material_size_id || im.material_size_id === line.material_size_id)
-                  )
+                  const itemsForType = line.material_type_id
+                    ? itemMasters.filter(im =>
+                        im.material_type_id === line.material_type_id &&
+                        (!line.material_size_id || !im.material_size_id || im.material_size_id === line.material_size_id)
+                      )
+                    : itemMasters
                   const itemSearchValue = itemSearch[line.rowId] ?? line.item_name
                   const materialTypeSearchValue = materialTypeSearch[line.rowId] ?? (materialTypes.find(mt => mt.id === line.material_type_id)?.name ?? '')
                   const sizeSearchValue = sizeSearch[line.rowId] ?? (materialSizes.find(s => s.id === line.material_size_id)?.size_label ?? '')
