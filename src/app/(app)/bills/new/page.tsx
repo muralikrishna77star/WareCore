@@ -712,7 +712,7 @@ export default function NewBillPage() {
                   <th className="pb-2"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {lines.map((line, i) => {
                   const sizesForType = materialSizes.filter(s => !s.material_type_id || s.material_type_id === line.material_type_id)
                   const itemsForType = line.material_type_id
@@ -734,7 +734,7 @@ export default function NewBillPage() {
                   return (
                     <tr key={i} className="py-1">
                       {/* Item Name */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <div className="relative">
                           <input type="text" value={itemSearchValue}
                             onChange={(e) => {
@@ -824,18 +824,18 @@ export default function NewBillPage() {
                         </div>
                       </td>
                       {/* Line ID */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         {line.purchase_line_id
                           ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-[0.6875rem] font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
                           : <span className="text-[0.6875rem] text-gray-400 italic">— select item —</span>}
                       </td>
                       {/* Item Code */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <input type="text" value={line.item_code} readOnly placeholder="—"
                           className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] bg-gray-50" />
                       </td>
                       {/* Material Type */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <select value={line.material_type_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
@@ -851,7 +851,7 @@ export default function NewBillPage() {
                         </select>
                       </td>
                       {/* Size */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <select value={line.material_size_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true) }
@@ -868,25 +868,25 @@ export default function NewBillPage() {
                         </select>
                       </td>
                       {/* Qty */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
                           className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Rate */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
                           className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Taxable */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[0.9375rem] text-gray-700 text-right">
                           {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
                         </span>
                       </td>
                       {/* Tax Rate */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
                           className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
@@ -894,31 +894,31 @@ export default function NewBillPage() {
                         </select>
                       </td>
                       {/* CGST */}
-                      <td className="pr-3 py-2 text-right">
+                      <td className="pr-3 py-1 text-right">
                         {line.cgst_amount > 0
                           ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
                           : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* SGST */}
-                      <td className="pr-3 py-2 text-right">
+                      <td className="pr-3 py-1 text-right">
                         {line.sgst_amount > 0
                           ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
                           : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* TDS */}
-                      <td className="pr-3 py-2 text-right">
+                      <td className="pr-3 py-1 text-right">
                         {line.tds_amount > 0
                           ? <span className="text-[0.6875rem] text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
                           : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* Total */}
-                      <td className="pr-3 py-2 text-right">
+                      <td className="pr-3 py-1 text-right">
                         <span className="text-[0.9375rem] font-semibold text-gray-900">
                           {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
                         </span>
                       </td>
                       {/* Notes */}
-                      <td className="pr-3 py-2">
+                      <td className="pr-3 py-1">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
                           className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
