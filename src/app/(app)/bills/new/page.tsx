@@ -732,9 +732,9 @@ export default function NewBillPage() {
                   const sizeSearchValue = sizeSearch[line.rowId] ?? (materialSizes.find(s => s.id === line.material_size_id)?.size_label ?? '')
                   const taxRateSearchValue = taxRateSearch[line.rowId] ?? (taxRates.find(tr => tr.id === line.tax_rate_id)?.name ?? '')
                   return (
-                    <tr key={i} className="py-1">
+                    <tr key={i}>
                       {/* Item Name */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <div className="relative">
                           <input type="text" value={itemSearchValue}
                             onChange={(e) => {
@@ -786,7 +786,7 @@ export default function NewBillPage() {
                             onFocus={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))}
                             onBlur={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))}
                             placeholder="Search item..."
-                            className={`block w-36 rounded border px-2 py-1.5 text-[0.8125rem] focus:outline-none ${
+                            className={`block w-36 rounded border px-2 py-0.5 text-[0.8125rem] focus:outline-none ${
                               line.material_type_id && line.quantity && !line.item_name
                                 ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
                             }`} />
@@ -824,18 +824,18 @@ export default function NewBillPage() {
                         </div>
                       </td>
                       {/* Line ID */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         {line.purchase_line_id
                           ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-[0.6875rem] font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
                           : <span className="text-[0.6875rem] text-gray-400 italic">— select item —</span>}
                       </td>
                       {/* Item Code */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <input type="text" value={line.item_code} readOnly placeholder="—"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] bg-gray-50" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] bg-gray-50" />
                       </td>
                       {/* Material Type */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <select value={line.material_type_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
@@ -844,14 +844,14 @@ export default function NewBillPage() {
                               setItemSearch(prev => ({ ...prev, [line.rowId]: '' }))
                             }
                           }}
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
+                          className="block w-28 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
                           {materialTypes.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
                         </select>
                       </td>
                       {/* Size */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <select value={line.material_size_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true) }
@@ -861,67 +861,67 @@ export default function NewBillPage() {
                               if (size) updateLine(i, 'size_label', size.size_label)
                             }
                           }}
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
+                          className="block w-24 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           <option value="NEW" className="font-semibold">+ New Size</option>
                           {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                         </select>
                       </td>
                       {/* Qty */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Rate */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
-                          className="block w-20 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Taxable */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[0.9375rem] text-gray-700 text-right">
                           {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
                         </span>
                       </td>
                       {/* Tax Rate */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
-                          className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
+                          className="block w-32 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
                           {taxRates.map(tr => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
                         </select>
                       </td>
                       {/* CGST */}
-                      <td className="pr-3 py-1 text-right">
+                      <td className="pr-2 py-0.5 text-right">
                         {line.cgst_amount > 0
                           ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
                           : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* SGST */}
-                      <td className="pr-3 py-1 text-right">
+                      <td className="pr-2 py-0.5 text-right">
                         {line.sgst_amount > 0
                           ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
                           : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* TDS */}
-                      <td className="pr-3 py-1 text-right">
+                      <td className="pr-2 py-0.5 text-right">
                         {line.tds_amount > 0
                           ? <span className="text-[0.6875rem] text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
                           : <span className="text-gray-300 text-[0.6875rem]">—</span>}
                       </td>
                       {/* Total */}
-                      <td className="pr-3 py-1 text-right">
+                      <td className="pr-2 py-0.5 text-right">
                         <span className="text-[0.9375rem] font-semibold text-gray-900">
                           {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
                         </span>
                       </td>
                       {/* Notes */}
-                      <td className="pr-3 py-1">
+                      <td className="pr-2 py-0.5">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
+                          className="block w-24 rounded border border-gray-300 px-2 py-0.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         {lines.length > 1 && (
