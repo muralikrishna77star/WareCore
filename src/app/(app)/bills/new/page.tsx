@@ -536,6 +536,11 @@ export default function NewBillPage() {
                 />
                 {companyOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <button type="button"
+                      onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                      + New Company
+                    </button>
                     {companies
                       .filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.code.toLowerCase().includes(companySearch.toLowerCase()))
                       .map(c => (
@@ -550,11 +555,6 @@ export default function NewBillPage() {
                           <span className="text-gray-500">{c.code}</span>
                         </button>
                       ))}
-                    <button type="button"
-                      onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold">
-                      + New Company
-                    </button>
                   </div>
                 )}
               </div>
@@ -573,6 +573,11 @@ export default function NewBillPage() {
                 />
                 {warehouseOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <button type="button"
+                      onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                      + New Warehouse
+                    </button>
                     {filteredWarehouses
                       .filter(w => w.name.toLowerCase().includes(warehouseSearch.toLowerCase()))
                       .map(w => (
@@ -586,11 +591,6 @@ export default function NewBillPage() {
                           {w.name}
                         </button>
                       ))}
-                    <button type="button"
-                      onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold">
-                      + New Warehouse
-                    </button>
                   </div>
                 )}
               </div>
@@ -608,6 +608,11 @@ export default function NewBillPage() {
                 />
                 {supplierOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <button type="button"
+                      onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                      + New Supplier
+                    </button>
                     {suppliers
                       .filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
                       .map(s => (
@@ -621,11 +626,6 @@ export default function NewBillPage() {
                           {s.name}
                         </button>
                       ))}
-                    <button type="button"
-                      onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold">
-                      + New Supplier
-                    </button>
                   </div>
                 )}
               </div>
@@ -792,6 +792,18 @@ export default function NewBillPage() {
                             }`} />
                           {itemOpen[line.rowId] && (
                             <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+                              <button type="button" onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setNewItemLineIndex(i)
+                                  setShowNewItemDialog(true)
+                                  setNewItemMaterialTypeId(line.material_type_id)
+                                  setNewItemMaterialSizeId(line.material_size_id)
+                                  setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
+                                  setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
+                                }}
+                                className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                                + New Item
+                              </button>
                               {filteredDropdownItems.map((im, idx) => (
                                   <button key={im.id} id={`item-opt-${line.rowId}-${idx}`} type="button" onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => {
@@ -807,18 +819,6 @@ export default function NewBillPage() {
                               {filteredDropdownItems.length === 0 && (
                                 <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
                               )}
-                              <button type="button" onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
-                                  setNewItemLineIndex(i)
-                                  setShowNewItemDialog(true)
-                                  setNewItemMaterialTypeId(line.material_type_id)
-                                  setNewItemMaterialSizeId(line.material_size_id)
-                                  setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
-                                  setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
-                                }}
-                                className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold">
-                                + New Item
-                              </button>
                             </div>
                           )}
                         </div>
@@ -846,8 +846,8 @@ export default function NewBillPage() {
                           }}
                           className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
+                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
                         </select>
                       </td>
                       {/* Size */}
@@ -863,8 +863,8 @@ export default function NewBillPage() {
                           }}
                           className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                           <option value="NEW" className="font-semibold">+ New Size</option>
+                          {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                         </select>
                       </td>
                       {/* Qty */}
