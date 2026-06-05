@@ -711,10 +711,10 @@ export default function NewBillPage() {
             <table className="w-full text-[0.9375rem]">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Line ID</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Code</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Rate (₹)</th>
@@ -749,6 +749,22 @@ export default function NewBillPage() {
                   const taxRateSearchValue = taxRateSearch[line.rowId] ?? (taxRates.find(tr => tr.id === line.tax_rate_id)?.name ?? '')
                   return (
                     <tr key={i}>
+                      {/* Material Type — first column */}
+                      <td className="pr-2 py-0">
+                        <select value={line.material_type_id}
+                          onChange={(e) => {
+                            if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
+                            else {
+                              updateLine(i, 'material_type_id', e.target.value)
+                              setItemSearch(prev => ({ ...prev, [line.rowId]: '' }))
+                            }
+                          }}
+                          className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
+                          <option value="">Select</option>
+                          <option value="NEW" className="font-semibold">+ New Material Type</option>
+                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.description}</option>)}
+                        </select>
+                      </td>
                       {/* Item Name */}
                       <td className="pr-2 py-0">
                         <div className="relative">
@@ -849,22 +865,6 @@ export default function NewBillPage() {
                       <td className="pr-2 py-0">
                         <input type="text" value={line.item_code} readOnly placeholder="—"
                           className="block w-20 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 bg-gray-50" />
-                      </td>
-                      {/* Material Type */}
-                      <td className="pr-2 py-0">
-                        <select value={line.material_type_id}
-                          onChange={(e) => {
-                            if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
-                            else {
-                              updateLine(i, 'material_type_id', e.target.value)
-                              setItemSearch(prev => ({ ...prev, [line.rowId]: '' }))
-                            }
-                          }}
-                          className="block w-28 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
-                          <option value="">Select</option>
-                          <option value="NEW" className="font-semibold">+ New Material Type</option>
-                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
-                        </select>
                       </td>
                       {/* Size */}
                       <td className="pr-2 py-0">
