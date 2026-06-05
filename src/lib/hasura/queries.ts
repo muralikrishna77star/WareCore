@@ -106,7 +106,8 @@ export const MATERIAL_SIZES_QUERY = `
       created_at
       material_types {
         id
-        name
+        code
+        description
       }
     }
   }
@@ -192,21 +193,43 @@ export const CREATE_COMPANY_MUTATION = `
 export const UPDATE_COMPANY_MUTATION = `
   mutation UpdateCompany($id: uuid!, $name: String!, $code: String!, $short_name: String, $address: String, $city: String, $state: String, $pincode: String, $phone: String, $email: String, $gstin: String, $is_active: Boolean) {
     update_companies_by_pk(pk_columns: {id: $id}, _set: {
-      name: $name
-      code: $code
-      short_name: $short_name
-      address: $address
-      city: $city
-      state: $state
-      pincode: $pincode
-      phone: $phone
-      email: $email
-      gstin: $gstin
-      is_active: $is_active
-    }) {
-      id
-      name
-    }
+      name: $name code: $code short_name: $short_name address: $address
+      city: $city state: $state pincode: $pincode phone: $phone email: $email gstin: $gstin is_active: $is_active
+    }) { id name }
+  }
+`
+
+export const DELETE_COMPANY_MUTATION = `
+  mutation DeleteCompany($id: uuid!) {
+    delete_companies_by_pk(id: $id) { id }
+  }
+`
+
+export const UPDATE_WAREHOUSE_MUTATION = `
+  mutation UpdateWarehouse($id: uuid!, $name: String!, $company_id: uuid, $address: String, $city: String, $state: String, $is_active: Boolean) {
+    update_warehouses_by_pk(pk_columns: {id: $id}, _set: {
+      name: $name company_id: $company_id address: $address city: $city state: $state is_active: $is_active
+    }) { id name }
+  }
+`
+
+export const DELETE_WAREHOUSE_MUTATION = `
+  mutation DeleteWarehouse($id: uuid!) {
+    delete_warehouses_by_pk(id: $id) { id }
+  }
+`
+
+export const UPDATE_MATERIAL_TYPE_MUTATION = `
+  mutation UpdateMaterialType($id: uuid!, $code: String!, $description: String!, $unit: String, $is_active: Boolean) {
+    update_material_types_by_pk(pk_columns: {id: $id}, _set: {
+      code: $code description: $description unit: $unit is_active: $is_active
+    }) { id code description }
+  }
+`
+
+export const DELETE_MATERIAL_TYPE_MUTATION = `
+  mutation DeleteMaterialType($id: uuid!) {
+    delete_material_types_by_pk(id: $id) { id }
   }
 `
 
@@ -487,6 +510,20 @@ export const CREATE_MATERIAL_TYPE_MUTATION = `
     }) {
       id code description unit
     }
+  }
+`
+
+export const UPDATE_MATERIAL_SIZE_MUTATION = `
+  mutation UpdateMaterialSize($id: uuid!, $size_label: String!, $material_type_id: uuid!, $thickness: numeric, $width: numeric, $is_active: Boolean) {
+    update_material_sizes_by_pk(pk_columns: {id: $id}, _set: {
+      size_label: $size_label material_type_id: $material_type_id thickness: $thickness width: $width is_active: $is_active
+    }) { id size_label }
+  }
+`
+
+export const DELETE_MATERIAL_SIZE_MUTATION = `
+  mutation DeleteMaterialSize($id: uuid!) {
+    delete_material_sizes_by_pk(id: $id) { id }
   }
 `
 
@@ -777,6 +814,36 @@ export const CREATE_FINANCIAL_ENTRY_MUTATION = `
     }
   }
 `
+export const UPDATE_CUSTOMER_MUTATION = `
+  mutation UpdateCustomer($id: uuid!, $name: String!, $contact_person: String, $phone: String, $email: String, $address: String, $city: String, $state: String, $pincode: String, $gstin: String, $is_active: Boolean) {
+    update_customers_by_pk(pk_columns: {id: $id}, _set: {
+      name: $name contact_person: $contact_person phone: $phone email: $email
+      address: $address city: $city state: $state pincode: $pincode gstin: $gstin is_active: $is_active
+    }) { id name is_active }
+  }
+`
+
+export const DELETE_CUSTOMER_MUTATION = `
+  mutation DeleteCustomer($id: uuid!) {
+    delete_customers_by_pk(id: $id) { id }
+  }
+`
+
+export const UPDATE_SUPPLIER_MUTATION = `
+  mutation UpdateSupplier($id: uuid!, $name: String!, $contact_person: String, $phone: String, $email: String, $address: String, $city: String, $state: String, $pincode: String, $gstin: String, $is_active: Boolean) {
+    update_suppliers_by_pk(pk_columns: {id: $id}, _set: {
+      name: $name contact_person: $contact_person phone: $phone email: $email
+      address: $address city: $city state: $state pincode: $pincode gstin: $gstin is_active: $is_active
+    }) { id name is_active }
+  }
+`
+
+export const DELETE_SUPPLIER_MUTATION = `
+  mutation DeleteSupplier($id: uuid!) {
+    delete_suppliers_by_pk(id: $id) { id }
+  }
+`
+
 // ─── Suppliers & Customers admin list queries ────────────────────────────────
 
 export const SUPPLIERS_LIST_QUERY = `
