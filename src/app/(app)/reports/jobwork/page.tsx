@@ -158,7 +158,7 @@ export default async function JobWorkReportPage({
                       )}
                       {item ? (
                         <>
-                          <td className="px-4 py-3 font-medium">{item.material_types?.name}</td>
+                          <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
                           <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                           <td className="px-4 py-3 text-right">{Number(item.quantity_sent || 0).toFixed(3)}</td>
                           <td className="px-4 py-3 text-right text-green-700">{Number(item.quantity_received || 0).toFixed(3)}</td>

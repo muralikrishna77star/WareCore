@@ -49,7 +49,7 @@ export default async function SizesPage() {
                 sizes.map((s: any) => (
                   <tr key={s.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 font-medium text-gray-900">{s.size_label}</td>
-                    <td className="px-6 py-3 text-gray-600">{s.material_types?.name ?? '—'}</td>
+                    <td className="px-6 py-3 text-gray-600">{s.material_types?.description ?? '—'}</td>
                     <td className="px-6 py-3 text-gray-600">{s.thickness ?? '—'}</td>
                     <td className="px-6 py-3 text-gray-600">{s.width ?? '—'}</td>
                     <td className="px-6 py-3">

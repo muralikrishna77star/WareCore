@@ -14,7 +14,7 @@ type LedgerRow = {
   material_type_id: string
   material_size_id?: string | null
   size_label?: string | null
-  material_types: { name: string; unit: string }
+  material_types: { description: string; unit: string }
   material_sizes?: { size_label: string } | null
 }
 
@@ -72,7 +72,7 @@ export default async function StockStatementPage({
   const items: Record<string, StockItem> = {}
 
   const getKey = (row: LedgerRow) => {
-    const name = row.material_types?.name ?? '?'
+    const name = row.material_types?.description ?? '?'
     const size = row.material_sizes?.size_label ?? row.size_label ?? '—'
     return `${name}||${size}`
   }
@@ -81,7 +81,7 @@ export default async function StockStatementPage({
     const key = getKey(row)
     if (!items[key]) {
       items[key] = {
-        material: row.material_types?.name ?? '?',
+        material: row.material_types?.description ?? '?',
         unit: row.material_types?.unit ?? 'tons',
         size: row.material_sizes?.size_label ?? row.size_label ?? '—',
         opening: 0,

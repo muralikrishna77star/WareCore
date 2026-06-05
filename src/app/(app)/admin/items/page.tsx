@@ -56,7 +56,7 @@ export default async function ItemMastersPage() {
                     <td className="px-5 py-3 font-medium text-gray-900">{item.item_code}</td>
                     <td className="px-5 py-3 text-gray-600">{item.item_name}</td>
                     <td className="px-5 py-3 text-gray-600">{item.material_types?.code || '—'}</td>
-                    <td className="px-5 py-3 text-gray-600">{item.material_types?.name || '—'}</td>
+                    <td className="px-5 py-3 text-gray-600">{item.material_types?.description || '—'}</td>
                     <td className="px-5 py-3 text-gray-600">{item.material_sizes?.size_label || item.size_label || '—'}</td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${item.is_active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>

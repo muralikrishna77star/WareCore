@@ -92,7 +92,7 @@ export default async function AdminPage() {
       title: 'Material Types', icon: '📦',
       addHref: '/admin/materials/new', href: '/admin/materials',
       columns: ['Code', 'Name', 'Unit'],
-      rows: materialTypes.map((m: any) => [m.code, m.name, m.unit]),
+      rows: materialTypes.map((m: any) => [m.code, m.description, m.unit]),
     },
     {
       title: 'Material Sizes', icon: '📐',
@@ -104,7 +104,7 @@ export default async function AdminPage() {
       title: 'Item Master', icon: '📋',
       addHref: '/admin/items/new', href: '/admin/items',
       columns: ['Code', 'Name', 'Material Type'],
-      rows: itemMasters.map((item: any) => [item.item_code, item.item_name, item.material_types?.name || '—']),
+      rows: itemMasters.map((item: any) => [item.item_code, item.item_name, item.material_types?.description || '—']),
     },
     {
       title: 'Tax Rates', icon: '🧾',

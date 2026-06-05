@@ -146,7 +146,7 @@ export default async function TransfersReportPage({
                       )}
                       {item ? (
                         <>
-                          <td className="px-4 py-3 font-medium">{item.material_types?.name}</td>
+                          <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
                           <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                           <td className="px-4 py-3 text-right">{Number(item.quantity).toFixed(3)}</td>
                         </>

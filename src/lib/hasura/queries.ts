@@ -83,12 +83,11 @@ export const CUSTOMERS_QUERY = `
 
 export const MATERIAL_TYPES_QUERY = `
   query GetMaterialTypes {
-    material_types(order_by: {name: asc}) {
+    material_types(order_by: {description: asc}) {
       id
       code
-      name
-      unit
       description
+      unit
       is_active
       created_at
     }
@@ -335,8 +334,8 @@ export const ACTIVE_CUSTOMERS_QUERY = `
 
 export const ACTIVE_MATERIAL_TYPES_QUERY = `
   query GetActiveMaterialTypes {
-    material_types(where: {is_active: {_eq: true}}, order_by: {name: asc}) {
-      id code name unit
+    material_types(where: {is_active: {_eq: true}}, order_by: {description: asc}) {
+      id code description unit
     }
   }
 `
@@ -361,7 +360,7 @@ export const ACTIVE_ITEM_MASTER_QUERY = `
       unit
       is_active
       created_at
-      material_types { id code name unit }
+      material_types { id code description unit }
       material_sizes { id size_label }
     }
   }
@@ -379,7 +378,7 @@ export const ITEM_MASTER_BY_MATERIAL_TYPE_QUERY = `
       unit
       is_active
       created_at
-      material_types { id code name unit }
+      material_types { id code description unit }
       material_sizes { id size_label }
     }
   }
@@ -458,7 +457,7 @@ export const PURCHASE_BILL_ITEMS_QUERY = `
   query GetPurchaseBillItems($bill_id: uuid!) {
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
       id bill_id quantity rate amount notes size_label item_name purchase_line_id
-      material_types { name }
+      material_types { description }
     }
   }
 `
@@ -471,7 +470,7 @@ export const CREATE_PURCHASE_BILL_ITEMS_MUTATION = `
         id 
         purchase_line_id
         item_name 
-        material_types { name } 
+        material_types { description } 
       }
     }
   }
@@ -480,14 +479,13 @@ export const CREATE_PURCHASE_BILL_ITEMS_MUTATION = `
 // ─── Material Management ─────────────────────────────────────────────────────
 
 export const CREATE_MATERIAL_TYPE_MUTATION = `
-  mutation CreateMaterialType($code: String!, $name: String!, $unit: String, $description: String) {
+  mutation CreateMaterialType($code: String!, $description: String!, $unit: String) {
     insert_material_types_one(object: {
       code: $code
-      name: $name
-      unit: $unit
       description: $description
+      unit: $unit
     }) {
-      id code name unit
+      id code description unit
     }
   }
 `
@@ -518,7 +516,7 @@ export const TRANSFERS_QUERY = `
       to_warehouse: warehouses_to { name }
       transfer_items {
         quantity size_label
-        material_types { name }
+        material_types { description }
         material_sizes { size_label }
       }
     }
@@ -541,7 +539,7 @@ export const TRANSFER_ITEMS_QUERY = `
   query GetTransferItems($transfer_id: uuid!) {
     transfer_items(where: {transfer_id: {_eq: $transfer_id}}, order_by: {id: asc}) {
       id transfer_id quantity notes size_label
-      material_types { name }
+      material_types { description }
       material_sizes { size_label }
     }
   }
@@ -606,7 +604,7 @@ export const DISPATCH_ITEMS_QUERY = `
   query GetDispatchItems($dispatch_order_id: uuid!) {
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
       id dispatch_order_id purchase_line_id sub_purchase_line_id quantity rate amount notes size_label
-      material_types { name }
+      material_types { description }
     }
   }
 `
@@ -807,7 +805,7 @@ export const JOB_WORK_ORDERS_QUERY = `
       suppliers { name }
       job_work_items {
         quantity_sent quantity_received size_label
-        material_types { name }
+        material_types { description }
         material_sizes { size_label }
       }
     }
@@ -829,7 +827,7 @@ export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
       id job_work_order_id purchase_line_id sub_purchase_line_id quantity_sent quantity_received size_label
-      material_types { name }
+      material_types { description }
       material_sizes { size_label }
     }
   }
@@ -896,7 +894,7 @@ export const STOCK_LEDGER_QUERY = `
       id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
       companies { id name code }
       warehouses { name }
-      material_types { name unit }
+      material_types { description unit }
       material_sizes { size_label }
     }
   }
@@ -912,7 +910,7 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
       id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
       companies { id name code }
       warehouses { name }
-      material_types { name unit }
+      material_types { description unit }
       material_sizes { size_label }
     }
   }
@@ -924,7 +922,7 @@ export const RECENT_MOVEMENTS_QUERY = `
       id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label
       companies { name }
       warehouses { name }
-      material_types { name unit }
+      material_types { description unit }
     }
   }
 `
@@ -973,12 +971,12 @@ export const STOCK_STATEMENT_QUERY = `
   query GetStockStatement($opening_where: stock_ledger_bool_exp = {}, $period_where: stock_ledger_bool_exp = {}) {
     opening: stock_ledger(where: $opening_where, limit: 5000) {
       quantity material_type_id material_size_id size_label
-      material_types { name unit }
+      material_types { description unit }
       material_sizes { size_label }
     }
     period: stock_ledger(where: $period_where, limit: 5000) {
       entry_type quantity material_type_id material_size_id size_label
-      material_types { name unit }
+      material_types { description unit }
       material_sizes { size_label }
     }
   }
@@ -995,7 +993,7 @@ export const BILLING_REPORT_QUERY = `
       suppliers { name }
       purchase_bill_items {
         quantity rate amount size_label unit
-        material_types { name unit }
+        material_types { description unit }
         material_sizes { size_label }
       }
     }
@@ -1014,7 +1012,7 @@ export const TRANSFERS_REPORT_QUERY = `
       warehouses_to { name }
       transfer_items {
         quantity size_label
-        material_types { name }
+        material_types { description }
         material_sizes { size_label }
       }
     }
@@ -1032,7 +1030,7 @@ export const DISPATCH_REPORT_QUERY = `
       customers { name }
       dispatch_items {
         quantity rate amount size_label
-        material_types { name }
+        material_types { description }
         material_sizes { size_label }
       }
     }
@@ -1050,7 +1048,7 @@ export const JOB_WORK_REPORT_QUERY = `
       suppliers { name }
       job_work_items {
         quantity_sent quantity_received size_label
-        material_types { name unit }
+        material_types { description unit }
         material_sizes { size_label }
       }
     }
@@ -1065,7 +1063,7 @@ export const MOVEMENTS_REPORT_QUERY = `
       id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
       companies { name code }
       warehouses { name }
-      material_types { name unit }
+      material_types { description unit }
       material_sizes { size_label }
     }
   }

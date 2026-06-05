@@ -182,7 +182,7 @@ async function RecentMovements() {
                     </span>
                   </td>
                   <td className="px-6 py-3 text-gray-700">
-                    {entry.material_types?.name}
+                    {entry.material_types?.description}
                   </td>
                   <td className="px-6 py-3 text-gray-600">{entry.size_label || '-'}</td>
                   <td className={`px-6 py-3 font-medium ${entry.quantity >= 0 ? 'text-green-700' : 'text-red-700'}`}>

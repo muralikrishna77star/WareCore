@@ -73,9 +73,8 @@ export interface Customer {
 export interface MaterialType {
   id: string
   code: string
-  name: string
+  description: string
   unit: string
-  description?: string
   is_active: boolean
   created_at: string
 }

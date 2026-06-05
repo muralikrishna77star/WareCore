@@ -164,7 +164,7 @@ export default async function MovementsReportPage({
                       </td>
                       <td className="px-4 py-3">{m.companies?.name}</td>
                       <td className="px-4 py-3 text-gray-500">{m.warehouses?.name}</td>
-                      <td className="px-4 py-3 font-medium">{m.material_types?.name}</td>
+                      <td className="px-4 py-3 font-medium">{m.material_types?.description}</td>
                       <td className="px-4 py-3 text-gray-500">{m.material_sizes?.size_label ?? m.size_label ?? '—'}</td>
                       <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-700' : 'text-red-600'}`}>
                         {isIn ? '+' : '-'}{Math.abs(Number(m.quantity)).toFixed(3)}

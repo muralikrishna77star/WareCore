@@ -125,7 +125,7 @@ export default async function MovementsPage({
                       </td>
                       <td className="px-4 py-2.5 text-gray-700">{m.companies?.code}</td>
                       <td className="px-4 py-2.5 text-gray-600">{m.warehouses?.name}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-900">{m.material_types?.name}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{m.material_types?.description}</td>
                       <td className="px-4 py-2.5 text-gray-600">{m.size_label || m.material_sizes?.size_label || '—'}</td>
                       <td className={`px-4 py-2.5 text-right font-semibold ${isIn ? 'text-green-700' : 'text-red-700'}`}>
                         {isIn ? '+' : '-'}{Math.abs(m.quantity).toFixed(3)} {m.material_types?.unit}

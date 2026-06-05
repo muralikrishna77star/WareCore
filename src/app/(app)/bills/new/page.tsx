@@ -150,7 +150,7 @@ export default function NewBillPage() {
   // ── Material Type dialog ─────────────────────────────────────────────────
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
-  const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
+  const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
   const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
   const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
 
@@ -379,17 +379,17 @@ export default function NewBillPage() {
   const handleCreateMaterialType = async () => {
     const code = newMaterialTypeCode.trim().toUpperCase()
     if (code.length !== 2) { alert('Code must be exactly 2 characters'); return }
-    if (!newMaterialTypeName.trim()) { alert('Name is required'); return }
+    if (!newMaterialTypeDescription.trim()) { alert('Description is required'); return }
     setMaterialTypeDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
-      code, name: newMaterialTypeName, unit: newMaterialTypeUnit,
+      code, description: newMaterialTypeDescription, unit: newMaterialTypeUnit,
     })
     setMaterialTypeDialogLoading(false)
     if (err) { alert(`Error: ${err.message}`); return }
     const newMT = data?.insert_material_types_one
     if (newMT) {
       setMaterialTypes(prev => [...prev, newMT])
-      setNewMaterialTypeCode(''); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons')
+      setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons')
       setShowMaterialTypeDialog(false)
     }
   }
@@ -728,7 +728,7 @@ export default function NewBillPage() {
                         return im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
                       })
                     : itemsForType
-                  const materialTypeSearchValue = materialTypeSearch[line.rowId] ?? (materialTypes.find(mt => mt.id === line.material_type_id)?.name ?? '')
+                  const materialTypeSearchValue = materialTypeSearch[line.rowId] ?? (materialTypes.find(mt => mt.id === line.material_type_id)?.description ?? '')
                   const sizeSearchValue = sizeSearch[line.rowId] ?? (materialSizes.find(s => s.id === line.material_size_id)?.size_label ?? '')
                   const taxRateSearchValue = taxRateSearch[line.rowId] ?? (taxRates.find(tr => tr.id === line.tax_rate_id)?.name ?? '')
                   return (
@@ -846,7 +846,7 @@ export default function NewBillPage() {
                           }}
                           className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          {materialTypes.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
@@ -1085,8 +1085,8 @@ export default function NewBillPage() {
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] font-mono uppercase focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Name *</label>
-                <input type="text" value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Description *</label>
+                <input type="text" value={newMaterialTypeDescription} onChange={(e) => setNewMaterialTypeDescription(e.target.value)}
                   placeholder="e.g. GA Sheet, CR Coil"
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
@@ -1102,7 +1102,7 @@ export default function NewBillPage() {
               </select>
             </div>
             <div className="flex gap-3 justify-end pt-2">
-              <button onClick={() => { setShowMaterialTypeDialog(false); setNewMaterialTypeCode(''); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons') }}
+              <button onClick={() => { setShowMaterialTypeDialog(false); setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons') }}
                 className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
                 className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
@@ -1123,7 +1123,7 @@ export default function NewBillPage() {
               <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
                 className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                 <option value="">— Select —</option>
-                {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
+                {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.description}</option>)}
               </select>
             </div>
             <div>
@@ -1167,7 +1167,7 @@ export default function NewBillPage() {
                 <select value={newItemMaterialTypeId} onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
                   className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                   <option value="">— Select —</option>
-                  {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.code} — {mt.name}</option>)}
+                  {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.code} — {mt.description}</option>)}
                 </select>
               </div>
               <div>

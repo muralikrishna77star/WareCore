@@ -141,7 +141,7 @@ export default function NewDispatchPage() {
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
-  const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
+  const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
   const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
   const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
   const [activeLineIndexForNewType, setActiveLineIndexForNewType] = useState<number | null>(null)
@@ -286,7 +286,7 @@ export default function NewDispatchPage() {
 
       if (field === 'material_type_id') {
         const mt = materialTypes.find((m) => m.id === value)
-        if (mt && !updated[index].item_name) updated[index].item_name = mt.name
+        if (mt && !updated[index].item_name) updated[index].item_name = mt.description
       }
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
@@ -308,10 +308,10 @@ export default function NewDispatchPage() {
   const handleCreateMaterialType = async () => {
     const code = newMaterialTypeCode.trim().toUpperCase()
     if (code.length !== 2) { setError('Material type code must be exactly 2 characters'); return }
-    if (!newMaterialTypeName.trim()) return
+    if (!newMaterialTypeDescription.trim()) return
     setMaterialTypeDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
-      code, name: newMaterialTypeName.trim(), unit: newMaterialTypeUnit.trim() || null, description: null,
+      code, description: newMaterialTypeDescription.trim(), unit: newMaterialTypeUnit.trim() || null,
     })
     if (err) { setError(err.message); setMaterialTypeDialogLoading(false); return }
     const newType = data?.insert_material_types_one
@@ -322,7 +322,7 @@ export default function NewDispatchPage() {
         updateLine(activeLineIndexForNewType, 'material_size_id', '')
         updateLine(activeLineIndexForNewType, 'size_label', '')
       }
-      setShowMaterialTypeDialog(false); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons'); setActiveLineIndexForNewType(null)
+      setShowMaterialTypeDialog(false); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons'); setActiveLineIndexForNewType(null)
     }
     setMaterialTypeDialogLoading(false)
   }
@@ -350,7 +350,7 @@ export default function NewDispatchPage() {
   }
 
   const handleCancelNewType = () => {
-    setShowMaterialTypeDialog(false); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons'); setActiveLineIndexForNewType(null)
+    setShowMaterialTypeDialog(false); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons'); setActiveLineIndexForNewType(null)
   }
 
   const handleCancelNewSize = () => {
@@ -628,7 +628,7 @@ export default function NewDispatchPage() {
                         }} required
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
                           <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
@@ -765,8 +765,8 @@ export default function NewDispatchPage() {
                   placeholder="e.g. GA" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Name *</label>
-                <input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                <label className="block text-sm font-medium text-blue-900 mb-1">Description *</label>
+                <input value={newMaterialTypeDescription} onChange={(e) => setNewMaterialTypeDescription(e.target.value)}
                   className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="e.g. GA Sheet" />
               </div>
@@ -800,7 +800,7 @@ export default function NewDispatchPage() {
                 <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
                   className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">— Select Material Type —</option>
-                  {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
                 </select>
               </div>
               <div>

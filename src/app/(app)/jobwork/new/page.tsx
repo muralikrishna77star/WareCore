@@ -363,7 +363,7 @@ export default function NewJobWorkPage() {
                         }} required
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
                           <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
                         </select>
                       </td>
@@ -456,7 +456,7 @@ export default function NewJobWorkPage() {
                 <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
                   className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">— Select Material Type —</option>
-                  {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
                 </select>
               </div>
               <div>

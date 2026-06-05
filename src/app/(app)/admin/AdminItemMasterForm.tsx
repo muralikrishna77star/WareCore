@@ -31,7 +31,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
 
   const [showNewMaterialTypeForm, setShowNewMaterialTypeForm] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
-  const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
+  const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
   const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
   const [newMaterialTypeLoading, setNewMaterialTypeLoading] = useState(false)
 
@@ -93,13 +93,12 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
   const handleCreateMaterialType = async () => {
     const code = newMaterialTypeCode.trim().toUpperCase()
     if (code.length !== 2) { setError('Code must be exactly 2 characters.'); return }
-    if (!newMaterialTypeName.trim()) { setError('Name is required.'); return }
+    if (!newMaterialTypeDescription.trim()) { setError('Description is required.'); return }
     setNewMaterialTypeLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
       code,
-      name: newMaterialTypeName.trim(),
+      description: newMaterialTypeDescription.trim(),
       unit: newMaterialTypeUnit || 'tons',
-      description: null,
     })
     if (err) { setError(err.message); setNewMaterialTypeLoading(false); return }
     const newMT = data?.insert_material_types_one
@@ -107,7 +106,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
       setLocalMaterialTypes(prev => [...prev, newMT])
       setMaterialTypeId(newMT.id)
       setShowNewMaterialTypeForm(false)
-      setNewMaterialTypeCode(''); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons')
+      setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons')
       setError('')
     }
     setNewMaterialTypeLoading(false)
@@ -151,7 +150,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
             setMaterialTypeId(e.target.value)
           }} className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
             <option value="">— Select Material Type —</option>
-            {localMaterialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.name}</option>)}
+            {localMaterialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.description}</option>)}
             <option value="__add_new__">+ Add new Material Type</option>
           </select>
           {showNewMaterialTypeForm && (
@@ -165,8 +164,8 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
                     placeholder="e.g. GA" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                  <input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
+                  <input value={newMaterialTypeDescription} onChange={(e) => setNewMaterialTypeDescription(e.target.value)}
                     className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                     placeholder="e.g. GA Sheet" />
                 </div>
@@ -182,7 +181,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
                   className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                   {newMaterialTypeLoading ? 'Adding…' : 'Add Material Type'}
                 </button>
-                <button type="button" onClick={() => { setShowNewMaterialTypeForm(false); setNewMaterialTypeCode(''); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons'); setError('') }}
+                <button type="button" onClick={() => { setShowNewMaterialTypeForm(false); setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons'); setError('') }}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
                   Cancel
                 </button>
@@ -233,7 +232,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
                 <select value={newSizeMaterialTypeId || materialTypeId || ''} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">— Select —</option>
-                  {localMaterialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.name}</option>)}
+                  {localMaterialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.description}</option>)}
                 </select>
               </div>
               <div>

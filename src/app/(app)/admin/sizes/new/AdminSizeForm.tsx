@@ -6,7 +6,7 @@ import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { CREATE_MATERIAL_SIZE_MUTATION } from '@/lib/hasura/queries'
 
 interface Props {
-  materialTypes: { id: string; name: string }[]
+  materialTypes: { id: string; code: string; description: string }[]
 }
 
 export default function AdminSizeForm({ materialTypes }: Props) {
@@ -49,7 +49,7 @@ export default function AdminSizeForm({ materialTypes }: Props) {
         >
           <option value="">Select material type…</option>
           {materialTypes.map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
+            <option key={m.id} value={m.id}>{m.code} — {m.description}</option>
           ))}
         </select>
       </div>
