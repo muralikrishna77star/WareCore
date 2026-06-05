@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
 
-const ALLOWED_ROLES = new Set(['admin', 'company_manager', 'billing_staff'])
+const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 
 export async function POST(
   request: NextRequest,
