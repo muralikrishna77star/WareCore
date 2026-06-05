@@ -304,7 +304,7 @@ export const CREATE_USER_PROFILE_MUTATION = `
 `
 
 export const CREATE_PURCHASE_BILL_MUTATION = `
-  mutation CreatePurchaseBill($supplier_id: uuid, $company_id: uuid, $warehouse_id: uuid, $bill_number: String!, $bill_date: date!, $total_quantity: numeric, $total_amount: numeric, $notes: String) {
+  mutation CreatePurchaseBill($supplier_id: uuid, $company_id: uuid, $warehouse_id: uuid, $bill_number: String!, $bill_date: date!, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String) {
     insert_purchase_bills_one(object: {
       supplier_id: $supplier_id
       company_id: $company_id
@@ -314,6 +314,7 @@ export const CREATE_PURCHASE_BILL_MUTATION = `
       total_quantity: $total_quantity
       total_amount: $total_amount
       notes: $notes
+      status: $status
     }) {
       id
       bill_number

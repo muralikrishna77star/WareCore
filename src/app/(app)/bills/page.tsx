@@ -52,9 +52,10 @@ export default async function BillsPage() {
               <tbody className="divide-y divide-gray-100">
                 {bills.map((bill: any) => {
                   const cancelled = bill.status === 'cancelled'
+                  const draft = bill.status === 'draft'
                   return (
-                  <tr key={bill.id} className={`hover:bg-gray-50 ${cancelled ? 'opacity-60' : ''}`}>
-                    <td className={`px-6 py-3 font-medium whitespace-nowrap ${cancelled ? 'text-gray-400 line-through' : 'text-blue-600'}`}>
+                  <tr key={bill.id} className={`hover:bg-gray-50 ${cancelled ? 'opacity-60' : ''} ${draft ? 'bg-amber-50/40' : ''}`}>
+                    <td className={`px-6 py-3 font-medium whitespace-nowrap ${cancelled ? 'text-gray-400 line-through' : draft ? 'text-amber-700' : 'text-blue-600'}`}>
                       {bill.bill_number}
                     </td>
                     <td className="px-6 py-3 text-gray-700 whitespace-nowrap">
@@ -79,13 +80,11 @@ export default async function BillsPage() {
                     </td>
                     <td className="px-6 py-3">
                       {cancelled ? (
-                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[0.6875rem] font-medium text-red-600 border border-red-200">
-                          Cancelled
-                        </span>
+                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[0.6875rem] font-medium text-red-600 border border-red-200">Cancelled</span>
+                      ) : draft ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-700 border border-amber-200">Draft</span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[0.6875rem] font-medium text-green-700">
-                          Active
-                        </span>
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[0.6875rem] font-medium text-green-700">Active</span>
                       )}
                     </td>
                     <td className="px-6 py-3">

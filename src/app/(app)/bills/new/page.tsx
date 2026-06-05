@@ -457,48 +457,61 @@ export default function NewBillPage() {
     }
   }
 
-  // ── Submit ───────────────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // ── Shared bill save helper ───────────────────────────────────────────────
+  const saveBill = async (status: 'active' | 'draft') => {
     setLoading(true); setError(null)
 
-    const validLines = lines.filter((l) => l.material_type_id && l.quantity)
-    if (!validLines.length) { setError('Add at least one line item with material type and quantity.'); setLoading(false); return }
-
-    for (let i = 0; i < validLines.length; i++) {
-      if (!validLines[i].item_name.trim()) {
-        setError(`Line ${i + 1}: Item Name is required.`); setLoading(false); return
-      }
-    }
-    if (!warehouseId) { setError('Please select a warehouse before saving.'); setLoading(false); return }
     if (!billNumber.trim()) { setError('Purchase ID is required.'); setLoading(false); return }
+
+    if (status === 'active') {
+      const validLines = lines.filter((l) => l.material_type_id && l.quantity)
+      if (!validLines.length) { setError('Add at least one line item with material type and quantity.'); setLoading(false); return }
+      for (let i = 0; i < validLines.length; i++) {
+        if (!validLines[i].item_name.trim()) { setError(`Line ${i + 1}: Item Name is required.`); setLoading(false); return }
+      }
+      if (!warehouseId) { setError('Please select a warehouse before saving.'); setLoading(false); return }
+    }
 
     const { data: billData, error: billError } = await hasuraFetch<any>(CREATE_PURCHASE_BILL_MUTATION, {
       company_id: companyId || null, warehouse_id: warehouseId || null,
       supplier_id: supplierId || null, bill_number: billNumber,
-      bill_date: billDate, total_quantity: totalQty, total_amount: totalAmt, notes: notes || null,
+      bill_date: billDate, total_quantity: totalQty, total_amount: totalAmt,
+      notes: notes || null, status,
     })
     const bill = billData?.insert_purchase_bills_one
-    if (billError || !bill) { setError(billError?.message ?? 'Failed to create bill'); setLoading(false); return }
+    if (billError || !bill) { setError(billError?.message ?? 'Failed to save bill'); setLoading(false); return }
 
-    const items = validLines.map((l) => ({
-      bill_id: bill.id,
-      purchase_line_id: l.purchase_line_id || null, item_name: l.item_name || null,
-      item_master_id: l.item_master_id || null, material_type_id: l.material_type_id || null,
-      material_size_id: l.material_size_id || null, size_label: l.size_label || null,
-      quantity: parseFloat(l.quantity), rate: l.rate ? parseFloat(l.rate) : null,
-      amount: l.amount ? parseFloat(l.amount) : null, notes: l.notes || null,
-      tax_rate_id: l.tax_rate_id || null, taxable_value: l.taxable_value || null,
-      cgst_rate: l.cgst_rate || null, cgst_amount: l.cgst_amount || null,
-      sgst_rate: l.sgst_rate || null, sgst_amount: l.sgst_amount || null,
-      tds_rate: l.tds_rate || null, tds_amount: l.tds_amount || null,
-      total_with_tax: l.total_with_tax || null,
-    }))
-    const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { items })
-    if (itemsError) { setError(itemsError.message); setLoading(false); return }
+    const itemsToSave = lines.filter(l => l.item_name.trim() || l.material_type_id || l.quantity)
+    if (itemsToSave.length) {
+      const items = itemsToSave.map((l) => ({
+        bill_id: bill.id,
+        purchase_line_id: l.purchase_line_id || null, item_name: l.item_name || null,
+        item_master_id: l.item_master_id || null, material_type_id: l.material_type_id || null,
+        material_size_id: l.material_size_id || null, size_label: l.size_label || null,
+        quantity: parseFloat(l.quantity) || null, rate: l.rate ? parseFloat(l.rate) : null,
+        amount: l.amount ? parseFloat(l.amount) : null, notes: l.notes || null,
+        tax_rate_id: l.tax_rate_id || null, taxable_value: l.taxable_value || null,
+        cgst_rate: l.cgst_rate || null, cgst_amount: l.cgst_amount || null,
+        sgst_rate: l.sgst_rate || null, sgst_amount: l.sgst_amount || null,
+        tds_rate: l.tds_rate || null, tds_amount: l.tds_amount || null,
+        total_with_tax: l.total_with_tax || null,
+      }))
+      const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { items })
+      if (itemsError) { setError(itemsError.message); setLoading(false); return }
+    }
 
     router.push('/bills')
     router.refresh()
+  }
+
+  // ── Submit ───────────────────────────────────────────────────────────────
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await saveBill('active')
+  }
+
+  const handleSaveDraft = async () => {
+    await saveBill('draft')
   }
 
   return (
@@ -956,6 +969,10 @@ export default function NewBillPage() {
           <button type="submit" disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {loading ? 'Saving...' : '✓ Save Bill'}
+          </button>
+          <button type="button" onClick={handleSaveDraft} disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
+            {loading ? 'Saving...' : '⎘ Save Draft'}
           </button>
           <button type="button" onClick={() => router.back()}
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50 transition-colors">
