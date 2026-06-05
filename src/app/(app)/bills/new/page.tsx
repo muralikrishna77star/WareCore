@@ -63,8 +63,8 @@ function generatePurchaseId(existingBillNumbers: string[], dateStr?: string): st
   return `${getMMYY(date)}-${String(seq + 1).padStart(4, '0')}`
 }
 
-function generatePurchaseLineId(groupCode: string, billNumber: string, allLineIds: string[]): string {
-  const prefix = `${groupCode.slice(0, 2).toUpperCase()}${billNumber}-`
+function generatePurchaseLineId(groupCode: string, mmyy: string, allLineIds: string[]): string {
+  const prefix = `${groupCode.slice(0, 2).toUpperCase()}${mmyy}-`
   const count = allLineIds.filter(id => id && id.startsWith(prefix)).length
   return `${prefix}${String(count + 1).padStart(4, '0')}`
 }
@@ -310,7 +310,7 @@ export default function NewBillPage() {
             if (group) {
               const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.purchase_line_id).filter(Boolean)
               updated[index].purchase_line_id = generatePurchaseLineId(
-                group.group_code, billNumber, [...existingLineIds, ...currentAssigned]
+                group.group_code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned]
               )
             }
           }
@@ -354,7 +354,7 @@ export default function NewBillPage() {
       }
       return updated
     })
-  }, [itemMasters, itemGroups, materialSizes, taxRates, existingLineIds])
+  }, [itemMasters, itemGroups, materialSizes, taxRates, existingLineIds, billDate])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -528,7 +528,7 @@ export default function NewBillPage() {
             material_size_id: created.material_size_id || '',
             size_label: created.size_label || '',
             purchase_line_id: group
-              ? generatePurchaseLineId(group.group_code, billNumber, [...existingLineIds, ...currentAssigned])
+              ? generatePurchaseLineId(group.group_code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned])
               : '',
           }
           return updated
@@ -753,7 +753,7 @@ export default function NewBillPage() {
                       if (!item) continue
                       const group = itemGroups.find(g => g.id === item.item_group_id)
                       if (!group) continue
-                      const newLineId = generatePurchaseLineId(group.group_code, newBillNum, [...existingLineIds, ...newlyAssigned])
+                      const newLineId = generatePurchaseLineId(group.group_code, getMMYY(new Date(newDate + 'T00:00:00')), [...existingLineIds, ...newlyAssigned])
                       newLines[i] = { ...line, purchase_line_id: newLineId }
                       newlyAssigned.push(newLineId)
                     }
