@@ -418,7 +418,7 @@ export const ITEM_MASTERS_QUERY = `
       material_types {
         id
         code
-        name
+        description
       }
       material_sizes {
         id
