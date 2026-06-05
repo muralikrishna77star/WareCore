@@ -92,10 +92,11 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Dispatched (MT)</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned (MT)</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Type</th>
               </tr>
             </thead>
@@ -103,7 +104,8 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
               {items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_types?.name ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.item_name ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{item.material_types?.description ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity_sent?.toFixed(3)}</td>
                   <td className="px-6 py-4 text-right">

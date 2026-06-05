@@ -6,17 +6,20 @@ import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_WAREHOUSES_QUERY,
-  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
   CREATE_JOB_WORK_ORDER_MUTATION, CREATE_JOB_WORK_ITEMS_MUTATION,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
   PURCHASE_LINE_STOCK_QUERY,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
-import type { Company, Supplier, Warehouse, MaterialType, MaterialSize } from '@/types'
+import type { Company, Supplier, Warehouse, MaterialType, MaterialSize, ItemMaster } from '@/types'
 
 type JobWorkLine = {
   purchase_line_id: string
   available_quantity: string
+  item_master_id: string
+  item_name: string
+  item_code: string
   material_type_id: string
   material_size_id: string
   size_label: string
@@ -24,7 +27,12 @@ type JobWorkLine = {
   notes: string
 }
 
-const emptyLine = (): JobWorkLine => ({ purchase_line_id: '', available_quantity: '', material_type_id: '', material_size_id: '', size_label: '', quantity: '', notes: '' })
+const emptyLine = (): JobWorkLine => ({
+  purchase_line_id: '', available_quantity: '',
+  item_master_id: '', item_name: '', item_code: '',
+  material_type_id: '', material_size_id: '', size_label: '',
+  quantity: '', notes: '',
+})
 
 export default function NewJobWorkPage() {
   const router = useRouter()
@@ -34,6 +42,9 @@ export default function NewJobWorkPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
+  const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
+  const [itemSearch, setItemSearch] = useState<Record<number, string>>({})
+  const [itemOpen, setItemOpen] = useState<Record<number, boolean>>({})
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
@@ -63,18 +74,20 @@ export default function NewJobWorkPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, s, w, mt, ms] = await Promise.all([
+      const [c, s, w, mt, ms, im] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setSuppliers((s.data as any)?.suppliers ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+      setItemMasters((im.data as any)?.item_master ?? [])
       setMasterDataLoading(false)
     }
     load()
@@ -183,6 +196,23 @@ export default function NewJobWorkPage() {
     setLines((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
+      if (field === 'item_master_id') {
+        if (value) {
+          const item = itemMasters.find(im => im.id === value)
+          if (item) {
+            updated[index].item_name = item.item_name
+            updated[index].item_code = item.item_code
+            updated[index].material_type_id = item.material_type_id
+            updated[index].material_size_id = item.material_size_id || ''
+            updated[index].size_label = item.size_label || ''
+          }
+        } else {
+          updated[index].item_name = ''
+          updated[index].item_code = ''
+          updated[index].material_type_id = ''
+          updated[index].material_size_id = ''
+        }
+      }
       if (field === 'purchase_line_id') {
         updated[index].available_quantity = ''
       }
@@ -191,7 +221,7 @@ export default function NewJobWorkPage() {
     if (field === 'purchase_line_id') {
       fetchPurchaseLineAvailability(value, index)
     }
-  }, [])
+  }, [itemMasters])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -201,9 +231,9 @@ export default function NewJobWorkPage() {
     setLoading(true)
     setError(null)
 
-    const validLines = lines.filter((l) => l.material_type_id && l.quantity)
+    const validLines = lines.filter((l) => (l.item_master_id || l.material_type_id) && l.quantity)
     if (!validLines.length) {
-      setError('Add at least one line item.')
+      setError('Add at least one line item with an item/material and quantity.')
       setLoading(false)
       return
     }
@@ -231,6 +261,8 @@ export default function NewJobWorkPage() {
     const items = validLines.map((l) => ({
       job_work_order_id: order.id,
       purchase_line_id: l.purchase_line_id || null,
+      item_master_id: l.item_master_id || null,
+      item_name: l.item_name || l.material_type_id ? (materialTypes.find(m => m.id === l.material_type_id)?.description ?? null) : null,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
       size_label: l.size_label || null,
@@ -327,7 +359,8 @@ export default function NewJobWorkPage() {
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">PurchaseLineID</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Quantity</th>
@@ -343,28 +376,64 @@ export default function NewJobWorkPage() {
                       <td className="pr-3 py-2">
                         <div>
                           <input type="text" value={line.purchase_line_id} onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
-                            placeholder="PurchaseLineID"
-                            className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                            placeholder="Purchase Line ID"
+                            className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                           {line.available_quantity ? (
                             <p className="text-[10px] text-gray-500 mt-1">Available: {line.available_quantity}</p>
                           ) : null}
                         </div>
                       </td>
+                      {/* Item search */}
+                      <td className="pr-3 py-2">
+                        <div className="relative">
+                          <input type="text"
+                            value={itemSearch[i] ?? line.item_name}
+                            onChange={(e) => {
+                              setItemSearch(p => ({ ...p, [i]: e.target.value }))
+                              setItemOpen(p => ({ ...p, [i]: true }))
+                            }}
+                            onFocus={() => setItemOpen(p => ({ ...p, [i]: true }))}
+                            onBlur={() => setItemOpen(p => ({ ...p, [i]: false }))}
+                            placeholder="Search item…"
+                            className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          {itemOpen[i] && (
+                            <div className="absolute z-50 mt-1 w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+                              {itemMasters
+                                .filter(im => {
+                                  const q = (itemSearch[i] ?? '').toLowerCase()
+                                  return !q || im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
+                                })
+                                .slice(0, 30)
+                                .map(im => (
+                                  <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      updateLine(i, 'item_master_id', im.id)
+                                      setItemSearch(p => ({ ...p, [i]: im.item_name }))
+                                      setItemOpen(p => ({ ...p, [i]: false }))
+                                    }}
+                                    className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100">
+                                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>{im.item_name}
+                                  </button>
+                                ))}
+                              {itemMasters.filter(im => { const q = (itemSearch[i] ?? '').toLowerCase(); return !q || im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q) }).length === 0 && (
+                                <div className="px-2 py-1.5 text-xs text-gray-500">No items found</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      {/* Material Type — auto-filled from item */}
                       <td className="pr-3 py-2">
                         <select value={line.material_type_id} onChange={(e) => {
-                          if (e.target.value === 'NEW_TYPE') {
-                            setActiveLineIndexForNewType(i)
-                            setShowMaterialTypeDialog(true)
-                            return
-                          }
+                          if (e.target.value === 'NEW_TYPE') { setActiveLineIndexForNewType(i); setShowMaterialTypeDialog(true); return }
                           updateLine(i, 'material_type_id', e.target.value)
                           updateLine(i, 'material_size_id', '')
                           updateLine(i, 'size_label', '')
-                        }} required
-                          className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                        }}
+                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
-                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
-                          <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
+                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.code} — {m.description}</option>)}
+                          <option value="NEW_TYPE" className="font-semibold">+ New Type</option>
                         </select>
                       </td>
                       <td className="pr-3 py-2">

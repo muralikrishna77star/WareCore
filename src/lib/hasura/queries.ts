@@ -895,6 +895,7 @@ export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
       id job_work_order_id purchase_line_id sub_purchase_line_id quantity_sent quantity_received size_label
+      item_master_id item_name
       material_types { description }
       material_sizes { size_label }
     }
@@ -919,7 +920,10 @@ export const CREATE_JOB_WORK_ORDER_MUTATION = `
 
 export const CREATE_JOB_WORK_ITEMS_MUTATION = `
   mutation CreateJobWorkItems($objects: [job_work_items_insert_input!]!) {
-    insert_job_work_items(objects: $objects) { affected_rows }
+    insert_job_work_items(objects: $objects) {
+      affected_rows
+      returning { id item_name item_master_id material_types { description } }
+    }
   }
 `
 
