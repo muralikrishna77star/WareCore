@@ -8,7 +8,6 @@ import {
   CUSTOMERS_QUERY,
   MATERIAL_TYPES_QUERY,
   MATERIAL_SIZES_QUERY,
-  ITEM_GROUPS_QUERY,
   ITEM_MASTERS_QUERY,
   USER_PROFILES_QUERY,
   TAX_RATES_QUERY,
@@ -17,7 +16,6 @@ import {
 import CollapsibleSection from './CollapsibleSection'
 
 export default async function AdminPage() {
-  // Fetch all data in parallel using Hasura GraphQL, but keep the admin page alive even when some tables are unavailable.
   const queryResults = await Promise.allSettled([
     hasuraQuery(COMPANIES_QUERY),
     hasuraQuery(WAREHOUSES_QUERY),
@@ -25,7 +23,6 @@ export default async function AdminPage() {
     hasuraQuery(CUSTOMERS_QUERY),
     hasuraQuery(MATERIAL_TYPES_QUERY),
     hasuraQuery(MATERIAL_SIZES_QUERY),
-    hasuraQuery(ITEM_GROUPS_QUERY, undefined, { suppressError: true }),
     hasuraQuery(ITEM_MASTERS_QUERY, undefined, { suppressError: true }),
     hasuraQuery(TAX_RATES_QUERY, undefined, { suppressError: true }),
     hasuraQuery(USER_PROFILES_QUERY),
@@ -39,78 +36,32 @@ export default async function AdminPage() {
     customersRes,
     materialTypesRes,
     materialSizesRes,
-    itemGroupsRes,
     itemMastersRes,
     taxRatesRes,
     usersRes,
     customRolesRes,
   ] = queryResults
 
-  const companies =
-    companiesRes.status === 'fulfilled'
-      ? (companiesRes.value as any).companies ?? []
-      : []
-  const warehouses =
-    warehousesRes.status === 'fulfilled'
-      ? (warehousesRes.value as any).warehouses ?? []
-      : []
-  const suppliers =
-    suppliersRes.status === 'fulfilled'
-      ? (suppliersRes.value as any).suppliers ?? []
-      : []
-  const customers =
-    customersRes.status === 'fulfilled'
-      ? (customersRes.value as any).customers ?? []
-      : []
-  const materialTypes =
-    materialTypesRes.status === 'fulfilled'
-      ? (materialTypesRes.value as any).material_types ?? []
-      : []
-  const materialSizes =
-    materialSizesRes.status === 'fulfilled'
-      ? (materialSizesRes.value as any).material_sizes ?? []
-      : []
-  const itemGroups =
-    itemGroupsRes.status === 'fulfilled'
-      ? (itemGroupsRes.value as any).item_groups ?? []
-      : []
-  const itemMasters =
-    itemMastersRes.status === 'fulfilled'
-      ? (itemMastersRes.value as any).item_master ?? []
-      : []
-  const taxRates =
-    taxRatesRes.status === 'fulfilled'
-      ? (taxRatesRes.value as any).tax_rates ?? []
-      : []
-  const users =
-    usersRes.status === 'fulfilled'
-      ? (usersRes.value as any).user_profiles ?? []
-      : []
-  const customRoles =
-    customRolesRes.status === 'fulfilled'
-      ? (customRolesRes.value as any).custom_roles ?? []
-      : []
+  const companies = companiesRes.status === 'fulfilled' ? (companiesRes.value as any).companies ?? [] : []
+  const warehouses = warehousesRes.status === 'fulfilled' ? (warehousesRes.value as any).warehouses ?? [] : []
+  const suppliers = suppliersRes.status === 'fulfilled' ? (suppliersRes.value as any).suppliers ?? [] : []
+  const customers = customersRes.status === 'fulfilled' ? (customersRes.value as any).customers ?? [] : []
+  const materialTypes = materialTypesRes.status === 'fulfilled' ? (materialTypesRes.value as any).material_types ?? [] : []
+  const materialSizes = materialSizesRes.status === 'fulfilled' ? (materialSizesRes.value as any).material_sizes ?? [] : []
+  const itemMasters = itemMastersRes.status === 'fulfilled' ? (itemMastersRes.value as any).item_master ?? [] : []
+  const taxRates = taxRatesRes.status === 'fulfilled' ? (taxRatesRes.value as any).tax_rates ?? [] : []
+  const users = usersRes.status === 'fulfilled' ? (usersRes.value as any).user_profiles ?? [] : []
+  const customRoles = customRolesRes.status === 'fulfilled' ? (customRolesRes.value as any).custom_roles ?? [] : []
 
   const formatReason = (reason: unknown) => {
     if (reason instanceof Error) return reason.message
     if (typeof reason === 'string') return reason
-    try {
-      return JSON.stringify(reason)
-    } catch {
-      return 'Unknown error'
-    }
+    try { return JSON.stringify(reason) } catch { return 'Unknown error' }
   }
 
   const adminWarnings: string[] = []
-  if (itemGroupsRes.status === 'rejected') {
-    adminWarnings.push(`Item Groups data is currently unavailable: ${formatReason(itemGroupsRes.reason)}`)
-  }
-  if (itemMastersRes.status === 'rejected') {
-    adminWarnings.push(`Item Master data is currently unavailable: ${formatReason(itemMastersRes.reason)}`)
-  }
-  if (usersRes.status === 'rejected') {
-    adminWarnings.push(`User data is currently unavailable: ${formatReason(usersRes.reason)}`)
-  }
+  if (itemMastersRes.status === 'rejected') adminWarnings.push(`Item Master data is currently unavailable: ${formatReason(itemMastersRes.reason)}`)
+  if (usersRes.status === 'rejected') adminWarnings.push(`User data is currently unavailable: ${formatReason(usersRes.reason)}`)
 
   const sections = [
     {
@@ -140,8 +91,8 @@ export default async function AdminPage() {
     {
       title: 'Material Types', icon: '📦',
       addHref: '/admin/materials/new', href: '/admin/materials',
-      columns: ['Name', 'Unit', 'Description'],
-      rows: materialTypes.map((m: any) => [m.name, m.unit, m.description || '—']),
+      columns: ['Code', 'Name', 'Unit'],
+      rows: materialTypes.map((m: any) => [m.code, m.name, m.unit]),
     },
     {
       title: 'Material Sizes', icon: '📐',
@@ -150,16 +101,10 @@ export default async function AdminPage() {
       rows: materialSizes.map((s: any) => [s.size_label, s.thickness?.toString() || '—', s.width?.toString() || '—']),
     },
     {
-      title: 'Item Groups', icon: '🧭',
-      addHref: '/admin/item-groups/new', href: '/admin/item-groups',
-      columns: ['Code', 'Description', 'Status'],
-      rows: itemGroups.map((g: any) => [g.group_code, g.group_desc || '—', g.is_active ? 'Active' : 'Inactive']),
-    },
-    {
       title: 'Item Master', icon: '📋',
       addHref: '/admin/items/new', href: '/admin/items',
-      columns: ['Code', 'Name', 'Group'],
-      rows: itemMasters.map((item: any) => [item.item_code, item.item_name, item.item_groups?.group_code || '—']),
+      columns: ['Code', 'Name', 'Material Type'],
+      rows: itemMasters.map((item: any) => [item.item_code, item.item_name, item.material_types?.name || '—']),
     },
     {
       title: 'Tax Rates', icon: '🧾',
@@ -195,32 +140,23 @@ export default async function AdminPage() {
         <p className="mt-1 text-sm text-gray-500">Manage master data and system settings</p>
       </div>
 
-      {adminWarnings.length > 0 ? (
+      {adminWarnings.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
           <details className="group">
             <summary className="cursor-pointer font-semibold list-none marker:hidden">
               Partial data loaded — click to view details
             </summary>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-900 group-open:mt-3">
-              {adminWarnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
+              {adminWarnings.map((warning) => <li key={warning}>{warning}</li>)}
             </ul>
           </details>
         </div>
-      ) : null}
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {sections.map((s) => (
-          <CollapsibleSection
-            key={s.title}
-            title={s.title}
-            icon={s.icon}
-            addHref={s.addHref}
-            href={s.href}
-            columns={s.columns}
-            rows={s.rows}
-          />
+          <CollapsibleSection key={s.title} title={s.title} icon={s.icon}
+            addHref={s.addHref} href={s.href} columns={s.columns} rows={s.rows} />
         ))}
       </div>
     </div>

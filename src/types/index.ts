@@ -70,26 +70,9 @@ export interface Customer {
   updated_at: string
 }
 
-export interface Division {
-  id: string
-  division_code: string
-  division_name: string
-  is_active: boolean
-  created_at: string
-}
-
-export interface ItemGroup {
-  id: string
-  group_code: string
-  group_desc?: string
-  division_id?: string
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
 export interface MaterialType {
   id: string
+  code: string
   name: string
   unit: string
   description?: string
@@ -112,7 +95,6 @@ export interface ItemMaster {
   id: string
   item_code: string
   item_name: string
-  item_group_id?: string
   material_type_id: string
   material_size_id?: string
   size_label?: string
@@ -123,7 +105,6 @@ export interface ItemMaster {
   updated_at: string
   material_type?: MaterialType
   material_size?: MaterialSize
-  item_group?: ItemGroup
 }
 
 export interface UserProfile {

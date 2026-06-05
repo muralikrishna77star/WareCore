@@ -24,8 +24,6 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   // Tax rate control database
   CreateTaxRate:    ADMIN,
   UpdateTaxRate:    ADMIN,
-  // Item catalogue hierarchy
-  CreateItemGroup:   ADMIN,
   // Material catalogue
   CreateMaterialType: ADMIN_MANAGER,
   CreateMaterialSize: ADMIN_MANAGER,
@@ -55,8 +53,6 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   CreateCustomRole:          ADMIN_MANAGER,
   InsertRolePermissions:     ADMIN_MANAGER,
   UpsertRolePermissions:     ADMIN_MANAGER,
-  // Division / item hierarchy
-  CreateDivision:            ADMIN_MANAGER,
 }
 
 /** Returns the operation type and name from a GraphQL query string. */

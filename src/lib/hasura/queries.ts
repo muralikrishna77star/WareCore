@@ -85,6 +85,7 @@ export const MATERIAL_TYPES_QUERY = `
   query GetMaterialTypes {
     material_types(order_by: {name: asc}) {
       id
+      code
       name
       unit
       description
@@ -112,59 +113,6 @@ export const MATERIAL_SIZES_QUERY = `
   }
 `
 
-export const ITEM_GROUPS_QUERY = `
-  query GetItemGroups {
-    item_groups(order_by: {group_code: asc}) {
-      id
-      group_code
-      group_desc
-      is_active
-      created_at
-      updated_at
-    }
-  }
-`
-
-export const ACTIVE_DIVISIONS_QUERY = `
-  query GetActiveDivisions {
-    divisions(where: {is_active: {_eq: true}}, order_by: {division_code: asc}) {
-      id
-      division_code
-      division_name
-      is_active
-      created_at
-    }
-  }
-`
-
-export const CREATE_DIVISION_MUTATION = `
-  mutation CreateDivision($division_code: String!, $division_name: String!) {
-    insert_divisions_one(object: {
-      division_code: $division_code
-      division_name: $division_name
-    }) {
-      id
-      division_code
-      division_name
-      is_active
-      created_at
-    }
-  }
-`
-
-export const ACTIVE_ITEM_GROUPS_QUERY = `
-  query GetActiveItemGroups {
-    item_groups(where: {is_active: {_eq: true}}, order_by: {group_code: asc}) {
-      id
-      group_code
-      group_desc
-      division_id
-      is_active
-      created_at
-      updated_at
-    }
-  }
-`
 
 export const USER_PROFILES_QUERY = `
   query GetUserProfiles {
@@ -388,7 +336,7 @@ export const ACTIVE_CUSTOMERS_QUERY = `
 export const ACTIVE_MATERIAL_TYPES_QUERY = `
   query GetActiveMaterialTypes {
     material_types(where: {is_active: {_eq: true}}, order_by: {name: asc}) {
-      id name unit
+      id code name unit
     }
   }
 `
@@ -407,19 +355,13 @@ export const ACTIVE_ITEM_MASTER_QUERY = `
       id
       item_code
       item_name
-      item_group_id
       material_type_id
       material_size_id
       size_label
       unit
       is_active
       created_at
-      item_groups {
-        id
-        group_code
-        group_desc
-      }
-      material_types { name }
+      material_types { id code name unit }
       material_sizes { id size_label }
     }
   }
@@ -431,29 +373,23 @@ export const ITEM_MASTER_BY_MATERIAL_TYPE_QUERY = `
       id
       item_code
       item_name
-      item_group_id
       material_type_id
       material_size_id
       size_label
       unit
       is_active
       created_at
-      item_groups {
-        id
-        group_code
-      }
-      material_types { name }
+      material_types { id code name unit }
       material_sizes { id size_label }
     }
   }
 `
 
 export const CREATE_ITEM_MASTER_MUTATION = `
-  mutation CreateItemMaster($item_code: String!, $item_name: String!, $item_group_id: uuid!, $material_type_id: uuid!, $material_size_id: uuid, $size_label: String, $unit: String, $description: String) {
+  mutation CreateItemMaster($item_code: String!, $item_name: String!, $material_type_id: uuid!, $material_size_id: uuid, $size_label: String, $unit: String, $description: String) {
     insert_item_master_one(object: {
       item_code: $item_code
       item_name: $item_name
-      item_group_id: $item_group_id
       material_type_id: $material_type_id
       material_size_id: $material_size_id
       size_label: $size_label
@@ -463,7 +399,6 @@ export const CREATE_ITEM_MASTER_MUTATION = `
       id
       item_code
       item_name
-      item_group_id
       material_size_id
       size_label
     }
@@ -476,19 +411,14 @@ export const ITEM_MASTERS_QUERY = `
       id
       item_code
       item_name
-      item_group_id
       material_type_id
       material_size_id
       size_label
       unit
       is_active
-      item_groups {
-        id
-        group_code
-        group_desc
-      }
       material_types {
         id
+        code
         name
       }
       material_sizes {
@@ -550,13 +480,14 @@ export const CREATE_PURCHASE_BILL_ITEMS_MUTATION = `
 // ─── Material Management ─────────────────────────────────────────────────────
 
 export const CREATE_MATERIAL_TYPE_MUTATION = `
-  mutation CreateMaterialType($name: String!, $unit: String, $description: String) {
+  mutation CreateMaterialType($code: String!, $name: String!, $unit: String, $description: String) {
     insert_material_types_one(object: {
+      code: $code
       name: $name
       unit: $unit
       description: $description
     }) {
-      id name unit
+      id code name unit
     }
   }
 `
@@ -574,23 +505,6 @@ export const CREATE_MATERIAL_SIZE_MUTATION = `
   }
 `
 
-export const CREATE_ITEM_GROUP_MUTATION = `
-  mutation CreateItemGroup($group_code: String!, $group_desc: String, $division_id: uuid) {
-    insert_item_groups_one(object: {
-      group_code: $group_code
-      group_desc: $group_desc
-      division_id: $division_id
-    }) {
-      id
-      group_code
-      group_desc
-      division_id
-      is_active
-      created_at
-      updated_at
-    }
-  }
-`
 
 // ─── Transfers ───────────────────────────────────────────────────────────────
 

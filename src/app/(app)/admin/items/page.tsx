@@ -55,7 +55,7 @@ export default async function ItemMastersPage() {
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{item.item_code}</td>
                     <td className="px-5 py-3 text-gray-600">{item.item_name}</td>
-                    <td className="px-5 py-3 text-gray-600">{item.item_groups?.group_code || '—'}</td>
+                    <td className="px-5 py-3 text-gray-600">{item.material_types?.code || '—'}</td>
                     <td className="px-5 py-3 text-gray-600">{item.material_types?.name || '—'}</td>
                     <td className="px-5 py-3 text-gray-600">{item.material_sizes?.size_label || item.size_label || '—'}</td>
                     <td className="px-5 py-3">

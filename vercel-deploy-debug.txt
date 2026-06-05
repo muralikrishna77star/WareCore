@@ -1,0 +1,193 @@
+> [debug] [2026-06-04T13:26:49.396Z] Vercel CLI 52.0.0
+> [debug] [2026-06-04T13:26:49.409Z] Agent/TTY/nonInteractive: isAgent=false agentName=none stdin.isTTY=true --non-interactive=false explicitFalse=false => nonInteractive=false
+> [debug] [2026-06-04T13:26:49.410Z] user supplied a possible target for deployment or an extension
+> [debug] [2026-06-04T13:26:49.430Z] failed to find extension command with name "vercel---prod"
+> [debug] [2026-06-04T13:26:49.476Z] Setting target to production
+> [debug] [2026-06-04T13:26:49.481Z] Spinner invoked (Retrieving projectΓÇª) with a 1000ms delay
+> [debug] [2026-06-04T13:26:49.484Z] Valid access token, skipping token refresh.
+> [debug] [2026-06-04T13:26:49.507Z] #1 ΓåÆ GET https://api.vercel.com/teams/team_YYtAQOOFinSW16OhMsIrd8xN?teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+> [debug] [2026-06-04T13:26:49.509Z] #2 ΓåÆ GET https://api.vercel.com/v9/projects/prj_7vGf5zPVhQ3I5Aqx6z3B5f4L88tX?teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+> [debug] [2026-06-04T13:26:50.190Z] #1 ΓåÉ 200 OK: sfo1::wlmcc-1780579610043-e51e72df6bc0 [683ms]
+> [debug] [2026-06-04T13:26:50.233Z] #2 ΓåÉ 200 OK: sfo1::94l9x-1780579610047-04fbcad3c665 [724ms]
+> [debug] [2026-06-04T13:26:50.736Z] Spinner invoked (Deploying muralisudemytrainings-cmds-projects/warecore) with a 0ms delay
+[client-debug] 2026-06-04T13:26:50.736Z Creating deployment...
+[client-debug] 2026-06-04T13:26:50.736Z Provided 'path' is a directory.
+[client-debug] 2026-06-04T13:26:50.738Z Found 26 rules in .vercelignore
+[client-debug] 2026-06-04T13:26:50.738Z Building file tree...
+[client-debug] 2026-06-04T13:26:50.752Z Found 210 files in the specified directory
+[client-debug] 2026-06-04T13:26:50.764Z Yielding a 'hashes-calculated' event with 205 hashes
+> [debug] [2026-06-04T13:26:50.765Z] #3 ΓåÆ GET https://api.vercel.com/v9/projects/warecore?teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+> [debug] [2026-06-04T13:26:51.042Z] #3 ΓåÉ 200 OK: sfo1::txn6l-1780579610867-96d21ba403b1 [277ms]
+[client-debug] 2026-06-04T13:26:51.043Z Using provided API URL: https://api.vercel.com
+[client-debug] 2026-06-04T13:26:51.043Z Using provided user agent: vercel 52.0.0 node-v25.8.0 win32 (x64)
+[client-debug] 2026-06-04T13:26:51.043Z Setting platform version to harcoded value 2
+[client-debug] 2026-06-04T13:26:51.043Z Creating the deployment and starting upload...
+[client-debug] 2026-06-04T13:26:51.044Z Determining necessary files for upload...
+[client-debug] 2026-06-04T13:26:51.044Z Creating deployment
+[client-debug] 2026-06-04T13:26:51.045Z Sending deployment creation API request
+[client-debug] 2026-06-04T13:26:51.553Z Deployment response: {"error":{"code":"missing_files","message":"Missing files","missing":["375ad408214b1b8ed4e58316f007073a1667f43e"]}}
+[client-debug] 2026-06-04T13:26:51.553Z Error: Deployment request status is 400
+[client-debug] 2026-06-04T13:26:51.553Z 1 files are required to upload
+[client-debug] 2026-06-04T13:26:51.553Z Yielding a 'file-count' event
+> [debug] [2026-06-04T13:26:51.553Z] Total files 205, 1 changed
+> [debug] [2026-06-04T13:26:51.554Z] Spinner invoked (Uploading [--------------------] (0.0B/1.6KB)) with a 0ms delay
+[client-debug] 2026-06-04T13:26:51.554Z Building an upload list...
+[client-debug] 2026-06-04T13:26:51.555Z Starting upload
+[client-debug] 2026-06-04T13:26:51.555Z POST https://api.vercel.com/v2/files?teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+> [debug] [2026-06-04T13:26:51.556Z] Spinner invoked (Uploading [====================] (1.6KB/1.6KB)) with a 0ms delay
+[client-debug] 2026-06-04T13:26:51.919Z DONE in 363ms: POST https://api.vercel.com/v2/files?teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+[client-debug] 2026-06-04T13:26:51.919Z File 375ad408214b1b8ed4e58316f007073a1667f43e (C:\Users\Public\Projects\warecore\vercel-deploy-debug.txt) uploaded
+[client-debug] 2026-06-04T13:26:51.919Z Yielding a 'file-uploaded' event
+> [debug] [2026-06-04T13:26:51.920Z] Uploaded: C:\Users\Public\Projects\warecore\vercel-deploy-debug.txt (1.64KB)
+[client-debug] 2026-06-04T13:26:51.920Z All files uploaded
+[client-debug] 2026-06-04T13:26:51.920Z Yielding a 'all-files-uploaded' event
+[client-debug] 2026-06-04T13:26:51.920Z Starting deployment creation
+[client-debug] 2026-06-04T13:26:51.920Z Creating deployment
+[client-debug] 2026-06-04T13:26:51.923Z Sending deployment creation API request
+[client-debug] 2026-06-04T13:26:54.212Z Deployment response: {"alias":["warecore-muralisudemytrainings-cmds-projects.vercel.app"],"aliasAssigned":false,"automaticAliases":["warecore-muralisudemytrainings-cmds-projects.vercel.app"],"bootedAt":1780579612643,"buildingAt":1780579612643,"buildSkipped":false,"createdAt":1780579612643,"creator":{"uid":"OBjycGuI7XiEEQDSAVJQ0eMw","username":"muralisudemytrainings-cmd"},"id":"dpl_J6WCeEWC1bUgtLGJo9yPJd68XrYz","name":"warecore","meta":{"githubCommitAuthorName":"muralikrishna77star","githubCommitAuthorEmail":"muralikrishna77star@gmail.com","githubCommitMessage":"Fix purchase line ID generation to include purchase bill number for CR format","githubCommitOrg":"muralikrishna77star","githubCommitRef":"main","githubCommitRepo":"WareCore","githubCommitSha":"edfb9158b602dff6e7561a511d60dcc0b82074cd","githubDeployment":"1","githubOrg":"muralikrishna77star","githubRepo":"WareCore","gitDirty":"1"},"originCacheRegion":"iad1","project":{"id":"prj_7vGf5zPVhQ3I5Aqx6z3B5f4L88tX","name":"warecore","framework":"nextjs"},"public":false,"readyState":"INITIALIZING","regions":["iad1"],"source":"cli","status":"INITIALIZING","target":"production","team":{"id":"team_YYtAQOOFinSW16OhMsIrd8xN","name":"muralisudemytrainings-cmd's projects","slug":"muralisudemytrainings-cmds-projects"},"type":"LAMBDAS","url":"warecore-2rjok4980-muralisudemytrainings-cmds-projects.vercel.app","version":2,"previewCommentsEnabled":true,"oidcTokenClaims":{"sub":"owner:muralisudemytrainings-cmds-projects:project:warecore:environment:production","iss":"https://oidc.vercel.com/muralisudemytrainings-cmds-projects","scope":"owner:muralisudemytrainings-cmds-projects:project:warecore:environment:production","aud":"https://vercel.com/muralisudemytrainings-cmds-projects","owner":"muralisudemytrainings-cmds-projects","owner_id":"team_YYtAQOOFinSW16OhMsIrd8xN","project":"warecore","project_id":"prj_7vGf5zPVhQ3I5Aqx6z3B5f4L88tX","environment":"production","plan":"hobby"},"lambdas":[{"id":"bld_eomardm8c","createdAt":1780579613604,"entrypoint":".","readyState":"READY","readyStateAt":1780579613604,"output":[]}],"aliasAssignedAt":null,"build":{"env":[]},"builds":[],"createdIn":"sfo1","env":[],"functions":null,"inspectorUrl":"https://vercel.com/muralisudemytrainings-cmds-projects/warecore/J6WCeEWC1bUgtLGJo9yPJd68XrYz","isInConcurrentBuildsQueue":false,"isInSystemBuildsQueue":true,"ownerId":"team_YYtAQOOFinSW16OhMsIrd8xN","plan":"hobby","projectId":"prj_7vGf5zPVhQ3I5Aqx6z3B5f4L88tX","projectSettings":{"buildCommand":null,"devCommand":null,"framework":"nextjs","commandForIgnoringBuildStep":null,"installCommand":null,"outputDirectory":null,"speedInsights":{"id":"lk4BmeletGrojt93VoYBQeNNre7","hasData":false},"webAnalytics":{"id":"xUSzeQHDcyFiFnv47Ve64QepE"},"nodeVersion":"24.x"},"routes":null,"config":{"version":1,"secureComputePrimaryRegion":null,"secureComputeFallbackRegion":null,"functionTimeout":300,"functionType":"fluid","functionMemoryType":"standard","isUsingActiveCPU":true,"resourceConfig":{"buildQueue":{"configuration":"SKIP_NAMESPACE_QUEUE"}}},"attribution":{"commitMeta":{"name":"muralikrishna77star","email":"muralikrishna77star@gmail.com","isVerified":false},"gitUser":{"id":47923704,"login":"muralikrishna77star","type":"user","provider":"github"},"vercelUser":{"id":"bIJgPBKdbeu2tfK3adJM572E","username":"muralikrishna77star-2475"}}}
+[client-debug] 2026-06-04T13:26:54.213Z Deployment created
+[client-debug] 2026-06-04T13:26:54.213Z Yielding a 'created' event
+Inspect: https://vercel.com/muralisudemytrainings-cmds-projects/warecore/J6WCeEWC1bUgtLGJo9yPJd68XrYz [3s]
+Production: https://warecore-2rjok4980-muralisudemytrainings-cmds-projects.vercel.app [3s]
+> [debug] [2026-06-04T13:26:54.216Z] Spinner invoked (Building...) with a 0ms delay
+> [debug] [2026-06-04T13:26:54.218Z] #4 ΓåÆ GET https://api.vercel.com/v2/user
+[client-debug] 2026-06-04T13:26:54.218Z Waiting for deployment to be ready...
+[client-debug] 2026-06-04T13:26:54.219Z Waiting for builds and the deployment to complete...
+> [debug] [2026-06-04T13:26:54.475Z] #4 ΓåÉ 200 OK: sfo1::vfjwf-1780579614324-acc21e11e0c1 [257ms]
+> [debug] [2026-06-04T13:26:54.477Z] #5 ΓåÆ GET https://api.vercel.com/v3/now/deployments/dpl_J6WCeEWC1bUgtLGJo9yPJd68XrYz/events?direction=forward&follow=1&format=lines&teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+[client-debug] 2026-06-04T13:26:56.331Z Deployment state changed to BUILDING
+[client-debug] 2026-06-04T13:26:56.331Z Yielding a 'building' event
+> [debug] [2026-06-04T13:26:56.331Z] Spinner invoked (Building...) with a 0ms delay
+> [debug] [2026-06-04T13:26:56.770Z] #5 ΓåÉ 200 OK: sfo1::lrrrn-1780579614582-04c66abd50fe [2.29s]
+> [debug] [2026-06-04T13:26:56.773Z] Spinner invoked (Building: Running build in Washington, D.C., USA (East) ΓÇô iad1) with a 0ms delay
+> [debug] [2026-06-04T13:26:56.774Z] Spinner invoked (Building: Build machine configuration: 2 cores, 8 GB) with a 0ms delay
+> [debug] [2026-06-04T13:26:56.774Z] Spinner invoked (Building: Retrieving list of deployment files...) with a 0ms delay
+> [debug] [2026-06-04T13:26:58.305Z] Spinner invoked (Building: Downloading 210 deployment files...) with a 0ms delay
+> [debug] [2026-06-04T13:27:02.840Z] Spinner invoked (Building: Restored build cache from previous deployment (MiC5bfbGnoAeXZG1vNmaQejtpwmF)) with a 0ms delay
+> [debug] [2026-06-04T13:27:02.840Z] Spinner invoked (Building: Running "vercel build") with a 0ms delay
+> [debug] [2026-06-04T13:27:02.841Z] Spinner invoked (Building: Vercel CLI 54.9.0) with a 0ms delay
+> [debug] [2026-06-04T13:27:04.327Z] Spinner invoked (Building: Installing dependencies...) with a 0ms delay
+> [debug] [2026-06-04T13:27:04.328Z] Spinner invoked (Building: up to date in 834ms) with a 0ms delay
+> [debug] [2026-06-04T13:27:04.328Z] Spinner invoked (Building: 138 packages are looking for funding) with a 0ms delay
+> [debug] [2026-06-04T13:27:04.328Z] Spinner invoked (Building: run `npm fund` for details) with a 0ms delay
+> [debug] [2026-06-04T13:27:04.328Z] Spinner invoked (Building: Detected Next.js version: 16.2.6) with a 0ms delay
+> [debug] [2026-06-04T13:27:04.328Z] Spinner invoked (Building: Running "npm run build") with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: > warecore@1.1.2 build) with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: > next build) with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: Applying modifyConfig from Vercel) with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: Γû▓ Next.js 16.2.6 (Turbopack)) with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: - Experiments (use with caution):) with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: ┬╖ serverActions) with a 0ms delay
+> [debug] [2026-06-04T13:27:05.762Z] Spinner invoked (Building: Creating an optimized production build ...) with a 0ms delay
+> [debug] [2026-06-04T13:27:19.587Z] Spinner invoked (Building: Γ£ô Compiled successfully in 13.0s) with a 0ms delay
+> [debug] [2026-06-04T13:27:19.587Z] Spinner invoked (Building: Running TypeScript ...) with a 0ms delay
+> [debug] [2026-06-04T13:27:28.417Z] Spinner invoked (Building: Finished TypeScript in 8.7s ...) with a 0ms delay
+> [debug] [2026-06-04T13:27:28.418Z] Spinner invoked (Building: Collecting page data using 1 worker ...) with a 0ms delay
+> [debug] [2026-06-04T13:27:28.418Z] Spinner invoked (Building: Generating static pages using 1 worker (0/34) ...) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Generating static pages using 1 worker (8/34)) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Generating static pages using 1 worker (16/34)) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Generating static pages using 1 worker (25/34)) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γ£ô Generating static pages using 1 worker (34/34) in 487ms) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Finalizing page optimization ...) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Running onBuildComplete from Vercel) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Route (app)) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γöî Γùï /) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γö£ Γùï /_not-found) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γö£ Γùï /accounts) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γö£ ╞Æ /admin) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γö£ Γùï /admin/backups) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.861Z] Spinner invoked (Building: Γö£ Γùï /admin/companies/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/customers) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/customers/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/item-groups) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ Γùï /admin/item-groups/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/items) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/items/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ Γùï /admin/materials/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/roles) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/roles/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.862Z] Spinner invoked (Building: Γö£ ╞Æ /admin/sizes) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/sizes/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/suppliers) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/suppliers/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/tax-rates) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/tax-rates/[id]/edit) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ Γùï /admin/tax-rates/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/users/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.863Z] Spinner invoked (Building: Γö£ ╞Æ /admin/warehouses/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/change-password) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/create-user) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/forgot-password) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/google) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/google/callback) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/google/debug) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/login) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/auth/reset-password) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/backup/create) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/backup/export) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.864Z] Spinner invoked (Building: Γö£ ╞Æ /api/backup/metadata) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.865Z] Spinner invoked (Building: Γö£ ╞Æ /api/backup/restore) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.865Z] Spinner invoked (Building: Γö£ ╞Æ /api/bills/[id]/cancel) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.865Z] Spinner invoked (Building: Γö£ ╞Æ /api/dispatch/[id]/cancel) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.865Z] Spinner invoked (Building: Γö£ ╞Æ /api/graphql) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.866Z] Spinner invoked (Building: Γö£ ╞Æ /bills) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.866Z] Spinner invoked (Building: Γö£ ╞Æ /bills/[id]) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.866Z] Spinner invoked (Building: Γö£ Γùï /bills/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.866Z] Spinner invoked (Building: Γö£ ╞Æ /dashboard) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.866Z] Spinner invoked (Building: Γö£ ╞Æ /dispatch) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.866Z] Spinner invoked (Building: Γö£ ╞Æ /dispatch/[id]) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.867Z] Spinner invoked (Building: Γö£ Γùï /dispatch/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.867Z] Spinner invoked (Building: Γö£ ╞Æ /inventory) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.867Z] Spinner invoked (Building: Γö£ ╞Æ /jobwork) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.867Z] Spinner invoked (Building: Γö£ ╞Æ /jobwork/[id]) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.867Z] Spinner invoked (Building: Γö£ Γùï /jobwork/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.867Z] Spinner invoked (Building: Γö£ Γùï /login) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.868Z] Spinner invoked (Building: Γö£ Γùï /login/forgot-password) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ Γùï /login/reset-password) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ ╞Æ /movements) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ Γùï /offline) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ Γùï /profile) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ ╞Æ /reports) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ ╞Æ /reports/billing) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.869Z] Spinner invoked (Building: Γö£ ╞Æ /reports/dispatch) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γö£ ╞Æ /reports/jobwork) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γö£ ╞Æ /reports/movements) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γö£ ╞Æ /reports/stock-statement) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γö£ ╞Æ /reports/transfers) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γö£ ╞Æ /transfers) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γö£ ╞Æ /transfers/[id]) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γöö Γùï /transfers/new) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: ╞Æ Proxy (Middleware)) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: Γùï  (Static)   prerendered as static content) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.870Z] Spinner invoked (Building: ╞Æ  (Dynamic)  server-rendered on demand) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.871Z] Spinner invoked (Building: Build Completed in /vercel/output [26s]) with a 0ms delay
+> [debug] [2026-06-04T13:27:29.871Z] Spinner invoked (Building: Deploying outputs...) with a 0ms delay
+[client-debug] 2026-06-04T13:27:37.327Z Deployment state changed to READY
+[client-debug] 2026-06-04T13:27:37.328Z Yielding a 'ready' event
+[2K[1A[2K[GProduction: https://warecore-2rjok4980-muralisudemytrainings-cmds-projects.vercel.app [47s]
+> [debug] [2026-06-04T13:27:37.331Z] Spinner invoked (Completing...) with a 0ms delay
+[client-debug] 2026-06-04T13:27:37.331Z Deployment alias assigned
+[client-debug] 2026-06-04T13:27:37.332Z Deployment is ready
+[client-debug] 2026-06-04T13:27:37.332Z Yielding a 'alias-assigned' event
+Aliased: https://warecore.vercel.app [47s]
+> [debug] [2026-06-04T13:27:37.336Z] #6 ΓåÆ GET https://api.vercel.com/v13/deployments/dpl_J6WCeEWC1bUgtLGJo9yPJd68XrYz?teamId=team_YYtAQOOFinSW16OhMsIrd8xN
+> [debug] [2026-06-04T13:27:37.830Z] #6 ΓåÉ 200 OK: sfo1::vfkqk-1780579657441-bca4f46a6a51 [494ms]
+> [debug] [2026-06-04T13:27:37.857Z] Failed to run 'claude plugins list --json': Error: spawn claude ENOENT
+> Tip: Run `npx plugins add vercel/vercel-plugin` to enhance your agent experience
+> [debug] [2026-06-04T13:27:39.608Z] Telemetry event tracked
+> [debug] [2026-06-04T13:27:39.743Z] Telemetry subprocess exited with code 0
+> [debug] [2026-06-04T13:27:39.745Z] Spawning C:\Users\akrishna\AppData\Roaming\npm\node_modules\vercel\dist\get-latest-worker.cjs
+> '[debug] [2026-06-04T13:27:39.858Z] Notifying parent we're ready
+> '[debug] [2026-06-04T13:27:39.861Z] Received message from parent: {
+  cacheFile: 'C:\\Users\\akrishna\\AppData\\Local\\com.vercel.cli\\Cache\\package-updates\\vercel-latest.json',
+  distTag: 'latest',
+  name: 'vercel',
+  updateCheckInterval: 86400000
+}
+> '[debug] [2026-06-04T13:27:39.861Z] Disconnecting from parent
+> '[debug] [2026-06-04T13:27:39.863Z] Checking lock file: C:\Users\akrishna\AppData\Local\com.vercel.cli\Cache\package-updates\vercel-latest.lock
+> '[debug] [2026-06-04T13:27:39.864Z] Found lock file with pid: 34548
+> '[debug] [2026-06-04T13:27:39.864Z] Resetting lock file: Error: kill ESRCH
+> '[debug] [2026-06-04T13:27:39.865Z] Initializing lock file with pid 7164
+> '[debug] [2026-06-04T13:27:39.868Z] Fetching https://registry.npmjs.org/-/package/vercel/dist-tags
+https://warecore-2rjok4980-muralisudemytrainings-cmds-projects.vercel.app

@@ -7,14 +7,14 @@ import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
-  ACTIVE_ITEM_MASTER_QUERY, ACTIVE_ITEM_GROUPS_QUERY,
+  ACTIVE_ITEM_MASTER_QUERY,
   CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
   ACTIVE_SALES_TAX_RATES_QUERY,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
   ALL_INVOICE_NUMBERS_QUERY, ALL_SALE_LINE_IDS_QUERY,
   PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY, STOCK_LEDGER_LINE_QUANTITIES_QUERY,
 } from '@/lib/hasura/queries'
-import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate } from '@/types'
+import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
 type AvailablePurchaseLine = {
   purchase_line_id: string
@@ -71,9 +71,9 @@ function generateSaleId(existingInvoiceNumbers: string[]): string {
   return `${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
 }
 
-function generateSaleLineId(groupCode: string, allLineIds: string[]): string {
+function generateSaleLineId(typeCode: string, allLineIds: string[]): string {
   const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
-  const prefix = groupCode.slice(0, 2).toUpperCase()
+  const prefix = typeCode.slice(0, 2).toUpperCase()
   return `${prefix}${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
 }
 
@@ -130,7 +130,6 @@ export default function NewDispatchPage() {
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
-  const [itemGroups, setItemGroups] = useState<ItemGroup[]>([])
   const [taxRates, setTaxRates] = useState<TaxRate[]>([])
 
   // Pre-loaded purchase lines with available stock > 0
@@ -141,6 +140,7 @@ export default function NewDispatchPage() {
   const [existingLineIds, setExistingLineIds] = useState<string[]>([])
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
+  const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
   const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
   const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
@@ -169,14 +169,13 @@ export default function NewDispatchPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, w, cu, mt, ms, im, ig, tr, invs, slis, pbiRes, slRes] = await Promise.all([
+      const [c, w, cu, mt, ms, im, tr, invs, slis, pbiRes, slRes] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ACTIVE_ITEM_GROUPS_QUERY),
         hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
         hasuraFetch(ALL_INVOICE_NUMBERS_QUERY),
         hasuraFetch(ALL_SALE_LINE_IDS_QUERY),
@@ -189,7 +188,6 @@ export default function NewDispatchPage() {
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
       setItemMasters((im.data as any)?.item_master ?? [])
-      setItemGroups((ig.data as any)?.item_groups ?? [])
       setTaxRates((tr.data as any)?.tax_rates ?? [])
 
       const invoiceNums: string[] = ((invs.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
@@ -238,10 +236,10 @@ export default function NewDispatchPage() {
             updated[index].material_size_id = item.material_size_id || ''
             updated[index].size_label = item.size_label || ''
 
-            const group = itemGroups.find((g) => g.id === item.item_group_id)
-            if (group) {
+            const mt = materialTypes.find(m => m.id === item.material_type_id)
+            if (mt?.code) {
               const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
-              updated[index].sale_line_id = generateSaleLineId(group.group_code, [...existingLineIds, ...currentAssigned])
+              updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
             }
           }
           // Clear purchase_line_id if it belongs to a different item
@@ -275,10 +273,10 @@ export default function NewDispatchPage() {
           if (!updated[index].item_master_id && pl.item_master_id) {
             updated[index].item_master_id = pl.item_master_id
             const item = itemMasters.find((im) => im.id === pl.item_master_id)
-            const group = item ? itemGroups.find((g) => g.id === item.item_group_id) : null
-            if (group) {
+            const mt = item ? materialTypes.find(m => m.id === item.material_type_id) : null
+            if (mt?.code) {
               const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
-              updated[index].sale_line_id = generateSaleLineId(group.group_code, [...existingLineIds, ...currentAssigned])
+              updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
             }
           }
         } else {
@@ -300,7 +298,7 @@ export default function NewDispatchPage() {
       }
       return updated
     })
-  }, [itemMasters, itemGroups, materialTypes, taxRates, existingLineIds, availablePurchaseLines])
+  }, [itemMasters, materialTypes, taxRates, existingLineIds, availablePurchaseLines])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -308,10 +306,12 @@ export default function NewDispatchPage() {
   const totalAmt = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
   const handleCreateMaterialType = async () => {
+    const code = newMaterialTypeCode.trim().toUpperCase()
+    if (code.length !== 2) { setError('Material type code must be exactly 2 characters'); return }
     if (!newMaterialTypeName.trim()) return
     setMaterialTypeDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
-      name: newMaterialTypeName.trim(), unit: newMaterialTypeUnit.trim() || null, description: null,
+      code, name: newMaterialTypeName.trim(), unit: newMaterialTypeUnit.trim() || null, description: null,
     })
     if (err) { setError(err.message); setMaterialTypeDialogLoading(false); return }
     const newType = data?.insert_material_types_one
@@ -756,12 +756,19 @@ export default function NewDispatchPage() {
               </div>
               <button type="button" onClick={handleCancelNewType} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Material Type Name</label>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Code * (2 chars)</label>
+                <input value={newMaterialTypeCode} maxLength={2}
+                  onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:outline-none"
+                  placeholder="e.g. GA" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-1">Name *</label>
                 <input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
                   className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="Enter material type" />
+                  placeholder="e.g. GA Sheet" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-blue-900 mb-1">Unit</label>

@@ -7,15 +7,14 @@ import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
-  ACTIVE_ITEM_GROUPS_QUERY, ACTIVE_PURCHASE_TAX_RATES_QUERY, ACTIVE_DIVISIONS_QUERY,
+  ACTIVE_PURCHASE_TAX_RATES_QUERY,
   ALL_BILL_NUMBERS_QUERY, ALL_PURCHASE_LINE_IDS_QUERY,
   CREATE_PURCHASE_BILL_MUTATION, CREATE_PURCHASE_BILL_ITEMS_MUTATION,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
-  CREATE_ITEM_MASTER_MUTATION, CREATE_ITEM_GROUP_MUTATION,
+  CREATE_ITEM_MASTER_MUTATION,
   CREATE_COMPANY_MUTATION, CREATE_WAREHOUSE_MUTATION, CREATE_SUPPLIER_MUTATION,
-  CREATE_DIVISION_MUTATION,
 } from '@/lib/hasura/queries'
-import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, ItemGroup, TaxRate, Division } from '@/types'
+import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
 type LineItem = {
   rowId: string
@@ -109,8 +108,6 @@ export default function NewBillPage() {
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
-  const [itemGroups, setItemGroups] = useState<ItemGroup[]>([])
-  const [divisions, setDivisions] = useState<Division[]>([])
   const [taxRates, setTaxRates] = useState<TaxRate[]>([])
 
   // Existing IDs for sequence computation
@@ -152,6 +149,7 @@ export default function NewBillPage() {
 
   // ── Material Type dialog ─────────────────────────────────────────────────
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
+  const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
   const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
   const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
@@ -167,8 +165,6 @@ export default function NewBillPage() {
   // ── New Item dialog ──────────────────────────────────────────────────────
   const [showNewItemDialog, setShowNewItemDialog] = useState(false)
   const [newItemLineIndex, setNewItemLineIndex] = useState<number | null>(null)
-  const [newItemDivisionId, setNewItemDivisionId] = useState('')
-  const [newItemGroupId, setNewItemGroupId] = useState('')
   const [newItemMaterialTypeId, setNewItemMaterialTypeId] = useState('')
   const [newItemMaterialSizeId, setNewItemMaterialSizeId] = useState('')
   const [newItemName, setNewItemName] = useState('')
@@ -176,19 +172,6 @@ export default function NewBillPage() {
   const [newItemDescription, setNewItemDescription] = useState('')
   const [newItemCode, setNewItemCode] = useState('')
   const [newItemDialogLoading, setNewItemDialogLoading] = useState(false)
-
-  // ── New Group sub-dialog (inside Item dialog) ────────────────────────────
-  const [showNewGroupDialog, setShowNewGroupDialog] = useState(false)
-  const [newGroupCode, setNewGroupCode] = useState('')
-  const [newGroupDesc, setNewGroupDesc] = useState('')
-  const [newGroupDivisionId, setNewGroupDivisionId] = useState('')
-  const [newGroupDialogLoading, setNewGroupDialogLoading] = useState(false)
-
-  // ── New Division sub-dialog (inside Item dialog) ─────────────────────────
-  const [showNewDivisionDialog, setShowNewDivisionDialog] = useState(false)
-  const [newDivCode, setNewDivCode] = useState('')
-  const [newDivName, setNewDivName] = useState('')
-  const [newDivLoading, setNewDivLoading] = useState(false)
 
   // ── Autocomplete search state ────────────────────────────────────────────
   const [companySearch, setCompanySearch] = useState('')
@@ -211,16 +194,14 @@ export default function NewBillPage() {
   // ── Load master data ─────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
-      const [c, w, s, mt, ms, ig, im, tr, div, bns, lis] = await Promise.all([
+      const [c, w, s, mt, ms, im, tr, bns, lis] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_GROUPS_QUERY),
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
         hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
-        hasuraFetch(ACTIVE_DIVISIONS_QUERY),
         hasuraFetch(ALL_BILL_NUMBERS_QUERY),
         hasuraFetch(ALL_PURCHASE_LINE_IDS_QUERY),
       ])
@@ -229,10 +210,8 @@ export default function NewBillPage() {
       setSuppliers((s.data as any)?.suppliers ?? [])
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemGroups((ig.data as any)?.item_groups ?? [])
       setItemMasters((im.data as any)?.item_master ?? [])
       setTaxRates((tr.data as any)?.tax_rates ?? [])
-      setDivisions((div.data as any)?.divisions ?? [])
 
       const bills: string[] = ((bns.data as any)?.purchase_bills ?? []).map((b: any) => b.bill_number)
       const lineIds: string[] = ((lis.data as any)?.purchase_bill_items ?? [])
@@ -250,10 +229,12 @@ export default function NewBillPage() {
     ? warehouses.filter((w) => w.company_id === companyId || !w.company_id)
     : warehouses
 
-  const generateItemCode = (groupId: string) => {
-    const group = itemGroups.find((g) => g.id === groupId)
-    if (!group?.group_code) return ''
-    const prefix = group.group_code.trim().toUpperCase()
+  useEffect(() => {
+    const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
+    if (mt) setNewItemUnit(mt.unit || 'tons')
+    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
+    if (!mt?.code) { setNewItemCode(''); return }
+    const prefix = mt.code.trim().toUpperCase()
     const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const sequence = itemMasters.reduce((max, item) => {
       if (!item.item_code?.startsWith(prefix)) return max
@@ -262,32 +243,8 @@ export default function NewBillPage() {
       const n = Number(match[1])
       return Number.isFinite(n) ? Math.max(max, n) : max
     }, 0)
-    return `${prefix}${String(sequence + 1).padStart(4, '0')}`
-  }
-
-  useEffect(() => {
-    setNewItemCode(newItemGroupId ? generateItemCode(newItemGroupId) : '')
-  }, [newItemGroupId, itemMasters])
-
-  useEffect(() => {
-    const materialType = materialTypes.find((mt) => mt.id === newItemMaterialTypeId)
-    if (materialType) setNewItemUnit(materialType.unit || 'tons')
-  }, [newItemMaterialTypeId, materialTypes])
-
-  useEffect(() => {
-    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
-  }, [newItemMaterialTypeId])
-
-  // When division changes in item dialog, reset group if it no longer belongs to that division
-  useEffect(() => {
-    if (newItemDivisionId && newItemGroupId) {
-      const group = itemGroups.find(g => g.id === newItemGroupId)
-      if (group && group.division_id && group.division_id !== newItemDivisionId) {
-        setNewItemGroupId('')
-        setNewItemCode('')
-      }
-    }
-  }, [newItemDivisionId])
+    setNewItemCode(`${prefix}${String(sequence + 1).padStart(4, '0')}`)
+  }, [newItemMaterialTypeId, materialTypes, itemMasters])
 
   const selectedNewItemSize = materialSizes.find((s) => s.id === newItemMaterialSizeId)
 
@@ -306,11 +263,11 @@ export default function NewBillPage() {
             updated[index].material_type_id = item.material_type_id
             updated[index].material_size_id = item.material_size_id || ''
             updated[index].size_label = item.size_label || ''
-            const group = itemGroups.find((g) => g.id === item.item_group_id)
-            if (group) {
+            const mt = materialTypes.find(m => m.id === item.material_type_id)
+            if (mt?.code) {
               const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.purchase_line_id).filter(Boolean)
               updated[index].purchase_line_id = generatePurchaseLineId(
-                group.group_code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned]
+                mt.code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned]
               )
             }
           }
@@ -354,7 +311,7 @@ export default function NewBillPage() {
       }
       return updated
     })
-  }, [itemMasters, itemGroups, materialSizes, taxRates, existingLineIds, billDate])
+  }, [itemMasters, materialTypes, materialSizes, taxRates, existingLineIds, billDate])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i))
@@ -420,17 +377,19 @@ export default function NewBillPage() {
 
   // ── Material Type creation ───────────────────────────────────────────────
   const handleCreateMaterialType = async () => {
-    if (!newMaterialTypeName.trim()) { alert('Material Type name is required'); return }
+    const code = newMaterialTypeCode.trim().toUpperCase()
+    if (code.length !== 2) { alert('Code must be exactly 2 characters'); return }
+    if (!newMaterialTypeName.trim()) { alert('Name is required'); return }
     setMaterialTypeDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
-      name: newMaterialTypeName, unit: newMaterialTypeUnit,
+      code, name: newMaterialTypeName, unit: newMaterialTypeUnit,
     })
     setMaterialTypeDialogLoading(false)
     if (err) { alert(`Error: ${err.message}`); return }
     const newMT = data?.insert_material_types_one
     if (newMT) {
       setMaterialTypes(prev => [...prev, newMT])
-      setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons')
+      setNewMaterialTypeCode(''); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons')
       setShowMaterialTypeDialog(false)
     }
   }
@@ -454,59 +413,17 @@ export default function NewBillPage() {
     }
   }
 
-  // ── Division creation (inside Item dialog) ───────────────────────────────
-  const handleCreateDivision = async () => {
-    if (!newDivCode.trim() || !newDivName.trim()) { alert('Division code and name are required'); return }
-    setNewDivLoading(true)
-    const { data, error: err } = await hasuraFetch<{ insert_divisions_one: Division }>(CREATE_DIVISION_MUTATION, {
-      division_code: newDivCode.trim().toUpperCase(),
-      division_name: newDivName.trim(),
-    })
-    setNewDivLoading(false)
-    if (err) { alert(`Error: ${err.message}`); return }
-    const created = data?.insert_divisions_one
-    if (created) {
-      setDivisions(prev => [...prev, created])
-      setNewItemDivisionId(created.id)
-      setNewGroupDivisionId(created.id)
-      setNewDivCode(''); setNewDivName('')
-      setShowNewDivisionDialog(false)
-    }
-  }
-
-  // ── New Item Group creation (inside Item dialog) ─────────────────────────
-  const handleCreateGroup = async () => {
-    const code = newGroupCode.trim().toUpperCase()
-    if (!code) { alert('Group code is required'); return }
-    if (code.length !== 2) { alert('Group code must be exactly 2 characters'); return }
-    setNewGroupDialogLoading(true)
-    const { data, error: err } = await hasuraFetch<{ insert_item_groups_one: ItemGroup }>(CREATE_ITEM_GROUP_MUTATION, {
-      group_code: code,
-      group_desc: newGroupDesc || null,
-      division_id: newGroupDivisionId || newItemDivisionId || null,
-    })
-    setNewGroupDialogLoading(false)
-    if (err) { alert(`Error: ${err.message}`); return }
-    const created = data?.insert_item_groups_one
-    if (created) {
-      setItemGroups(prev => [...prev, created])
-      setNewItemGroupId(created.id)
-      setNewGroupCode(''); setNewGroupDesc(''); setNewGroupDivisionId('')
-      setShowNewGroupDialog(false)
-    }
-  }
-
   // ── New Item creation ────────────────────────────────────────────────────
   const handleCreateNewItem = async () => {
-    if (!newItemGroupId || !newItemMaterialTypeId || !newItemName.trim()) {
-      alert('Group, material type, and item name are required.')
+    if (!newItemMaterialTypeId || !newItemName.trim()) {
+      alert('Material type and item name are required.')
       return
     }
-    if (!newItemCode) { alert('Select a group first to generate an item code.'); return }
+    if (!newItemCode) { alert('Select a material type first to generate an item code.'); return }
     setNewItemDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_item_master_one: ItemMaster }>(CREATE_ITEM_MASTER_MUTATION, {
       item_code: newItemCode, item_name: newItemName,
-      item_group_id: newItemGroupId, material_type_id: newItemMaterialTypeId,
+      material_type_id: newItemMaterialTypeId,
       material_size_id: newItemMaterialSizeId || null,
       size_label: selectedNewItemSize?.size_label || null,
       unit: newItemUnit, description: newItemDescription || null,
@@ -517,7 +434,7 @@ export default function NewBillPage() {
     if (created) {
       setItemMasters(prev => [...prev, created])
       if (newItemLineIndex !== null) {
-        const group = itemGroups.find(g => g.id === newItemGroupId)
+        const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
         setLines(prev => {
           const updated = [...prev]
           const currentAssigned = prev.filter((_, i) => i !== newItemLineIndex).map(l => l.purchase_line_id).filter(Boolean)
@@ -527,17 +444,16 @@ export default function NewBillPage() {
             item_code: created.item_code, material_type_id: newItemMaterialTypeId,
             material_size_id: created.material_size_id || '',
             size_label: created.size_label || '',
-            purchase_line_id: group
-              ? generatePurchaseLineId(group.group_code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned])
+            purchase_line_id: mt?.code
+              ? generatePurchaseLineId(mt.code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned])
               : '',
           }
           return updated
         })
       }
       setShowNewItemDialog(false)
-      setNewItemLineIndex(null); setNewItemDivisionId(''); setNewItemGroupId('')
-      setNewItemMaterialTypeId(''); setNewItemMaterialSizeId(''); setNewItemName('')
-      setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
+      setNewItemLineIndex(null); setNewItemMaterialTypeId(''); setNewItemMaterialSizeId('')
+      setNewItemName(''); setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
     }
   }
 
@@ -584,11 +500,6 @@ export default function NewBillPage() {
     router.push('/bills')
     router.refresh()
   }
-
-  // Groups visible in item dialog (filter by division if selected)
-  const groupsForItemDialog = newItemDivisionId
-    ? itemGroups.filter(g => !g.division_id || g.division_id === newItemDivisionId)
-    : itemGroups
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -751,9 +662,9 @@ export default function NewBillPage() {
                       if (!line.item_master_id) continue
                       const item = itemMasters.find(im => im.id === line.item_master_id)
                       if (!item) continue
-                      const group = itemGroups.find(g => g.id === item.item_group_id)
-                      if (!group) continue
-                      const newLineId = generatePurchaseLineId(group.group_code, getMMYY(new Date(newDate + 'T00:00:00')), [...existingLineIds, ...newlyAssigned])
+                      const mt = materialTypes.find(m => m.id === item.material_type_id)
+                      if (!mt?.code) continue
+                      const newLineId = generatePurchaseLineId(mt.code, getMMYY(new Date(newDate + 'T00:00:00')), [...existingLineIds, ...newlyAssigned])
                       newLines[i] = { ...line, purchase_line_id: newLineId }
                       newlyAssigned.push(newLineId)
                     }
@@ -902,7 +813,7 @@ export default function NewBillPage() {
                                   setShowNewItemDialog(true)
                                   setNewItemMaterialTypeId(line.material_type_id)
                                   setNewItemMaterialSizeId(line.material_size_id)
-                                  setNewItemName(''); setNewItemDescription(''); setNewItemGroupId(''); setNewItemCode(''); setNewItemDivisionId('')
+                                  setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
                                   setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
                                 }}
                                 className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold">
@@ -1165,11 +1076,20 @@ export default function NewBillPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
             <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Material Type</h2>
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Name</label>
-              <input type="text" value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
-                placeholder="e.g., CR, GI, HR Coil"
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Code * (2 chars)</label>
+                <input type="text" value={newMaterialTypeCode} maxLength={2}
+                  onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. GA" autoFocus
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] font-mono uppercase focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Name *</label>
+                <input type="text" value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)}
+                  placeholder="e.g. GA Sheet, CR Coil"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
             </div>
             <div>
               <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Unit</label>
@@ -1182,7 +1102,7 @@ export default function NewBillPage() {
               </select>
             </div>
             <div className="flex gap-3 justify-end pt-2">
-              <button onClick={() => setShowMaterialTypeDialog(false)}
+              <button onClick={() => { setShowMaterialTypeDialog(false); setNewMaterialTypeCode(''); setNewMaterialTypeName(''); setNewMaterialTypeUnit('tons') }}
                 className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
                 className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
@@ -1235,65 +1155,33 @@ export default function NewBillPage() {
         </div>
       )}
 
-      {/* ── New Item (with Division hierarchy) ──────────────────────────── */}
+      {/* ── New Item ────────────────────────────────────────────────────── */}
       {showNewItemDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
             <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Item</h2>
 
-            {/* Row 1: Division → Group Code → Item Code */}
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division</label>
-                <select value={newItemDivisionId}
-                  onChange={(e) => {
-                    if (e.target.value === 'NEW_DIV') { setShowNewDivisionDialog(true) }
-                    else { setNewItemDivisionId(e.target.value) }
-                  }}
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Material Type *</label>
+                <select value={newItemMaterialTypeId} onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
                   className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                  <option value="">— All Divisions —</option>
-                  {divisions.map(d => <option key={d.id} value={d.id}>{d.division_code} — {d.division_name}</option>)}
-                  <option value="NEW_DIV" className="font-semibold text-blue-600">+ New Division</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Group Code *</label>
-                <select value={newItemGroupId}
-                  onChange={(e) => {
-                    if (e.target.value === 'NEW_GROUP') {
-                      setNewGroupDivisionId(newItemDivisionId)
-                      setShowNewGroupDialog(true)
-                    } else {
-                      setNewItemGroupId(e.target.value)
-                    }
-                  }}
-                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                  <option value="">— Select Group —</option>
-                  {groupsForItemDialog.map(g => <option key={g.id} value={g.id}>{g.group_code}{g.group_desc ? ` (${g.group_desc})` : ''}</option>)}
-                  <option value="NEW_GROUP" className="font-semibold text-blue-600">+ New Group</option>
+                  <option value="">— Select —</option>
+                  {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.code} — {mt.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Item Code</label>
-                <input readOnly value={newItemCode} placeholder="Auto-generated"
-                  className="block w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-[0.9375rem]" />
+                <input readOnly value={newItemCode} placeholder="Auto-generated from type"
+                  className="block w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-[0.9375rem] font-mono" />
               </div>
             </div>
 
-            {/* Row 2: Item Name + Material Type */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Item Name *</label>
                 <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Material Type *</label>
-                <select value={newItemMaterialTypeId} onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                  <option value="">— Select —</option>
-                  {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.name}</option>)}
-                </select>
               </div>
               <div>
                 <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Size</label>
@@ -1308,89 +1196,24 @@ export default function NewBillPage() {
                 <input type="text" value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)}
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
-            </div>
-            <div>
-              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Description</label>
-              <input type="text" value={newItemDescription} onChange={(e) => setNewItemDescription(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Description</label>
+                <input type="text" value={newItemDescription} onChange={(e) => setNewItemDescription(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end pt-2">
               <button type="button"
                 onClick={() => {
                   setShowNewItemDialog(false); setNewItemLineIndex(null)
-                  setNewItemDivisionId(''); setNewItemGroupId(''); setNewItemMaterialTypeId('')
-                  setNewItemMaterialSizeId(''); setNewItemName(''); setNewItemUnit('tons')
-                  setNewItemDescription(''); setNewItemCode('')
+                  setNewItemMaterialTypeId(''); setNewItemMaterialSizeId('')
+                  setNewItemName(''); setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
                 }}
                 className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={handleCreateNewItem} disabled={newItemDialogLoading}
                 className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {newItemDialogLoading ? 'Creating...' : 'Create Item'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── New Division (inside Item dialog) ───────────────────────────── */}
-      {showNewDivisionDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg max-w-sm w-full p-6 space-y-4">
-            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Division</h2>
-            <div>
-              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division Code *</label>
-              <input type="text" value={newDivCode} onChange={(e) => setNewDivCode(e.target.value.toUpperCase())} autoFocus
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
-                placeholder="e.g. STL" />
-            </div>
-            <div>
-              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division Name *</label>
-              <input type="text" value={newDivName} onChange={(e) => setNewDivName(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
-                placeholder="e.g. Steel Products" />
-            </div>
-            <div className="flex gap-3 justify-end pt-2">
-              <button onClick={() => { setShowNewDivisionDialog(false); setNewDivCode(''); setNewDivName('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleCreateDivision} disabled={newDivLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {newDivLoading ? 'Creating...' : 'Create Division'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── New Group (inside Item dialog) ───────────────────────────────── */}
-      {showNewGroupDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg max-w-sm w-full p-6 space-y-4">
-            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Item Group</h2>
-            <div>
-              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Division</label>
-              <select value={newGroupDivisionId} onChange={(e) => setNewGroupDivisionId(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
-                <option value="">— None —</option>
-                {divisions.map(d => <option key={d.id} value={d.id}>{d.division_code} — {d.division_name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Group Code * <span className="font-normal text-gray-400">(2 chars)</span></label>
-              <input type="text" value={newGroupCode} onChange={(e) => setNewGroupCode(e.target.value.toUpperCase())} maxLength={2} autoFocus
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. MS" />
-            </div>
-            <div>
-              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Description</label>
-              <input type="text" value={newGroupDesc} onChange={(e) => setNewGroupDesc(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
-            </div>
-            <div className="flex gap-3 justify-end pt-2">
-              <button onClick={() => { setShowNewGroupDialog(false); setNewGroupCode(''); setNewGroupDesc(''); setNewGroupDivisionId('') }}
-                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleCreateGroup} disabled={newGroupDialogLoading}
-                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {newGroupDialogLoading ? 'Creating...' : 'Create Group'}
               </button>
             </div>
           </div>
