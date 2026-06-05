@@ -833,7 +833,10 @@ export default function NewBillPage() {
                           {itemOpen[line.rowId] && (
                             <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
                               {itemsForType
-                                .filter(im => im.item_name.toLowerCase().includes(itemSearchValue.toLowerCase()))
+                                .filter(im => {
+                                  const q = itemSearchValue.toLowerCase()
+                                  return im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
+                                })
                                 .map(im => (
                                   <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => {
@@ -845,7 +848,10 @@ export default function NewBillPage() {
                                     {im.item_name}
                                   </button>
                                 ))}
-                              {itemsForType.filter(im => im.item_name.toLowerCase().includes(itemSearchValue.toLowerCase())).length === 0 && (
+                              {itemsForType.filter(im => {
+                                const q = itemSearchValue.toLowerCase()
+                                return im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
+                              }).length === 0 && (
                                 <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
                               )}
                               <button type="button" onMouseDown={(e) => e.preventDefault()}
@@ -880,7 +886,10 @@ export default function NewBillPage() {
                         <select value={line.material_type_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
-                            else { updateLine(i, 'material_type_id', e.target.value) }
+                            else {
+                              updateLine(i, 'material_type_id', e.target.value)
+                              setItemSearch(prev => ({ ...prev, [line.rowId]: '' }))
+                            }
                           }}
                           className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
