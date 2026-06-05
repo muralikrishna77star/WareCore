@@ -57,9 +57,10 @@ function computeNextSeq(ids: string[], pattern: RegExp): number {
   }, 0)
 }
 
-function generatePurchaseId(existingBillNumbers: string[]): string {
+function generatePurchaseId(existingBillNumbers: string[], dateStr?: string): string {
   const seq = computeNextSeq(existingBillNumbers, /^\d{4}-(\d+)$/)
-  return `${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+  const date = dateStr ? new Date(dateStr + 'T00:00:00') : new Date()
+  return `${getMMYY(date)}-${String(seq + 1).padStart(4, '0')}`
 }
 
 function generatePurchaseLineId(groupCode: string, billNumber: string, allLineIds: string[]): string {
@@ -238,7 +239,7 @@ export default function NewBillPage() {
 
       setExistingBillNumbers(bills)
       setExistingLineIds(lineIds)
-      setBillNumber(generatePurchaseId(bills))
+      setBillNumber(generatePurchaseId(bills, new Date().toISOString().split('T')[0]))
       setMasterDataLoading(false)
     }
     load()
@@ -727,7 +728,7 @@ export default function NewBillPage() {
                 <input type="text" value={billNumber} onChange={(e) => setBillNumber(e.target.value)}
                   placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
                   className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] font-mono focus:border-blue-500 focus:outline-none" />
-                <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers))}
+                <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers, billDate))}
                   className="rounded-md border border-gray-300 px-3 py-2 text-[0.6875rem] text-gray-600 hover:bg-gray-50">↻ New ID</button>
               </div>
             </div>
@@ -735,7 +736,30 @@ export default function NewBillPage() {
             {/* Bill Date */}
             <div>
               <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Bill Date</label>
-              <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} required
+              <input type="date" value={billDate} onChange={(e) => {
+                const newDate = e.target.value
+                setBillDate(newDate)
+                if (newDate) {
+                  const newBillNum = generatePurchaseId(existingBillNumbers, newDate)
+                  setBillNumber(newBillNum)
+                  setLines(prev => {
+                    const newLines = [...prev]
+                    const newlyAssigned: string[] = []
+                    for (let i = 0; i < newLines.length; i++) {
+                      const line = newLines[i]
+                      if (!line.item_master_id) continue
+                      const item = itemMasters.find(im => im.id === line.item_master_id)
+                      if (!item) continue
+                      const group = itemGroups.find(g => g.id === item.item_group_id)
+                      if (!group) continue
+                      const newLineId = generatePurchaseLineId(group.group_code, newBillNum, [...existingLineIds, ...newlyAssigned])
+                      newLines[i] = { ...line, purchase_line_id: newLineId }
+                      newlyAssigned.push(newLineId)
+                    }
+                    return newLines
+                  })
+                }
+              }} required
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
 
