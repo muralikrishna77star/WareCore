@@ -520,9 +520,9 @@ export default function NewBillPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border p-6">
-          <h2 className="text-[0.9375rem] font-semibold text-gray-800 mb-4">Bill Details</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border px-4 py-3">
+          <h2 className="text-[0.875rem] font-semibold text-gray-800 mb-2">Bill Details</h2>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 
             {/* Company */}
             <div>
@@ -686,8 +686,8 @@ export default function NewBillPage() {
         </div>
 
         {/* ── Line Items ─────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
             <button type="button" onClick={addLine} className="text-[0.9375rem] text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
           </div>
