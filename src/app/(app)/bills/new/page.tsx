@@ -121,7 +121,7 @@ export default function NewBillPage() {
   const [billNumber, setBillNumber] = useState('')
   const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
-  const [lines, setLines] = useState<LineItem[]>([emptyLine()])
+  const [lines, setLines] = useState<LineItem[]>([emptyLine(), emptyLine(), emptyLine(), emptyLine(), emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [masterDataLoading, setMasterDataLoading] = useState(true)
