@@ -544,12 +544,13 @@ export default function NewBillPage() {
                 <input type="text" value={companySearch}
                   onChange={(e) => setCompanySearch(e.target.value)}
                   onFocus={() => setCompanyOpen(true)}
+                  onBlur={() => setCompanyOpen(false)}
                   placeholder="Search company..."
                   className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
                 />
                 {companyOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button type="button"
+                    <button type="button" onMouseDown={(e) => e.preventDefault()}
                       onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
                       className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                       + New Company
@@ -557,7 +558,7 @@ export default function NewBillPage() {
                     {companies
                       .filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.code.toLowerCase().includes(companySearch.toLowerCase()))
                       .map(c => (
-                        <button key={c.id} type="button"
+                        <button key={c.id} type="button" onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setCompanyId(c.id)
                             setCompanySearch(c.name)
@@ -580,13 +581,14 @@ export default function NewBillPage() {
                 <input type="text" value={warehouseSearch}
                   onChange={(e) => setWarehouseSearch(e.target.value)}
                   onFocus={() => setWarehouseOpen(true)}
+                  onBlur={() => setWarehouseOpen(false)}
                   placeholder="Search warehouse..."
                   required
                   className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
                 />
                 {warehouseOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button type="button"
+                    <button type="button" onMouseDown={(e) => e.preventDefault()}
                       onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
                       className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                       + New Warehouse
@@ -594,7 +596,7 @@ export default function NewBillPage() {
                     {filteredWarehouses
                       .filter(w => w.name.toLowerCase().includes(warehouseSearch.toLowerCase()))
                       .map(w => (
-                        <button key={w.id} type="button"
+                        <button key={w.id} type="button" onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setWarehouseId(w.id)
                             setWarehouseSearch(w.name)
@@ -616,12 +618,13 @@ export default function NewBillPage() {
                 <input type="text" value={supplierSearch}
                   onChange={(e) => setSupplierSearch(e.target.value)}
                   onFocus={() => setSupplierOpen(true)}
+                  onBlur={() => setSupplierOpen(false)}
                   placeholder="Search supplier..."
                   className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
                 />
                 {supplierOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button type="button"
+                    <button type="button" onMouseDown={(e) => e.preventDefault()}
                       onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
                       className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                       + New Supplier
@@ -629,7 +632,7 @@ export default function NewBillPage() {
                     {suppliers
                       .filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
                       .map(s => (
-                        <button key={s.id} type="button"
+                        <button key={s.id} type="button" onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setSupplierId(s.id)
                             setSupplierSearch(s.name)
