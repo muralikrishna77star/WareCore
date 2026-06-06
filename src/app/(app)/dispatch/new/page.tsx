@@ -540,7 +540,7 @@ export default function NewDispatchPage() {
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item / Sale Line ID</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
@@ -625,8 +625,8 @@ export default function NewDispatchPage() {
                       {/* ── Material ── */}
                       <td className="pr-3 py-2">
                         {line.purchase_line_id ? (
-                          <span className="block text-sm text-gray-700 px-1">
-                            {materialTypes.find(m => m.id === line.material_type_id)?.description || '—'}
+                          <span className="block text-sm text-gray-700 px-1 font-mono">
+                            {materialTypes.find(m => m.id === line.material_type_id)?.code || '—'}
                           </span>
                         ) : (
                           <select value={line.material_type_id} onChange={(e) => {
