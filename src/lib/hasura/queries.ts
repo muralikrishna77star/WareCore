@@ -1116,11 +1116,11 @@ export const REPORTS_QUERY = `
     v_stock_at_vendors {
       vendor_name material_type_name size_label pending_quantity
     }
-    purchase_bills(order_by: {bill_date: desc}) {
+    purchase_bills(where: {status: {_eq: "active"}}, order_by: {bill_date: desc}) {
       bill_date total_quantity total_amount
       companies { name code }
     }
-    dispatch_orders(order_by: {dispatch_date: desc}) {
+    dispatch_orders(where: {status: {_eq: "active"}}, order_by: {dispatch_date: desc}) {
       dispatch_date total_quantity total_amount
       companies { name code }
     }
