@@ -1099,6 +1099,19 @@ export const STOCK_STATEMENT_QUERY = `
   }
 `
 
+export const CHECK_PURCHASE_LINE_USAGE_QUERY = `
+  query CheckPurchaseLineUsage($line_ids: [String!]!) {
+    dispatch_items(where: {
+      purchase_line_id: { _in: $line_ids }
+      dispatch_order: { status: { _neq: "cancelled" } }
+    }) { purchase_line_id }
+    job_work_items(where: {
+      purchase_line_id: { _in: $line_ids }
+      job_work_order: { status: { _neq: "cancelled" } }
+    }) { purchase_line_id }
+  }
+`
+
 // ─── Purchase Cancellations ──────────────────────────────────────────────────
 
 export const PURCHASE_CANCELLATIONS_QUERY = `

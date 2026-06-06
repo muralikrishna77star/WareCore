@@ -12,11 +12,14 @@ import {
   UPDATE_PURCHASE_BILL_MUTATION,
   DELETE_PURCHASE_BILL_ITEMS_MUTATION,
   CREATE_PURCHASE_BILL_ITEMS_MUTATION,
+  CHECK_PURCHASE_LINE_USAGE_QUERY,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
 type LineItem = {
   rowId: string
+  dbItemId: string
+  isLocked: boolean
   purchase_line_id: string
   item_master_id: string
   item_name: string
@@ -61,6 +64,7 @@ function generatePurchaseLineId(groupCode: string, mmyy: string, allLineIds: str
 
 const emptyLine = (): LineItem => ({
   rowId: Math.random().toString(36).slice(2, 8),
+  dbItemId: '', isLocked: false,
   purchase_line_id: '', item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   quantity: '', rate: '', amount: '', notes: '',
@@ -112,6 +116,8 @@ export default function EditBillPage() {
   const [error, setError] = useState<string | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [billStatus, setBillStatus] = useState<'draft' | 'active'>('draft')
+  const [originalFreeItemIds, setOriginalFreeItemIds] = useState<string[]>([])
 
   const [companySearch, setCompanySearch] = useState('')
   const [warehouseSearch, setWarehouseSearch] = useState('')
@@ -159,8 +165,9 @@ export default function EditBillPage() {
       setExistingLineIds(allLineIds)
 
       const bill = (billRes.data as any)?.purchase_bills_by_pk
-      if (!bill || bill.status !== 'draft') { setNotFound(true); setPageLoading(false); return }
+      if (!bill || bill.status === 'cancelled') { setNotFound(true); setPageLoading(false); return }
 
+      setBillStatus(bill.status as 'draft' | 'active')
       setBillNumber(bill.bill_number)
       setBillDate(bill.bill_date)
       setNotes(bill.notes ?? '')
@@ -184,6 +191,8 @@ export default function EditBillPage() {
         const itemMaster = loadedItemMasters.find(im => im.id === item.item_master_id)
         return {
           rowId: Math.random().toString(36).slice(2, 8),
+          dbItemId: item.id ?? '',
+          isLocked: false,
           purchase_line_id: item.purchase_line_id ?? '',
           item_master_id: item.item_master_id ?? '',
           item_name: item.item_name ?? '',
@@ -207,8 +216,30 @@ export default function EditBillPage() {
         }
       })
 
-      // Pad to at least 3 lines
-      while (loadedLines.length < 3) loadedLines.push(emptyLine())
+      // For active bills, determine which lines are locked (used in dispatch/job work)
+      if (bill.status === 'active') {
+        const lineIds = loadedLines.map(l => l.purchase_line_id).filter(Boolean)
+        if (lineIds.length) {
+          const usageRes = await hasuraFetch(CHECK_PURCHASE_LINE_USAGE_QUERY, { line_ids: lineIds })
+          const usedLineIds = new Set<string>([
+            ...((usageRes.data as any)?.dispatch_items ?? []).map((d: any) => d.purchase_line_id),
+            ...((usageRes.data as any)?.job_work_items ?? []).map((j: any) => j.purchase_line_id),
+          ])
+          loadedLines.forEach(l => {
+            if (l.purchase_line_id && usedLineIds.has(l.purchase_line_id)) l.isLocked = true
+          })
+        }
+        // Track free item DB IDs for stock reversal on save
+        setOriginalFreeItemIds(loadedLines.filter(l => !l.isLocked && l.dbItemId).map(l => l.dbItemId))
+      }
+
+      // For drafts: pad to at least 3 lines. For active: ensure at least 1 editable line.
+      if (bill.status === 'draft') {
+        while (loadedLines.length < 3) loadedLines.push(emptyLine())
+      } else {
+        const editableCount = loadedLines.filter(l => !l.isLocked).length
+        if (editableCount === 0) loadedLines.push(emptyLine())
+      }
       setLines(loadedLines)
       setPageLoading(false)
     }
@@ -284,13 +315,56 @@ export default function EditBillPage() {
     if (!billNumber.trim()) { setError('Purchase ID is required.'); setLoading(false); return }
     if (status === 'active') {
       if (!warehouseId) { setError('Warehouse is required to submit.'); setLoading(false); return }
-      const validLines = lines.filter(l => l.material_type_id && parseFloat(l.quantity) > 0)
+      const validLines = lines.filter(l => !l.isLocked && l.material_type_id && parseFloat(l.quantity) > 0)
       if (!validLines.length) { setError('Add at least one line item with material type and quantity.'); setLoading(false); return }
       for (let i = 0; i < validLines.length; i++) {
         if (!validLines[i].item_name.trim()) { setError(`Line ${i + 1}: Item Name is required.`); setLoading(false); return }
       }
     }
 
+    // Active bill: call save-edit API (handles stock reversal for free items)
+    if (billStatus === 'active') {
+      const freeLines = lines.filter(l => !l.isLocked && l.material_type_id && parseFloat(l.quantity) > 0)
+      const newItems = freeLines.map(l => ({
+        purchase_line_id: l.purchase_line_id || null,
+        item_name: l.item_name || null,
+        item_master_id: l.item_master_id || null,
+        material_type_id: l.material_type_id || null,
+        material_size_id: l.material_size_id || null,
+        size_label: l.size_label || null,
+        quantity: parseFloat(l.quantity),
+        rate: l.rate ? parseFloat(l.rate) : null,
+        amount: l.amount ? parseFloat(l.amount) : null,
+        notes: l.notes || null,
+        tax_rate_id: l.tax_rate_id || null,
+        taxable_value: l.taxable_value || null,
+        cgst_rate: l.cgst_rate || null, cgst_amount: l.cgst_amount || null,
+        sgst_rate: l.sgst_rate || null, sgst_amount: l.sgst_amount || null,
+        tds_rate: l.tds_rate || null, tds_amount: l.tds_amount || null,
+        total_with_tax: l.total_with_tax || null,
+      }))
+      const res = await fetch(`/api/bills/${billId}/save-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: companyId || null,
+          warehouse_id: warehouseId || null,
+          supplier_id: supplierId || null,
+          bill_number: billNumber,
+          bill_date: billDate,
+          notes: notes || null,
+          free_item_ids: originalFreeItemIds,
+          new_items: newItems,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Failed to save.'); setLoading(false); return }
+      router.push(`/bills/${billId}`)
+      router.refresh()
+      return
+    }
+
+    // Draft bill: direct GraphQL update
     const { error: updateError } = await hasuraFetch<any>(UPDATE_PURCHASE_BILL_MUTATION, {
       id: billId,
       company_id: companyId || null, warehouse_id: warehouseId || null,
@@ -326,24 +400,31 @@ export default function EditBillPage() {
   }
 
   if (pageLoading) {
-    return <div className="max-w-6xl mx-auto p-6 text-gray-500">Loading draft…</div>
+    return <div className="max-w-6xl mx-auto p-6 text-gray-500">Loading bill…</div>
   }
 
   if (notFound) {
     return (
       <div className="max-w-6xl mx-auto p-6">
-        <p className="text-red-600 font-medium">Draft not found or this bill is no longer editable.</p>
+        <p className="text-red-600 font-medium">Bill not found or cannot be edited.</p>
         <a href="/bills" className="mt-2 text-blue-600 hover:underline text-sm block">← Back to Bills</a>
       </div>
     )
   }
 
+  const isActiveBill = billStatus === 'active'
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <a href={`/bills/${billId}`} className="text-[0.9375rem] text-blue-600 hover:underline mb-1 block">← Back to Draft</a>
-        <h1 className="text-[1.4375rem] font-bold text-gray-900">Edit Draft</h1>
+        <a href={`/bills/${billId}`} className="text-[0.9375rem] text-blue-600 hover:underline mb-1 block">
+          ← Back to {isActiveBill ? 'Bill' : 'Draft'}
+        </a>
+        <h1 className="text-[1.4375rem] font-bold text-gray-900">{isActiveBill ? 'Edit Bill' : 'Edit Draft'}</h1>
         <p className="mt-1 text-[0.9375rem] text-gray-500">Purchase ID: {billNumber}</p>
+        {isActiveBill && (
+          <p className="mt-1 text-[0.8125rem] text-amber-600">Lines used in dispatch or job work are locked and cannot be edited.</p>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -497,6 +578,33 @@ export default function EditBillPage() {
                       })
                     : itemsForType
 
+                  if (line.isLocked) {
+                    const mt = materialTypes.find(m => m.id === line.material_type_id)
+                    const sz = materialSizes.find(s => s.id === line.material_size_id)
+                    return (
+                      <tr key={line.rowId} className="bg-gray-50 opacity-70">
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{mt ? `${mt.code} — ${mt.description}` : '—'}</td>
+                        <td className="pr-2 py-1">
+                          <span className="text-[0.8125rem] text-gray-600">{line.item_name || '—'}</span>
+                          <span className="ml-2 inline-flex items-center rounded bg-orange-50 border border-orange-200 px-1.5 py-0.5 text-[0.625rem] font-medium text-orange-700">🔒 Locked</span>
+                        </td>
+                        <td className="pr-2 py-1">
+                          <span className="inline-flex items-center rounded bg-gray-100 border border-gray-300 px-2 py-1 text-[0.6875rem] font-mono text-gray-500">{line.purchase_line_id || '—'}</span>
+                        </td>
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{line.item_code || '—'}</td>
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{sz?.size_label || line.size_label || '—'}</td>
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-600">{line.quantity}</td>
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-600">{line.rate}</td>
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">—</td>
+                        <td className="pr-2 py-1 text-right text-[0.8125rem] text-gray-600">
+                          {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : line.amount ? `₹${parseFloat(line.amount).toFixed(2)}` : '—'}
+                        </td>
+                        <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{line.notes}</td>
+                        <td></td>
+                      </tr>
+                    )
+                  }
+
                   return (
                     <tr key={line.rowId}>
                       {/* Material Type */}
@@ -645,14 +753,23 @@ export default function EditBillPage() {
         {error && <div className="rounded-md bg-red-50 border border-red-200 p-4"><p className="text-[0.9375rem] text-red-800">{error}</p></div>}
 
         <div className="flex gap-3">
-          <button type="button" onClick={() => saveBill('active')} disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Submit Bill'}
-          </button>
-          <button type="button" onClick={() => saveBill('draft')} disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '⎘ Save Draft'}
-          </button>
+          {isActiveBill ? (
+            <button type="button" onClick={() => saveBill('active')} disabled={loading}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {loading ? 'Saving...' : '✓ Save Changes'}
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => saveBill('active')} disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+                {loading ? 'Saving...' : '✓ Submit Bill'}
+              </button>
+              <button type="button" onClick={() => saveBill('draft')} disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
+                {loading ? 'Saving...' : '⎘ Save Draft'}
+              </button>
+            </>
+          )}
           <button type="button" onClick={() => router.back()}
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             Cancel

@@ -208,6 +208,21 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             </Link>
             <SubmitBillButton billId={bill.id} hasWarehouse={!!bill.warehouses} />
           </>
+        ) : !isCancelled ? (
+          <>
+            <Link
+              href={`/bills/${bill.id}/edit`}
+              className="px-4 py-2 bg-blue-600 text-white text-[0.9375rem] font-medium rounded-lg hover:bg-blue-700"
+            >
+              Edit Bill
+            </Link>
+            <Link
+              href="/bills/new"
+              className="px-4 py-2 bg-white text-gray-700 text-[0.9375rem] font-medium rounded-lg border border-gray-300 hover:bg-gray-50"
+            >
+              New Bill
+            </Link>
+          </>
         ) : (
           <Link
             href="/bills/new"
