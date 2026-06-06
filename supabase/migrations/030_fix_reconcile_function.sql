@@ -66,13 +66,13 @@ BEGIN
     SELECT
       sl.purchase_line_id,
       SUM(sl.quantity) AS net_qty,
-      MAX(sl.company_id)       FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS company_id,
-      MAX(sl.warehouse_id)     FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS warehouse_id,
-      MAX(sl.material_type_id) FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS material_type_id,
-      MAX(sl.material_size_id) FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS material_size_id,
-      MAX(sl.size_label)       FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS size_label,
-      MAX(sl.reference_id)     FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS reference_id,
-      MAX(sl.reference_number) FILTER (WHERE sl.entry_type = 'PURCHASE_IN') AS reference_number
+      (array_agg(sl.company_id)       FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS company_id,
+      (array_agg(sl.warehouse_id)     FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS warehouse_id,
+      (array_agg(sl.material_type_id) FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS material_type_id,
+      (array_agg(sl.material_size_id) FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS material_size_id,
+      (array_agg(sl.size_label)       FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS size_label,
+      (array_agg(sl.reference_id)     FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS reference_id,
+      (array_agg(sl.reference_number) FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] AS reference_number
     FROM stock_ledger sl
     WHERE sl.purchase_line_id IS NOT NULL
       AND NOT EXISTS (
@@ -81,9 +81,9 @@ BEGIN
       )
     GROUP BY sl.purchase_line_id
     HAVING SUM(sl.quantity) > 0
-      AND MAX(sl.company_id)       FILTER (WHERE sl.entry_type = 'PURCHASE_IN') IS NOT NULL
-      AND MAX(sl.warehouse_id)     FILTER (WHERE sl.entry_type = 'PURCHASE_IN') IS NOT NULL
-      AND MAX(sl.material_type_id) FILTER (WHERE sl.entry_type = 'PURCHASE_IN') IS NOT NULL
+      AND (array_agg(sl.company_id)       FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] IS NOT NULL
+      AND (array_agg(sl.warehouse_id)     FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] IS NOT NULL
+      AND (array_agg(sl.material_type_id) FILTER (WHERE sl.entry_type = 'PURCHASE_IN'))[1] IS NOT NULL
   ) phantoms;
 
   GET DIAGNOSTICS v_count = ROW_COUNT;
