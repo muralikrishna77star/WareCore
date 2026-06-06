@@ -92,7 +92,7 @@ export default async function DispatchPage() {
                         <Link href={`/dispatch/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                           View
                         </Link>
-                        {o.status === 'draft' && (
+                        {(o.status === 'draft' || o.status === 'active') && (
                           <Link href={`/dispatch/${o.id}/edit`} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">
                             Edit
                           </Link>

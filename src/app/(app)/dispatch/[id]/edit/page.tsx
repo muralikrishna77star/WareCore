@@ -416,6 +416,58 @@ export default function EditDispatchPage() {
       return
     }
 
+    // Active orders go through the atomic Postgres function to reverse + rewrite stock
+    if (orderStatus === 'active') {
+      const items = validLines.map((l) => ({
+        item_master_id: l.item_master_id || null,
+        sale_line_id: l.sale_line_id || null,
+        purchase_line_id: l.purchase_line_id && !l.purchase_line_id.startsWith('ID:') ? l.purchase_line_id : null,
+        item_name: l.item_name || null,
+        material_type_id: l.material_type_id,
+        material_size_id: l.material_size_id || null,
+        size_label: l.size_label || null,
+        quantity: parseFloat(l.quantity),
+        unit: 'tons',
+        rate: l.rate ? parseFloat(l.rate) : null,
+        amount: l.amount ? parseFloat(l.amount) : null,
+        notes: l.notes || null,
+        tax_rate_id: l.tax_rate_id || null,
+        taxable_value: l.taxable_value || null,
+        cgst_rate: l.cgst_rate || null,
+        cgst_amount: l.cgst_amount || null,
+        sgst_rate: l.sgst_rate || null,
+        sgst_amount: l.sgst_amount || null,
+        tcs_rate: l.tcs_rate || null,
+        tcs_amount: l.tcs_amount || null,
+        total_with_tax: l.total_with_tax || null,
+      }))
+      const res = await fetch(`/api/dispatch/${orderId}/save-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice_number: saleId || null,
+          dispatch_date: dispatchDate,
+          vehicle_number: vehicleNumber || null,
+          driver_name: driverName || null,
+          notes: notes || null,
+          company_id: companyId || null,
+          warehouse_id: warehouseId || null,
+          customer_id: customerId || null,
+          sale_ref_id: saleRefId || null,
+          status,
+          total_quantity: totalQty,
+          total_amount: totalAmt || null,
+          items,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Save failed'); setLoading(false); return }
+      router.push(`/dispatch/${orderId}`)
+      router.refresh()
+      return
+    }
+
+    // Draft order: three-step GraphQL approach (no stock ledger involvement)
     // 1. Update the order header (and status)
     const { error: updErr } = await hasuraFetch(UPDATE_DISPATCH_ORDER_MUTATION, {
       id: orderId,
@@ -488,25 +540,26 @@ export default function EditDispatchPage() {
     )
   }
 
-  if (orderStatus === 'active') {
-    return (
-      <div className="max-w-5xl mx-auto py-12 text-center space-y-4">
-        <p className="text-gray-700 font-medium">This sale order is already active.</p>
-        <p className="text-sm text-gray-500">Active orders affect stock. To make changes, cancel this order and create a new one.</p>
-        <a href={`/dispatch/${orderId}`} className="inline-block text-blue-600 hover:underline text-sm">← Back to order</a>
-      </div>
-    )
-  }
-
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <a href={`/dispatch/${orderId}`} className="text-sm text-blue-600 hover:underline mb-1 block">← Back to order</a>
         <h1 className="text-2xl font-bold text-gray-900">Edit Sale Entry</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Editing draft order <span className="font-mono font-medium">{saleId}</span>
+          {orderStatus === 'active'
+            ? <>Editing active order <span className="font-mono font-medium">{saleId}</span></>
+            : <>Editing draft order <span className="font-mono font-medium">{saleId}</span></>}
         </p>
       </div>
+
+      {orderStatus === 'active' && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-3">
+          <p className="text-sm font-semibold text-amber-800">Active order — stock will be recalculated</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Saving will reverse the original stock deductions and apply new ones based on the updated items.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-6">
         <div className="bg-white rounded-xl border p-6">

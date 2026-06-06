@@ -161,9 +161,9 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
         <Link href="/dispatch" className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           All Dispatches
         </Link>
-        {order.status === 'draft' && (
+        {(order.status === 'draft' || order.status === 'active') && !isCancelled && (
           <Link href={`/dispatch/${order.id}/edit`} className="px-4 py-2 bg-yellow-500 text-white text-sm font-medium rounded-lg hover:bg-yellow-600">
-            Edit Draft
+            {order.status === 'active' ? 'Edit Sale' : 'Edit Draft'}
           </Link>
         )}
         {!isCancelled && <CancelDispatchButton orderId={order.id} />}
