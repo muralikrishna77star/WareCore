@@ -481,7 +481,7 @@ export default function NewBillPage() {
     const bill = billData?.insert_purchase_bills_one
     if (billError || !bill) { setError(billError?.message ?? 'Failed to save bill'); setLoading(false); return }
 
-    const itemsToSave = lines.filter(l => l.item_name.trim() || l.material_type_id || l.quantity)
+    const itemsToSave = lines.filter(l => l.material_type_id && (l.item_name.trim() || l.quantity))
     if (itemsToSave.length) {
       const items = itemsToSave.map((l) => ({
         bill_id: bill.id,
