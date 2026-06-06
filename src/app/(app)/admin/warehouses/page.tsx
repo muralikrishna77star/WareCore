@@ -16,6 +16,12 @@ export default function WarehousesPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // Merge state
+  const [mergeSource, setMergeSource] = useState<Warehouse | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
+  const [mergeError, setMergeError] = useState('')
+
   const load = () => Promise.all([
     hasuraFetch(WAREHOUSES_QUERY),
     hasuraFetch(ACTIVE_COMPANIES_QUERY),
@@ -46,6 +52,22 @@ export default function WarehousesPage() {
   }
 
   const f = (field: keyof Warehouse, val: string | boolean) => setEditing(e => e ? { ...e, [field]: val } : e)
+
+  const doMerge = async () => {
+    if (!mergeSource || !mergeTargetId) return
+    const target = warehouses.find(w => w.id === mergeTargetId)
+    if (!confirm(`Merge "${mergeSource.name}" INTO "${target?.name}"?\n\nAll stock, bills, sales, and transfers referencing "${mergeSource.name}" will be reassigned to "${target?.name}", and "${mergeSource.name}" will be deleted. This cannot be undone.`)) return
+    setMerging(true); setMergeError('')
+    const res = await fetch('/api/warehouses/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId: mergeSource.id, targetId: mergeTargetId }),
+    })
+    const json = await res.json()
+    setMerging(false)
+    if (!res.ok || json.error) { setMergeError(json.error ?? 'Merge failed'); return }
+    setMergeSource(null); setMergeTargetId(''); load()
+  }
 
   return (
     <div className="space-y-6">
@@ -89,6 +111,7 @@ export default function WarehousesPage() {
                     <td className="px-5 py-3">
                       <div className="flex gap-2">
                         <button onClick={() => setEditing({ ...w })} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>
+                        <button onClick={() => { setMergeSource(w); setMergeTargetId(''); setMergeError('') }} className="text-xs text-amber-600 hover:text-amber-800 font-medium">Merge</button>
                         <button onClick={() => del(w)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
                       </div>
                     </td>
@@ -99,6 +122,38 @@ export default function WarehousesPage() {
           </div>
         )}
       </div>
+
+      {mergeSource && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Merge Warehouse</h2>
+            <p className="text-sm text-gray-600">
+              Reassign all stock, bills, sales, and transfers from{' '}
+              <span className="font-semibold text-red-700">"{mergeSource.name}"</span>{' '}
+              into another warehouse, then delete it.
+            </p>
+            {mergeError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{mergeError}</p>}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Merge INTO *</label>
+              <select value={mergeTargetId} onChange={e => setMergeTargetId(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="">— Select target warehouse —</option>
+                {warehouses.filter(w => w.id !== mergeSource.id).map(w => (
+                  <option key={w.id} value={w.id}>{w.name}{w.companies ? ` (${w.companies.name})` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setMergeSource(null); setMergeTargetId(''); setMergeError('') }}
+                className="px-4 py-2 text-sm border rounded-lg text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={doMerge} disabled={!mergeTargetId || merging}
+                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50">
+                {merging ? 'Merging…' : 'Merge & Delete Duplicate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
