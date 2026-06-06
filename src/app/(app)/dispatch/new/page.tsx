@@ -226,64 +226,74 @@ export default function NewDispatchPage() {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
 
-      // When item is selected from item master: auto-populate + generate sale_line_id
+      // Item selected first: populate all fields and generate sale_line_id
       if (field === 'item_master_id') {
         if (value) {
           const item = itemMasters.find((im) => im.id === value)
           if (item) {
-            updated[index].item_name = item.item_name
+            updated[index].item_name        = item.item_name
             updated[index].material_type_id = item.material_type_id
             updated[index].material_size_id = item.material_size_id || ''
-            updated[index].size_label = item.size_label || ''
-
+            updated[index].size_label       = item.size_label || ''
             const mt = materialTypes.find(m => m.id === item.material_type_id)
             if (mt?.code) {
               const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
               updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
             }
           }
-          // Clear purchase_line_id if it belongs to a different item
+          // Clear purchase_line_id if it no longer matches the selected item
           const currentPL = updated[index].purchase_line_id
           if (currentPL) {
             const pl = availablePurchaseLines.find((l) => l.purchase_line_id === currentPL)
-            if (pl?.item_master_id && pl.item_master_id !== value) {
+            if (!pl || (pl.item_master_id && pl.item_master_id !== value)) {
               updated[index].purchase_line_id = ''
               updated[index].available_quantity = ''
             }
           }
         } else {
-          updated[index].item_name = ''
-          updated[index].sale_line_id = ''
-          updated[index].purchase_line_id = ''
-          updated[index].available_quantity = ''
-        }
-      }
-
-      // When purchase line is selected: always override Item / Material / Size from it
-      if (field === 'purchase_line_id') {
-        const pl = availablePurchaseLines.find((l) => l.purchase_line_id === value)
-        if (pl) {
-          updated[index].available_quantity = pl.available_quantity.toFixed(3)
-          updated[index].item_name         = pl.item_name || ''
-          updated[index].material_type_id  = pl.material_type_id || ''
-          updated[index].material_size_id  = pl.material_size_id || ''
-          updated[index].size_label        = pl.size_label || ''
-          if (pl.item_master_id) updated[index].item_master_id = pl.item_master_id
-          // Always generate sale_line_id from material type
-          const mt = materialTypes.find(m => m.id === pl.material_type_id)
-          if (mt?.code) {
-            const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
-            updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
-          }
-        } else {
-          // Cleared — reset all derived fields
-          updated[index].available_quantity = ''
+          // Item cleared — reset everything
           updated[index].item_name          = ''
           updated[index].material_type_id   = ''
           updated[index].material_size_id   = ''
           updated[index].size_label         = ''
-          updated[index].item_master_id     = ''
           updated[index].sale_line_id       = ''
+          updated[index].purchase_line_id   = ''
+          updated[index].available_quantity = ''
+        }
+      }
+
+      // Purchase line selected second: set available qty + refine material/size
+      if (field === 'purchase_line_id') {
+        const pl = availablePurchaseLines.find((l) => l.purchase_line_id === value)
+        if (pl) {
+          updated[index].available_quantity = pl.available_quantity.toFixed(3)
+          updated[index].material_type_id   = pl.material_type_id || ''
+          updated[index].material_size_id   = pl.material_size_id || ''
+          updated[index].size_label         = pl.size_label || ''
+          // Generate sale_line_id only if not already set by item selection
+          if (!updated[index].sale_line_id) {
+            const mt = materialTypes.find(m => m.id === pl.material_type_id)
+            if (mt?.code) {
+              const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
+              updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
+            }
+          }
+        } else {
+          // Cleared — restore material/size from item if still selected
+          updated[index].available_quantity = ''
+          const selItem = updated[index].item_master_id
+            ? itemMasters.find(im => im.id === updated[index].item_master_id)
+            : null
+          if (selItem) {
+            updated[index].material_type_id = selItem.material_type_id
+            updated[index].material_size_id = selItem.material_size_id || ''
+            updated[index].size_label       = selItem.size_label || ''
+          } else {
+            updated[index].material_type_id = ''
+            updated[index].material_size_id = ''
+            updated[index].size_label       = ''
+            updated[index].sale_line_id     = ''
+          }
         }
       }
 
@@ -539,8 +549,8 @@ export default function NewDispatchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
@@ -559,21 +569,47 @@ export default function NewDispatchPage() {
                 {lines.map((line, i) => {
                   const sizesForType = materialSizes.filter((s) => !s.material_type_id || s.material_type_id === line.material_type_id)
 
-                  // Filter purchase lines: when item is selected, show only matching lines (+ unlinked)
-                  const purchaseLinesForRow = line.item_master_id
-                    ? availablePurchaseLines.filter((pl) => !pl.item_master_id || pl.item_master_id === line.item_master_id)
+                  // Filter purchase lines by selected item (match item_master_id, or material_type_id for lines without one)
+                  const selectedItem = line.item_master_id ? itemMasters.find(im => im.id === line.item_master_id) : null
+                  const purchaseLinesForRow = selectedItem
+                    ? availablePurchaseLines.filter(pl =>
+                        pl.item_master_id === selectedItem.id ||
+                        (!pl.item_master_id && pl.material_type_id === selectedItem.material_type_id)
+                      )
                     : availablePurchaseLines
 
                   return (
                     <tr key={i}>
-                      {/* ── Purchase Line dropdown (stock > 0 only) — FIRST column ── */}
+                      {/* ── Item — FIRST column (always a dropdown) ── */}
+                      <td className="pr-3 py-2">
+                        <div className="space-y-1">
+                          <select
+                            value={line.item_master_id}
+                            onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
+                            className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="">Select Item</option>
+                            {itemMasters.map((im) => (
+                              <option key={im.id} value={im.id}>{im.item_name}</option>
+                            ))}
+                          </select>
+                          {line.sale_line_id ? (
+                            <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">
+                              {line.sale_line_id}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 italic">no line ID yet</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* ── Purchase Line — SECOND column (filtered by item) ── */}
                       <td className="pr-3 py-2">
                         <div>
                           <select
                             value={line.purchase_line_id}
                             onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
                             className={`block w-44 rounded border px-2 py-1.5 text-sm focus:outline-none ${
-                              purchaseLinesForRow.length === 0
+                              line.item_master_id && purchaseLinesForRow.length === 0
                                 ? 'border-gray-200 bg-gray-50 text-gray-400'
                                 : 'border-gray-300 focus:border-blue-500'
                             }`}
@@ -589,42 +625,14 @@ export default function NewDispatchPage() {
                             <p className="text-[10px] text-green-600 mt-0.5 font-medium">
                               ✓ {line.available_quantity} avail
                             </p>
-                          ) : purchaseLinesForRow.length === 0 && !masterDataLoading ? (
-                            <p className="text-[10px] text-amber-600 mt-0.5">No stock</p>
+                          ) : line.item_master_id && purchaseLinesForRow.length === 0 && !masterDataLoading ? (
+                            <p className="text-[10px] text-amber-600 mt-0.5">No stock for this item</p>
                           ) : null}
-                        </div>
-                      </td>
-                      {/* ── Item + Sale Line ID ── */}
-                      <td className="pr-3 py-2">
-                        <div className="space-y-1">
-                          {line.purchase_line_id ? (
-                            <span className="block text-sm text-gray-800 font-medium px-1">
-                              {line.item_name || '—'}
-                            </span>
-                          ) : (
-                            <select
-                              value={line.item_master_id}
-                              onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
-                              className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                            >
-                              <option value="">Select Item</option>
-                              {itemMasters.map((im) => (
-                                <option key={im.id} value={im.id}>{im.item_name}</option>
-                              ))}
-                            </select>
-                          )}
-                          {line.sale_line_id ? (
-                            <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">
-                              {line.sale_line_id}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-gray-400 italic">no line ID yet</span>
-                          )}
                         </div>
                       </td>
                       {/* ── Material ── */}
                       <td className="pr-3 py-2">
-                        {line.purchase_line_id ? (
+                        {line.item_master_id || line.purchase_line_id ? (
                           <span className="block text-sm text-gray-700 px-1 font-mono">
                             {materialTypes.find(m => m.id === line.material_type_id)?.code || '—'}
                           </span>
@@ -648,7 +656,7 @@ export default function NewDispatchPage() {
                       </td>
                       {/* ── Size ── */}
                       <td className="pr-3 py-2">
-                        {line.purchase_line_id ? (
+                        {line.item_master_id || line.purchase_line_id ? (
                           <span className="block text-sm text-gray-700 px-1">
                             {line.size_label || '—'}
                           </span>
