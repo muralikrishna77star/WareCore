@@ -6,6 +6,7 @@ import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY } from '@/lib/hasura/queries'
 import CancelDispatchButton from './CancelDispatchButton'
+import PurgeDispatchButton from './PurgeDispatchButton'
 
 export default async function DispatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -167,6 +168,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
           </Link>
         )}
         {!isCancelled && <CancelDispatchButton orderId={order.id} />}
+        {isCancelled && <PurgeDispatchButton orderId={order.id} />}
       </div>
     </div>
   )

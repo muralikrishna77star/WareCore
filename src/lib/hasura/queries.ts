@@ -161,7 +161,7 @@ export const DASHBOARD_STATS_QUERY = `
         count
       }
     }
-    dispatch_orders_aggregate {
+    dispatch_orders_aggregate(where: {status: {_neq: "cancelled"}}) {
       aggregate {
         count
       }
@@ -1419,6 +1419,35 @@ export const UPSERT_ROLE_PERMISSIONS_MUTATION = `
       }
     ) {
       affected_rows
+    }
+  }
+`
+
+// ─── Dispatch Cancellations ──────────────────────────────────────────────────
+
+export const DISPATCH_CANCELLATIONS_QUERY = `
+  query GetDispatchCancellations {
+    dispatch_cancellations(order_by: {purged_at: desc}) {
+      id invoice_number dispatch_date
+      company_name warehouse_name customer_name
+      total_quantity total_amount
+      cancelled_at cancelled_notes purged_at
+    }
+  }
+`
+
+export const DISPATCH_CANCELLATION_BY_ID_QUERY = `
+  query GetDispatchCancellation($id: uuid!) {
+    dispatch_cancellations_by_pk(id: $id) {
+      id invoice_number dispatch_date notes
+      company_name warehouse_name customer_name
+      vehicle_number sale_ref_id
+      total_quantity total_amount
+      cancelled_at cancelled_notes purged_at
+      dispatch_cancellation_items(order_by: {id: asc}) {
+        id sale_line_id item_name material_type_name size_label
+        quantity rate amount notes
+      }
     }
   }
 `
