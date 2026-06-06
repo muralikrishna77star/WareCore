@@ -1099,6 +1099,36 @@ export const STOCK_STATEMENT_QUERY = `
   }
 `
 
+// ─── Purchase Cancellations ──────────────────────────────────────────────────
+
+export const PURCHASE_CANCELLATIONS_QUERY = `
+  query GetPurchaseCancellations {
+    purchase_cancellations(order_by: {purged_at: desc}) {
+      id bill_number bill_date
+      company_name warehouse_name supplier_name
+      total_quantity total_amount
+      cancelled_at cancelled_notes purged_at
+    }
+  }
+`
+
+export const PURCHASE_CANCELLATION_BY_ID_QUERY = `
+  query GetPurchaseCancellation($id: uuid!) {
+    purchase_cancellations_by_pk(id: $id) {
+      id bill_number bill_date notes
+      company_name warehouse_name supplier_name
+      total_quantity total_amount
+      cancelled_at cancelled_notes purged_at
+      purchase_cancellation_items(order_by: {id: asc}) {
+        id purchase_line_id item_name material_type_name size_label
+        quantity rate amount notes
+        taxable_value cgst_rate cgst_amount sgst_rate sgst_amount
+        tds_rate tds_amount total_with_tax
+      }
+    }
+  }
+`
+
 // ─── Billing Report ──────────────────────────────────────────────────────────
 
 export const BILLING_REPORT_QUERY = `

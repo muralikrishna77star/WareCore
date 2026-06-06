@@ -7,6 +7,7 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY } from '@/lib/hasura/queries'
 import CancelBillButton from './CancelBillButton'
 import SubmitBillButton from './SubmitBillButton'
+import PurgeBillButton from './PurgeBillButton'
 
 export default async function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -222,6 +223,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
           All Bills
         </Link>
         {!isCancelled && canCancel && <CancelBillButton billId={bill.id} />}
+        {isCancelled && <PurgeBillButton billId={bill.id} />}
       </div>
     </div>
   )

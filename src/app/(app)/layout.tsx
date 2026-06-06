@@ -34,6 +34,11 @@ const navItems: NavItem[] = [
     icon: '📋',
   },
   {
+    title: 'Purchase Cancellations',
+    href: '/purchase-cancellations',
+    icon: '🗑️',
+  },
+  {
     title: 'Accounts',
     href: '/accounts',
     icon: '💰',
