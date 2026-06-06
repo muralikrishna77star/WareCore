@@ -259,28 +259,31 @@ export default function NewDispatchPage() {
         }
       }
 
-      // When purchase line is selected from dropdown: populate details + available qty
+      // When purchase line is selected: always override Item / Material / Size from it
       if (field === 'purchase_line_id') {
         const pl = availablePurchaseLines.find((l) => l.purchase_line_id === value)
         if (pl) {
           updated[index].available_quantity = pl.available_quantity.toFixed(3)
-          // Fill item details if not already set via item master selection
-          if (!updated[index].item_name) updated[index].item_name = pl.item_name || ''
-          if (!updated[index].material_type_id) updated[index].material_type_id = pl.material_type_id || ''
-          if (!updated[index].material_size_id && pl.material_size_id) updated[index].material_size_id = pl.material_size_id
-          if (!updated[index].size_label && pl.size_label) updated[index].size_label = pl.size_label
-          // If item_master_id not yet set and purchase line has one → set it + generate sale_line_id
-          if (!updated[index].item_master_id && pl.item_master_id) {
-            updated[index].item_master_id = pl.item_master_id
-            const item = itemMasters.find((im) => im.id === pl.item_master_id)
-            const mt = item ? materialTypes.find(m => m.id === item.material_type_id) : null
-            if (mt?.code) {
-              const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
-              updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
-            }
+          updated[index].item_name         = pl.item_name || ''
+          updated[index].material_type_id  = pl.material_type_id || ''
+          updated[index].material_size_id  = pl.material_size_id || ''
+          updated[index].size_label        = pl.size_label || ''
+          if (pl.item_master_id) updated[index].item_master_id = pl.item_master_id
+          // Always generate sale_line_id from material type
+          const mt = materialTypes.find(m => m.id === pl.material_type_id)
+          if (mt?.code) {
+            const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.sale_line_id).filter(Boolean)
+            updated[index].sale_line_id = generateSaleLineId(mt.code, [...existingLineIds, ...currentAssigned])
           }
         } else {
+          // Cleared — reset all derived fields
           updated[index].available_quantity = ''
+          updated[index].item_name          = ''
+          updated[index].material_type_id   = ''
+          updated[index].material_size_id   = ''
+          updated[index].size_label         = ''
+          updated[index].item_master_id     = ''
+          updated[index].sale_line_id       = ''
         }
       }
 
@@ -540,7 +543,6 @@ export default function NewDispatchPage() {
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item / Sale Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Rate (₹)</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Taxable (₹)</th>
@@ -592,19 +594,25 @@ export default function NewDispatchPage() {
                           ) : null}
                         </div>
                       </td>
-                      {/* ── Item + Sale Line ID (stacked in one cell) ── */}
+                      {/* ── Item + Sale Line ID ── */}
                       <td className="pr-3 py-2">
                         <div className="space-y-1">
-                          <select
-                            value={line.item_master_id}
-                            onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
-                            className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                          >
-                            <option value="">Select Item</option>
-                            {itemMasters.map((im) => (
-                              <option key={im.id} value={im.id}>{im.item_name}</option>
-                            ))}
-                          </select>
+                          {line.purchase_line_id ? (
+                            <span className="block text-sm text-gray-800 font-medium px-1">
+                              {line.item_name || '—'}
+                            </span>
+                          ) : (
+                            <select
+                              value={line.item_master_id}
+                              onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
+                              className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                            >
+                              <option value="">Select Item</option>
+                              {itemMasters.map((im) => (
+                                <option key={im.id} value={im.id}>{im.item_name}</option>
+                              ))}
+                            </select>
+                          )}
                           {line.sale_line_id ? (
                             <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">
                               {line.sale_line_id}
@@ -616,46 +624,53 @@ export default function NewDispatchPage() {
                       </td>
                       {/* ── Material ── */}
                       <td className="pr-3 py-2">
-                        <select value={line.material_type_id} onChange={(e) => {
-                          if (e.target.value === 'NEW_TYPE') {
-                            setActiveLineIndexForNewType(i)
-                            setShowMaterialTypeDialog(true)
-                            return
-                          }
-                          updateLine(i, 'material_type_id', e.target.value)
-                          updateLine(i, 'material_size_id', '')
-                          updateLine(i, 'size_label', '')
-                        }} required
-                          className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
-                          <option value="">Select</option>
-                          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
-                          <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
-                        </select>
+                        {line.purchase_line_id ? (
+                          <span className="block text-sm text-gray-700 px-1">
+                            {materialTypes.find(m => m.id === line.material_type_id)?.description || '—'}
+                          </span>
+                        ) : (
+                          <select value={line.material_type_id} onChange={(e) => {
+                            if (e.target.value === 'NEW_TYPE') {
+                              setActiveLineIndexForNewType(i)
+                              setShowMaterialTypeDialog(true)
+                              return
+                            }
+                            updateLine(i, 'material_type_id', e.target.value)
+                            updateLine(i, 'material_size_id', '')
+                            updateLine(i, 'size_label', '')
+                          }} required
+                            className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                            <option value="">Select</option>
+                            {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
+                            <option value="NEW_TYPE" className="font-semibold">+ New Material Type</option>
+                          </select>
+                        )}
                       </td>
                       {/* ── Size ── */}
                       <td className="pr-3 py-2">
-                        <select value={line.material_size_id}
-                          onChange={(e) => {
-                            if (e.target.value === 'NEW_SIZE') {
-                              setActiveLineIndexForNewSize(i)
-                              setNewSizeMaterialTypeId(line.material_type_id)
-                              setShowSizeDialog(true)
-                              return
-                            }
-                            const sz = materialSizes.find(s => s.id === e.target.value)
-                            updateLine(i, 'material_size_id', e.target.value)
-                            if (sz) updateLine(i, 'size_label', sz.size_label)
-                          }}
-                          className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
-                          <option value="">Select</option>
-                          {sizesForType.map((s) => <option key={s.id} value={s.id}>{s.size_label}</option>)}
-                          <option value="NEW_SIZE" className="font-semibold">+ New Size</option>
-                        </select>
-                      </td>
-                      {/* ── Custom Size ── */}
-                      <td className="pr-3 py-2">
-                        <input type="text" value={line.size_label} onChange={(e) => updateLine(i, 'size_label', e.target.value)}
-                          placeholder="Custom" className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                        {line.purchase_line_id ? (
+                          <span className="block text-sm text-gray-700 px-1">
+                            {line.size_label || '—'}
+                          </span>
+                        ) : (
+                          <select value={line.material_size_id}
+                            onChange={(e) => {
+                              if (e.target.value === 'NEW_SIZE') {
+                                setActiveLineIndexForNewSize(i)
+                                setNewSizeMaterialTypeId(line.material_type_id)
+                                setShowSizeDialog(true)
+                                return
+                              }
+                              const sz = materialSizes.find(s => s.id === e.target.value)
+                              updateLine(i, 'material_size_id', e.target.value)
+                              if (sz) updateLine(i, 'size_label', sz.size_label)
+                            }}
+                            className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                            <option value="">Select</option>
+                            {sizesForType.map((s) => <option key={s.id} value={s.id}>{s.size_label}</option>)}
+                            <option value="NEW_SIZE" className="font-semibold">+ New Size</option>
+                          </select>
+                        )}
                       </td>
                       {/* ── Qty ── */}
                       <td className="pr-3 py-2">
@@ -736,7 +751,7 @@ export default function NewDispatchPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={5} className="py-3 text-sm font-semibold text-right pr-3">Totals:</td>
+                  <td colSpan={4} className="py-3 text-sm font-semibold text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-sm font-bold">{totalQty.toFixed(3)}</td>
                   <td></td>
                   <td className="py-3 pr-3 text-sm font-bold">₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
