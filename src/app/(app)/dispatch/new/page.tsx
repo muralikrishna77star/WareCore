@@ -569,12 +569,21 @@ export default function NewDispatchPage() {
                 {lines.map((line, i) => {
                   const sizesForType = materialSizes.filter((s) => !s.material_type_id || s.material_type_id === line.material_type_id)
 
-                  // Filter purchase lines by selected item (match item_master_id, or material_type_id for lines without one)
+                  // Filter purchase lines by selected item.
+                  // Priority: exact item_master_id match → fall back to material_type + size match.
+                  // This handles purchases done without item_master_id, or with a different item_master_id.
                   const selectedItem = line.item_master_id ? itemMasters.find(im => im.id === line.item_master_id) : null
                   const purchaseLinesForRow = selectedItem
                     ? availablePurchaseLines.filter(pl =>
                         pl.item_master_id === selectedItem.id ||
-                        (!pl.item_master_id && pl.material_type_id === selectedItem.material_type_id)
+                        (
+                          pl.material_type_id === selectedItem.material_type_id &&
+                          (
+                            !selectedItem.material_size_id ||
+                            pl.material_size_id === selectedItem.material_size_id ||
+                            (pl.size_label && selectedItem.size_label && pl.size_label === selectedItem.size_label)
+                          )
+                        )
                       )
                     : availablePurchaseLines
 
