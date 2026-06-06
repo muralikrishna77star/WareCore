@@ -6,6 +6,7 @@ import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY } from '@/lib/hasura/queries'
 import CancelBillButton from './CancelBillButton'
+import SubmitBillButton from './SubmitBillButton'
 
 export default async function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -22,6 +23,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
   const totalQty = items.reduce((sum: number, i: any) => sum + (Number(i.quantity) || 0), 0)
 
   const isCancelled = bill.status === 'cancelled'
+  const isDraft = bill.status === 'draft'
 
   // Check if any purchase line IDs from this bill are used in an active sale entry
   let canCancel = true
@@ -61,6 +63,10 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
         {isCancelled ? (
           <span className="px-3 py-1 rounded-full text-[0.9375rem] font-semibold bg-red-100 text-red-700 border border-red-200">
             Cancelled
+          </span>
+        ) : isDraft ? (
+          <span className="px-3 py-1 rounded-full text-[0.9375rem] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+            Draft
           </span>
         ) : (
           <span className="px-3 py-1 rounded-full text-[0.9375rem] font-medium bg-green-100 text-green-800">
@@ -191,12 +197,24 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
 
       {/* Actions */}
       <div className="flex gap-3 flex-wrap items-center">
-        <Link
-          href="/bills/new"
-          className="px-4 py-2 bg-blue-600 text-white text-[0.9375rem] font-medium rounded-lg hover:bg-blue-700"
-        >
-          New Bill
-        </Link>
+        {isDraft ? (
+          <>
+            <Link
+              href={`/bills/${bill.id}/edit`}
+              className="px-4 py-2 bg-blue-600 text-white text-[0.9375rem] font-medium rounded-lg hover:bg-blue-700"
+            >
+              Edit Draft
+            </Link>
+            <SubmitBillButton billId={bill.id} hasWarehouse={!!bill.warehouses} />
+          </>
+        ) : (
+          <Link
+            href="/bills/new"
+            className="px-4 py-2 bg-blue-600 text-white text-[0.9375rem] font-medium rounded-lg hover:bg-blue-700"
+          >
+            New Bill
+          </Link>
+        )}
         <Link
           href="/bills"
           className="px-4 py-2 bg-white text-gray-700 text-[0.9375rem] font-medium rounded-lg border border-gray-300 hover:bg-gray-50"

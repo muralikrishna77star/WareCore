@@ -500,6 +500,51 @@ export const CREATE_PURCHASE_BILL_ITEMS_MUTATION = `
   }
 `
 
+export const PURCHASE_BILL_FOR_EDIT_QUERY = `
+  query GetPurchaseBillForEdit($id: uuid!) {
+    purchase_bills_by_pk(id: $id) {
+      id bill_number bill_date notes status
+      company_id warehouse_id supplier_id
+      companies { name }
+      warehouses { name }
+      suppliers { name }
+      purchase_bill_items(order_by: {id: asc}) {
+        id purchase_line_id
+        item_master_id item_name
+        material_type_id material_size_id size_label
+        quantity rate amount notes
+        tax_rate_id taxable_value
+        cgst_rate cgst_amount sgst_rate sgst_amount
+        tds_rate tds_amount total_with_tax
+      }
+    }
+  }
+`
+
+export const UPDATE_PURCHASE_BILL_MUTATION = `
+  mutation UpdatePurchaseBill($id: uuid!, $supplier_id: uuid, $company_id: uuid, $warehouse_id: uuid, $bill_number: String!, $bill_date: date!, $notes: String, $status: String!) {
+    update_purchase_bills_by_pk(pk_columns: {id: $id}, _set: {
+      supplier_id: $supplier_id
+      company_id: $company_id
+      warehouse_id: $warehouse_id
+      bill_number: $bill_number
+      bill_date: $bill_date
+      notes: $notes
+      status: $status
+    }) {
+      id bill_number status
+    }
+  }
+`
+
+export const DELETE_PURCHASE_BILL_ITEMS_MUTATION = `
+  mutation DeletePurchaseBillItems($bill_id: uuid!) {
+    delete_purchase_bill_items(where: {bill_id: {_eq: $bill_id}}) {
+      affected_rows
+    }
+  }
+`
+
 // ─── Material Management ─────────────────────────────────────────────────────
 
 export const CREATE_MATERIAL_TYPE_MUTATION = `
