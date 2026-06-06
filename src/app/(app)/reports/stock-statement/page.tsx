@@ -22,6 +22,7 @@ type StockItem = {
   material: string
   unit: string
   size: string
+  item_name: string
   opening: number
   purchase_in: number
   transfer_in: number
@@ -80,10 +81,13 @@ export default async function StockStatementPage({
   const ensureItem = (row: LedgerRow): StockItem => {
     const key = getKey(row)
     if (!items[key]) {
+      const material = row.material_types?.description ?? '?'
+      const size = row.material_sizes?.size_label ?? row.size_label ?? ''
       items[key] = {
-        material: row.material_types?.description ?? '?',
+        material,
         unit: row.material_types?.unit ?? 'tons',
-        size: row.material_sizes?.size_label ?? row.size_label ?? '—',
+        size,
+        item_name: size ? `${material} — ${size}` : material,
         opening: 0,
         purchase_in: 0,
         transfer_in: 0,
@@ -253,8 +257,7 @@ export default async function StockStatementPage({
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="border-b text-xs font-semibold uppercase">
-                  <th className="px-4 py-3 text-left text-gray-600 bg-white">Material</th>
-                  <th className="px-4 py-3 text-left text-gray-600 bg-white">Size</th>
+                  <th className="px-4 py-3 text-left text-gray-600 bg-white">Item Name</th>
                   <th className="px-4 py-3 text-left text-gray-400 bg-white">Unit</th>
                   {/* Opening */}
                   <th className="px-4 py-3 text-right text-blue-700 bg-blue-50">Opening</th>
@@ -276,8 +279,7 @@ export default async function StockStatementPage({
                   const cl = closing(item)
                   return (
                     <tr key={i} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-900">{item.material}</td>
-                      <td className="px-4 py-3 text-gray-600">{item.size}</td>
+                      <td className="px-4 py-3 font-medium text-gray-900">{item.item_name}</td>
                       <td className="px-4 py-3 text-gray-400">{item.unit}</td>
                       <td className="px-4 py-3 text-right text-blue-700 bg-blue-50/40">{fmtQ(item.opening)}</td>
                       <td className="px-4 py-3 text-right text-green-700 bg-green-50/40">{item.purchase_in  > 0 ? fmtQ(item.purchase_in)  : '—'}</td>
@@ -297,7 +299,7 @@ export default async function StockStatementPage({
               {/* Totals */}
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                  <td className="px-4 py-3 text-gray-700" colSpan={3}>Total</td>
+                  <td className="px-4 py-3 text-gray-700" colSpan={2}>Total</td>
                   <td className="px-4 py-3 text-right text-blue-800">{fmtQ(totals.opening)}</td>
                   <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.purchase_in)}</td>
                   <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.transfer_in)}</td>
