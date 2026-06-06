@@ -49,7 +49,9 @@ export async function hasuraRunSql(sql: string): Promise<{ result: string[][] }>
   })
   const json = await res.json()
   if (!res.ok || json.error) {
-    throw new Error(json.error ?? json.message ?? 'SQL execution failed')
+    const detail = json.internal?.error?.message ?? json.internal?.error?.description ?? ''
+    const msg = `${json.error ?? json.message ?? 'SQL execution failed'}${detail ? `: ${detail}` : ''}`
+    throw new Error(msg)
   }
   return json
 }
