@@ -116,6 +116,7 @@ export default function EditBillPage() {
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineItem[]>([emptyLine(), emptyLine(), emptyLine()])
   const [loading, setLoading] = useState(false)
+  const [showTaxColumns, setShowTaxColumns] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pageLoading, setPageLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -756,7 +757,16 @@ export default function EditBillPage() {
         <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
-            <span className="text-[0.8125rem] text-gray-400">Use + at end of last row to add lines</span>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={addLine}
+                className="text-[0.9375rem] text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
+              <div className="flex rounded-md border border-gray-300 overflow-hidden text-[0.8125rem]">
+                <button type="button" onClick={() => setShowTaxColumns(false)}
+                  className={`px-3 py-1 ${!showTaxColumns ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Basic</button>
+                <button type="button" onClick={() => setShowTaxColumns(true)}
+                  className={`px-3 py-1 border-l border-gray-300 ${showTaxColumns ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Tax</button>
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[0.9375rem]">
@@ -769,7 +779,11 @@ export default function EditBillPage() {
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Rate (₹)</th>
+                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Taxable (₹)</th>}
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Tax Rate</th>
+                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">CGST</th>}
+                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">SGST</th>}
+                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">TDS</th>}
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">Total</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Notes</th>
                   <th className="pb-2"></th>
@@ -812,7 +826,11 @@ export default function EditBillPage() {
                         <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{sz?.size_label || line.size_label || '—'}</td>
                         <td className="pr-2 py-1 text-[0.8125rem] text-gray-600">{line.quantity}</td>
                         <td className="pr-2 py-1 text-[0.8125rem] text-gray-600">{line.rate}</td>
+                        {showTaxColumns && <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}</td>}
                         <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">—</td>
+                        {showTaxColumns && <td className="pr-2 py-1 text-right text-[0.8125rem] text-orange-700">{line.cgst_amount > 0 ? `₹${line.cgst_amount.toFixed(2)}` : '—'}</td>}
+                        {showTaxColumns && <td className="pr-2 py-1 text-right text-[0.8125rem] text-orange-700">{line.sgst_amount > 0 ? `₹${line.sgst_amount.toFixed(2)}` : '—'}</td>}
+                        {showTaxColumns && <td className="pr-2 py-1 text-right text-[0.8125rem] text-red-700">{line.tds_amount > 0 ? `−₹${line.tds_amount.toFixed(2)}` : '—'}</td>}
                         <td className="pr-2 py-1 text-right text-[0.8125rem] text-gray-600">
                           {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : line.amount ? `₹${parseFloat(line.amount).toFixed(2)}` : '—'}
                         </td>
@@ -943,6 +961,14 @@ export default function EditBillPage() {
                           step="0.01" min="0" placeholder="0.00"
                           className="block w-20 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
                       </td>
+                      {/* Taxable */}
+                      {showTaxColumns && (
+                        <td className="pr-2 py-0">
+                          <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[0.9375rem] text-gray-700 text-right">
+                            {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
+                          </span>
+                        </td>
+                      )}
                       {/* Tax Rate */}
                       <td className="pr-2 py-0">
                         <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
@@ -951,6 +977,30 @@ export default function EditBillPage() {
                           {taxRates.map(tr => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
                         </select>
                       </td>
+                      {/* CGST */}
+                      {showTaxColumns && (
+                        <td className="pr-2 py-0 text-right">
+                          {line.cgst_amount > 0
+                            ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
+                            : <span className="text-gray-300 text-[0.6875rem]">—</span>}
+                        </td>
+                      )}
+                      {/* SGST */}
+                      {showTaxColumns && (
+                        <td className="pr-2 py-0 text-right">
+                          {line.sgst_amount > 0
+                            ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
+                            : <span className="text-gray-300 text-[0.6875rem]">—</span>}
+                        </td>
+                      )}
+                      {/* TDS */}
+                      {showTaxColumns && (
+                        <td className="pr-2 py-0 text-right">
+                          {line.tds_amount > 0
+                            ? <span className="text-[0.6875rem] text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
+                            : <span className="text-gray-300 text-[0.6875rem]">—</span>}
+                        </td>
+                      )}
                       {/* Total */}
                       <td className="pr-2 py-0 text-right">
                         <span className="text-[0.9375rem] font-semibold text-gray-900">
@@ -982,8 +1032,19 @@ export default function EditBillPage() {
                 <tr className="border-t-2 border-gray-200">
                   <td colSpan={5} className="py-3 text-[0.9375rem] font-semibold text-gray-700 text-right pr-3">Totals:</td>
                   <td className="py-3 pr-3 text-[0.9375rem] font-bold text-gray-900">{totalQty.toFixed(3)}</td>
-                  <td colSpan={2} className="py-3 pr-3"></td>
-                  <td className="py-3 pr-3 text-right text-[0.9375rem] font-bold text-gray-900">₹{totalAmt.toFixed(2)}</td>
+                  {showTaxColumns ? (
+                    <>
+                      <td className="py-3 pr-3"></td>
+                      <td className="py-3 pr-3 text-[0.9375rem] text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
+                      <td className="py-3 pr-3"></td>
+                      <td className="py-3 pr-3 text-right text-[0.9375rem] text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
+                      <td className="py-3 pr-3 text-right text-[0.9375rem] text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
+                      <td className="py-3 pr-3 text-right text-[0.9375rem] text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
+                    </>
+                  ) : (
+                    <td colSpan={2} className="py-3 pr-3"></td>
+                  )}
+                  <td className="py-3 pr-3 text-right text-[0.9375rem] font-bold text-gray-900">₹{(showTaxColumns ? lines.reduce((s,l)=>s+(l.total_with_tax||0),0) : totalAmt).toFixed(2)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
