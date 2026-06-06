@@ -14,11 +14,12 @@ export default function StockReconcilePage() {
     setResult(null)
     try {
       const res = await fetch('/api/stock/reconcile', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Reconciliation failed'); return }
+      let data: any
+      try { data = await res.json() } catch { data = {} }
+      if (!res.ok) { setError(data.error || `Server error (${res.status})`); return }
       setResult(data)
-    } catch {
-      setError('Network error')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error')
     } finally {
       setRunning(false)
     }
