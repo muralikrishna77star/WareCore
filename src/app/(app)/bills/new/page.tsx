@@ -192,6 +192,19 @@ export default function NewBillPage() {
   const [taxRateSearch, setTaxRateSearch] = useState<Record<string, string>>({})
   const [taxRateOpen, setTaxRateOpen] = useState<Record<string, boolean>>({})
 
+  // ── Refresh loading state ────────────────────────────────────────────────
+  const [refreshingMaterialTypes, setRefreshingMaterialTypes] = useState(false)
+  const [refreshingItemMasters, setRefreshingItemMasters] = useState(false)
+  const [refreshingSizes, setRefreshingSizes] = useState(false)
+  const [refreshingTaxRates, setRefreshingTaxRates] = useState(false)
+
+  // ── Inline new size state (within New Item dialog) ───────────────────────
+  const [showInlineNewSize, setShowInlineNewSize] = useState(false)
+  const [inlineNewSizeLabel, setInlineNewSizeLabel] = useState('')
+  const [inlineNewSizeThickness, setInlineNewSizeThickness] = useState('')
+  const [inlineNewSizeWidth, setInlineNewSizeWidth] = useState('')
+  const [inlineNewSizeLoading, setInlineNewSizeLoading] = useState(false)
+
   // ── Load master data ─────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
@@ -226,9 +239,32 @@ export default function NewBillPage() {
     load()
   }, [])
 
-  const filteredWarehouses = companyId
-    ? warehouses.filter((w) => w.company_id === companyId || !w.company_id)
-    : warehouses
+  const refreshMaterialTypes = async () => {
+    setRefreshingMaterialTypes(true)
+    const res = await hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY)
+    setMaterialTypes((res.data as any)?.material_types ?? [])
+    setRefreshingMaterialTypes(false)
+  }
+  const refreshItemMasters = async () => {
+    setRefreshingItemMasters(true)
+    const res = await hasuraFetch(ACTIVE_ITEM_MASTER_QUERY)
+    setItemMasters((res.data as any)?.item_master ?? [])
+    setRefreshingItemMasters(false)
+  }
+  const refreshSizes = async () => {
+    setRefreshingSizes(true)
+    const res = await hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY)
+    setMaterialSizes((res.data as any)?.material_sizes ?? [])
+    setRefreshingSizes(false)
+  }
+  const refreshTaxRates = async () => {
+    setRefreshingTaxRates(true)
+    const res = await hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY)
+    setTaxRates((res.data as any)?.tax_rates ?? [])
+    setRefreshingTaxRates(false)
+  }
+
+  const filteredWarehouses = warehouses
 
   useEffect(() => {
     const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
@@ -426,6 +462,30 @@ export default function NewBillPage() {
     }
   }
 
+  // ── Inline New Size (within New Item dialog) ─────────────────────────────
+  const handleCreateInlineNewSize = async () => {
+    if (!newItemMaterialTypeId || !inlineNewSizeLabel.trim()) {
+      alert('Material Type and Size Label are required')
+      return
+    }
+    setInlineNewSizeLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_sizes_one: MaterialSize }>(CREATE_MATERIAL_SIZE_MUTATION, {
+      material_type_id: newItemMaterialTypeId,
+      size_label: inlineNewSizeLabel,
+      thickness: inlineNewSizeThickness ? parseFloat(inlineNewSizeThickness) : null,
+      width: inlineNewSizeWidth ? parseFloat(inlineNewSizeWidth) : null,
+    })
+    setInlineNewSizeLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const newSize = data?.insert_material_sizes_one
+    if (newSize) {
+      setMaterialSizes(prev => [...prev, newSize])
+      setNewItemMaterialSizeId(newSize.id)
+      setInlineNewSizeLabel(''); setInlineNewSizeThickness(''); setInlineNewSizeWidth('')
+      setShowInlineNewSize(false)
+    }
+  }
+
   // ── New Item creation ────────────────────────────────────────────────────
   const handleCreateNewItem = async () => {
     if (!newItemMaterialTypeId || !newItemName.trim()) {
@@ -467,6 +527,7 @@ export default function NewBillPage() {
       setShowNewItemDialog(false)
       setNewItemLineIndex(null); setNewItemMaterialTypeId(''); setNewItemMaterialSizeId('')
       setNewItemName(''); setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
+      setShowInlineNewSize(false); setInlineNewSizeLabel(''); setInlineNewSizeThickness(''); setInlineNewSizeWidth('')
     }
   }
 
@@ -733,15 +794,39 @@ export default function NewBillPage() {
             <table className="w-full text-[0.9375rem]">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Material Type</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Name <span className="text-red-500">*</span></th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                    Material Type
+                    <button type="button" onClick={refreshMaterialTypes} title="Refresh material types"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingMaterialTypes ? '…' : '↻'}
+                    </button>
+                  </th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                    Item Name <span className="text-red-500">*</span>
+                    <button type="button" onClick={refreshItemMasters} title="Refresh items"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingItemMasters ? '…' : '↻'}
+                    </button>
+                  </th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Line ID</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Code</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Size</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                    Size
+                    <button type="button" onClick={refreshSizes} title="Refresh sizes"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingSizes ? '…' : '↻'}
+                    </button>
+                  </th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Rate (₹)</th>
                   {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Taxable (₹)</th>}
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Tax Rate</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                    Tax Rate
+                    <button type="button" onClick={refreshTaxRates} title="Refresh tax rates"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingTaxRates ? '…' : '↻'}
+                    </button>
+                  </th>
                   {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">CGST</th>}
                   {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">SGST</th>}
                   {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">TDS</th>}
@@ -1246,12 +1331,44 @@ export default function NewBillPage() {
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
-                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Size</label>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">
+                  Size
+                  {newItemMaterialTypeId && (
+                    <button type="button" onClick={() => setShowInlineNewSize(v => !v)}
+                      className="ml-2 text-blue-600 hover:text-blue-800 text-[0.6875rem] font-normal">
+                      {showInlineNewSize ? '− Cancel' : '+ New Size'}
+                    </button>
+                  )}
+                </label>
                 <select value={newItemMaterialSizeId} onChange={(e) => setNewItemMaterialSizeId(e.target.value)}
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
                   <option value="">— None —</option>
                   {materialSizes.filter(s => s.material_type_id === newItemMaterialTypeId).map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                 </select>
+                {showInlineNewSize && (
+                  <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-3 space-y-2">
+                    <p className="text-[0.6875rem] font-semibold text-blue-700 uppercase tracking-wide">New Size</p>
+                    <input type="text" value={inlineNewSizeLabel} onChange={(e) => setInlineNewSizeLabel(e.target.value)}
+                      placeholder="Size Label (e.g. 0.80x121) *"
+                      className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="number" value={inlineNewSizeThickness} onChange={(e) => setInlineNewSizeThickness(e.target.value)}
+                        step="0.01" placeholder="Thickness (optional)"
+                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
+                      <input type="number" value={inlineNewSizeWidth} onChange={(e) => setInlineNewSizeWidth(e.target.value)}
+                        step="0.01" placeholder="Width (optional)"
+                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.8125rem] focus:border-blue-500 focus:outline-none" />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={() => { setShowInlineNewSize(false); setInlineNewSizeLabel(''); setInlineNewSizeThickness(''); setInlineNewSizeWidth('') }}
+                        className="rounded border border-gray-300 px-3 py-1 text-[0.8125rem] text-gray-600 hover:bg-gray-50">Cancel</button>
+                      <button type="button" onClick={handleCreateInlineNewSize} disabled={inlineNewSizeLoading}
+                        className="rounded bg-blue-600 px-3 py-1 text-[0.8125rem] text-white hover:bg-blue-700 disabled:opacity-50">
+                        {inlineNewSizeLoading ? 'Saving...' : 'Add Size'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Unit</label>
@@ -1271,6 +1388,7 @@ export default function NewBillPage() {
                   setShowNewItemDialog(false); setNewItemLineIndex(null)
                   setNewItemMaterialTypeId(''); setNewItemMaterialSizeId('')
                   setNewItemName(''); setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
+                  setShowInlineNewSize(false); setInlineNewSizeLabel(''); setInlineNewSizeThickness(''); setInlineNewSizeWidth('')
                 }}
                 className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={handleCreateNewItem} disabled={newItemDialogLoading}
