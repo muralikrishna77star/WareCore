@@ -310,6 +310,25 @@ export default function EditBillPage() {
   const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
   const totalAmt = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshMasterData = async () => {
+    setRefreshing(true)
+    const [c, w, s, mt, ms, im, tr] = await Promise.all([
+      hasuraFetch(ACTIVE_COMPANIES_QUERY), hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
+      hasuraFetch(ACTIVE_SUPPLIERS_QUERY), hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
+      hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY), hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
+      hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
+    ])
+    setCompanies((c.data as any)?.companies ?? [])
+    setWarehouses((w.data as any)?.warehouses ?? [])
+    setSuppliers((s.data as any)?.suppliers ?? [])
+    setMaterialTypes((mt.data as any)?.material_types ?? [])
+    setMaterialSizes((ms.data as any)?.material_sizes ?? [])
+    setItemMasters((im.data as any)?.item_master ?? [])
+    setTaxRates((tr.data as any)?.tax_rates ?? [])
+    setRefreshing(false)
+  }
+
   const saveBill = async (status: 'active' | 'draft') => {
     setLoading(true); setError(null)
     if (!billNumber.trim()) { setError('Purchase ID is required.'); setLoading(false); return }
@@ -446,6 +465,11 @@ export default function EditBillPage() {
                 />
                 {companyOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <button type="button" onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { window.open('/admin/companies/new', '_blank'); setCompanyOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                      + New Company
+                    </button>
                     {companies
                       .filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.code.toLowerCase().includes(companySearch.toLowerCase()))
                       .map(c => (
@@ -473,6 +497,11 @@ export default function EditBillPage() {
                 />
                 {warehouseOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <button type="button" onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { window.open('/admin/warehouses/new', '_blank'); setWarehouseOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                      + New Warehouse
+                    </button>
                     {filteredWarehouses
                       .filter(w => w.name.toLowerCase().includes(warehouseSearch.toLowerCase()))
                       .map(w => (
@@ -500,6 +529,11 @@ export default function EditBillPage() {
                 />
                 {supplierOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                    <button type="button" onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { window.open('/admin/suppliers/new', '_blank'); setSupplierOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                      + New Supplier
+                    </button>
                     {suppliers
                       .filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
                       .map(s => (
@@ -542,7 +576,11 @@ export default function EditBillPage() {
         <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
-            <button type="button" onClick={addLine} className="text-[0.9375rem] text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
+            <button type="button" onClick={refreshMasterData} disabled={refreshing}
+              className="text-[0.8125rem] text-gray-500 hover:text-blue-600 disabled:opacity-50 transition-colors"
+              title="Reload master data after creating new items/materials">
+              {refreshing ? 'Refreshing...' : '↻ Refresh master data'}
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[0.9375rem]">
@@ -562,7 +600,10 @@ export default function EditBillPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {lines.map((line, i) => {
+                {(() => {
+                  const editableLineCount = lines.filter(l => !l.isLocked).length
+                  const lastEditableIdx = lines.reduce((last, l, idx) => !l.isLocked ? idx : last, -1)
+                  return lines.map((line, i) => {
                   const sizesForType = materialSizes.filter(s => !s.material_type_id || s.material_type_id === line.material_type_id)
                   const itemsForType = line.material_type_id
                     ? itemMasters.filter(im =>
@@ -610,9 +651,13 @@ export default function EditBillPage() {
                       {/* Material Type */}
                       <td className="pr-2 py-0">
                         <select value={line.material_type_id}
-                          onChange={(e) => updateLine(i, 'material_type_id', e.target.value)}
+                          onChange={(e) => {
+                            if (e.target.value === 'NEW') { window.open('/admin/materials/new', '_blank'); return }
+                            updateLine(i, 'material_type_id', e.target.value)
+                          }}
                           className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
+                          <option value="NEW" className="font-semibold">+ New Material Type</option>
                           {materialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.description}</option>)}
                         </select>
                       </td>
@@ -653,6 +698,11 @@ export default function EditBillPage() {
                           />
                           {itemOpen[line.rowId] && (
                             <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+                              <button type="button" onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => { window.open('/admin/items/new', '_blank'); setItemOpen(prev => ({ ...prev, [line.rowId]: false })) }}
+                                className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                                + New Item
+                              </button>
                               {filteredDropdownItems.map((im, idx) => (
                                 <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => {
@@ -687,12 +737,14 @@ export default function EditBillPage() {
                       <td className="pr-2 py-0">
                         <select value={line.material_size_id}
                           onChange={(e) => {
+                            if (e.target.value === 'NEW') { window.open('/admin/sizes/new', '_blank'); return }
                             const size = materialSizes.find(s => s.id === e.target.value)
                             updateLine(i, 'material_size_id', e.target.value)
                             if (size) updateLine(i, 'size_label', size.size_label)
                           }}
                           className="block w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
+                          <option value="NEW" className="font-semibold">+ New Size</option>
                           {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                         </select>
                       </td>
@@ -729,13 +781,19 @@ export default function EditBillPage() {
                           className="block w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
-                        {lines.length > 1 && (
-                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 font-bold px-2">×</button>
-                        )}
+                        <div className="flex gap-1 items-center">
+                          {i === lastEditableIdx && (
+                            <button type="button" onClick={addLine}
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 font-bold text-base leading-none">+</button>
+                          )}
+                          {editableLineCount > 1 && (
+                            <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 font-bold px-1">×</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
-                })}
+                }) })()}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">

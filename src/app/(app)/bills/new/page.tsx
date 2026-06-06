@@ -705,7 +705,7 @@ export default function NewBillPage() {
         <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
-            <button type="button" onClick={addLine} className="text-[0.9375rem] text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
+            <span className="text-[0.8125rem] text-gray-400">Use + at end of last row to add lines</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[0.9375rem]">
@@ -940,9 +940,15 @@ export default function NewBillPage() {
                           className="block w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
-                        {lines.length > 1 && (
-                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 font-bold px-2">×</button>
-                        )}
+                        <div className="flex gap-1 items-center">
+                          {i === lines.length - 1 && (
+                            <button type="button" onClick={addLine}
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 font-bold text-base leading-none">+</button>
+                          )}
+                          {lines.length > 1 && (
+                            <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 font-bold px-1">×</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
