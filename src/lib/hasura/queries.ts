@@ -732,12 +732,10 @@ export const CREATE_DISPATCH_ITEMS_MUTATION = `
 export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
   query GetPurchaseBillItemsForDispatch {
     purchase_bill_items(
-      where: {
-        purchase_line_id: { _is_null: false }
-        purchase_bill: { status: { _eq: "active" } }
-      }
+      where: { purchase_bill: { status: { _eq: "active" } } }
       order_by: { created_at: desc }
     ) {
+      id
       purchase_line_id
       item_name
       item_master_id
@@ -750,8 +748,11 @@ export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
 
 export const STOCK_LEDGER_LINE_QUANTITIES_QUERY = `
   query GetStockLedgerLineQuantities {
-    stock_ledger(where: { purchase_line_id: { _is_null: false } }) {
+    stock_ledger {
       purchase_line_id
+      material_type_id
+      material_size_id
+      size_label
       quantity
     }
   }
@@ -1088,7 +1089,11 @@ export const REPORTS_QUERY = `
 // ─── Stock Statement ─────────────────────────────────────────────────────────
 
 export const STOCK_STATEMENT_QUERY = `
-  query GetStockStatement($opening_where: stock_ledger_bool_exp = {}, $period_where: stock_ledger_bool_exp = {}) {
+  query GetStockStatement(
+    $opening_where: stock_ledger_bool_exp = {},
+    $period_where: stock_ledger_bool_exp = {},
+    $current_where: stock_ledger_bool_exp = {}
+  ) {
     opening: stock_ledger(where: $opening_where, limit: 5000) {
       quantity material_type_id material_size_id size_label
       material_types { description unit }
@@ -1096,6 +1101,11 @@ export const STOCK_STATEMENT_QUERY = `
     }
     period: stock_ledger(where: $period_where, limit: 5000) {
       entry_type quantity material_type_id material_size_id size_label
+      material_types { description unit }
+      material_sizes { size_label }
+    }
+    current: stock_ledger(where: $current_where, limit: 5000) {
+      quantity material_type_id material_size_id size_label
       material_types { description unit }
       material_sizes { size_label }
     }

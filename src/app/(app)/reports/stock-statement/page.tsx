@@ -31,6 +31,7 @@ type StockItem = {
   jw_out: number
   jw_return: number
   adjustment: number
+  current_stock: number
 }
 
 export default async function StockStatementPage({
@@ -54,15 +55,18 @@ export default async function StockStatementPage({
   const periodWhere = {
     _and: [...baseConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
   }
+  // current_where: all entries up to today (no date ceiling) → gives live stock
+  const currentWhere = baseConditions.length > 0 ? { _and: baseConditions } : {}
 
   const [result, compResult, whResult] = await Promise.all([
-    hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere }),
+    hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere }),
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
     hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
   ])
 
   const openingRows: LedgerRow[] = result.opening ?? []
   const periodRows: LedgerRow[] = result.period ?? []
+  const currentRows: LedgerRow[] = result.current ?? []
   const companies: { id: string; name: string }[] = compResult.companies ?? []
   const allWarehouses: { id: string; name: string; company_id: string }[] = whResult.warehouses ?? []
   const warehouses = params.company
@@ -96,6 +100,7 @@ export default async function StockStatementPage({
         jw_out: 0,
         jw_return: 0,
         adjustment: 0,
+        current_stock: 0,
       }
     }
     return items[key]
@@ -122,6 +127,14 @@ export default async function StockStatementPage({
     }
   }
 
+  // Current stock = net of ALL stock_ledger entries (no date filter)
+  for (const row of currentRows) {
+    // ensureItem creates the entry if it doesn't exist yet (items with no period activity)
+    const item = ensureItem(row)
+    // We accumulate sum then assign at end — reset first pass handled by current_stock: 0 init
+    item.current_stock += Number(row.quantity)
+  }
+
   const sorted = Object.values(items).sort(
     (a, b) => a.material.localeCompare(b.material) || a.size.localeCompare(b.size),
   )
@@ -139,14 +152,15 @@ export default async function StockStatementPage({
   const fmtQ = (n: number) => n.toFixed(3)
 
   const totals = {
-    opening:      sorted.reduce((s, i) => s + i.opening, 0),
-    purchase_in:  sorted.reduce((s, i) => s + i.purchase_in, 0),
-    transfer_in:  sorted.reduce((s, i) => s + i.transfer_in, 0),
-    jw_return:    sorted.reduce((s, i) => s + i.jw_return, 0),
-    transfer_out: sorted.reduce((s, i) => s + i.transfer_out, 0),
-    dispatch_out: sorted.reduce((s, i) => s + i.dispatch_out, 0),
-    jw_out:       sorted.reduce((s, i) => s + i.jw_out, 0),
-    closing:      sorted.reduce((s, i) => s + closing(i), 0),
+    opening:       sorted.reduce((s, i) => s + i.opening, 0),
+    purchase_in:   sorted.reduce((s, i) => s + i.purchase_in, 0),
+    transfer_in:   sorted.reduce((s, i) => s + i.transfer_in, 0),
+    jw_return:     sorted.reduce((s, i) => s + i.jw_return, 0),
+    transfer_out:  sorted.reduce((s, i) => s + i.transfer_out, 0),
+    dispatch_out:  sorted.reduce((s, i) => s + i.dispatch_out, 0),
+    jw_out:        sorted.reduce((s, i) => s + i.jw_out, 0),
+    closing:       sorted.reduce((s, i) => s + closing(i), 0),
+    current_stock: sorted.reduce((s, i) => s + i.current_stock, 0),
   }
 
   return (
@@ -235,6 +249,7 @@ export default async function StockStatementPage({
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block" /> Stock In</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> Stock Out</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-700 inline-block" /> Closing Stock</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" /> Live Stock (all-time)</span>
       </div>
 
       {/* Table */}
@@ -271,6 +286,8 @@ export default async function StockStatementPage({
                   <th className="px-4 py-3 text-right text-red-700 bg-red-50">Job Work Out</th>
                   {/* Closing */}
                   <th className="px-4 py-3 text-right text-gray-800 bg-gray-100">Closing</th>
+                  {/* Current / Live */}
+                  <th className="px-4 py-3 text-right text-purple-700 bg-purple-50">Live Stock</th>
                 </tr>
               </thead>
 
@@ -291,6 +308,9 @@ export default async function StockStatementPage({
                       <td className={`px-4 py-3 text-right font-bold bg-gray-100/60 ${cl < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                         {fmtQ(cl)}
                       </td>
+                      <td className={`px-4 py-3 text-right font-bold bg-purple-50/60 ${item.current_stock < 0 ? 'text-red-600' : 'text-purple-800'}`}>
+                        {fmtQ(item.current_stock)}
+                      </td>
                     </tr>
                   )
                 })}
@@ -309,6 +329,9 @@ export default async function StockStatementPage({
                   <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.jw_out)}</td>
                   <td className={`px-4 py-3 text-right font-bold ${totals.closing < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                     {fmtQ(totals.closing)}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-bold ${totals.current_stock < 0 ? 'text-red-700' : 'text-purple-800'}`}>
+                    {fmtQ(totals.current_stock)}
                   </td>
                 </tr>
               </tfoot>

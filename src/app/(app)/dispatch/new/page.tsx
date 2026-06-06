@@ -17,7 +17,9 @@ import {
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
 type AvailablePurchaseLine = {
-  purchase_line_id: string
+  _key: string               // dropdown key: purchase_line_id or 'ID:' + pbi_id
+  id: string                 // purchase_bill_item id
+  purchase_line_id: string | null
   item_name: string | null
   item_master_id: string | null
   material_type_id: string
@@ -197,22 +199,39 @@ export default function NewDispatchPage() {
       setExistingLineIds(lineIds)
       setSaleId(generateSaleId(invoiceNums))
 
-      // Compute available stock per purchase_line_id
-      const stockMap: Record<string, number> = {}
+      // Compute stock in two maps:
+      // 1. By purchase_line_id (for items that have one)
+      // 2. By material+size where purchase_line_id IS NULL (for older purchases)
+      const stockByLine: Record<string, number> = {}
+      const stockByMaterial: Record<string, number> = {}
       for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
-        if (!entry.purchase_line_id) continue
-        stockMap[entry.purchase_line_id] = (stockMap[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
+        if (entry.purchase_line_id) {
+          stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
+        } else {
+          const mk = `${entry.material_type_id}|${entry.material_size_id ?? ''}|${entry.size_label ?? ''}`
+          stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + Number(entry.quantity)
+        }
       }
 
-      // Build available purchase lines: unique by purchase_line_id, stock > 0
+      // Build available purchase lines — include items even without purchase_line_id
       const seen = new Set<string>()
       const avail: AvailablePurchaseLine[] = []
       for (const item of (pbiRes.data as any)?.purchase_bill_items ?? []) {
-        if (!item.purchase_line_id || seen.has(item.purchase_line_id)) continue
-        const qty = stockMap[item.purchase_line_id] ?? 0
+        let qty: number
+        let key: string
+        if (item.purchase_line_id) {
+          if (seen.has(item.purchase_line_id)) continue
+          qty = stockByLine[item.purchase_line_id] ?? 0
+          key = item.purchase_line_id
+        } else {
+          const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+          if (seen.has(mk)) continue
+          qty = stockByMaterial[mk] ?? 0
+          key = `ID:${item.id}`
+        }
         if (qty > 0) {
-          seen.add(item.purchase_line_id)
-          avail.push({ ...item, available_quantity: qty })
+          seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
+          avail.push({ ...item, _key: key, available_quantity: qty })
         }
       }
       setAvailablePurchaseLines(avail)
@@ -264,7 +283,7 @@ export default function NewDispatchPage() {
 
       // Purchase line selected second: set available qty + refine material/size
       if (field === 'purchase_line_id') {
-        const pl = availablePurchaseLines.find((l) => l.purchase_line_id === value)
+        const pl = availablePurchaseLines.find((l) => l._key === value)
         if (pl) {
           updated[index].available_quantity = pl.available_quantity.toFixed(3)
           updated[index].material_type_id   = pl.material_type_id || ''
@@ -413,7 +432,7 @@ export default function NewDispatchPage() {
       dispatch_order_id: order.id,
       item_master_id: l.item_master_id || null,
       sale_line_id: l.sale_line_id || null,
-      purchase_line_id: l.purchase_line_id || null,
+      purchase_line_id: l.purchase_line_id && !l.purchase_line_id.startsWith('ID:') ? l.purchase_line_id : null,
       item_name: l.item_name || null,
       material_type_id: l.material_type_id || null,
       material_size_id: l.material_size_id || null,
@@ -625,8 +644,11 @@ export default function NewDispatchPage() {
                           >
                             <option value="">— Select —</option>
                             {purchaseLinesForRow.map((pl) => (
-                              <option key={pl.purchase_line_id} value={pl.purchase_line_id}>
-                                {pl.purchase_line_id} ({pl.available_quantity.toFixed(2)})
+                              <option key={pl._key} value={pl._key}>
+                                {pl.purchase_line_id
+                                  ? `${pl.purchase_line_id} (${pl.available_quantity.toFixed(2)})`
+                                  : `[Stock] ${pl.item_name || pl.size_label || 'General'} (${pl.available_quantity.toFixed(2)})`
+                                }
                               </option>
                             ))}
                           </select>
