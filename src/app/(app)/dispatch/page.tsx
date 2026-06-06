@@ -41,6 +41,7 @@ export default async function DispatchPage() {
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Customer</th>
+                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Sale Ref ID</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Vehicle</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Qty</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Amount</th>
@@ -66,6 +67,7 @@ export default async function DispatchPage() {
                       <td className={`px-6 py-3 font-medium ${cancelled ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                         {o.customers?.name || '—'}
                       </td>
+                      <td className="px-6 py-3 text-gray-500 font-mono text-xs">{o.sale_ref_id || '—'}</td>
                       <td className="px-6 py-3 text-gray-600">{o.vehicle_number || '—'}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">{totalQty.toFixed(3)}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">

@@ -93,6 +93,12 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             <p className="text-xs text-gray-500 uppercase tracking-wide">Driver</p>
             <p className="text-sm font-medium text-gray-900 mt-1">{order.driver_name ?? '—'}</p>
           </div>
+          {order.sale_ref_id && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Sale Ref ID</p>
+              <p className="text-sm font-medium text-gray-900 mt-1 font-mono">{order.sale_ref_id}</p>
+            </div>
+          )}
         </div>
         {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">

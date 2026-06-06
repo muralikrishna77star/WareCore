@@ -661,7 +661,7 @@ export const UPDATE_TRANSFER_STATUS_MUTATION = `
 export const DISPATCH_ORDERS_QUERY = `
   query GetDispatchOrders {
     dispatch_orders(order_by: {dispatch_date: desc}, limit: 50) {
-      id dispatch_date vehicle_number driver_name notes created_at status
+      id dispatch_date vehicle_number driver_name notes created_at status sale_ref_id
       companies { name code }
       customers { name }
       dispatch_items {
@@ -675,7 +675,7 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
   query GetDispatchOrderById($id: uuid!) {
     dispatch_orders_by_pk(id: $id) {
       id dispatch_date vehicle_number driver_name notes created_at
-      invoice_number status cancelled_at cancelled_notes
+      invoice_number status cancelled_at cancelled_notes sale_ref_id
       companies { name }
       warehouses { name }
       customers { name }
@@ -705,7 +705,7 @@ export const PURCHASE_LINE_STOCK_QUERY = `
 `
 
 export const CREATE_DISPATCH_ORDER_MUTATION = `
-  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String) {
+  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String) {
     insert_dispatch_orders_one(object: {
       company_id: $company_id
       warehouse_id: $warehouse_id
@@ -718,6 +718,7 @@ export const CREATE_DISPATCH_ORDER_MUTATION = `
       total_amount: $total_amount
       notes: $notes
       status: $status
+      sale_ref_id: $sale_ref_id
     }) { id invoice_number status }
   }
 `
@@ -731,7 +732,7 @@ export const CREATE_DISPATCH_ITEMS_MUTATION = `
 export const GET_DISPATCH_ORDER_FOR_EDIT_QUERY = `
   query GetDispatchOrderForEdit($id: uuid!) {
     dispatch_orders_by_pk(id: $id) {
-      id invoice_number dispatch_date status notes vehicle_number driver_name
+      id invoice_number dispatch_date status notes vehicle_number driver_name sale_ref_id
       company_id warehouse_id customer_id
       dispatch_items(order_by: {id: asc}) {
         id sale_line_id purchase_line_id item_master_id item_name
@@ -744,7 +745,7 @@ export const GET_DISPATCH_ORDER_FOR_EDIT_QUERY = `
 `
 
 export const UPDATE_DISPATCH_ORDER_MUTATION = `
-  mutation UpdateDispatchOrder($id: uuid!, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $company_id: uuid, $warehouse_id: uuid, $customer_id: uuid) {
+  mutation UpdateDispatchOrder($id: uuid!, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $sale_ref_id: String) {
     update_dispatch_orders_by_pk(
       pk_columns: { id: $id }
       _set: {
@@ -759,6 +760,7 @@ export const UPDATE_DISPATCH_ORDER_MUTATION = `
         company_id: $company_id
         warehouse_id: $warehouse_id
         customer_id: $customer_id
+        sale_ref_id: $sale_ref_id
       }
     ) { id status }
   }
@@ -1242,7 +1244,7 @@ export const TRANSFERS_REPORT_QUERY = `
 export const DISPATCH_REPORT_QUERY = `
   query GetDispatchReport($where: dispatch_orders_bool_exp = {}) {
     dispatch_orders(where: $where, order_by: {dispatch_date: asc}, limit: 1000) {
-      id dispatch_date vehicle_number driver_name invoice_number notes
+      id dispatch_date vehicle_number driver_name invoice_number notes sale_ref_id
       companies { name code }
       warehouses { name }
       customers { name }

@@ -145,6 +145,7 @@ export default function EditDispatchPage() {
   const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
   const [vehicleNumber, setVehicleNumber] = useState('')
   const [driverName, setDriverName] = useState('')
+  const [saleRefId, setSaleRefId] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<DispatchLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
@@ -177,6 +178,7 @@ export default function EditDispatchPage() {
       setDispatchDate(order.dispatch_date ?? new Date().toISOString().split('T')[0])
       setVehicleNumber(order.vehicle_number ?? '')
       setDriverName(order.driver_name ?? '')
+      setSaleRefId(order.sale_ref_id ?? '')
       setNotes(order.notes ?? '')
 
       const loadedMaterialTypes: MaterialType[] = (mt.data as any)?.material_types ?? []
@@ -428,6 +430,7 @@ export default function EditDispatchPage() {
       company_id: companyId || null,
       warehouse_id: warehouseId || null,
       customer_id: customerId || null,
+      sale_ref_id: saleRefId || null,
     })
     if (updErr) { setError(updErr.message); setLoading(false); return }
 
@@ -551,6 +554,15 @@ export default function EditDispatchPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
               <input type="text" value={driverName} onChange={(e) => setDriverName(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Sale Ref ID
+                <span className="ml-1.5 text-xs font-normal text-gray-400">for cross-system reference</span>
+              </label>
+              <input type="text" value={saleRefId} onChange={(e) => setSaleRefId(e.target.value)}
+                placeholder="e.g. ERP-2024-001"
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
             <div className="sm:col-span-2">
