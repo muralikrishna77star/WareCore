@@ -39,9 +39,13 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
           <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
             Cancelled
           </span>
+        ) : order.status === 'draft' ? (
+          <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+            Draft
+          </span>
         ) : (
           <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            Dispatch Order
+            Active
           </span>
         )}
       </div>
@@ -151,6 +155,11 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
         <Link href="/dispatch" className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           All Dispatches
         </Link>
+        {order.status === 'draft' && (
+          <Link href={`/dispatch/${order.id}/edit`} className="px-4 py-2 bg-yellow-500 text-white text-sm font-medium rounded-lg hover:bg-yellow-600">
+            Edit Draft
+          </Link>
+        )}
         {!isCancelled && <CancelDispatchButton orderId={order.id} />}
       </div>
     </div>

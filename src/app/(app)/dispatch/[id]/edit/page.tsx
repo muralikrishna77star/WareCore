@@ -1,18 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
-import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
-  ACTIVE_ITEM_MASTER_QUERY,
-  CREATE_DISPATCH_ORDER_MUTATION, CREATE_DISPATCH_ITEMS_MUTATION,
-  ACTIVE_SALES_TAX_RATES_QUERY,
+  ACTIVE_ITEM_MASTER_QUERY, ACTIVE_SALES_TAX_RATES_QUERY,
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
-  ALL_INVOICE_NUMBERS_QUERY, ALL_SALE_LINE_IDS_QUERY,
+  ALL_SALE_LINE_IDS_QUERY,
   PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY, STOCK_LEDGER_LINE_QUANTITIES_QUERY,
+  GET_DISPATCH_ORDER_FOR_EDIT_QUERY,
+  UPDATE_DISPATCH_ORDER_MUTATION,
+  DELETE_DISPATCH_ITEMS_BY_ORDER_MUTATION,
+  CREATE_DISPATCH_ITEMS_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
@@ -67,11 +68,6 @@ function computeNextSeq(ids: string[], pattern: RegExp): number {
   }, 0)
 }
 
-function generateSaleId(existingInvoiceNumbers: string[]): string {
-  const seq = computeNextSeq(existingInvoiceNumbers, /^\d{4}-(\d+)$/)
-  return `${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
-}
-
 function generateSaleLineId(typeCode: string, allLineIds: string[]): string {
   const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
   const prefix = typeCode.slice(0, 2).toUpperCase()
@@ -98,31 +94,20 @@ function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<Dispatch
 
 const emptyLine = (): DispatchLine => ({
   rowId: Math.random().toString(36).slice(2, 8),
-  item_master_id: '',
-  sale_line_id: '',
-  purchase_line_id: '',
-  available_quantity: '',
-  item_name: '',
-  material_type_id: '',
-  material_size_id: '',
-  size_label: '',
-  quantity: '',
-  rate: '',
-  amount: '',
-  notes: '',
-  tax_rate_id: '',
-  taxable_value: 0,
-  cgst_rate: 0,
-  cgst_amount: 0,
-  sgst_rate: 0,
-  sgst_amount: 0,
-  tcs_rate: 0,
-  tcs_amount: 0,
-  total_with_tax: 0,
+  item_master_id: '', sale_line_id: '', purchase_line_id: '', available_quantity: '',
+  item_name: '', material_type_id: '', material_size_id: '', size_label: '',
+  quantity: '', rate: '', amount: '', notes: '', tax_rate_id: '',
+  taxable_value: 0, cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0,
+  tcs_rate: 0, tcs_amount: 0, total_with_tax: 0,
 })
 
-export default function NewDispatchPage() {
+export default function EditDispatchPage() {
   const router = useRouter()
+  const params = useParams()
+  const orderId = params.id as string
+
+  const [pageLoading, setPageLoading] = useState(true)
+  const [orderStatus, setOrderStatus] = useState<string>('')
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
@@ -132,10 +117,8 @@ export default function NewDispatchPage() {
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
   const [taxRates, setTaxRates] = useState<TaxRate[]>([])
   const [availablePurchaseLines, setAvailablePurchaseLines] = useState<AvailablePurchaseLine[]>([])
-  const [existingInvoiceNumbers, setExistingInvoiceNumbers] = useState<string[]>([])
   const [existingLineIds, setExistingLineIds] = useState<string[]>([])
 
-  // Item combo state (per rowId)
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
@@ -166,11 +149,11 @@ export default function NewDispatchPage() {
   const [lines, setLines] = useState<DispatchLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [masterDataLoading, setMasterDataLoading] = useState(true)
 
   useEffect(() => {
     const load = async () => {
-      const [c, w, cu, mt, ms, im, tr, invs, slis, pbiRes, slRes] = await Promise.all([
+      const [orderRes, c, w, cu, mt, ms, im, tr, slis, pbiRes, slRes] = await Promise.all([
+        hasuraFetch(GET_DISPATCH_ORDER_FOR_EDIT_QUERY, { id: orderId }),
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
@@ -178,25 +161,46 @@ export default function NewDispatchPage() {
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
         hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
-        hasuraFetch(ALL_INVOICE_NUMBERS_QUERY),
         hasuraFetch(ALL_SALE_LINE_IDS_QUERY),
         hasuraFetch(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
         hasuraFetch(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
       ])
+
+      const order = (orderRes.data as any)?.dispatch_orders_by_pk
+      if (!order) { setError('Sale order not found'); setPageLoading(false); return }
+
+      setOrderStatus(order.status)
+      setCompanyId(order.company_id ?? '')
+      setWarehouseId(order.warehouse_id ?? '')
+      setCustomerId(order.customer_id ?? '')
+      setSaleId(order.invoice_number ?? '')
+      setDispatchDate(order.dispatch_date ?? new Date().toISOString().split('T')[0])
+      setVehicleNumber(order.vehicle_number ?? '')
+      setDriverName(order.driver_name ?? '')
+      setNotes(order.notes ?? '')
+
+      const loadedMaterialTypes: MaterialType[] = (mt.data as any)?.material_types ?? []
+      const loadedMaterialSizes: MaterialSize[] = (ms.data as any)?.material_sizes ?? []
+      const loadedItemMasters: ItemMaster[] = (im.data as any)?.item_master ?? []
+      const loadedTaxRates: TaxRate[] = (tr.data as any)?.tax_rates ?? []
+
       setCompanies((c.data as any)?.companies ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
       setCustomers((cu.data as any)?.customers ?? [])
-      setMaterialTypes((mt.data as any)?.material_types ?? [])
-      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemMasters((im.data as any)?.item_master ?? [])
-      setTaxRates((tr.data as any)?.tax_rates ?? [])
+      setMaterialTypes(loadedMaterialTypes)
+      setMaterialSizes(loadedMaterialSizes)
+      setItemMasters(loadedItemMasters)
+      setTaxRates(loadedTaxRates)
 
-      const invoiceNums: string[] = ((invs.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
-      const lineIds: string[] = ((slis.data as any)?.dispatch_items ?? []).map((i: any) => i.sale_line_id).filter(Boolean)
-      setExistingInvoiceNumbers(invoiceNums)
+      const lineIds: string[] = ((slis.data as any)?.dispatch_items ?? [])
+        .map((i: any) => i.sale_line_id).filter(Boolean)
+        .filter((id: string) => {
+          // Exclude the current order's line IDs so they can be reused
+          return !order.dispatch_items?.some((di: any) => di.sale_line_id === id)
+        })
       setExistingLineIds(lineIds)
-      setSaleId(generateSaleId(invoiceNums))
 
+      // Stock maps
       const stockByLine: Record<string, number> = {}
       const stockByMaterial: Record<string, number> = {}
       for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
@@ -223,16 +227,52 @@ export default function NewDispatchPage() {
           qty = stockByMaterial[mk] ?? 0
           key = `ID:${item.id}`
         }
-        if (qty > 0) {
-          seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
-          avail.push({ ...item, _key: key, available_quantity: qty })
-        }
+        seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
+        // Include even zero-stock for items that are already on this order (so they can be kept)
+        avail.push({ ...item, _key: key, available_quantity: qty })
       }
       setAvailablePurchaseLines(avail)
-      setMasterDataLoading(false)
+
+      // Map existing items → DispatchLine rows
+      if (order.dispatch_items?.length) {
+        const existingLines: DispatchLine[] = order.dispatch_items.map((di: any) => ({
+          rowId: Math.random().toString(36).slice(2, 8),
+          item_master_id: di.item_master_id ?? '',
+          sale_line_id: di.sale_line_id ?? '',
+          purchase_line_id: di.purchase_line_id ?? '',
+          available_quantity: '',
+          item_name: di.item_name ?? '',
+          material_type_id: di.material_type_id ?? '',
+          material_size_id: di.material_size_id ?? '',
+          size_label: di.size_label ?? '',
+          quantity: di.quantity?.toString() ?? '',
+          rate: di.rate?.toString() ?? '',
+          amount: di.amount?.toString() ?? '',
+          notes: di.notes ?? '',
+          tax_rate_id: di.tax_rate_id ?? '',
+          taxable_value: Number(di.taxable_value) || 0,
+          cgst_rate: Number(di.cgst_rate) || 0,
+          cgst_amount: Number(di.cgst_amount) || 0,
+          sgst_rate: Number(di.sgst_rate) || 0,
+          sgst_amount: Number(di.sgst_amount) || 0,
+          tcs_rate: Number(di.tcs_rate) || 0,
+          tcs_amount: Number(di.tcs_amount) || 0,
+          total_with_tax: Number(di.total_with_tax) || 0,
+        }))
+
+        // Pre-fill itemSearch display values
+        const searchInit: Record<string, string> = {}
+        for (const l of existingLines) {
+          if (l.item_name) searchInit[l.rowId] = l.item_name
+        }
+        setItemSearch(searchInit)
+        setLines(existingLines)
+      }
+
+      setPageLoading(false)
     }
     load()
-  }, [])
+  }, [orderId])
 
   const updateLine = useCallback((index: number, field: keyof DispatchLine, value: string) => {
     setLines((prev) => {
@@ -262,12 +302,9 @@ export default function NewDispatchPage() {
             }
           }
         } else {
-          updated[index].item_name          = ''
-          updated[index].material_type_id   = ''
-          updated[index].material_size_id   = ''
-          updated[index].size_label         = ''
-          updated[index].sale_line_id       = ''
-          updated[index].purchase_line_id   = ''
+          updated[index].item_name = ''; updated[index].material_type_id = ''
+          updated[index].material_size_id = ''; updated[index].size_label = ''
+          updated[index].sale_line_id = ''; updated[index].purchase_line_id = ''
           updated[index].available_quantity = ''
         }
       }
@@ -275,7 +312,7 @@ export default function NewDispatchPage() {
       if (field === 'purchase_line_id') {
         const pl = availablePurchaseLines.find((l) => l._key === value)
         if (pl) {
-          updated[index].available_quantity = pl.available_quantity.toFixed(3)
+          updated[index].available_quantity = pl.available_quantity > 0 ? pl.available_quantity.toFixed(3) : ''
           updated[index].material_type_id   = pl.material_type_id || ''
           updated[index].material_size_id   = pl.material_size_id || ''
           updated[index].size_label         = pl.size_label || ''
@@ -289,17 +326,14 @@ export default function NewDispatchPage() {
         } else {
           updated[index].available_quantity = ''
           const selItem = updated[index].item_master_id
-            ? itemMasters.find(im => im.id === updated[index].item_master_id)
-            : null
+            ? itemMasters.find(im => im.id === updated[index].item_master_id) : null
           if (selItem) {
             updated[index].material_type_id = selItem.material_type_id
             updated[index].material_size_id = selItem.material_size_id || ''
             updated[index].size_label       = selItem.size_label || ''
           } else {
-            updated[index].material_type_id = ''
-            updated[index].material_size_id = ''
-            updated[index].size_label       = ''
-            updated[index].sale_line_id     = ''
+            updated[index].material_type_id = ''; updated[index].material_size_id = ''
+            updated[index].size_label = ''; updated[index].sale_line_id = ''
           }
         }
       }
@@ -380,37 +414,33 @@ export default function NewDispatchPage() {
       return
     }
 
-    if (!saleId.trim()) {
-      setError('Sale ID is required.')
-      setLoading(false)
-      return
-    }
+    // 1. Update the order header (and status)
+    const { error: updErr } = await hasuraFetch(UPDATE_DISPATCH_ORDER_MUTATION, {
+      id: orderId,
+      invoice_number: saleId || null,
+      dispatch_date: dispatchDate,
+      vehicle_number: vehicleNumber || null,
+      driver_name: driverName || null,
+      total_quantity: totalQty,
+      total_amount: totalAmt || null,
+      notes: notes || null,
+      status,
+      company_id: companyId || null,
+      warehouse_id: warehouseId || null,
+      customer_id: customerId || null,
+    })
+    if (updErr) { setError(updErr.message); setLoading(false); return }
 
-    const { data: orderData, error: oErr } = await hasuraFetch<any>(
-      CREATE_DISPATCH_ORDER_MUTATION, {
-        company_id: companyId || null,
-        warehouse_id: warehouseId || null,
-        customer_id: customerId || null,
-        invoice_number: saleId,
-        dispatch_date: dispatchDate,
-        vehicle_number: vehicleNumber || null,
-        driver_name: driverName || null,
-        total_quantity: totalQty,
-        total_amount: totalAmt || null,
-        notes: notes || null,
-        status,
-      }
-    )
-    const order = orderData?.insert_dispatch_orders_one
-    if (oErr || !order) {
-      setError(oErr?.message ?? 'Failed to create dispatch')
-      setLoading(false)
-      return
-    }
+    // 2. Delete old items
+    const { error: delErr } = await hasuraFetch(DELETE_DISPATCH_ITEMS_BY_ORDER_MUTATION, {
+      dispatch_order_id: orderId,
+    })
+    if (delErr) { setError(delErr.message); setLoading(false); return }
 
+    // 3. Insert new items (trigger writes stock only if status='active')
     if (validLines.length) {
       const objects = validLines.map((l) => ({
-        dispatch_order_id: order.id,
+        dispatch_order_id: orderId,
         item_master_id: l.item_master_id || null,
         sale_line_id: l.sale_line_id || null,
         purchase_line_id: l.purchase_line_id && !l.purchase_line_id.startsWith('ID:') ? l.purchase_line_id : null,
@@ -433,33 +463,47 @@ export default function NewDispatchPage() {
         total_with_tax: l.total_with_tax || null,
       }))
       const { error: iErr } = await hasuraFetch(CREATE_DISPATCH_ITEMS_MUTATION, { objects })
-      if (iErr) {
-        setError(iErr.message)
-        setLoading(false)
-        return
-      }
+      if (iErr) { setError(iErr.message); setLoading(false); return }
     }
 
-    router.push('/dispatch')
+    router.push(`/dispatch/${orderId}`)
     router.refresh()
+  }
+
+  if (pageLoading) {
+    return (
+      <div className="max-w-5xl mx-auto py-12 text-center text-gray-500">Loading…</div>
+    )
+  }
+
+  if (orderStatus === 'cancelled') {
+    return (
+      <div className="max-w-5xl mx-auto py-12 text-center">
+        <p className="text-red-600 font-medium">This sale order is cancelled and cannot be edited.</p>
+        <a href={`/dispatch/${orderId}`} className="mt-4 inline-block text-blue-600 hover:underline text-sm">← Back to order</a>
+      </div>
+    )
+  }
+
+  if (orderStatus === 'active') {
+    return (
+      <div className="max-w-5xl mx-auto py-12 text-center space-y-4">
+        <p className="text-gray-700 font-medium">This sale order is already active.</p>
+        <p className="text-sm text-gray-500">Active orders affect stock. To make changes, cancel this order and create a new one.</p>
+        <a href={`/dispatch/${orderId}`} className="inline-block text-blue-600 hover:underline text-sm">← Back to order</a>
+      </div>
+    )
   }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">New Sale Entry</h1>
-        <p className="mt-1 text-sm text-gray-500">Create a new sale invoice / customer dispatch</p>
+        <a href={`/dispatch/${orderId}`} className="text-sm text-blue-600 hover:underline mb-1 block">← Back to order</a>
+        <h1 className="text-2xl font-bold text-gray-900">Edit Sale Entry</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Editing draft order <span className="font-mono font-medium">{saleId}</span>
+        </p>
       </div>
-
-      <MissingMasterDataBanner
-        loading={masterDataLoading}
-        checks={[
-          { label: 'Companies', count: companies.length, adminPath: '/admin/companies/new' },
-          { label: 'Warehouses', count: warehouses.length, adminPath: '/admin/warehouses/new' },
-          { label: 'Customers', count: customers.length, adminPath: '/admin/customers/new' },
-          { label: 'Material Types', count: materialTypes.length, adminPath: '/admin/materials/new' },
-        ]}
-      />
 
       <div className="space-y-6">
         <div className="bg-white rounded-xl border p-6">
@@ -490,19 +534,9 @@ export default function NewDispatchPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sale ID
-                <span className="ml-2 text-xs font-normal text-gray-400">(auto-generated)</span>
-              </label>
-              <div className="flex gap-2">
-                <input type="text" value={saleId} onChange={(e) => setSaleId(e.target.value)}
-                  placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
-                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
-                <button type="button" onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap">
-                  ↻ New ID
-                </button>
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sale ID</label>
+              <input type="text" value={saleId} onChange={(e) => setSaleId(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Date</label>
@@ -512,7 +546,6 @@ export default function NewDispatchPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Number</label>
               <input type="text" value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)}
-                placeholder="e.g. MH-01-AB-1234"
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
             <div>
@@ -532,8 +565,10 @@ export default function NewDispatchPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-base font-semibold text-gray-800">Items</h2>
-              {availablePurchaseLines.length > 0 && (
-                <p className="text-xs text-gray-500 mt-0.5">{availablePurchaseLines.length} purchase line{availablePurchaseLines.length !== 1 ? 's' : ''} with available stock</p>
+              {availablePurchaseLines.filter(pl => pl.available_quantity > 0).length > 0 && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {availablePurchaseLines.filter(pl => pl.available_quantity > 0).length} purchase lines with available stock
+                </p>
               )}
             </div>
             <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
@@ -564,19 +599,18 @@ export default function NewDispatchPage() {
                   const selectedItem = line.item_master_id ? itemMasters.find(im => im.id === line.item_master_id) : null
                   const purchaseLinesForRow = selectedItem
                     ? availablePurchaseLines.filter(pl =>
-                        pl.item_master_id === selectedItem.id ||
-                        (
-                          pl.material_type_id === selectedItem.material_type_id &&
+                        pl.available_quantity > 0 && (
+                          pl.item_master_id === selectedItem.id ||
                           (
-                            !selectedItem.material_size_id ||
-                            pl.material_size_id === selectedItem.material_size_id ||
-                            (pl.size_label && selectedItem.size_label && pl.size_label === selectedItem.size_label)
+                            pl.material_type_id === selectedItem.material_type_id &&
+                            (!selectedItem.material_size_id ||
+                              pl.material_size_id === selectedItem.material_size_id ||
+                              (pl.size_label && selectedItem.size_label && pl.size_label === selectedItem.size_label))
                           )
                         )
                       )
-                    : availablePurchaseLines
+                    : availablePurchaseLines.filter(pl => pl.available_quantity > 0)
 
-                  // Item combo search — searchable by item_name or item_code
                   const itemSearchValue = itemSearch[line.rowId] ?? line.item_name
                   const filteredItems = itemSearchValue
                     ? itemMasters.filter(im => {
@@ -587,7 +621,7 @@ export default function NewDispatchPage() {
 
                   return (
                     <tr key={line.rowId}>
-                      {/* ── Item — combo search ── */}
+                      {/* Item combo */}
                       <td className="pr-3 py-2">
                         <div className="space-y-1">
                           <div className="relative">
@@ -599,7 +633,6 @@ export default function NewDispatchPage() {
                                 setItemSearch(prev => ({ ...prev, [line.rowId]: val }))
                                 setItemOpen(prev => ({ ...prev, [line.rowId]: true }))
                                 setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
-                                // Clear item master selection if user starts typing new search
                                 if (line.item_master_id && val !== line.item_name) {
                                   updateLine(i, 'item_master_id', '')
                                 }
@@ -640,18 +673,14 @@ export default function NewDispatchPage() {
                             {itemOpen[line.rowId] && (
                               <div className="absolute z-50 mt-1 w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
                                 {filteredItems.map((im, idx) => (
-                                  <button
-                                    key={im.id}
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
+                                  <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => {
                                       updateLine(i, 'item_master_id', im.id)
                                       setItemSearch(prev => ({ ...prev, [line.rowId]: im.item_name }))
                                       setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
                                       setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
                                     }}
-                                    className={`w-full text-left px-2 py-2 text-xs ${itemHighlight[line.rowId] === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}
-                                  >
+                                    className={`w-full text-left px-2 py-2 text-xs ${itemHighlight[line.rowId] === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}>
                                     <span className="block font-medium">{im.item_name}</span>
                                     {im.item_code && <span className="text-gray-400">{im.item_code}</span>}
                                   </button>
@@ -667,40 +696,29 @@ export default function NewDispatchPage() {
                               {line.sale_line_id}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-400 italic">no line ID yet</span>
+                            <span className="text-[10px] text-gray-400 italic">no line ID</span>
                           )}
                         </div>
                       </td>
-                      {/* ── Purchase Line ── */}
+                      {/* Purchase Line */}
                       <td className="pr-3 py-2">
-                        <div>
-                          <select
-                            value={line.purchase_line_id}
-                            onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
-                            className={`block w-44 rounded border px-2 py-1.5 text-sm focus:outline-none ${
-                              line.item_master_id && purchaseLinesForRow.length === 0
-                                ? 'border-gray-200 bg-gray-50 text-gray-400'
-                                : 'border-gray-300 focus:border-blue-500'
-                            }`}
-                          >
-                            <option value="">— Select —</option>
-                            {purchaseLinesForRow.map((pl) => (
-                              <option key={pl._key} value={pl._key}>
-                                {pl.purchase_line_id
-                                  ? `${pl.purchase_line_id} (${pl.available_quantity.toFixed(2)})`
-                                  : `[Stock] ${pl.item_name || pl.size_label || 'General'} (${pl.available_quantity.toFixed(2)})`
-                                }
-                              </option>
-                            ))}
-                          </select>
-                          {line.available_quantity ? (
-                            <p className="text-[10px] text-green-600 mt-0.5 font-medium">✓ {line.available_quantity} avail</p>
-                          ) : line.item_master_id && purchaseLinesForRow.length === 0 && !masterDataLoading ? (
-                            <p className="text-[10px] text-amber-600 mt-0.5">No stock for this item</p>
-                          ) : null}
-                        </div>
+                        <select value={line.purchase_line_id} onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
+                          className="block w-44 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                          <option value="">— Select —</option>
+                          {purchaseLinesForRow.map((pl) => (
+                            <option key={pl._key} value={pl._key}>
+                              {pl.purchase_line_id
+                                ? `${pl.purchase_line_id} (${pl.available_quantity.toFixed(2)})`
+                                : `[Stock] ${pl.item_name || pl.size_label || 'General'} (${pl.available_quantity.toFixed(2)})`}
+                            </option>
+                          ))}
+                          {/* Show currently selected PL even if it has zero stock */}
+                          {line.purchase_line_id && !purchaseLinesForRow.find(pl => pl._key === line.purchase_line_id) && (
+                            <option value={line.purchase_line_id}>{line.purchase_line_id} (current)</option>
+                          )}
+                        </select>
                       </td>
-                      {/* ── Material ── */}
+                      {/* Material */}
                       <td className="pr-3 py-2">
                         {line.item_master_id || line.purchase_line_id ? (
                           <span className="block text-sm text-gray-700 px-1 font-mono">
@@ -712,8 +730,7 @@ export default function NewDispatchPage() {
                               setActiveLineIndexForNewType(i); setShowMaterialTypeDialog(true); return
                             }
                             updateLine(i, 'material_type_id', e.target.value)
-                            updateLine(i, 'material_size_id', '')
-                            updateLine(i, 'size_label', '')
+                            updateLine(i, 'material_size_id', ''); updateLine(i, 'size_label', '')
                           }}
                             className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                             <option value="">Select</option>
@@ -722,20 +739,19 @@ export default function NewDispatchPage() {
                           </select>
                         )}
                       </td>
-                      {/* ── Size ── */}
+                      {/* Size */}
                       <td className="pr-3 py-2">
                         {line.item_master_id || line.purchase_line_id ? (
                           <span className="block text-sm text-gray-700 px-1">{line.size_label || '—'}</span>
                         ) : (
-                          <select value={line.material_size_id}
-                            onChange={(e) => {
-                              if (e.target.value === 'NEW_SIZE') {
-                                setActiveLineIndexForNewSize(i); setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true); return
-                              }
-                              const sz = materialSizes.find(s => s.id === e.target.value)
-                              updateLine(i, 'material_size_id', e.target.value)
-                              if (sz) updateLine(i, 'size_label', sz.size_label)
-                            }}
+                          <select value={line.material_size_id} onChange={(e) => {
+                            if (e.target.value === 'NEW_SIZE') {
+                              setActiveLineIndexForNewSize(i); setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true); return
+                            }
+                            const sz = materialSizes.find(s => s.id === e.target.value)
+                            updateLine(i, 'material_size_id', e.target.value)
+                            if (sz) updateLine(i, 'size_label', sz.size_label)
+                          }}
                             className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                             <option value="">Select</option>
                             {sizesForType.map((s) => <option key={s.id} value={s.id}>{s.size_label}</option>)}
@@ -743,13 +759,13 @@ export default function NewDispatchPage() {
                           </select>
                         )}
                       </td>
-                      {/* ── Qty ── */}
+                      {/* Qty */}
                       <td className="pr-3 py-2">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" placeholder="0.000"
                           className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
-                      {/* ── Rate ── */}
+                      {/* Rate */}
                       <td className="pr-3 py-2">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
@@ -825,48 +841,37 @@ export default function NewDispatchPage() {
         {showMaterialTypeDialog && (
           <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
             <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-blue-900">Create New Material Type</h2>
-                <p className="text-sm text-blue-700">Add a material type and assign it to the current line.</p>
-              </div>
-              <button type="button" onClick={() => { setShowMaterialTypeDialog(false); setActiveLineIndexForNewType(null) }} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+              <h2 className="text-lg font-semibold text-blue-900">Create New Material Type</h2>
+              <button type="button" onClick={() => { setShowMaterialTypeDialog(false); setActiveLineIndexForNewType(null) }} className="text-sm text-blue-700">Cancel</button>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-sm font-medium text-blue-900 mb-1">Code * (2 chars)</label>
-                <input value={newMaterialTypeCode} maxLength={2}
-                  onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g. GA" />
+                <input value={newMaterialTypeCode} maxLength={2} onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:outline-none" placeholder="e.g. GA" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-blue-900 mb-1">Description *</label>
                 <input value={newMaterialTypeDescription} onChange={(e) => setNewMaterialTypeDescription(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g. GA Sheet" />
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-blue-900 mb-1">Unit</label>
                 <input value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="tons" />
+                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="tons" />
               </div>
             </div>
-            <div className="mt-4">
-              <button type="button" onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {materialTypeDialogLoading ? 'Creating…' : 'Create Material Type'}
-              </button>
-            </div>
+            <button type="button" onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
+              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {materialTypeDialogLoading ? 'Creating…' : 'Create Material Type'}
+            </button>
           </div>
         )}
         {showSizeDialog && (
           <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
             <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-blue-900">Create New Size</h2>
-              </div>
-              <button type="button" onClick={() => { setShowSizeDialog(false); setActiveLineIndexForNewSize(null) }} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+              <h2 className="text-lg font-semibold text-blue-900">Create New Size</h2>
+              <button type="button" onClick={() => { setShowSizeDialog(false); setActiveLineIndexForNewSize(null) }} className="text-sm text-blue-700">Cancel</button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -883,24 +888,10 @@ export default function NewDispatchPage() {
                   className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 mt-4">
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Thickness</label>
-                <input value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Width</label>
-                <input value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <button type="button" onClick={handleCreateSize} disabled={sizeDialogLoading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {sizeDialogLoading ? 'Creating…' : 'Create Size'}
-              </button>
-            </div>
+            <button type="button" onClick={handleCreateSize} disabled={sizeDialogLoading}
+              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {sizeDialogLoading ? 'Creating…' : 'Create Size'}
+            </button>
           </div>
         )}
 
@@ -913,7 +904,7 @@ export default function NewDispatchPage() {
         <div className="flex gap-3">
           <button type="button" onClick={() => handleSave('active')} disabled={loading}
             className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Create Sale'}
+            {loading ? 'Saving...' : '✓ Submit Sale'}
           </button>
           <button type="button" onClick={() => handleSave('draft')} disabled={loading}
             className="rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">

@@ -76,16 +76,25 @@ export default async function DispatchPage() {
                           <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 border border-red-200">
                             Cancelled
                           </span>
+                        ) : o.status === 'draft' ? (
+                          <span className="inline-flex items-center rounded-full bg-yellow-50 px-2 py-0.5 text-xs font-medium text-yellow-700 border border-yellow-200">
+                            Draft
+                          </span>
                         ) : (
                           <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
                             Active
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-3">
+                      <td className="px-6 py-3 flex gap-2">
                         <Link href={`/dispatch/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                           View
                         </Link>
+                        {o.status === 'draft' && (
+                          <Link href={`/dispatch/${o.id}/edit`} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">
+                            Edit
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   )

@@ -705,7 +705,7 @@ export const PURCHASE_LINE_STOCK_QUERY = `
 `
 
 export const CREATE_DISPATCH_ORDER_MUTATION = `
-  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String) {
+  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String) {
     insert_dispatch_orders_one(object: {
       company_id: $company_id
       warehouse_id: $warehouse_id
@@ -717,13 +717,58 @@ export const CREATE_DISPATCH_ORDER_MUTATION = `
       total_quantity: $total_quantity
       total_amount: $total_amount
       notes: $notes
-    }) { id }
+      status: $status
+    }) { id invoice_number status }
   }
 `
 
 export const CREATE_DISPATCH_ITEMS_MUTATION = `
   mutation CreateDispatchItems($objects: [dispatch_items_insert_input!]!) {
     insert_dispatch_items(objects: $objects) { affected_rows }
+  }
+`
+
+export const GET_DISPATCH_ORDER_FOR_EDIT_QUERY = `
+  query GetDispatchOrderForEdit($id: uuid!) {
+    dispatch_orders_by_pk(id: $id) {
+      id invoice_number dispatch_date status notes vehicle_number driver_name
+      company_id warehouse_id customer_id
+      dispatch_items(order_by: {id: asc}) {
+        id sale_line_id purchase_line_id item_master_id item_name
+        material_type_id material_size_id size_label
+        quantity rate amount notes tax_rate_id
+        taxable_value cgst_rate cgst_amount sgst_rate sgst_amount tcs_rate tcs_amount total_with_tax
+      }
+    }
+  }
+`
+
+export const UPDATE_DISPATCH_ORDER_MUTATION = `
+  mutation UpdateDispatchOrder($id: uuid!, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $company_id: uuid, $warehouse_id: uuid, $customer_id: uuid) {
+    update_dispatch_orders_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        invoice_number: $invoice_number
+        dispatch_date: $dispatch_date
+        vehicle_number: $vehicle_number
+        driver_name: $driver_name
+        total_quantity: $total_quantity
+        total_amount: $total_amount
+        notes: $notes
+        status: $status
+        company_id: $company_id
+        warehouse_id: $warehouse_id
+        customer_id: $customer_id
+      }
+    ) { id status }
+  }
+`
+
+export const DELETE_DISPATCH_ITEMS_BY_ORDER_MUTATION = `
+  mutation DeleteDispatchItemsByOrder($dispatch_order_id: uuid!) {
+    delete_dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}) {
+      affected_rows
+    }
   }
 `
 
