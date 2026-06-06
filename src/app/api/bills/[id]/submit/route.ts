@@ -17,7 +17,7 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid bill ID' }, { status: 400 })
   }
 
-  const check = await hasuraQuery<any>(
+  const check = await hasuraQuery(
     `query CheckBill($id: uuid!) { purchase_bills_by_pk(id: $id) { status warehouse_id } }`,
     { id }
   )
@@ -26,7 +26,7 @@ export async function POST(
   if (bill.status !== 'draft') return NextResponse.json({ error: 'Only draft bills can be submitted' }, { status: 400 })
   if (!bill.warehouse_id) return NextResponse.json({ error: 'Warehouse is required before submitting' }, { status: 400 })
 
-  const result = await hasuraQuery<any>(
+  const result = await hasuraQuery(
     `mutation SubmitBill($id: uuid!) {
       update_purchase_bills_by_pk(pk_columns: {id: $id}, _set: {status: "active"}) { id status }
     }`,
