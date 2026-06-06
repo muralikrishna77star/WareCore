@@ -13,6 +13,9 @@ import {
   DELETE_PURCHASE_BILL_ITEMS_MUTATION,
   CREATE_PURCHASE_BILL_ITEMS_MUTATION,
   CHECK_PURCHASE_LINE_USAGE_QUERY,
+  CREATE_COMPANY_MUTATION, CREATE_WAREHOUSE_MUTATION, CREATE_SUPPLIER_MUTATION,
+  CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
+  CREATE_ITEM_MASTER_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
@@ -310,23 +313,200 @@ export default function EditBillPage() {
   const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
   const totalAmt = lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
-  const [refreshing, setRefreshing] = useState(false)
-  const refreshMasterData = async () => {
-    setRefreshing(true)
-    const [c, w, s, mt, ms, im, tr] = await Promise.all([
-      hasuraFetch(ACTIVE_COMPANIES_QUERY), hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-      hasuraFetch(ACTIVE_SUPPLIERS_QUERY), hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-      hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY), hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-      hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
-    ])
-    setCompanies((c.data as any)?.companies ?? [])
-    setWarehouses((w.data as any)?.warehouses ?? [])
-    setSuppliers((s.data as any)?.suppliers ?? [])
-    setMaterialTypes((mt.data as any)?.material_types ?? [])
-    setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-    setItemMasters((im.data as any)?.item_master ?? [])
-    setTaxRates((tr.data as any)?.tax_rates ?? [])
-    setRefreshing(false)
+  // ── New Company dialog ───────────────────────────────────────────────────
+  const [showNewCompanyDialog, setShowNewCompanyDialog] = useState(false)
+  const [newCoName, setNewCoName] = useState('')
+  const [newCoCode, setNewCoCode] = useState('')
+  const [newCoShortName, setNewCoShortName] = useState('')
+  const [newCoGstin, setNewCoGstin] = useState('')
+  const [newCoLoading, setNewCoLoading] = useState(false)
+
+  // ── New Warehouse dialog ─────────────────────────────────────────────────
+  const [showNewWarehouseDialog, setShowNewWarehouseDialog] = useState(false)
+  const [newWhName, setNewWhName] = useState('')
+  const [newWhCompanyId, setNewWhCompanyId] = useState('')
+  const [newWhLoading, setNewWhLoading] = useState(false)
+
+  // ── New Supplier dialog ──────────────────────────────────────────────────
+  const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false)
+  const [newSpName, setNewSpName] = useState('')
+  const [newSpPhone, setNewSpPhone] = useState('')
+  const [newSpGstin, setNewSpGstin] = useState('')
+  const [newSpLoading, setNewSpLoading] = useState(false)
+
+  // ── Material Type dialog ─────────────────────────────────────────────────
+  const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
+  const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
+  const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
+  const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
+  const [materialTypeDialogLoading, setMaterialTypeDialogLoading] = useState(false)
+
+  // ── Size dialog ──────────────────────────────────────────────────────────
+  const [showSizeDialog, setShowSizeDialog] = useState(false)
+  const [newSizeMaterialTypeId, setNewSizeMaterialTypeId] = useState('')
+  const [newSizeLabel, setNewSizeLabel] = useState('')
+  const [newSizeThickness, setNewSizeThickness] = useState('')
+  const [newSizeWidth, setNewSizeWidth] = useState('')
+  const [sizeDialogLoading, setSizeDialogLoading] = useState(false)
+
+  // ── New Item dialog ──────────────────────────────────────────────────────
+  const [showNewItemDialog, setShowNewItemDialog] = useState(false)
+  const [newItemLineIndex, setNewItemLineIndex] = useState<number | null>(null)
+  const [newItemMaterialTypeId, setNewItemMaterialTypeId] = useState('')
+  const [newItemMaterialSizeId, setNewItemMaterialSizeId] = useState('')
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemUnit, setNewItemUnit] = useState('tons')
+  const [newItemDescription, setNewItemDescription] = useState('')
+  const [newItemCode, setNewItemCode] = useState('')
+  const [newItemDialogLoading, setNewItemDialogLoading] = useState(false)
+
+  useEffect(() => {
+    const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
+    if (mt) setNewItemUnit(mt.unit || 'tons')
+    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
+    if (!mt?.code) { setNewItemCode(''); return }
+    const prefix = mt.code.trim().toUpperCase()
+    const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const sequence = itemMasters.reduce((max, item) => {
+      if (!item.item_code?.startsWith(prefix)) return max
+      const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
+      if (!match) return max
+      const n = Number(match[1])
+      return Number.isFinite(n) ? Math.max(max, n) : max
+    }, 0)
+    setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+  }, [newItemMaterialTypeId, materialTypes, itemMasters])
+
+  const selectedNewItemSize = materialSizes.find(s => s.id === newItemMaterialSizeId)
+
+  const handleCreateCompany = async () => {
+    if (!newCoName.trim() || !newCoCode.trim()) { alert('Name and Code are required'); return }
+    setNewCoLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_companies_one: Company }>(CREATE_COMPANY_MUTATION, {
+      name: newCoName.trim(), code: newCoCode.trim().toUpperCase(),
+      short_name: newCoShortName || null, gstin: newCoGstin || null,
+    })
+    setNewCoLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_companies_one
+    if (created) {
+      setCompanies(prev => [...prev, created])
+      setCompanyId(created.id); setCompanySearch(created.name)
+      setNewCoName(''); setNewCoCode(''); setNewCoShortName(''); setNewCoGstin('')
+      setShowNewCompanyDialog(false)
+    }
+  }
+
+  const handleCreateWarehouse = async () => {
+    if (!newWhName.trim()) { alert('Warehouse name is required'); return }
+    const effectiveCompanyId = newWhCompanyId || companyId
+    if (!effectiveCompanyId) { alert('Please select a company first'); return }
+    setNewWhLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_warehouses_one: Warehouse }>(CREATE_WAREHOUSE_MUTATION, {
+      name: newWhName.trim(), company_id: effectiveCompanyId,
+    })
+    setNewWhLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_warehouses_one
+    if (created) {
+      setWarehouses(prev => [...prev, { ...created, company_id: effectiveCompanyId, is_active: true, created_at: '', updated_at: '' }])
+      setWarehouseId(created.id); setWarehouseSearch(created.name)
+      setNewWhName(''); setNewWhCompanyId('')
+      setShowNewWarehouseDialog(false)
+    }
+  }
+
+  const handleCreateSupplier = async () => {
+    if (!newSpName.trim()) { alert('Supplier name is required'); return }
+    setNewSpLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_suppliers_one: Supplier }>(CREATE_SUPPLIER_MUTATION, {
+      name: newSpName.trim(), phone: newSpPhone || null, gstin: newSpGstin || null,
+    })
+    setNewSpLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_suppliers_one
+    if (created) {
+      setSuppliers(prev => [...prev, created])
+      setSupplierId(created.id); setSupplierSearch(created.name)
+      setNewSpName(''); setNewSpPhone(''); setNewSpGstin('')
+      setShowNewSupplierDialog(false)
+    }
+  }
+
+  const handleCreateMaterialType = async () => {
+    const code = newMaterialTypeCode.trim().toUpperCase()
+    if (code.length !== 2) { alert('Code must be exactly 2 characters'); return }
+    if (!newMaterialTypeDescription.trim()) { alert('Description is required'); return }
+    setMaterialTypeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
+      code, description: newMaterialTypeDescription, unit: newMaterialTypeUnit,
+    })
+    setMaterialTypeDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const newMT = data?.insert_material_types_one
+    if (newMT) {
+      setMaterialTypes(prev => [...prev, newMT])
+      setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons')
+      setShowMaterialTypeDialog(false)
+    }
+  }
+
+  const handleCreateSize = async () => {
+    if (!newSizeMaterialTypeId || !newSizeLabel.trim()) { alert('Material Type and Size Label are required'); return }
+    setSizeDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_material_sizes_one: MaterialSize }>(CREATE_MATERIAL_SIZE_MUTATION, {
+      material_type_id: newSizeMaterialTypeId, size_label: newSizeLabel,
+      thickness: newSizeThickness ? parseFloat(newSizeThickness) : null,
+      width: newSizeWidth ? parseFloat(newSizeWidth) : null,
+    })
+    setSizeDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const newSize = data?.insert_material_sizes_one
+    if (newSize) {
+      setMaterialSizes(prev => [...prev, newSize])
+      setNewSizeMaterialTypeId(''); setNewSizeLabel(''); setNewSizeThickness(''); setNewSizeWidth('')
+      setShowSizeDialog(false)
+    }
+  }
+
+  const handleCreateNewItem = async () => {
+    if (!newItemMaterialTypeId || !newItemName.trim()) { alert('Material type and item name are required.'); return }
+    if (!newItemCode) { alert('Select a material type first to generate an item code.'); return }
+    setNewItemDialogLoading(true)
+    const { data, error: err } = await hasuraFetch<{ insert_item_master_one: ItemMaster }>(CREATE_ITEM_MASTER_MUTATION, {
+      item_code: newItemCode, item_name: newItemName,
+      material_type_id: newItemMaterialTypeId,
+      material_size_id: newItemMaterialSizeId || null,
+      size_label: selectedNewItemSize?.size_label || null,
+      unit: newItemUnit, description: newItemDescription || null,
+    })
+    setNewItemDialogLoading(false)
+    if (err) { alert(`Error: ${err.message}`); return }
+    const created = data?.insert_item_master_one
+    if (created) {
+      setItemMasters(prev => [...prev, created])
+      if (newItemLineIndex !== null) {
+        const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
+        setLines(prev => {
+          const updated = [...prev]
+          const currentAssigned = prev.filter((_, i) => i !== newItemLineIndex).map(l => l.purchase_line_id).filter(Boolean)
+          updated[newItemLineIndex] = {
+            ...updated[newItemLineIndex],
+            item_master_id: created.id, item_name: created.item_name,
+            item_code: created.item_code, material_type_id: newItemMaterialTypeId,
+            material_size_id: created.material_size_id || '',
+            size_label: created.size_label || '',
+            purchase_line_id: mt?.code
+              ? generatePurchaseLineId(mt.code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned])
+              : '',
+          }
+          return updated
+        })
+      }
+      setShowNewItemDialog(false)
+      setNewItemLineIndex(null); setNewItemMaterialTypeId(''); setNewItemMaterialSizeId('')
+      setNewItemName(''); setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
+    }
   }
 
   const saveBill = async (status: 'active' | 'draft') => {
@@ -466,7 +646,7 @@ export default function EditBillPage() {
                 {companyOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
                     <button type="button" onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { window.open('/admin/companies/new', '_blank'); setCompanyOpen(false) }}
+                      onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
                       className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                       + New Company
                     </button>
@@ -498,7 +678,7 @@ export default function EditBillPage() {
                 {warehouseOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
                     <button type="button" onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { window.open('/admin/warehouses/new', '_blank'); setWarehouseOpen(false) }}
+                      onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
                       className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                       + New Warehouse
                     </button>
@@ -530,7 +710,7 @@ export default function EditBillPage() {
                 {supplierOpen && (
                   <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
                     <button type="button" onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { window.open('/admin/suppliers/new', '_blank'); setSupplierOpen(false) }}
+                      onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
                       className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                       + New Supplier
                     </button>
@@ -576,11 +756,7 @@ export default function EditBillPage() {
         <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
-            <button type="button" onClick={refreshMasterData} disabled={refreshing}
-              className="text-[0.8125rem] text-gray-500 hover:text-blue-600 disabled:opacity-50 transition-colors"
-              title="Reload master data after creating new items/materials">
-              {refreshing ? 'Refreshing...' : '↻ Refresh master data'}
-            </button>
+            <span className="text-[0.8125rem] text-gray-400">Use + at end of last row to add lines</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[0.9375rem]">
@@ -652,7 +828,7 @@ export default function EditBillPage() {
                       <td className="pr-2 py-0">
                         <select value={line.material_type_id}
                           onChange={(e) => {
-                            if (e.target.value === 'NEW') { window.open('/admin/materials/new', '_blank'); return }
+                            if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true); return }
                             updateLine(i, 'material_type_id', e.target.value)
                           }}
                           className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
@@ -699,7 +875,14 @@ export default function EditBillPage() {
                           {itemOpen[line.rowId] && (
                             <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
                               <button type="button" onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => { window.open('/admin/items/new', '_blank'); setItemOpen(prev => ({ ...prev, [line.rowId]: false })) }}
+                                onClick={() => {
+                                  setNewItemLineIndex(i)
+                                  setShowNewItemDialog(true)
+                                  setNewItemMaterialTypeId(line.material_type_id)
+                                  setNewItemMaterialSizeId(line.material_size_id)
+                                  setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
+                                  setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
+                                }}
                                 className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                                 + New Item
                               </button>
@@ -737,7 +920,7 @@ export default function EditBillPage() {
                       <td className="pr-2 py-0">
                         <select value={line.material_size_id}
                           onChange={(e) => {
-                            if (e.target.value === 'NEW') { window.open('/admin/sizes/new', '_blank'); return }
+                            if (e.target.value === 'NEW') { setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true); return }
                             const size = materialSizes.find(s => s.id === e.target.value)
                             updateLine(i, 'material_size_id', e.target.value)
                             if (size) updateLine(i, 'size_label', size.size_label)
@@ -834,6 +1017,255 @@ export default function EditBillPage() {
           </button>
         </div>
       </div>
+
+      {/* ── New Company ─────────────────────────────────────────────────── */}
+      {showNewCompanyDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Company</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Company Name *</label>
+                <input type="text" value={newCoName} onChange={(e) => setNewCoName(e.target.value)} autoFocus
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC Steels Ltd" />
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Code *</label>
+                <input type="text" value={newCoCode} onChange={(e) => setNewCoCode(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. ABC" />
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Short Name</label>
+                <input type="text" value={newCoShortName} onChange={(e) => setNewCoShortName(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">GSTIN</label>
+                <input type="text" value={newCoGstin} onChange={(e) => setNewCoGstin(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewCompanyDialog(false); setNewCoName(''); setNewCoCode('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateCompany} disabled={newCoLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newCoLoading ? 'Creating...' : 'Create Company'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Warehouse ────────────────────────────────────────────────── */}
+      {showNewWarehouseDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Warehouse</h2>
+            <div>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Warehouse Name *</label>
+              <input type="text" value={newWhName} onChange={(e) => setNewWhName(e.target.value)} autoFocus
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. Main Warehouse" />
+            </div>
+            <div>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Company *</label>
+              <select value={newWhCompanyId || companyId} onChange={(e) => setNewWhCompanyId(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                <option value="">— Select Company —</option>
+                {companies.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+              </select>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewWarehouseDialog(false); setNewWhName(''); setNewWhCompanyId('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateWarehouse} disabled={newWhLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newWhLoading ? 'Creating...' : 'Create Warehouse'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Supplier ─────────────────────────────────────────────────── */}
+      {showNewSupplierDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Supplier</h2>
+            <div>
+              <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Supplier Name *</label>
+              <input type="text" value={newSpName} onChange={(e) => setNewSpName(e.target.value)} autoFocus
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="e.g. Steel Supplies Co." />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Phone</label>
+                <input type="text" value={newSpPhone} onChange={(e) => setNewSpPhone(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">GSTIN</label>
+                <input type="text" value={newSpGstin} onChange={(e) => setNewSpGstin(e.target.value.toUpperCase())}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowNewSupplierDialog(false); setNewSpName(''); setNewSpPhone(''); setNewSpGstin('') }}
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateSupplier} disabled={newSpLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newSpLoading ? 'Creating...' : 'Create Supplier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Material Type ────────────────────────────────────────────────── */}
+      {showMaterialTypeDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Material Type</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Code * (2 chars)</label>
+                <input type="text" value={newMaterialTypeCode} maxLength={2}
+                  onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. GA" autoFocus
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] font-mono uppercase focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Description *</label>
+                <input type="text" value={newMaterialTypeDescription} onChange={(e) => setNewMaterialTypeDescription(e.target.value)}
+                  placeholder="e.g. GA Sheet, CR Coil"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Unit</label>
+              <select value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                <option value="tons">Tons</option>
+                <option value="kg">Kilograms</option>
+                <option value="units">Units</option>
+                <option value="meters">Meters</option>
+              </select>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => { setShowMaterialTypeDialog(false); setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons') }}
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {materialTypeDialogLoading ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Size ─────────────────────────────────────────────────────────── */}
+      {showSizeDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Size</h2>
+            <div>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Material Type</label>
+              <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                <option value="">— Select —</option>
+                {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.description}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Size Label</label>
+              <input type="text" value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} placeholder="e.g., 0.80x121"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Thickness</label>
+                <input type="number" value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)} step="0.01" placeholder="Optional"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Width</label>
+                <input type="number" value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)} step="0.01" placeholder="Optional"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => setShowSizeDialog(false)}
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleCreateSize} disabled={sizeDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {sizeDialogLoading ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Item ────────────────────────────────────────────────────── */}
+      {showNewItemDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4">
+            <h2 className="text-[1.1875rem] font-bold text-gray-900">Create New Item</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Material Type *</label>
+                <select value={newItemMaterialTypeId} onChange={(e) => setNewItemMaterialTypeId(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                  <option value="">— Select —</option>
+                  {materialTypes.map(mt => <option key={mt.id} value={mt.id}>{mt.code} — {mt.description}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Item Code</label>
+                <input readOnly value={newItemCode} placeholder="Auto-generated from type"
+                  className="block w-full rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-[0.9375rem] font-mono" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Item Name *</label>
+                <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Size</label>
+                <select value={newItemMaterialSizeId} onChange={(e) => setNewItemMaterialSizeId(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none">
+                  <option value="">— None —</option>
+                  {materialSizes.filter(s => s.material_type_id === newItemMaterialTypeId).map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Unit</label>
+                <input type="text" value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[0.6875rem] font-medium text-gray-700 mb-1">Description</label>
+                <input type="text" value={newItemDescription} onChange={(e) => setNewItemDescription(e.target.value)}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button type="button"
+                onClick={() => {
+                  setShowNewItemDialog(false); setNewItemLineIndex(null)
+                  setNewItemMaterialTypeId(''); setNewItemMaterialSizeId('')
+                  setNewItemName(''); setNewItemUnit('tons'); setNewItemDescription(''); setNewItemCode('')
+                }}
+                className="rounded border border-gray-300 px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={handleCreateNewItem} disabled={newItemDialogLoading}
+                className="rounded bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {newItemDialogLoading ? 'Creating...' : 'Create Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
