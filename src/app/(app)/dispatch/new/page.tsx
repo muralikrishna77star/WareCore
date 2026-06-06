@@ -461,12 +461,28 @@ export default function NewDispatchPage() {
       return
     }
 
+    // Refetch invoice numbers right before saving to catch any IDs added/cancelled since page load
+    const freshInvRes = await hasuraFetch(ALL_INVOICE_NUMBERS_QUERY)
+    const freshInvoiceNumbers: string[] = ((freshInvRes.data as any)?.dispatch_orders ?? [])
+      .map((o: any) => o.invoice_number).filter(Boolean)
+    setExistingInvoiceNumbers(freshInvoiceNumbers)
+
+    let invoiceToUse = saleId.trim()
+    if (freshInvoiceNumbers.includes(invoiceToUse)) {
+      // ID is taken (e.g. by a cancelled order) — generate a fresh one
+      invoiceToUse = generateSaleId(freshInvoiceNumbers)
+      setSaleId(invoiceToUse)
+      setError(`Sale ID "${saleId}" was already taken — new ID "${invoiceToUse}" assigned. Review and save again.`)
+      setLoading(false)
+      return
+    }
+
     const { data: orderData, error: oErr } = await hasuraFetch<any>(
       CREATE_DISPATCH_ORDER_MUTATION, {
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
         customer_id: customerId || null,
-        invoice_number: saleId,
+        invoice_number: invoiceToUse,
         dispatch_date: dispatchDate,
         vehicle_number: vehicleNumber || null,
         driver_name: driverName || null,
