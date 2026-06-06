@@ -496,7 +496,7 @@ export default function NewBillPage() {
         tds_rate: l.tds_rate || null, tds_amount: l.tds_amount || null,
         total_with_tax: l.total_with_tax || null,
       }))
-      const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { items })
+      const { error: itemsError } = await hasuraFetch(CREATE_PURCHASE_BILL_ITEMS_MUTATION, { objects: items })
       if (itemsError) { setError(itemsError.message); setLoading(false); return }
     }
 
