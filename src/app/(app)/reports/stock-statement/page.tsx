@@ -106,6 +106,7 @@ export default async function StockStatementPage({
     const qty = Number(row.quantity)
     switch (row.entry_type) {
       case 'PURCHASE_IN':        item.purchase_in  += qty; break
+      case 'PURCHASE_CANCEL':    item.purchase_in  += qty; break  // qty is negative — reduces purchase_in
       case 'TRANSFER_IN':        item.transfer_in  += qty; break
       case 'TRANSFER_OUT':       item.transfer_out += Math.abs(qty); break
       case 'SALE_OUT':           item.dispatch_out += Math.abs(qty); break
@@ -154,9 +155,14 @@ export default async function StockStatementPage({
             Opening stock, all movements, and closing stock by item
           </p>
         </div>
-        <Link href="/reports" className="text-sm text-blue-600 hover:underline">
-          ← Back to Reports
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/reports/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
+            Reconcile Stock
+          </Link>
+          <Link href="/reports" className="text-sm text-blue-600 hover:underline">
+            ← Back to Reports
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

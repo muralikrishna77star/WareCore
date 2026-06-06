@@ -732,7 +732,10 @@ export const CREATE_DISPATCH_ITEMS_MUTATION = `
 export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
   query GetPurchaseBillItemsForDispatch {
     purchase_bill_items(
-      where: { purchase_line_id: { _is_null: false } }
+      where: {
+        purchase_line_id: { _is_null: false }
+        purchase_bill: { status: { _eq: "active" } }
+      }
       order_by: { created_at: desc }
     ) {
       purchase_line_id

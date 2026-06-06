@@ -98,6 +98,16 @@ export default async function ReportsPage() {
             <p className="text-sm text-gray-500 mt-0.5">Customer dispatch orders with invoice, vehicle, and item details</p>
           </div>
         </Link>
+        <Link
+          href="/reports/stock-reconcile"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-orange-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🔧</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-orange-700">Stock Reconciliation</p>
+            <p className="text-sm text-gray-500 mt-0.5">Detect and fix phantom stock entries from past bill edits</p>
+          </div>
+        </Link>
       </div>
 
       {/* Summary Cards */}

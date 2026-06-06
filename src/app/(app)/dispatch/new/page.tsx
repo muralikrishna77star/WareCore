@@ -536,8 +536,8 @@ export default function NewDispatchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item / Sale Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item / Sale Line ID</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Custom Size</th>
@@ -564,29 +564,7 @@ export default function NewDispatchPage() {
 
                   return (
                     <tr key={i}>
-                      {/* ── Item + Sale Line ID (stacked in one cell) ── */}
-                      <td className="pr-3 py-2">
-                        <div className="space-y-1">
-                          <select
-                            value={line.item_master_id}
-                            onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
-                            className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                          >
-                            <option value="">Select Item</option>
-                            {itemMasters.map((im) => (
-                              <option key={im.id} value={im.id}>{im.item_name}</option>
-                            ))}
-                          </select>
-                          {line.sale_line_id ? (
-                            <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">
-                              {line.sale_line_id}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-gray-400 italic">no line ID yet</span>
-                          )}
-                        </div>
-                      </td>
-                      {/* ── Purchase Line dropdown (stock > 0 only) ── */}
+                      {/* ── Purchase Line dropdown (stock > 0 only) — FIRST column ── */}
                       <td className="pr-3 py-2">
                         <div>
                           <select
@@ -612,6 +590,28 @@ export default function NewDispatchPage() {
                           ) : purchaseLinesForRow.length === 0 && !masterDataLoading ? (
                             <p className="text-[10px] text-amber-600 mt-0.5">No stock</p>
                           ) : null}
+                        </div>
+                      </td>
+                      {/* ── Item + Sale Line ID (stacked in one cell) ── */}
+                      <td className="pr-3 py-2">
+                        <div className="space-y-1">
+                          <select
+                            value={line.item_master_id}
+                            onChange={(e) => updateLine(i, 'item_master_id', e.target.value)}
+                            className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="">Select Item</option>
+                            {itemMasters.map((im) => (
+                              <option key={im.id} value={im.id}>{im.item_name}</option>
+                            ))}
+                          </select>
+                          {line.sale_line_id ? (
+                            <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">
+                              {line.sale_line_id}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 italic">no line ID yet</span>
+                          )}
                         </div>
                       </td>
                       {/* ── Material ── */}

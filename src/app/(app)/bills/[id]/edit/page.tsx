@@ -289,7 +289,19 @@ export default function EditBillPage() {
         updated[index].item_master_id = ''
         updated[index].item_name = ''
         updated[index].item_code = ''
-        updated[index].purchase_line_id = ''
+        if (value) {
+          const mt = materialTypes.find(m => m.id === value)
+          if (mt?.code) {
+            const currentAssigned = prev.filter((_, i) => i !== index).map((l) => l.purchase_line_id).filter(Boolean)
+            updated[index].purchase_line_id = generatePurchaseLineId(
+              mt.code, getMMYY(new Date(billDate + 'T00:00:00')), [...existingLineIds, ...currentAssigned]
+            )
+          } else {
+            updated[index].purchase_line_id = ''
+          }
+        } else {
+          updated[index].purchase_line_id = ''
+        }
       }
 
       if (field === 'material_size_id') {
