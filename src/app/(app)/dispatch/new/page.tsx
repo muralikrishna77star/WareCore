@@ -140,6 +140,13 @@ export default function NewDispatchPage() {
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
 
+  // ── Refresh loading state ────────────────────────────────────────────────
+  const [refreshingItems, setRefreshingItems] = useState(false)
+  const [refreshingPurchaseLines, setRefreshingPurchaseLines] = useState(false)
+  const [refreshingMaterialTypes, setRefreshingMaterialTypes] = useState(false)
+  const [refreshingSizes, setRefreshingSizes] = useState(false)
+  const [refreshingTaxRates, setRefreshingTaxRates] = useState(false)
+
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
   const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
@@ -233,6 +240,74 @@ export default function NewDispatchPage() {
     }
     load()
   }, [])
+
+  const refreshItems = async () => {
+    setRefreshingItems(true)
+    const res = await hasuraFetch(ACTIVE_ITEM_MASTER_QUERY)
+    setItemMasters((res.data as any)?.item_master ?? [])
+    setRefreshingItems(false)
+  }
+
+  const refreshPurchaseLines = async () => {
+    setRefreshingPurchaseLines(true)
+    const [pbiRes, slRes] = await Promise.all([
+      hasuraFetch(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
+      hasuraFetch(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+    ])
+    const stockByLine: Record<string, number> = {}
+    const stockByMaterial: Record<string, number> = {}
+    for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
+      if (entry.purchase_line_id) {
+        stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
+      } else {
+        const mk = `${entry.material_type_id}|${entry.material_size_id ?? ''}|${entry.size_label ?? ''}`
+        stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + Number(entry.quantity)
+      }
+    }
+    const seen = new Set<string>()
+    const avail: AvailablePurchaseLine[] = []
+    for (const item of (pbiRes.data as any)?.purchase_bill_items ?? []) {
+      let qty: number
+      let key: string
+      if (item.purchase_line_id) {
+        if (seen.has(item.purchase_line_id)) continue
+        qty = stockByLine[item.purchase_line_id] ?? 0
+        key = item.purchase_line_id
+      } else {
+        const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+        if (seen.has(mk)) continue
+        qty = stockByMaterial[mk] ?? 0
+        key = `ID:${item.id}`
+      }
+      if (qty > 0) {
+        seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
+        avail.push({ ...item, _key: key, available_quantity: qty })
+      }
+    }
+    setAvailablePurchaseLines(avail)
+    setRefreshingPurchaseLines(false)
+  }
+
+  const refreshMaterialTypes = async () => {
+    setRefreshingMaterialTypes(true)
+    const res = await hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY)
+    setMaterialTypes((res.data as any)?.material_types ?? [])
+    setRefreshingMaterialTypes(false)
+  }
+
+  const refreshSizes = async () => {
+    setRefreshingSizes(true)
+    const res = await hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY)
+    setMaterialSizes((res.data as any)?.material_sizes ?? [])
+    setRefreshingSizes(false)
+  }
+
+  const refreshTaxRates = async () => {
+    setRefreshingTaxRates(true)
+    const res = await hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY)
+    setTaxRates((res.data as any)?.tax_rates ?? [])
+    setRefreshingTaxRates(false)
+  }
 
   const updateLine = useCallback((index: number, field: keyof DispatchLine, value: string) => {
     setLines((prev) => {
@@ -542,14 +617,44 @@ export default function NewDispatchPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Item
+                    <button type="button" onClick={refreshItems} title="Refresh items"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingItems ? '…' : '↻'}
+                    </button>
+                  </th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Purchase Line
+                    <button type="button" onClick={refreshPurchaseLines} title="Refresh available stock"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingPurchaseLines ? '…' : '↻'}
+                    </button>
+                  </th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Material
+                    <button type="button" onClick={refreshMaterialTypes} title="Refresh material types"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingMaterialTypes ? '…' : '↻'}
+                    </button>
+                  </th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Size
+                    <button type="button" onClick={refreshSizes} title="Refresh sizes"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingSizes ? '…' : '↻'}
+                    </button>
+                  </th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Qty</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Rate (₹)</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Taxable (₹)</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Tax Rate</th>
+                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
+                    Tax Rate
+                    <button type="button" onClick={refreshTaxRates} title="Refresh tax rates"
+                      className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                      {refreshingTaxRates ? '…' : '↻'}
+                    </button>
+                  </th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">CGST</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">SGST</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500 text-right">TCS</th>
