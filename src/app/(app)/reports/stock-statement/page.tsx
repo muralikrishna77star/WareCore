@@ -119,6 +119,7 @@ export default async function StockStatementPage({
       case 'TRANSFER_IN':        item.transfer_in  += qty; break
       case 'TRANSFER_OUT':       item.transfer_out += Math.abs(qty); break
       case 'SALE_OUT':           item.dispatch_out += Math.abs(qty); break
+      case 'SALE_CANCEL':        item.dispatch_out -= qty; break  // qty is positive (reversal) — nets out the original SALE_OUT
       case 'JOB_WORK_OUT':       item.jw_out       += Math.abs(qty); break
       case 'JOB_WORK_RETURN_IN':
       case 'VENDOR_RETURN_IN':   item.jw_return    += qty; break
