@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY } from '@/lib/hasura/queries'
+import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
 import CancelDispatchButton from './CancelDispatchButton'
 import PurgeDispatchButton from './PurgeDispatchButton'
 
@@ -18,6 +18,12 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
   const order = orderResult.dispatch_orders_by_pk
   if (!order) notFound()
   const items = itemsResult.dispatch_items ?? []
+
+  let createdByName: string | null = null
+  if (order.created_by) {
+    const creatorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: order.created_by }, { suppressError: true })
+    createdByName = creatorResult.user_profiles_by_pk?.full_name ?? null
+  }
 
   const totalAmount = items.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
   const totalQty = items.reduce((sum: number, i: any) => sum + (Number(i.quantity) || 0), 0)
@@ -100,6 +106,14 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
               <p className="text-sm font-medium text-gray-900 mt-1 font-mono">{order.sale_ref_id}</p>
             </div>
           )}
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Created On</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(order.created_at)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{createdByName ?? '—'}</p>
+          </div>
         </div>
         {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">

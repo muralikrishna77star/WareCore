@@ -4,6 +4,7 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY } from '@/lib/hasura/queries'
 import { formatDate } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
+import DeleteJobWorkButton from './DeleteJobWorkButton'
 
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -90,6 +91,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         <Link href="/jobwork" className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           All Orders
         </Link>
+        <DeleteJobWorkButton orderId={order.id} />
       </div>
     </div>
   )

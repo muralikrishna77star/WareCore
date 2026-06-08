@@ -114,6 +114,16 @@ export const MATERIAL_SIZES_QUERY = `
 `
 
 
+export const USER_PROFILE_BY_ID_QUERY = `
+  query GetUserProfileById($id: uuid!) {
+    user_profiles_by_pk(id: $id) {
+      id
+      full_name
+      email
+    }
+  }
+`
+
 export const USER_PROFILES_QUERY = `
   query GetUserProfiles {
     user_profiles(order_by: {full_name: asc}) {
@@ -304,7 +314,7 @@ export const CREATE_USER_PROFILE_MUTATION = `
 `
 
 export const CREATE_PURCHASE_BILL_MUTATION = `
-  mutation CreatePurchaseBill($supplier_id: uuid, $company_id: uuid, $warehouse_id: uuid, $bill_number: String!, $bill_date: date!, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String) {
+  mutation CreatePurchaseBill($supplier_id: uuid, $company_id: uuid, $warehouse_id: uuid, $bill_number: String!, $bill_date: date!, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $created_by: uuid) {
     insert_purchase_bills_one(object: {
       supplier_id: $supplier_id
       company_id: $company_id
@@ -315,6 +325,7 @@ export const CREATE_PURCHASE_BILL_MUTATION = `
       total_amount: $total_amount
       notes: $notes
       status: $status
+      created_by: $created_by
     }) {
       id
       bill_number
@@ -468,7 +479,7 @@ export const PURCHASE_BILLS_QUERY = `
 export const PURCHASE_BILL_BY_ID_QUERY = `
   query GetPurchaseBillById($id: uuid!) {
     purchase_bills_by_pk(id: $id) {
-      id bill_number bill_date total_quantity total_amount notes created_at
+      id bill_number bill_date total_quantity total_amount notes created_at created_by
       status cancelled_at cancelled_notes
       companies { name }
       warehouses { name }
@@ -674,7 +685,7 @@ export const DISPATCH_ORDERS_QUERY = `
 export const DISPATCH_ORDER_BY_ID_QUERY = `
   query GetDispatchOrderById($id: uuid!) {
     dispatch_orders_by_pk(id: $id) {
-      id dispatch_date vehicle_number driver_name notes created_at
+      id dispatch_date vehicle_number driver_name notes created_at created_by
       invoice_number status cancelled_at cancelled_notes sale_ref_id
       companies { name }
       warehouses { name }
@@ -705,7 +716,7 @@ export const PURCHASE_LINE_STOCK_QUERY = `
 `
 
 export const CREATE_DISPATCH_ORDER_MUTATION = `
-  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String) {
+  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String, $created_by: uuid) {
     insert_dispatch_orders_one(object: {
       company_id: $company_id
       warehouse_id: $warehouse_id
@@ -719,6 +730,7 @@ export const CREATE_DISPATCH_ORDER_MUTATION = `
       notes: $notes
       status: $status
       sale_ref_id: $sale_ref_id
+      created_by: $created_by
     }) { id invoice_number status }
   }
 `

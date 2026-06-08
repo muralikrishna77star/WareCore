@@ -55,6 +55,10 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   UpsertRolePermissions:     ADMIN_MANAGER,
 }
 
+// Mutations that record who created the row — the proxy injects `created_by`
+// from the verified session so the client can't spoof another user's identity.
+const CREATED_BY_MUTATIONS = new Set(['CreatePurchaseBill', 'CreateDispatchOrder'])
+
 /** Returns the operation type and name from a GraphQL query string. */
 function parseOperation(query: string): { type: string; name: string | null } {
   const match = /^\s*(query|mutation|subscription)\s*(\w+)?/i.exec(query ?? '')
@@ -95,6 +99,11 @@ export async function POST(request: NextRequest) {
         { errors: [{ message: 'Forbidden: insufficient permissions' }] },
         { status: 403 }
       )
+    }
+
+    // Stamp the creating user server-side — the client cannot be trusted to supply this.
+    if (CREATED_BY_MUTATIONS.has(opName)) {
+      body.variables = { ...body.variables, created_by: session.userId }
     }
   }
 
