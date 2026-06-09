@@ -457,20 +457,20 @@ export default function NewJobWorkPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-40">Item</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-40">Purchase Line ID</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-28">Avail Stock</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-24">Unit</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-32">Notes</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-52">Item</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-48">Purchase Line ID</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-32">Avail Stock</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-32">Qty Consumed</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-28">Unit</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-36">Notes</th>
                   <th className="w-8"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {inputLines.map((line, i) => (
-                  <tr key={i}>
+                  <tr key={i} className="hover:bg-gray-50/50">
                     {/* Item autocomplete */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <div className="relative">
                         <input type="text"
                           value={inputItemSearch[i] ?? line.item_name}
@@ -481,7 +481,7 @@ export default function NewJobWorkPage() {
                           onFocus={() => setInputItemOpen(p => ({ ...p, [i]: true }))}
                           onBlur={() => setInputItemOpen(p => ({ ...p, [i]: false }))}
                           placeholder="Search item…"
-                          className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
                         {inputItemOpen[i] && (
                           <div className="absolute z-50 mt-1 w-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-52">
                             {masterDataLoading && (
@@ -517,7 +517,7 @@ export default function NewJobWorkPage() {
                     </td>
 
                     {/* Purchase Line ID dropdown */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       {!line.item_master_id ? (
                         <span className="text-xs text-gray-400 italic">Select item first</span>
                       ) : line.purchase_lines_loading ? (
@@ -527,7 +527,7 @@ export default function NewJobWorkPage() {
                       ) : (
                         <select value={line.purchase_line_id}
                           onChange={e => updateInputLine(i, 'purchase_line_id', e.target.value)}
-                          className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none font-mono">
+                          className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono">
                           <option value="">— Select —</option>
                           {line.purchase_line_options.map(opt => (
                             <option key={opt.purchase_line_id} value={opt.purchase_line_id}>
@@ -539,9 +539,9 @@ export default function NewJobWorkPage() {
                     </td>
 
                     {/* Available Stock */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       {line.available_quantity ? (
-                        <div className="text-sm font-medium text-green-700 bg-green-50 rounded px-2 py-1 text-right">
+                        <div className="text-sm font-medium text-green-700 bg-green-50 rounded px-3 py-2 text-right">
                           {Number(line.available_quantity).toFixed(3)}
                           <span className="text-xs text-green-600 ml-1">{line.unit}</span>
                         </div>
@@ -551,13 +551,13 @@ export default function NewJobWorkPage() {
                     </td>
 
                     {/* Quantity Consumed */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <input type="number" value={line.quantity}
                         onChange={e => updateInputLine(i, 'quantity', e.target.value)}
                         step="0.001" min="0"
                         max={line.available_quantity || undefined}
                         placeholder="0.000"
-                        className={`block w-full rounded border px-2 py-1.5 text-sm text-right focus:outline-none focus:border-blue-500
+                        className={`block w-full rounded border px-3 py-2.5 text-sm text-right focus:outline-none focus:border-blue-500
                           ${line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
                             ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
                       {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
@@ -566,20 +566,20 @@ export default function NewJobWorkPage() {
                     </td>
 
                     {/* Unit */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <select value={line.unit} onChange={e => updateInputLine(i, 'unit', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none">
                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </td>
 
                     {/* Notes */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <input type="text" value={line.notes} onChange={e => updateInputLine(i, 'notes', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
                     </td>
 
-                    <td className="py-2">
+                    <td className="py-4">
                       {inputLines.length > 1 && (
                         <button type="button"
                           onClick={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
@@ -626,18 +626,18 @@ export default function NewJobWorkPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-40">Produced Item</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-28">Qty Produced</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-24">Unit</th>
-                  <th className="pb-2 pr-3 text-xs font-medium text-gray-500 w-32">Notes</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-52">Produced Item</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-32">Qty Produced</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-28">Unit</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-36">Notes</th>
                   <th className="w-8"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100">
                 {outputLines.map((line, i) => (
-                  <tr key={i}>
+                  <tr key={i} className="hover:bg-gray-50/50">
                     {/* Item autocomplete */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <div className="relative">
                         <input type="text"
                           value={outputItemSearch[i] ?? line.item_name}
@@ -648,7 +648,7 @@ export default function NewJobWorkPage() {
                           onFocus={() => setOutputItemOpen(p => ({ ...p, [i]: true }))}
                           onBlur={() => setOutputItemOpen(p => ({ ...p, [i]: false }))}
                           placeholder="Search item…"
-                          className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
                         {outputItemOpen[i] && (
                           <div className="absolute z-50 mt-1 w-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-52">
                             {masterDataLoading && (
@@ -684,28 +684,28 @@ export default function NewJobWorkPage() {
                     </td>
 
                     {/* Qty Produced */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <input type="number" value={line.quantity}
                         onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
                         step="0.001" min="0" placeholder="0.000"
-                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm text-right focus:border-blue-500 focus:outline-none" />
+                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm text-right focus:border-blue-500 focus:outline-none" />
                     </td>
 
                     {/* Unit */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <select value={line.unit} onChange={e => updateOutputLine(i, 'unit', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none">
                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                       </select>
                     </td>
 
                     {/* Notes */}
-                    <td className="pr-3 py-2">
+                    <td className="pr-3 py-4">
                       <input type="text" value={line.notes} onChange={e => updateOutputLine(i, 'notes', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
                     </td>
 
-                    <td className="py-2">
+                    <td className="py-4">
                       {outputLines.length > 1 && (
                         <button type="button"
                           onClick={() => setOutputLines(p => p.filter((_, idx) => idx !== i))}
