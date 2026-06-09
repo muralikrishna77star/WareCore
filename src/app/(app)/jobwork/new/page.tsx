@@ -371,12 +371,11 @@ export default function NewJobWorkPage() {
       .sort((a, b) => b.availableStock - a.availableStock || a.item_name.localeCompare(b.item_name))
       .slice(0, 40)
 
+  const inputFieldCls = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+  const selectCls    = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">New Job Work Order</h1>
-        <p className="mt-1 text-sm text-gray-500">Track material conversion through a job work / processing operation</p>
-      </div>
+    <div className="max-w-[1400px] mx-auto">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}
@@ -388,358 +387,317 @@ export default function NewJobWorkPage() {
         ]}
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      {/* ── Single unified card ─────────────────────────────────────────── */}
+      <form onSubmit={handleSubmit}>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-4">Order Details</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-              <select value={companyId} onChange={e => setCompanyId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
-                <option value="">— Select —</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor / Job Worker</label>
-              <select value={vendorId} onChange={e => setVendorId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
-                <option value="">— Select Vendor —</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
-              <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
-                <option value="">— Select Warehouse —</option>
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Date</label>
-              <input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} required
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Expected Return</label>
-              <input type="date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Process / Work Description</label>
-              <input type="text" value={workDescription} onChange={e => setWorkDescription(e.target.value)}
-                placeholder="e.g. Coil Slitting, Sheet Cutting, Channel Fabrication"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-              <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+          {/* Title bar */}
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h1 className="text-base font-semibold text-gray-900">New Job Work Order</h1>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => router.back()}
+                className="rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100">
+                Cancel
+              </button>
+              <button type="submit" disabled={loading}
+                className="rounded bg-blue-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {loading ? 'Saving…' : 'Create Order'}
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* ── Input Materials (Consumed) ──────────────────────────────────── */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <h2 className="text-base font-semibold text-gray-800">Input Materials <span className="text-gray-400 font-normal">(Consumed)</span></h2>
-              <p className="text-xs text-gray-500 mt-0.5">Raw materials dispatched to vendor for processing</p>
-            </div>
-            <button type="button" onClick={() => setInputLines(p => [...p, emptyInput()])}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Row</button>
-          </div>
-
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-52">Item</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-48">Purchase Line ID</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-32">Avail Stock</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-32">Qty Consumed</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-28">Unit</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-36">Notes</th>
-                  <th className="w-8"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {inputLines.map((line, i) => (
-                  <tr key={i} className="hover:bg-gray-50/50">
-                    {/* Item autocomplete */}
-                    <td className="pr-3 py-4">
-                      <div className="relative">
-                        <input type="text"
-                          value={inputItemSearch[i] ?? line.item_name}
-                          onChange={e => {
-                            setInputItemSearch(p => ({ ...p, [i]: e.target.value }))
-                            setInputItemOpen(p => ({ ...p, [i]: true }))
-                          }}
-                          onFocus={() => setInputItemOpen(p => ({ ...p, [i]: true }))}
-                          onBlur={() => setInputItemOpen(p => ({ ...p, [i]: false }))}
-                          placeholder="Search item…"
-                          className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
-                        {inputItemOpen[i] && (
-                          <div className="absolute z-50 mt-1 w-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-52">
-                            {masterDataLoading && (
-                              <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>
-                            )}
-                            {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').map(im => (
-                              <button key={im.id} type="button"
-                                onMouseDown={e => e.preventDefault()}
-                                onClick={() => {
-                                  updateInputLine(i, 'item_master_id', im.id)
-                                  setInputItemSearch(p => ({ ...p, [i]: im.item_name }))
-                                  setInputItemOpen(p => ({ ...p, [i]: false }))
-                                }}
-                                className="w-full text-left px-2 py-1.5 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
-                                <div className="min-w-0 flex-1">
-                                  <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
-                                  <span className="text-gray-800">{im.item_name}</span>
-                                  {im.size_label && <span className="text-gray-400 ml-1 text-[10px]">{im.size_label}</span>}
-                                </div>
-                                <span className="shrink-0 text-[10px] font-mono bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5">
-                                  {im.availableStock.toFixed(3)} {im.unit}
-                                </span>
-                              </button>
-                            ))}
-                            {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').length === 0 && (
-                              <div className="px-3 py-2 text-xs text-gray-400">
-                                {(inputItemSearch[i] ?? '').length > 0 ? 'No matching items with stock' : 'No items with available stock'}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Purchase Line ID dropdown */}
-                    <td className="pr-3 py-4">
-                      {!line.item_master_id ? (
-                        <span className="text-xs text-gray-400 italic">Select item first</span>
-                      ) : line.purchase_lines_loading ? (
-                        <span className="text-xs text-gray-400">Loading…</span>
-                      ) : line.purchase_line_options.length === 0 ? (
-                        <span className="text-xs text-red-500">No stock available</span>
-                      ) : (
-                        <select value={line.purchase_line_id}
-                          onChange={e => updateInputLine(i, 'purchase_line_id', e.target.value)}
-                          className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none font-mono">
-                          <option value="">— Select —</option>
-                          {line.purchase_line_options.map(opt => (
-                            <option key={opt.purchase_line_id} value={opt.purchase_line_id}>
-                              {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-
-                    {/* Available Stock */}
-                    <td className="pr-3 py-4">
-                      {line.available_quantity ? (
-                        <div className="text-sm font-medium text-green-700 bg-green-50 rounded px-3 py-2 text-right">
-                          {Number(line.available_quantity).toFixed(3)}
-                          <span className="text-xs text-green-600 ml-1">{line.unit}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
-
-                    {/* Quantity Consumed */}
-                    <td className="pr-3 py-4">
-                      <input type="number" value={line.quantity}
-                        onChange={e => updateInputLine(i, 'quantity', e.target.value)}
-                        step="0.001" min="0"
-                        max={line.available_quantity || undefined}
-                        placeholder="0.000"
-                        className={`block w-full rounded border px-3 py-2.5 text-sm text-right focus:outline-none focus:border-blue-500
-                          ${line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
-                            ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
-                      {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
-                        <p className="text-[10px] text-red-500 mt-0.5">Exceeds available stock</p>
-                      )}
-                    </td>
-
-                    {/* Unit */}
-                    <td className="pr-3 py-4">
-                      <select value={line.unit} onChange={e => updateInputLine(i, 'unit', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none">
-                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </td>
-
-                    {/* Notes */}
-                    <td className="pr-3 py-4">
-                      <input type="text" value={line.notes} onChange={e => updateInputLine(i, 'notes', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
-                    </td>
-
-                    <td className="py-4">
-                      {inputLines.length > 1 && (
-                        <button type="button"
-                          onClick={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
-                          className="text-red-400 hover:text-red-600 font-bold px-1">×</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* ── Output Materials (Produced) ─────────────────────────────────── */}
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <h2 className="text-base font-semibold text-gray-800">Output Materials <span className="text-gray-400 font-normal">(Produced)</span></h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Finished / processed items produced from the input materials.
-                Source purchase lines are auto-linked from the Input section.
-              </p>
-            </div>
-            <button type="button" onClick={() => setOutputLines(p => [...p, emptyOutput()])}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Row</button>
-          </div>
-
-          {/* Source purchase lines badge */}
-          {(() => {
-            const ids = [...new Set(inputLines.map(l => l.purchase_line_id).filter(Boolean))]
-            return ids.length > 0 ? (
-              <div className="mt-2 mb-3 flex flex-wrap gap-1 items-center">
-                <span className="text-xs text-gray-500">Source IDs:</span>
-                {ids.map(id => (
-                  <span key={id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                    {id}
-                  </span>
-                ))}
+          {/* ── Order Details ──────────────────────────────────────────────── */}
+          <div className="px-4 py-3 border-b border-gray-200">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
+                <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={selectCls}>
+                  <option value="">— Select —</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </div>
-            ) : null
-          })()}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Vendor / Job Worker</label>
+                <select value={vendorId} onChange={e => setVendorId(e.target.value)} className={selectCls}>
+                  <option value="">— Select —</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
+                <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className={selectCls}>
+                  <option value="">— Select —</option>
+                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
+                <input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} required className={inputFieldCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Expected Return</label>
+                <input type="date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)} className={inputFieldCls} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Process / Work Description</label>
+                <input type="text" value={workDescription} onChange={e => setWorkDescription(e.target.value)}
+                  placeholder="e.g. Coil Slitting, Sheet Cutting" className={inputFieldCls} />
+              </div>
+              <div className="lg:col-span-1 sm:col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Remarks</label>
+                <input type="text" value={notes} onChange={e => setNotes(e.target.value)} className={inputFieldCls} />
+              </div>
+            </div>
+          </div>
 
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-52">Produced Item</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-32">Qty Produced</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-28">Unit</th>
-                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 w-36">Notes</th>
-                  <th className="w-8"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {outputLines.map((line, i) => (
-                  <tr key={i} className="hover:bg-gray-50/50">
-                    {/* Item autocomplete */}
-                    <td className="pr-3 py-4">
-                      <div className="relative">
-                        <input type="text"
-                          value={outputItemSearch[i] ?? line.item_name}
-                          onChange={e => {
-                            setOutputItemSearch(p => ({ ...p, [i]: e.target.value }))
-                            setOutputItemOpen(p => ({ ...p, [i]: true }))
-                          }}
-                          onFocus={() => setOutputItemOpen(p => ({ ...p, [i]: true }))}
-                          onBlur={() => setOutputItemOpen(p => ({ ...p, [i]: false }))}
-                          placeholder="Search item…"
-                          className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
-                        {outputItemOpen[i] && (
-                          <div className="absolute z-50 mt-1 w-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-52">
-                            {masterDataLoading && (
-                              <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>
-                            )}
-                            {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').map(im => (
-                              <button key={im.id} type="button"
-                                onMouseDown={e => e.preventDefault()}
-                                onClick={() => {
-                                  updateOutputLine(i, 'item_master_id', im.id)
-                                  setOutputItemSearch(p => ({ ...p, [i]: im.item_name }))
-                                  setOutputItemOpen(p => ({ ...p, [i]: false }))
-                                }}
-                                className="w-full text-left px-2 py-1.5 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
-                                <div className="min-w-0 flex-1">
-                                  <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
-                                  <span className="text-gray-800">{im.item_name}</span>
-                                  {im.size_label && <span className="text-gray-400 ml-1 text-[10px]">{im.size_label}</span>}
-                                </div>
-                                {im.availableStock > 0 && (
-                                  <span className="shrink-0 text-[10px] font-mono bg-gray-50 text-gray-500 border border-gray-200 rounded px-1.5 py-0.5">
+          {/* ── Input Materials ────────────────────────────────────────────── */}
+          <div className="border-b border-gray-200">
+            {/* Section header band */}
+            <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-blue-100">
+              <span className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
+                Input Materials <span className="font-normal normal-case text-blue-600">(Consumed — dispatched to vendor)</span>
+              </span>
+              <button type="button" onClick={() => setInputLines(p => [...p, emptyInput()])}
+                className="text-xs font-medium text-blue-700 hover:text-blue-900 border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100">
+                + Add Row
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[900px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-56">Item</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Purchase Line ID</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Avail Stock</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {inputLines.map((line, i) => (
+                    <tr key={i} className="hover:bg-blue-50/30">
+                      {/* Item */}
+                      <td className="px-3 py-2">
+                        <div className="relative">
+                          <input type="text"
+                            value={inputItemSearch[i] ?? line.item_name}
+                            onChange={e => { setInputItemSearch(p => ({ ...p, [i]: e.target.value })); setInputItemOpen(p => ({ ...p, [i]: true })) }}
+                            onFocus={() => setInputItemOpen(p => ({ ...p, [i]: true }))}
+                            onBlur={() => setInputItemOpen(p => ({ ...p, [i]: false }))}
+                            placeholder="Search item…"
+                            className={inputFieldCls} />
+                          {inputItemOpen[i] && (
+                            <div className="absolute z-50 mt-1 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+                              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
+                              {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').map(im => (
+                                <button key={im.id} type="button"
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => { updateInputLine(i, 'item_master_id', im.id); setInputItemSearch(p => ({ ...p, [i]: im.item_name })); setInputItemOpen(p => ({ ...p, [i]: false })) }}
+                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
+                                  <div className="min-w-0 flex-1 truncate">
+                                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
+                                    <span className="text-gray-800">{im.item_name}</span>
+                                    {im.size_label && <span className="text-gray-400 ml-1">{im.size_label}</span>}
+                                  </div>
+                                  <span className="shrink-0 text-[11px] font-mono bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5 whitespace-nowrap">
                                     {im.availableStock.toFixed(3)} {im.unit}
                                   </span>
-                                )}
-                              </button>
-                            ))}
-                            {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
-                              <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
-                            )}
-                          </div>
+                                </button>
+                              ))}
+                              {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').length === 0 && (
+                                <div className="px-3 py-2 text-xs text-gray-400">
+                                  {(inputItemSearch[i] ?? '').length > 0 ? 'No matching items with stock' : 'No items with available stock'}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Purchase Line ID */}
+                      <td className="px-3 py-2">
+                        {!line.item_master_id
+                          ? <span className="text-xs text-gray-400 italic">Select item first</span>
+                          : line.purchase_lines_loading
+                          ? <span className="text-xs text-gray-400">Loading…</span>
+                          : line.purchase_line_options.length === 0
+                          ? <span className="text-xs text-red-500">No stock available</span>
+                          : (
+                            <select value={line.purchase_line_id}
+                              onChange={e => updateInputLine(i, 'purchase_line_id', e.target.value)}
+                              className={selectCls + ' font-mono'}>
+                              <option value="">— Select —</option>
+                              {line.purchase_line_options.map(opt => (
+                                <option key={opt.purchase_line_id} value={opt.purchase_line_id}>
+                                  {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                      </td>
+
+                      {/* Avail Stock */}
+                      <td className="px-3 py-2 text-right">
+                        {line.available_quantity
+                          ? <span className="text-sm font-semibold text-green-700">{Number(line.available_quantity).toFixed(3)} <span className="text-xs font-normal text-green-600">{line.unit}</span></span>
+                          : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+
+                      {/* Qty Consumed */}
+                      <td className="px-3 py-2">
+                        <input type="number" value={line.quantity}
+                          onChange={e => updateInputLine(i, 'quantity', e.target.value)}
+                          step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
+                          className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
+                            line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
+                              ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+                        {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
+                          <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Qty Produced */}
-                    <td className="pr-3 py-4">
-                      <input type="number" value={line.quantity}
-                        onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
-                        step="0.001" min="0" placeholder="0.000"
-                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm text-right focus:border-blue-500 focus:outline-none" />
-                    </td>
+                      {/* Unit */}
+                      <td className="px-3 py-2">
+                        <select value={line.unit} onChange={e => updateInputLine(i, 'unit', e.target.value)} className={selectCls}>
+                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </td>
 
-                    {/* Unit */}
-                    <td className="pr-3 py-4">
-                      <select value={line.unit} onChange={e => updateOutputLine(i, 'unit', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none">
-                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </td>
+                      {/* Notes */}
+                      <td className="px-3 py-2">
+                        <input type="text" value={line.notes} onChange={e => updateInputLine(i, 'notes', e.target.value)} className={inputFieldCls} />
+                      </td>
 
-                    {/* Notes */}
-                    <td className="pr-3 py-4">
-                      <input type="text" value={line.notes} onChange={e => updateOutputLine(i, 'notes', e.target.value)}
-                        className="block w-full rounded border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none" />
-                    </td>
-
-                    <td className="py-4">
-                      {outputLines.length > 1 && (
-                        <button type="button"
-                          onClick={() => setOutputLines(p => p.filter((_, idx) => idx !== i))}
-                          className="text-red-400 hover:text-red-600 font-bold px-1">×</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <td className="px-2 py-2 text-center">
+                        {inputLines.length > 1 && (
+                          <button type="button" onClick={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
+                            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <p className="text-xs text-gray-400 mt-3">
-            Output items inherit source purchase line IDs from the Input section for full traceability:
-            Purchase Batch → Job Work → Finished Product.
-          </p>
+          {/* ── Output Materials ───────────────────────────────────────────── */}
+          <div>
+            {/* Section header band */}
+            <div className="flex items-center justify-between px-4 py-2 bg-emerald-50 border-b border-emerald-100">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">
+                  Output Materials <span className="font-normal normal-case text-emerald-600">(Produced)</span>
+                </span>
+                {(() => {
+                  const ids = [...new Set(inputLines.map(l => l.purchase_line_id).filter(Boolean))]
+                  return ids.length > 0 ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-500">Source:</span>
+                      {ids.map(id => (
+                        <span key={id} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">{id}</span>
+                      ))}
+                    </div>
+                  ) : null
+                })()}
+              </div>
+              <button type="button" onClick={() => setOutputLines(p => [...p, emptyOutput()])}
+                className="text-xs font-medium text-emerald-700 hover:text-emerald-900 border border-emerald-300 rounded px-2 py-0.5 hover:bg-emerald-100">
+                + Add Row
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[700px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-72">Produced Item</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Produced</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {outputLines.map((line, i) => (
+                    <tr key={i} className="hover:bg-emerald-50/30">
+                      {/* Item */}
+                      <td className="px-3 py-2">
+                        <div className="relative">
+                          <input type="text"
+                            value={outputItemSearch[i] ?? line.item_name}
+                            onChange={e => { setOutputItemSearch(p => ({ ...p, [i]: e.target.value })); setOutputItemOpen(p => ({ ...p, [i]: true })) }}
+                            onFocus={() => setOutputItemOpen(p => ({ ...p, [i]: true }))}
+                            onBlur={() => setOutputItemOpen(p => ({ ...p, [i]: false }))}
+                            placeholder="Search produced item…"
+                            className={inputFieldCls} />
+                          {outputItemOpen[i] && (
+                            <div className="absolute z-50 mt-1 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+                              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
+                              {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').map(im => (
+                                <button key={im.id} type="button"
+                                  onMouseDown={e => e.preventDefault()}
+                                  onClick={() => { updateOutputLine(i, 'item_master_id', im.id); setOutputItemSearch(p => ({ ...p, [i]: im.item_name })); setOutputItemOpen(p => ({ ...p, [i]: false })) }}
+                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
+                                  <div className="min-w-0 flex-1 truncate">
+                                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
+                                    <span className="text-gray-800">{im.item_name}</span>
+                                    {im.size_label && <span className="text-gray-400 ml-1">{im.size_label}</span>}
+                                  </div>
+                                  {im.availableStock > 0 && (
+                                    <span className="shrink-0 text-[11px] font-mono bg-gray-50 text-gray-500 border border-gray-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                                      {im.availableStock.toFixed(3)} {im.unit}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                              {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
+                                <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-3 py-2">
+                        <input type="number" value={line.quantity} onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
+                          step="0.001" min="0" placeholder="0.000"
+                          className="block w-full rounded border border-gray-300 px-2 py-2 text-sm text-right focus:border-blue-500 focus:outline-none" />
+                      </td>
+
+                      <td className="px-3 py-2">
+                        <select value={line.unit} onChange={e => updateOutputLine(i, 'unit', e.target.value)} className={selectCls}>
+                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </td>
+
+                      <td className="px-3 py-2">
+                        <input type="text" value={line.notes} onChange={e => updateOutputLine(i, 'notes', e.target.value)} className={inputFieldCls} />
+                      </td>
+
+                      <td className="px-2 py-2 text-center">
+                        {outputLines.length > 1 && (
+                          <button type="button" onClick={() => setOutputLines(p => p.filter((_, idx) => idx !== i))}
+                            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
         {error && (
-          <div className="rounded-md bg-red-50 border border-red-200 p-4">
+          <div className="mt-3 rounded-md bg-red-50 border border-red-200 px-4 py-2">
             <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
-
-        <div className="flex gap-3">
-          <button type="submit" disabled={loading}
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving…' : 'Create Job Work Order'}
-          </button>
-          <button type="button" onClick={() => router.back()}
-            className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-            Cancel
-          </button>
-        </div>
 
       </form>
     </div>
