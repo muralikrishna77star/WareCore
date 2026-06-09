@@ -589,11 +589,7 @@ export default function NewBillPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-[1.4375rem] font-bold text-gray-900">New Purchase Bill</h1>
-        <p className="mt-1 text-[0.9375rem] text-gray-500">Record a new inward purchase</p>
-      </div>
+    <div className="max-w-[1400px] mx-auto">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}
@@ -605,195 +601,202 @@ export default function NewBillPage() {
         ]}
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border px-4 py-3">
-          <h2 className="text-[0.875rem] font-semibold text-gray-800 mb-2">Bill Details</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={handleSubmit}>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 
-            {/* Company */}
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">My Companies</label>
-              <div className="relative">
-                <input type="text" value={companySearch}
-                  onChange={(e) => setCompanySearch(e.target.value)}
-                  onFocus={() => setCompanyOpen(true)}
-                  onBlur={() => setCompanyOpen(false)}
-                  placeholder="Search company..."
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
-                />
-                {companyOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button type="button" onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                      + New Company
-                    </button>
-                    {companies
-                      .filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.code.toLowerCase().includes(companySearch.toLowerCase()))
-                      .map(c => (
-                        <button key={c.id} type="button" onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setCompanyId(c.id)
-                            setCompanySearch(c.name)
-                            setCompanyOpen(false)
-                          }}
-                          className="w-full text-left px-3 py-2 text-[0.9375rem] hover:bg-gray-100 flex justify-between">
-                          <span>{c.name}</span>
-                          <span className="text-gray-500">{c.code}</span>
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Warehouse */}
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Warehouse</label>
-              <div className="relative">
-                <input type="text" value={warehouseSearch}
-                  onChange={(e) => setWarehouseSearch(e.target.value)}
-                  onFocus={() => setWarehouseOpen(true)}
-                  onBlur={() => setWarehouseOpen(false)}
-                  placeholder="Search warehouse..."
-                  required
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
-                />
-                {warehouseOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button type="button" onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                      + New Warehouse
-                    </button>
-                    {filteredWarehouses
-                      .filter(w => w.name.toLowerCase().includes(warehouseSearch.toLowerCase()))
-                      .map(w => (
-                        <button key={w.id} type="button" onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setWarehouseId(w.id)
-                            setWarehouseSearch(w.name)
-                            setWarehouseOpen(false)
-                          }}
-                          className="w-full text-left px-3 py-2 text-[0.9375rem] hover:bg-gray-100">
-                          {w.name}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Supplier */}
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Supplier</label>
-              <div className="relative">
-                <input type="text" value={supplierSearch}
-                  onChange={(e) => setSupplierSearch(e.target.value)}
-                  onFocus={() => setSupplierOpen(true)}
-                  onBlur={() => setSupplierOpen(false)}
-                  placeholder="Search supplier..."
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
-                />
-                {supplierOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                    <button type="button" onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
-                      className="w-full text-left px-3 py-2 text-[0.9375rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                      + New Supplier
-                    </button>
-                    {suppliers
-                      .filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
-                      .map(s => (
-                        <button key={s.id} type="button" onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setSupplierId(s.id)
-                            setSupplierSearch(s.name)
-                            setSupplierOpen(false)
-                          }}
-                          className="w-full text-left px-3 py-2 text-[0.9375rem] hover:bg-gray-100">
-                          {s.name}
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Purchase ID */}
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">
-                Purchase ID <span className="ml-1 text-[0.6875rem] font-normal text-gray-400">(auto-generated)</span>
-              </label>
-              <div className="flex gap-2">
-                <input type="text" value={billNumber} onChange={(e) => setBillNumber(e.target.value)}
-                  placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
-                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] font-mono focus:border-blue-500 focus:outline-none" />
-                <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers, billDate))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-[0.6875rem] text-gray-600 hover:bg-gray-50">↻ New ID</button>
-              </div>
-            </div>
-
-            {/* Bill Date */}
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Bill Date</label>
-              <input type="date" value={billDate} onChange={(e) => {
-                const newDate = e.target.value
-                setBillDate(newDate)
-                if (newDate) {
-                  const newBillNum = generatePurchaseId(existingBillNumbers, newDate)
-                  setBillNumber(newBillNum)
-                  setLines(prev => {
-                    const newLines = [...prev]
-                    const newlyAssigned: string[] = []
-                    for (let i = 0; i < newLines.length; i++) {
-                      const line = newLines[i]
-                      if (!line.item_master_id) continue
-                      const item = itemMasters.find(im => im.id === line.item_master_id)
-                      if (!item) continue
-                      const mt = materialTypes.find(m => m.id === item.material_type_id)
-                      if (!mt?.code) continue
-                      const newLineId = generatePurchaseLineId(mt.code, getMMYY(new Date(newDate + 'T00:00:00')), [...existingLineIds, ...newlyAssigned])
-                      newLines[i] = { ...line, purchase_line_id: newLineId }
-                      newlyAssigned.push(newLineId)
-                    }
-                    return newLines
-                  })
-                }
-              }} required
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Notes</label>
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
-                placeholder="Optional notes"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
+          {/* Title bar */}
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h1 className="text-base font-semibold text-gray-900">New Purchase Bill</h1>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => router.back()}
+                className="rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSaveDraft} disabled={loading}
+                className="rounded border border-amber-400 bg-amber-50 px-4 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50">
+                {loading ? 'Saving…' : 'Save Draft'}
+              </button>
+              <button type="submit" disabled={loading}
+                className="rounded bg-blue-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {loading ? 'Saving…' : 'Save Bill'}
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* ── Line Items ─────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={addLine}
-                className="text-[0.9375rem] text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
-              <div className="flex rounded-md border border-gray-300 overflow-hidden text-[0.8125rem]">
-                <button type="button" onClick={() => setShowTaxColumns(false)}
-                  className={`px-3 py-1 ${!showTaxColumns ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Basic</button>
-                <button type="button" onClick={() => setShowTaxColumns(true)}
-                  className={`px-3 py-1 border-l border-gray-300 ${showTaxColumns ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Tax</button>
+          {/* ── Bill Details ───────────────────────────────────────────────── */}
+          <div className="px-4 py-3 border-b border-gray-200">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
+
+              {/* Company */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">My Company</label>
+                <div className="relative">
+                  <input type="text" value={companySearch}
+                    onChange={(e) => setCompanySearch(e.target.value)}
+                    onFocus={() => setCompanyOpen(true)}
+                    onBlur={() => setCompanyOpen(false)}
+                    placeholder="Search company..."
+                    className="block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                  {companyOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                      <button type="button" onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setShowNewCompanyDialog(true); setCompanyOpen(false) }}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                        + New Company
+                      </button>
+                      {companies
+                        .filter(c => c.name.toLowerCase().includes(companySearch.toLowerCase()) || c.code.toLowerCase().includes(companySearch.toLowerCase()))
+                        .map(c => (
+                          <button key={c.id} type="button" onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setCompanyId(c.id); setCompanySearch(c.name); setCompanyOpen(false) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex justify-between">
+                            <span>{c.name}</span>
+                            <span className="text-gray-500 text-xs">{c.code}</span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Warehouse */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
+                <div className="relative">
+                  <input type="text" value={warehouseSearch}
+                    onChange={(e) => setWarehouseSearch(e.target.value)}
+                    onFocus={() => setWarehouseOpen(true)}
+                    onBlur={() => setWarehouseOpen(false)}
+                    placeholder="Search warehouse..."
+                    required
+                    className="block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                  {warehouseOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                      <button type="button" onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setNewWhCompanyId(companyId); setShowNewWarehouseDialog(true); setWarehouseOpen(false) }}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                        + New Warehouse
+                      </button>
+                      {filteredWarehouses
+                        .filter(w => w.name.toLowerCase().includes(warehouseSearch.toLowerCase()))
+                        .map(w => (
+                          <button key={w.id} type="button" onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setWarehouseId(w.id); setWarehouseSearch(w.name); setWarehouseOpen(false) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
+                            {w.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Supplier */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Supplier</label>
+                <div className="relative">
+                  <input type="text" value={supplierSearch}
+                    onChange={(e) => setSupplierSearch(e.target.value)}
+                    onFocus={() => setSupplierOpen(true)}
+                    onBlur={() => setSupplierOpen(false)}
+                    placeholder="Search supplier..."
+                    className="block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                  {supplierOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 border border-gray-300 bg-white rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                      <button type="button" onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { setShowNewSupplierDialog(true); setSupplierOpen(false) }}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                        + New Supplier
+                      </button>
+                      {suppliers
+                        .filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
+                        .map(s => (
+                          <button key={s.id} type="button" onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => { setSupplierId(s.id); setSupplierSearch(s.name); setSupplierOpen(false) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100">
+                            {s.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Purchase ID */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Purchase ID</label>
+                <div className="flex gap-1">
+                  <input type="text" value={billNumber} onChange={(e) => setBillNumber(e.target.value)}
+                    placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
+                    className="block flex-1 min-w-0 rounded border border-gray-300 px-2 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+                  <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers, billDate))}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap">↻</button>
+                </div>
+              </div>
+
+              {/* Bill Date */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Bill Date</label>
+                <input type="date" value={billDate} onChange={(e) => {
+                  const newDate = e.target.value
+                  setBillDate(newDate)
+                  if (newDate) {
+                    const newBillNum = generatePurchaseId(existingBillNumbers, newDate)
+                    setBillNumber(newBillNum)
+                    setLines(prev => {
+                      const newLines = [...prev]
+                      const newlyAssigned: string[] = []
+                      for (let i = 0; i < newLines.length; i++) {
+                        const line = newLines[i]
+                        if (!line.item_master_id) continue
+                        const item = itemMasters.find(im => im.id === line.item_master_id)
+                        if (!item) continue
+                        const mt = materialTypes.find(m => m.id === item.material_type_id)
+                        if (!mt?.code) continue
+                        const newLineId = generatePurchaseLineId(mt.code, getMMYY(new Date(newDate + 'T00:00:00')), [...existingLineIds, ...newlyAssigned])
+                        newLines[i] = { ...line, purchase_line_id: newLineId }
+                        newlyAssigned.push(newLineId)
+                      }
+                      return newLines
+                    })
+                  }
+                }} required
+                  className="block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+                <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Optional"
+                  className="block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Line Items band ────────────────────────────────────────────── */}
+          <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-blue-100">
+            <span className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Line Items</span>
+            <div className="flex items-center gap-3">
+              <div className="flex rounded border border-blue-300 overflow-hidden text-xs">
+                <button type="button" onClick={() => setShowTaxColumns(false)}
+                  className={`px-3 py-1 ${!showTaxColumns ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-100'}`}>Basic</button>
+                <button type="button" onClick={() => setShowTaxColumns(true)}
+                  className={`px-3 py-1 border-l border-blue-300 ${showTaxColumns ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-100'}`}>Tax</button>
+              </div>
+              <button type="button" onClick={addLine}
+                className="text-xs font-medium text-blue-700 hover:text-blue-900 border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100">
+                + Add Line
+              </button>
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-[0.9375rem]">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left">
+                <tr className="bg-gray-50 border-b border-gray-200 text-left">
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
                     Material Type
                     <button type="button" onClick={refreshMaterialTypes} title="Refresh material types"
@@ -1091,23 +1094,13 @@ export default function NewBillPage() {
               </tfoot>
             </table>
           </div>
-        </div>
 
-        {error && <div className="rounded-md bg-red-50 border border-red-200 p-4"><p className="text-[0.9375rem] text-red-800">{error}</p></div>}
+          {error && (
+            <div className="border-t border-red-200 bg-red-50 px-4 py-2">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
 
-        <div className="flex gap-3">
-          <button type="submit" disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Save Bill'}
-          </button>
-          <button type="button" onClick={handleSaveDraft} disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '⎘ Save Draft'}
-          </button>
-          <button type="button" onClick={() => router.back()}
-            className="rounded-lg border border-gray-300 px-6 py-2.5 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-            Cancel
-          </button>
         </div>
       </form>
 

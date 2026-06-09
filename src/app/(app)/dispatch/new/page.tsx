@@ -537,12 +537,10 @@ export default function NewDispatchPage() {
     router.refresh()
   }
 
+  const fieldCls = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">New Sale Entry</h1>
-        <p className="mt-1 text-sm text-gray-500">Create a new sale invoice / customer dispatch</p>
-      </div>
+    <div className="max-w-[1400px] mx-auto">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}
@@ -554,93 +552,96 @@ export default function NewDispatchPage() {
         ]}
       />
 
-      <div className="space-y-6">
-        <div className="bg-white rounded-xl border p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-4">Dispatch Details</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+
+        {/* Title bar */}
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h1 className="text-base font-semibold text-gray-900">New Sale Entry</h1>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => router.back()}
+              className="rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100">
+              Cancel
+            </button>
+            <button type="button" onClick={() => handleSave('draft')} disabled={loading}
+              className="rounded border border-amber-400 bg-amber-50 px-4 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50">
+              {loading ? 'Saving…' : 'Save Draft'}
+            </button>
+            <button type="button" onClick={() => handleSave('active')} disabled={loading}
+              className="rounded bg-blue-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Saving…' : 'Create Sale'}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Dispatch Details ───────────────────────────────────────────── */}
+        <div className="px-4 py-3 border-b border-gray-200">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-8">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-              <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
+              <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={fieldCls}>
                 <option value="">— Select —</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
-              <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
+              <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={fieldCls}>
                 <option value="">— Select —</option>
                 {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
-              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Customer</label>
+              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={fieldCls}>
                 <option value="">— Select —</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sale ID
-                <span className="ml-2 text-xs font-normal text-gray-400">(auto-generated)</span>
-              </label>
-              <div className="flex gap-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Sale ID</label>
+              <div className="flex gap-1">
                 <input type="text" value={saleId} onChange={(e) => setSaleId(e.target.value)}
                   placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
-                  className="block flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
+                  className="block flex-1 min-w-0 rounded border border-gray-300 px-2 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
                 <button type="button" onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers))}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap">
-                  ↻ New ID
-                </button>
+                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">↻</button>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Date</label>
-              <input type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
+              <input type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)} className={fieldCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Number</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Vehicle No.</label>
               <input type="text" value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)}
-                placeholder="e.g. MH-01-AB-1234"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                placeholder="MH-01-AB-1234" className={fieldCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
-              <input type="text" value={driverName} onChange={(e) => setDriverName(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              <label className="block text-xs font-medium text-gray-500 mb-1">Driver</label>
+              <input type="text" value={driverName} onChange={(e) => setDriverName(e.target.value)} className={fieldCls} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Sale Ref ID
-                <span className="ml-1.5 text-xs font-normal text-gray-400">for cross-system reference</span>
-              </label>
-              <input type="text" value={saleRefId} onChange={(e) => setSaleRefId(e.target.value)}
-                placeholder="e.g. ERP-2024-001"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
-                className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+              <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className={fieldCls} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-semibold text-gray-800">Items</h2>
-              {availablePurchaseLines.length > 0 && (
-                <p className="text-xs text-gray-500 mt-0.5">{availablePurchaseLines.length} purchase line{availablePurchaseLines.length !== 1 ? 's' : ''} with available stock</p>
-              )}
-            </div>
-            <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Add Line</button>
+        {/* ── Items band ─────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-blue-100">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Items</span>
+            {availablePurchaseLines.length > 0 && (
+              <span className="text-[10px] text-blue-600">{availablePurchaseLines.length} lines with stock</span>
+            )}
           </div>
-          <div className="overflow-x-auto">
+          <button type="button" onClick={addLine}
+            className="text-xs font-medium text-blue-700 hover:text-blue-900 border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100">
+            + Add Line
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
@@ -952,111 +953,95 @@ export default function NewDispatchPage() {
               </tfoot>
             </table>
           </div>
-        </div>
 
-        {showMaterialTypeDialog && (
-          <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-blue-900">Create New Material Type</h2>
-                <p className="text-sm text-blue-700">Add a material type and assign it to the current line.</p>
-              </div>
-              <button type="button" onClick={() => { setShowMaterialTypeDialog(false); setActiveLineIndexForNewType(null) }} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
+          {error && (
+            <div className="border-t border-red-200 bg-red-50 px-4 py-2">
+              <p className="text-sm text-red-800">{error}</p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+          )}
+
+        </div>
+      </div>
+
+      {/* ── New Material Type modal ─────────────────────────────────────── */}
+      {showMaterialTypeDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-base font-bold text-gray-900">Create New Material Type</h2>
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Code * (2 chars)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Code * (2 chars)</label>
                 <input value={newMaterialTypeCode} maxLength={2}
-                  onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:outline-none"
+                  onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())} autoFocus
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:outline-none"
                   placeholder="e.g. GA" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Description *</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Description *</label>
                 <input value={newMaterialTypeDescription} onChange={(e) => setNewMaterialTypeDescription(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="e.g. GA Sheet" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Unit</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Unit</label>
                 <input value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="tons" />
               </div>
             </div>
-            <div className="mt-4">
+            <div className="flex gap-3 justify-end pt-2">
+              <button type="button" onClick={() => { setShowMaterialTypeDialog(false); setActiveLineIndexForNewType(null) }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={handleCreateMaterialType} disabled={materialTypeDialogLoading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {materialTypeDialogLoading ? 'Creating…' : 'Create Material Type'}
               </button>
             </div>
           </div>
-        )}
-        {showSizeDialog && (
-          <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-5 mb-4">
-            <div className="mb-3 flex items-center justify-between">
+        </div>
+      )}
+
+      {/* ── New Size modal ──────────────────────────────────────────────── */}
+      {showSizeDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
+            <h2 className="text-base font-bold text-gray-900">Create New Size</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <h2 className="text-lg font-semibold text-blue-900">Create New Size</h2>
-              </div>
-              <button type="button" onClick={() => { setShowSizeDialog(false); setActiveLineIndexForNewSize(null) }} className="text-sm text-blue-700 hover:text-blue-900">Cancel</button>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Material Type</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Material Type</label>
                 <select value={newSizeMaterialTypeId} onChange={(e) => setNewSizeMaterialTypeId(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
                   <option value="">— Select —</option>
                   {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.description}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Size Label</label>
-                <input value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                <label className="block text-xs font-medium text-gray-700 mb-1">Size Label</label>
+                <input value={newSizeLabel} onChange={(e) => setNewSizeLabel(e.target.value)} autoFocus
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
               </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 mt-4">
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Thickness</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Thickness</label>
                 <input value={newSizeThickness} onChange={(e) => setNewSizeThickness(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Width</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Width</label>
                 <input value={newSizeWidth} onChange={(e) => setNewSizeWidth(e.target.value)}
-                  className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" placeholder="Optional" />
               </div>
             </div>
-            <div className="mt-4">
+            <div className="flex gap-3 justify-end pt-2">
+              <button type="button" onClick={() => { setShowSizeDialog(false); setActiveLineIndexForNewSize(null) }}
+                className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={handleCreateSize} disabled={sizeDialogLoading}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                 {sizeDialogLoading ? 'Creating…' : 'Create Size'}
               </button>
             </div>
           </div>
-        )}
-
-        {error && (
-          <div className="rounded-md bg-red-50 border border-red-200 p-4">
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button type="button" onClick={() => handleSave('active')} disabled={loading}
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Create Sale'}
-          </button>
-          <button type="button" onClick={() => handleSave('draft')} disabled={loading}
-            className="rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : 'Save as Draft'}
-          </button>
-          <button type="button" onClick={() => router.back()}
-            className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-            Cancel
-          </button>
         </div>
-      </div>
+      )}
     </div>
   )
 }

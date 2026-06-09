@@ -89,8 +89,8 @@ export default function NewJobWorkPage() {
   const [notes, setNotes] = useState('')
 
   // Line items
-  const [inputLines, setInputLines] = useState<InputLine[]>([emptyInput()])
-  const [outputLines, setOutputLines] = useState<OutputLine[]>([emptyOutput()])
+  const [inputLines, setInputLines] = useState<InputLine[]>([emptyInput(), emptyInput(), emptyInput()])
+  const [outputLines, setOutputLines] = useState<OutputLine[]>([emptyOutput(), emptyOutput(), emptyOutput()])
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
