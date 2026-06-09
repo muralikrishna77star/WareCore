@@ -10,6 +10,7 @@ import {
   CREATE_JOB_WORK_ORDER_MUTATION, CREATE_JOB_WORK_ITEMS_MUTATION,
   CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION,
   ITEM_PURCHASE_LINES_QUERY, PURCHASE_LINES_STOCK_QUERY,
+  ALL_PURCHASE_BILL_ITEM_LINES_QUERY, ALL_STOCK_BY_PURCHASE_LINE_QUERY,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Supplier, Warehouse, MaterialType, MaterialSize, ItemMaster } from '@/types'
@@ -69,6 +70,7 @@ export default function NewJobWorkPage() {
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
+  const [stockByItem, setStockByItem] = useState<Record<string, number>>({})
   const [masterDataLoading, setMasterDataLoading] = useState(true)
 
   // Item search state for inputs and outputs separately
@@ -95,13 +97,15 @@ export default function NewJobWorkPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, s, w, mt, ms, im] = await Promise.all([
+      const [c, s, w, mt, ms, im, billLines, stockRows] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
         hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
+        hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setSuppliers((s.data as any)?.suppliers ?? [])
@@ -109,6 +113,20 @@ export default function NewJobWorkPage() {
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
       setItemMasters((im.data as any)?.item_master ?? [])
+
+      // Build stock-by-item map: aggregate stock_ledger by purchase_line_id,
+      // then map purchase_line_id → item_master_id via purchase_bill_items
+      const stockByLine: Record<string, number> = {}
+      for (const row of (stockRows.data as any)?.stock_ledger ?? []) {
+        stockByLine[row.purchase_line_id] = (stockByLine[row.purchase_line_id] ?? 0) + Number(row.quantity)
+      }
+      const itemStockMap: Record<string, number> = {}
+      for (const pbi of (billLines.data as any)?.purchase_bill_items ?? []) {
+        const qty = stockByLine[pbi.purchase_line_id] ?? 0
+        itemStockMap[pbi.item_master_id] = (itemStockMap[pbi.item_master_id] ?? 0) + qty
+      }
+      setStockByItem(itemStockMap)
+
       setMasterDataLoading(false)
     }
     load()
@@ -332,12 +350,26 @@ export default function NewJobWorkPage() {
     router.refresh()
   }
 
-  // Item search helpers
-  const filteredItems = (search: string) =>
-    itemMasters.filter(im => {
-      const q = search.toLowerCase()
-      return !q || im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
-    }).slice(0, 30)
+  // Items matching the search query, with stock quantities attached
+  const matchingItems = (search: string) => {
+    const q = search.toLowerCase()
+    return itemMasters
+      .filter(im => !q || im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q))
+      .map(im => ({ ...im, availableStock: stockByItem[im.id] ?? 0 }))
+  }
+
+  // Input combo: only items with stock > 0, sorted highest stock first
+  const filteredInputItems = (search: string) =>
+    matchingItems(search)
+      .filter(im => im.availableStock > 0)
+      .sort((a, b) => b.availableStock - a.availableStock)
+      .slice(0, 40)
+
+  // Output combo: all items (producing new stock), stock shown as context only
+  const filteredAllItems = (search: string) =>
+    matchingItems(search)
+      .sort((a, b) => b.availableStock - a.availableStock || a.item_name.localeCompare(b.item_name))
+      .slice(0, 40)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -451,8 +483,11 @@ export default function NewJobWorkPage() {
                           placeholder="Search item…"
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                         {inputItemOpen[i] && (
-                          <div className="absolute z-50 mt-1 w-56 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-44">
-                            {filteredItems(inputItemSearch[i] ?? '').map(im => (
+                          <div className="absolute z-50 mt-1 w-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-52">
+                            {masterDataLoading && (
+                              <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>
+                            )}
+                            {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').map(im => (
                               <button key={im.id} type="button"
                                 onMouseDown={e => e.preventDefault()}
                                 onClick={() => {
@@ -460,12 +495,21 @@ export default function NewJobWorkPage() {
                                   setInputItemSearch(p => ({ ...p, [i]: im.item_name }))
                                   setInputItemOpen(p => ({ ...p, [i]: false }))
                                 }}
-                                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100">
-                                <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>{im.item_name}
+                                className="w-full text-left px-2 py-1.5 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
+                                  <span className="text-gray-800">{im.item_name}</span>
+                                  {im.size_label && <span className="text-gray-400 ml-1 text-[10px]">{im.size_label}</span>}
+                                </div>
+                                <span className="shrink-0 text-[10px] font-mono bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5">
+                                  {im.availableStock.toFixed(3)} {im.unit}
+                                </span>
                               </button>
                             ))}
-                            {filteredItems(inputItemSearch[i] ?? '').length === 0 && (
-                              <div className="px-2 py-1.5 text-xs text-gray-400">No items found</div>
+                            {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').length === 0 && (
+                              <div className="px-3 py-2 text-xs text-gray-400">
+                                {(inputItemSearch[i] ?? '').length > 0 ? 'No matching items with stock' : 'No items with available stock'}
+                              </div>
                             )}
                           </div>
                         )}
@@ -606,8 +650,11 @@ export default function NewJobWorkPage() {
                           placeholder="Search item…"
                           className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                         {outputItemOpen[i] && (
-                          <div className="absolute z-50 mt-1 w-56 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-44">
-                            {filteredItems(outputItemSearch[i] ?? '').map(im => (
+                          <div className="absolute z-50 mt-1 w-72 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-52">
+                            {masterDataLoading && (
+                              <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>
+                            )}
+                            {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').map(im => (
                               <button key={im.id} type="button"
                                 onMouseDown={e => e.preventDefault()}
                                 onClick={() => {
@@ -615,12 +662,21 @@ export default function NewJobWorkPage() {
                                   setOutputItemSearch(p => ({ ...p, [i]: im.item_name }))
                                   setOutputItemOpen(p => ({ ...p, [i]: false }))
                                 }}
-                                className="w-full text-left px-2 py-1.5 text-xs hover:bg-gray-100">
-                                <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>{im.item_name}
+                                className="w-full text-left px-2 py-1.5 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
+                                  <span className="text-gray-800">{im.item_name}</span>
+                                  {im.size_label && <span className="text-gray-400 ml-1 text-[10px]">{im.size_label}</span>}
+                                </div>
+                                {im.availableStock > 0 && (
+                                  <span className="shrink-0 text-[10px] font-mono bg-gray-50 text-gray-500 border border-gray-200 rounded px-1.5 py-0.5">
+                                    {im.availableStock.toFixed(3)} {im.unit}
+                                  </span>
+                                )}
                               </button>
                             ))}
-                            {filteredItems(outputItemSearch[i] ?? '').length === 0 && (
-                              <div className="px-2 py-1.5 text-xs text-gray-400">No items found</div>
+                            {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
+                              <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
                             )}
                           </div>
                         )}

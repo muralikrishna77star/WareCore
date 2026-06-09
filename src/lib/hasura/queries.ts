@@ -1062,6 +1062,26 @@ export const VENDOR_STOCK_QUERY = `
   }
 `
 
+export const ALL_PURCHASE_BILL_ITEM_LINES_QUERY = `
+  query GetAllPurchaseBillItemLines {
+    purchase_bill_items(
+      where: { item_master_id: { _is_null: false }, purchase_line_id: { _is_null: false } }
+    ) {
+      item_master_id
+      purchase_line_id
+    }
+  }
+`
+
+export const ALL_STOCK_BY_PURCHASE_LINE_QUERY = `
+  query GetAllStockByPurchaseLine {
+    stock_ledger(where: { purchase_line_id: { _is_null: false } }) {
+      purchase_line_id
+      quantity
+    }
+  }
+`
+
 export const ITEM_PURCHASE_LINES_QUERY = `
   query GetItemPurchaseLines($item_master_id: uuid!) {
     purchase_bill_items(
