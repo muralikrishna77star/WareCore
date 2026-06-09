@@ -159,6 +159,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Line ID</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
@@ -169,13 +170,16 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-[0.9375rem] text-gray-400">
+                  <td colSpan={7} className="px-6 py-8 text-center text-[0.9375rem] text-gray-400">
                     No line items recorded.
                   </td>
                 </tr>
               ) : items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-500">{idx + 1}</td>
+                  <td className="px-6 py-4 text-[0.9375rem] font-mono text-blue-700">
+                    {item.purchase_line_id ?? '—'}
+                  </td>
                   <td className="px-6 py-4 text-[0.9375rem] font-medium text-gray-900">
                     {item.item_name ?? item.material_types?.name ?? '—'}
                   </td>
@@ -196,7 +200,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 border-gray-200">
               <tr>
-                <td colSpan={3} className="px-6 py-4 text-[0.9375rem] font-semibold text-gray-900 text-right">Totals</td>
+                <td colSpan={4} className="px-6 py-4 text-[0.9375rem] font-semibold text-gray-900 text-right">Totals</td>
                 <td className="px-6 py-4 text-[0.9375rem] font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
                 <td></td>
                 <td className="px-6 py-4 text-[0.9375rem] font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>

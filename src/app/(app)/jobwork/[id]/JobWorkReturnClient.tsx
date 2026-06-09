@@ -85,29 +85,34 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Job Work Items — Record Returns</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Input Materials <span className="text-sm font-normal text-gray-500">(Consumed)</span></h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Work Type</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.item_name ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.material_types?.description ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity_sent?.toFixed(3)}</td>
+                  <td className="px-6 py-4 text-sm font-mono text-blue-700">
+                    {item.purchase_line_id ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    {item.item_name ?? item.material_types?.description ?? '—'}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                    {item.quantity_sent?.toFixed(3)} <span className="text-xs text-gray-400">{item.unit ?? 'MT'}</span>
+                  </td>
                   <td className="px-6 py-4 text-right">
                     {order.status === 'completed' ? (
                       <span className="text-sm text-gray-900">{item.quantity_received?.toFixed(3)}</span>
@@ -123,7 +128,6 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                       />
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{item.work_type ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

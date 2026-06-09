@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY } from '@/lib/hasura/queries'
+import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY } from '@/lib/hasura/queries'
 import { formatDate } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
@@ -9,13 +9,15 @@ import DeleteJobWorkButton from './DeleteJobWorkButton'
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [orderResult, itemsResult] = await Promise.all([
+  const [orderResult, itemsResult, outputItemsResult] = await Promise.all([
     hasuraQuery(JOB_WORK_ORDER_BY_ID_QUERY, { id }),
     hasuraQuery(JOB_WORK_ITEMS_QUERY, { job_work_order_id: id }),
+    hasuraQuery(JOB_WORK_OUTPUT_ITEMS_QUERY, { job_work_order_id: id }),
   ])
   const order = orderResult.job_work_orders_by_pk
   if (!order) notFound()
   const items = itemsResult.job_work_items ?? []
+  const outputItems = outputItemsResult.job_work_output_items ?? []
 
   const isOverdue =
     order.expected_return_date &&
@@ -80,6 +82,60 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
           </div>
         )}
       </div>
+
+      {/* Output Items — Produced Materials */}
+      {outputItems.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Output Materials <span className="text-sm font-normal text-gray-500">(Produced)</span></h2>
+              <p className="text-xs text-gray-400 mt-0.5">Items produced / processed by this job work</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produced Item</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source Purchase Lines</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {outputItems.map((item: any, idx: number) => {
+                  const sourceIds: string[] = Array.isArray(item.source_purchase_line_ids)
+                    ? item.source_purchase_line_ids
+                    : []
+                  return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                        {item.item_name ?? item.material_types?.description ?? '—'}
+                        {item.size_label && <span className="ml-1 text-gray-400 text-xs">{item.size_label}</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900 text-right font-mono">
+                        {Number(item.quantity).toFixed(3)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{item.unit}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          {sourceIds.length > 0 ? sourceIds.map(pid => (
+                            <span key={pid} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
+                              {pid}
+                            </span>
+                          )) : <span className="text-xs text-gray-400">—</span>}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Status + Return Form (client) */}
       <JobWorkReturnClient order={order} items={items ?? []} />
