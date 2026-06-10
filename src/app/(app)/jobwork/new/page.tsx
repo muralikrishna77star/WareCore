@@ -94,6 +94,7 @@ export default function NewJobWorkPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshingItemMasters, setRefreshingItemMasters] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -130,6 +131,29 @@ export default function NewJobWorkPage() {
       setMasterDataLoading(false)
     }
     load()
+  }, [])
+
+  // Refresh item masters and their available stock (e.g. after adding a new item elsewhere)
+  const refreshItemMasters = useCallback(async () => {
+    setRefreshingItemMasters(true)
+    const [im, billLines, stockRows] = await Promise.all([
+      hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
+      hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
+      hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
+    ])
+    setItemMasters((im.data as any)?.item_master ?? [])
+
+    const stockByLine: Record<string, number> = {}
+    for (const row of (stockRows.data as any)?.stock_ledger ?? []) {
+      stockByLine[row.purchase_line_id] = (stockByLine[row.purchase_line_id] ?? 0) + Number(row.quantity)
+    }
+    const itemStockMap: Record<string, number> = {}
+    for (const pbi of (billLines.data as any)?.purchase_bill_items ?? []) {
+      const qty = stockByLine[pbi.purchase_line_id] ?? 0
+      itemStockMap[pbi.item_master_id] = (itemStockMap[pbi.item_master_id] ?? 0) + qty
+    }
+    setStockByItem(itemStockMap)
+    setRefreshingItemMasters(false)
   }, [])
 
   // Fetch purchase line options for a given item master
@@ -375,7 +399,7 @@ export default function NewJobWorkPage() {
   const selectCls    = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="max-w-[1800px] mx-auto">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}
@@ -467,7 +491,13 @@ export default function NewJobWorkPage() {
               <table className="w-full text-sm min-w-[900px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-56">Item</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-56">
+                      Item
+                      <button type="button" onClick={refreshItemMasters} title="Refresh master items"
+                        className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                        {refreshingItemMasters ? '…' : '↻'}
+                      </button>
+                    </th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Purchase Line ID</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Avail Stock</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
@@ -588,22 +618,9 @@ export default function NewJobWorkPage() {
           <div>
             {/* Section header band */}
             <div className="flex items-center justify-between px-4 py-2 bg-emerald-50 border-b border-emerald-100">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">
-                  Output Materials <span className="font-normal normal-case text-emerald-600">(Produced)</span>
-                </span>
-                {(() => {
-                  const ids = [...new Set(inputLines.map(l => l.purchase_line_id).filter(Boolean))]
-                  return ids.length > 0 ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-gray-500">Source:</span>
-                      {ids.map(id => (
-                        <span key={id} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">{id}</span>
-                      ))}
-                    </div>
-                  ) : null
-                })()}
-              </div>
+              <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">
+                Output Materials <span className="font-normal normal-case text-emerald-600">(Produced)</span>
+              </span>
               <button type="button" onClick={() => setOutputLines(p => [...p, emptyOutput()])}
                 className="text-xs font-medium text-emerald-700 hover:text-emerald-900 border border-emerald-300 rounded px-2 py-0.5 hover:bg-emerald-100">
                 + Add Row
@@ -614,7 +631,14 @@ export default function NewJobWorkPage() {
               <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-72">Produced Item</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-72">
+                      Produced Item
+                      <button type="button" onClick={refreshItemMasters} title="Refresh master items"
+                        className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
+                        {refreshingItemMasters ? '…' : '↻'}
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Source Line ID(s)</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Produced</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
@@ -622,7 +646,9 @@ export default function NewJobWorkPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {outputLines.map((line, i) => (
+                  {(() => {
+                    const sourceLineIds = [...new Set(inputLines.map(l => l.purchase_line_id).filter(Boolean))]
+                    return outputLines.map((line, i) => (
                     <tr key={i} className="hover:bg-emerald-50/30">
                       {/* Item */}
                       <td className="px-3 py-2">
@@ -663,6 +689,18 @@ export default function NewJobWorkPage() {
                       </td>
 
                       <td className="px-3 py-2">
+                        {sourceLineIds.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {sourceLineIds.map(id => (
+                              <span key={id} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">{id}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300 italic">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-3 py-2">
                         <input type="number" value={line.quantity} onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" placeholder="0.000"
                           className="block w-full rounded border border-gray-300 px-2 py-2 text-sm text-right focus:border-blue-500 focus:outline-none" />
@@ -685,7 +723,8 @@ export default function NewJobWorkPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  ))
+                  })()}
                 </tbody>
               </table>
             </div>

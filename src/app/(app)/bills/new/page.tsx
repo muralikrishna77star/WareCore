@@ -589,7 +589,7 @@ export default function NewBillPage() {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto">
+    <div className="max-w-[1800px] mx-auto">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}
@@ -797,45 +797,45 @@ export default function NewBillPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left">
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Material Type
                     <button type="button" onClick={refreshMaterialTypes} title="Refresh material types"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
                       {refreshingMaterialTypes ? '…' : '↻'}
                     </button>
                   </th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Item Name <span className="text-red-500">*</span>
                     <button type="button" onClick={refreshItemMasters} title="Refresh items"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
                       {refreshingItemMasters ? '…' : '↻'}
                     </button>
                   </th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Line ID</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Code</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500">Line ID</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500">Item Code</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Size
                     <button type="button" onClick={refreshSizes} title="Refresh sizes"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
                       {refreshingSizes ? '…' : '↻'}
                     </button>
                   </th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Qty</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Rate (₹)</th>
-                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Taxable (₹)</th>}
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap">
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500">Qty</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500">Rate (₹)</th>
+                  {showTaxColumns && <th className="pb-3 pr-3 text-xs font-medium text-gray-500">Taxable (₹)</th>}
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Tax Rate
                     <button type="button" onClick={refreshTaxRates} title="Refresh tax rates"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
                       {refreshingTaxRates ? '…' : '↻'}
                     </button>
                   </th>
-                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">CGST</th>}
-                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">SGST</th>}
-                  {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">TDS</th>}
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 text-right">Total</th>
-                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Notes</th>
-                  <th className="pb-2"></th>
+                  {showTaxColumns && <th className="pb-3 pr-3 text-xs font-medium text-gray-500 text-right">CGST</th>}
+                  {showTaxColumns && <th className="pb-3 pr-3 text-xs font-medium text-gray-500 text-right">SGST</th>}
+                  {showTaxColumns && <th className="pb-3 pr-3 text-xs font-medium text-gray-500 text-right">TDS</th>}
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500 text-right">Total</th>
+                  <th className="pb-3 pr-3 text-xs font-medium text-gray-500">Notes</th>
+                  <th className="pb-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -858,9 +858,9 @@ export default function NewBillPage() {
                   const sizeSearchValue = sizeSearch[line.rowId] ?? (materialSizes.find(s => s.id === line.material_size_id)?.size_label ?? '')
                   const taxRateSearchValue = taxRateSearch[line.rowId] ?? (taxRates.find(tr => tr.id === line.tax_rate_id)?.name ?? '')
                   return (
-                    <tr key={i}>
+                    <tr key={i} className="hover:bg-gray-50/50">
                       {/* Material Type — first column */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <select value={line.material_type_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setShowMaterialTypeDialog(true) }
@@ -869,14 +869,14 @@ export default function NewBillPage() {
                               setItemSearch(prev => ({ ...prev, [line.rowId]: '' }))
                             }
                           }}
-                          className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
+                          className="block w-36 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           <option value="NEW" className="font-semibold">+ New Material Type</option>
                           {materialTypes.map(m => <option key={m.id} value={m.id}>{m.code} — {m.description}</option>)}
                         </select>
                       </td>
                       {/* Item Name */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <div className="relative">
                           <input type="text" value={itemSearchValue}
                             onChange={(e) => {
@@ -928,7 +928,7 @@ export default function NewBillPage() {
                             onFocus={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))}
                             onBlur={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))}
                             placeholder="Search item..."
-                            className={`block w-36 rounded border px-2 py-px text-[0.8125rem] h-7 focus:outline-none ${
+                            className={`block w-36 rounded border px-2 py-2 text-sm h-9 focus:outline-none ${
                               line.material_type_id && line.quantity && !line.item_name
                                 ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
                             }`} />
@@ -966,18 +966,18 @@ export default function NewBillPage() {
                         </div>
                       </td>
                       {/* Line ID */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         {line.purchase_line_id
-                          ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-1.5 text-[0.6875rem] font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
-                          : <span className="text-[0.6875rem] text-gray-400 italic">— select item —</span>}
+                          ? <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 px-2 py-2 text-xs font-mono font-medium text-blue-700 whitespace-nowrap select-all">{line.purchase_line_id}</span>
+                          : <span className="text-xs text-gray-400 italic">— select item —</span>}
                       </td>
                       {/* Item Code */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <input type="text" value={line.item_code} readOnly placeholder="—"
-                          className="block w-20 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 bg-gray-50" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-2 text-sm h-9 bg-gray-50" />
                       </td>
                       {/* Size */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <select value={line.material_size_id}
                           onChange={(e) => {
                             if (e.target.value === 'NEW') { setNewSizeMaterialTypeId(line.material_type_id); setShowSizeDialog(true) }
@@ -987,75 +987,75 @@ export default function NewBillPage() {
                               if (size) updateLine(i, 'size_label', size.size_label)
                             }
                           }}
-                          className="block w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
+                          className="block w-24 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none">
                           <option value="">Select</option>
                           <option value="NEW" className="font-semibold">+ New Size</option>
                           {sizesForType.map(s => <option key={s.id} value={s.id}>{s.size_label}</option>)}
                         </select>
                       </td>
                       {/* Qty */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
-                          className="block w-20 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Rate */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <input type="number" value={line.rate} onChange={(e) => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
-                          className="block w-20 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
+                          className="block w-20 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none" />
                       </td>
                       {/* Taxable */}
                       {showTaxColumns && (
-                        <td className="pr-2 py-0">
+                        <td className="pr-2 py-2">
                           <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-[0.9375rem] text-gray-700 text-right">
                             {line.taxable_value > 0 ? `₹${line.taxable_value.toFixed(2)}` : '—'}
                           </span>
                         </td>
                       )}
                       {/* Tax Rate */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <select value={line.tax_rate_id} onChange={(e) => updateLine(i, 'tax_rate_id', e.target.value)}
-                          className="block w-32 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none">
+                          className="block w-32 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
                           {taxRates.map(tr => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
                         </select>
                       </td>
                       {/* CGST */}
                       {showTaxColumns && (
-                        <td className="pr-2 py-0 text-right">
+                        <td className="pr-2 py-2 text-right">
                           {line.cgst_amount > 0
-                            ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
-                            : <span className="text-gray-300 text-[0.6875rem]">—</span>}
+                            ? <span className="text-xs text-orange-700"><span className="block text-gray-400">{line.cgst_rate}%</span>₹{line.cgst_amount.toFixed(2)}</span>
+                            : <span className="text-gray-300 text-xs">—</span>}
                         </td>
                       )}
                       {/* SGST */}
                       {showTaxColumns && (
-                        <td className="pr-2 py-0 text-right">
+                        <td className="pr-2 py-2 text-right">
                           {line.sgst_amount > 0
-                            ? <span className="text-[0.6875rem] text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
-                            : <span className="text-gray-300 text-[0.6875rem]">—</span>}
+                            ? <span className="text-xs text-orange-700"><span className="block text-gray-400">{line.sgst_rate}%</span>₹{line.sgst_amount.toFixed(2)}</span>
+                            : <span className="text-gray-300 text-xs">—</span>}
                         </td>
                       )}
                       {/* TDS */}
                       {showTaxColumns && (
-                        <td className="pr-2 py-0 text-right">
+                        <td className="pr-2 py-2 text-right">
                           {line.tds_amount > 0
-                            ? <span className="text-[0.6875rem] text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
-                            : <span className="text-gray-300 text-[0.6875rem]">—</span>}
+                            ? <span className="text-xs text-red-700"><span className="block text-gray-400">{line.tds_rate}%</span>−₹{line.tds_amount.toFixed(2)}</span>
+                            : <span className="text-gray-300 text-xs">—</span>}
                         </td>
                       )}
                       {/* Total */}
-                      <td className="pr-2 py-0 text-right">
+                      <td className="pr-2 py-2 text-right">
                         <span className="text-[0.9375rem] font-semibold text-gray-900">
                           {line.total_with_tax > 0 ? `₹${line.total_with_tax.toFixed(2)}` : '—'}
                         </span>
                       </td>
                       {/* Notes */}
-                      <td className="pr-2 py-0">
+                      <td className="pr-2 py-2">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="block w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
+                          className="block w-24 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         <div className="flex gap-1 items-center">
@@ -1073,22 +1073,22 @@ export default function NewBillPage() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-gray-200">
-                  <td colSpan={5} className="py-3 text-[0.9375rem] font-semibold text-gray-700 text-right pr-3">Totals:</td>
-                  <td className="py-3 pr-3 text-[0.9375rem] font-bold text-gray-900">{totalQty.toFixed(3)}</td>
+                <tr className="border-t-2 border-gray-300 bg-gray-50">
+                  <td colSpan={5} className="py-4 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
+                  <td className="py-4 pr-3 text-base font-bold text-gray-900">{totalQty.toFixed(3)}</td>
                   {showTaxColumns ? (
                     <>
-                      <td className="py-3 pr-3"></td>
-                      <td className="py-3 pr-3 text-[0.9375rem] text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
-                      <td className="py-3 pr-3"></td>
-                      <td className="py-3 pr-3 text-right text-[0.9375rem] text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-right text-[0.9375rem] text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-right text-[0.9375rem] text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
+                      <td className="py-4 pr-3"></td>
+                      <td className="py-4 pr-3 text-sm text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
+                      <td className="py-4 pr-3"></td>
+                      <td className="py-4 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
+                      <td className="py-4 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
+                      <td className="py-4 pr-3 text-right text-sm text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
                     </>
                   ) : (
-                    <td colSpan={2} className="py-3 pr-3"></td>
+                    <td colSpan={2} className="py-4 pr-3"></td>
                   )}
-                  <td className="py-3 pr-3 text-right text-[0.9375rem] font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</td>
+                  <td className="py-4 pr-3 text-right text-base font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
