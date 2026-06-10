@@ -5,7 +5,16 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(vercel --prod)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Public\\\\Projects\\\\warecore\\\\src\" -Recurse | Where-Object { $_.Name -match \"purchase|Purchase|bill|Bill\" } | Select-Object FullName)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Public\\\\Projects\\\\warecore\\\\src\\\\components\" -Recurse | Where-Object { $_.Name -match \"purchase|Purchase|bill|Bill|entry|Entry\" } | Select-Object FullName)",
+      "Bash(npx supabase *)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Public\\\\Projects\\\\warecore\\\\src\\\\app\\\\api\\\\bills\\\\[id]\\\\submit\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Public\\\\Projects\\\\warecore\\\\src\\\\app\\\\\\(app\\)\\\\bills\\\\[id]\\\\edit\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Public\\Projects\\warecore\\src\\app\\api\\bills\\[id]",
+      "C:\\Users\\Public\\Projects\\warecore\\src\\app\\(app)\\bills\\[id]"
     ]
   }
 }
