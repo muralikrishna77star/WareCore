@@ -93,6 +93,7 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
@@ -105,6 +106,9 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-mono text-blue-700">
                     {item.purchase_line_id ?? <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-mono text-indigo-700">
+                    {item.job_line_id ?? <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
                     {item.item_name ?? item.material_types?.description ?? '—'}

@@ -11,11 +11,26 @@ import {
   CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION,
   ITEM_PURCHASE_LINES_QUERY, PURCHASE_LINES_STOCK_QUERY,
   ALL_PURCHASE_BILL_ITEM_LINES_QUERY, ALL_STOCK_BY_PURCHASE_LINE_QUERY,
+  ALL_JOB_WORK_LINE_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Supplier, Warehouse, MaterialType, MaterialSize, ItemMaster } from '@/types'
 
 const UNITS = ['MT', 'KG', 'Nos', 'Sheets', 'Meters']
+
+// ─── Job Line ID generation (format JW-DDMM-NNNN) ─────────────────────────────
+
+function getDDMM(date: Date = new Date()): string {
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  return `${dd}${mm}`
+}
+
+function generateJobLineId(ddmm: string, allJobLineIds: string[]): string {
+  const prefix = `JW-${ddmm}-`
+  const count = allJobLineIds.filter(id => id && id.startsWith(prefix)).length
+  return `${prefix}${String(count + 1).padStart(4, '0')}`
+}
 
 type PurchaseLineOption = { purchase_line_id: string; available_qty: number }
 
@@ -33,6 +48,7 @@ type InputLine = {
   quantity: string
   unit: string
   notes: string
+  job_line_id: string
 }
 
 type OutputLine = {
@@ -45,6 +61,7 @@ type OutputLine = {
   quantity: string
   unit: string
   notes: string
+  job_line_id: string
 }
 
 const emptyInput = (): InputLine => ({
@@ -53,12 +70,14 @@ const emptyInput = (): InputLine => ({
   purchase_line_options: [], purchase_lines_loading: false,
   purchase_line_id: '', available_quantity: '',
   quantity: '', unit: 'MT', notes: '',
+  job_line_id: '',
 })
 
 const emptyOutput = (): OutputLine => ({
   item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   quantity: '', unit: 'MT', notes: '',
+  job_line_id: '',
 })
 
 export default function NewJobWorkPage() {
@@ -72,6 +91,7 @@ export default function NewJobWorkPage() {
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
   const [stockByItem, setStockByItem] = useState<Record<string, number>>({})
   const [masterDataLoading, setMasterDataLoading] = useState(true)
+  const [existingJobLineIds, setExistingJobLineIds] = useState<string[]>([])
 
   // Item search state for inputs and outputs separately
   const [inputItemSearch, setInputItemSearch] = useState<Record<number, string>>({})
@@ -98,7 +118,7 @@ export default function NewJobWorkPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, s, w, mt, ms, im, billLines, stockRows] = await Promise.all([
+      const [c, s, w, mt, ms, im, billLines, stockRows, jli] = await Promise.all([
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
@@ -107,6 +127,7 @@ export default function NewJobWorkPage() {
         hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
         hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
         hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
+        hasuraFetch(ALL_JOB_WORK_LINE_IDS_QUERY),
       ])
       setCompanies((c.data as any)?.companies ?? [])
       setSuppliers((s.data as any)?.suppliers ?? [])
@@ -114,6 +135,9 @@ export default function NewJobWorkPage() {
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
       setItemMasters((im.data as any)?.item_master ?? [])
+      setExistingJobLineIds(
+        ((jli.data as any)?.job_work_items ?? []).map((r: any) => r.job_line_id).filter(Boolean)
+      )
 
       // Build stock-by-item map: aggregate stock_ledger by purchase_line_id,
       // then map purchase_line_id → item_master_id via purchase_bill_items
@@ -226,12 +250,21 @@ export default function NewJobWorkPage() {
             u[index].size_label = item.size_label || ''
             u[index].unit = item.unit || 'MT'
           }
+          if (!u[index].job_line_id) {
+            const ddmm = getDDMM(new Date(dispatchDate + 'T00:00:00'))
+            const currentlyAssigned = u
+              .filter((_, idx) => idx !== index)
+              .map(l => l.job_line_id)
+              .filter(Boolean)
+            u[index].job_line_id = generateJobLineId(ddmm, [...existingJobLineIds, ...currentlyAssigned])
+          }
         } else {
           u[index].item_name = ''
           u[index].item_code = ''
           u[index].material_type_id = ''
           u[index].material_size_id = ''
           u[index].size_label = ''
+          u[index].job_line_id = ''
         }
         u[index].purchase_line_id = ''
         u[index].available_quantity = ''
@@ -249,7 +282,7 @@ export default function NewJobWorkPage() {
     if (field === 'item_master_id' && value) {
       fetchPurchaseLinesForItem(value, index)
     }
-  }, [itemMasters, fetchPurchaseLinesForItem])
+  }, [itemMasters, fetchPurchaseLinesForItem, dispatchDate, existingJobLineIds])
 
   const updateOutputLine = useCallback((index: number, field: keyof OutputLine, value: string) => {
     setOutputLines(prev => {
@@ -280,6 +313,22 @@ export default function NewJobWorkPage() {
     })
   }, [itemMasters])
 
+  // Clear stale Output Job Line ID references when their Input row's item is removed
+  useEffect(() => {
+    const validIds = new Set(inputLines.map(l => l.job_line_id).filter(Boolean))
+    setOutputLines(prev => {
+      let changed = false
+      const next = prev.map(l => {
+        if (l.job_line_id && !validIds.has(l.job_line_id)) {
+          changed = true
+          return { ...l, job_line_id: '' }
+        }
+        return l
+      })
+      return changed ? next : prev
+    })
+  }, [inputLines])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -296,6 +345,20 @@ export default function NewJobWorkPage() {
     for (const line of validInputs) {
       if (line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)) {
         setError(`Quantity for "${line.item_name}" (${line.quantity}) exceeds available stock (${line.available_quantity}).`)
+        setLoading(false)
+        return
+      }
+    }
+
+    // Validate output quantities don't exceed input quantities per Job Line ID
+    for (const line of validInputs) {
+      if (!line.job_line_id) continue
+      const inputQty = parseFloat(line.quantity) || 0
+      const allocated = outputLines
+        .filter(o => o.job_line_id === line.job_line_id && o.item_master_id && o.quantity)
+        .reduce((sum, o) => sum + (parseFloat(o.quantity) || 0), 0)
+      if (allocated > inputQty + 0.0005) {
+        setError(`Output quantity linked to ${line.job_line_id} (${line.item_name}) is ${allocated.toFixed(3)} ${line.unit}, exceeding the input quantity of ${inputQty.toFixed(3)} ${line.unit}.`)
         setLoading(false)
         return
       }
@@ -326,6 +389,7 @@ export default function NewJobWorkPage() {
     const inputItems = validInputs.map(l => ({
       job_work_order_id: order.id,
       purchase_line_id: l.purchase_line_id || null,
+      job_line_id: l.job_line_id || null,
       item_master_id: l.item_master_id || null,
       item_name: l.item_name || null,
       material_type_id: l.material_type_id || null,
@@ -342,11 +406,6 @@ export default function NewJobWorkPage() {
       return
     }
 
-    // Collect source purchase line IDs for output traceability
-    const sourcePurchaseLineIds = [...new Set(
-      validInputs.map(l => l.purchase_line_id).filter(Boolean)
-    )]
-
     // Create output items (if any)
     const validOutputs = outputLines.filter(l => l.item_master_id && l.quantity)
     if (validOutputs.length) {
@@ -359,7 +418,7 @@ export default function NewJobWorkPage() {
         size_label: l.size_label || null,
         quantity: parseFloat(l.quantity),
         unit: l.unit || 'MT',
-        source_purchase_line_ids: sourcePurchaseLineIds,
+        source_job_line_id: l.job_line_id || null,
         notes: l.notes || null,
       }))
       const { error: outErr } = await hasuraFetch(CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION, { objects: outputItems })
@@ -488,7 +547,7 @@ export default function NewJobWorkPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[900px]">
+              <table className="w-full text-sm min-w-[1050px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-56">
@@ -498,6 +557,7 @@ export default function NewJobWorkPage() {
                         {refreshingItemMasters ? '…' : '↻'}
                       </button>
                     </th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-32">Job Line ID</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Purchase Line ID</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Avail Stock</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
@@ -545,6 +605,28 @@ export default function NewJobWorkPage() {
                             </div>
                           )}
                         </div>
+                      </td>
+
+                      {/* Job Line ID */}
+                      <td className="px-3 py-2">
+                        {line.job_line_id ? (
+                          <>
+                            <span className="inline-block text-[11px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {line.job_line_id}
+                            </span>
+                            {(() => {
+                              const allocated = outputLines
+                                .filter(o => o.job_line_id === line.job_line_id)
+                                .reduce((s, o) => s + (parseFloat(o.quantity) || 0), 0)
+                              const remaining = (parseFloat(line.quantity) || 0) - allocated
+                              return remaining < -0.0005
+                                ? <p className="text-[10px] text-red-500 mt-0.5">Over by {Math.abs(remaining).toFixed(3)} {line.unit}</p>
+                                : <p className="text-[10px] text-green-600 mt-0.5">Remaining: {remaining.toFixed(3)} {line.unit}</p>
+                            })()}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-300 italic">—</span>
+                        )}
                       </td>
 
                       {/* Purchase Line ID */}
@@ -638,7 +720,7 @@ export default function NewJobWorkPage() {
                         {refreshingItemMasters ? '…' : '↻'}
                       </button>
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Source Line ID(s)</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Job Line ID</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Produced</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
@@ -646,9 +728,7 @@ export default function NewJobWorkPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(() => {
-                    const sourceLineIds = [...new Set(inputLines.map(l => l.purchase_line_id).filter(Boolean))]
-                    return outputLines.map((line, i) => (
+                  {outputLines.map((line, i) => (
                     <tr key={i} className="hover:bg-emerald-50/30">
                       {/* Item */}
                       <td className="px-3 py-2">
@@ -689,15 +769,14 @@ export default function NewJobWorkPage() {
                       </td>
 
                       <td className="px-3 py-2">
-                        {sourceLineIds.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {sourceLineIds.map(id => (
-                              <span key={id} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">{id}</span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-300 italic">—</span>
-                        )}
+                        <select value={line.job_line_id} onChange={e => updateOutputLine(i, 'job_line_id', e.target.value)} className={selectCls + ' font-mono'}>
+                          <option value="">— none —</option>
+                          {inputLines.filter(l => l.item_master_id && l.job_line_id).map(l => (
+                            <option key={l.job_line_id} value={l.job_line_id}>
+                              {l.job_line_id} — {l.item_name} ({l.quantity || '0'} {l.unit})
+                            </option>
+                          ))}
+                        </select>
                       </td>
 
                       <td className="px-3 py-2">
@@ -723,8 +802,7 @@ export default function NewJobWorkPage() {
                         )}
                       </td>
                     </tr>
-                  ))
-                  })()}
+                  ))}
                 </tbody>
               </table>
             </div>

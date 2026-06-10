@@ -100,15 +100,11 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produced Item</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source Purchase Lines</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {outputItems.map((item: any, idx: number) => {
-                  const sourceIds: string[] = Array.isArray(item.source_purchase_line_ids)
-                    ? item.source_purchase_line_ids
-                    : []
-                  return (
+                {outputItems.map((item: any, idx: number) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
@@ -120,17 +116,14 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{item.unit}</td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-1">
-                          {sourceIds.length > 0 ? sourceIds.map(pid => (
-                            <span key={pid} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                              {pid}
-                            </span>
-                          )) : <span className="text-xs text-gray-400">—</span>}
-                        </div>
+                        {item.source_job_line_id ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {item.source_job_line_id}
+                          </span>
+                        ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                     </tr>
-                  )
-                })}
+                ))}
               </tbody>
             </table>
           </div>

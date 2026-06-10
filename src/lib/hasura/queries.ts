@@ -835,6 +835,14 @@ export const ALL_PURCHASE_LINE_IDS_QUERY = `
   }
 `
 
+export const ALL_JOB_WORK_LINE_IDS_QUERY = `
+  query GetAllJobWorkLineIds {
+    job_work_items {
+      job_line_id
+    }
+  }
+`
+
 export const ALL_INVOICE_NUMBERS_QUERY = `
   query GetAllInvoiceNumbers {
     dispatch_orders(order_by: {created_at: desc}) {
@@ -1002,7 +1010,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id purchase_line_id sub_purchase_line_id quantity_sent quantity_received size_label
+      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received size_label
       item_master_id item_name
       material_types { description }
       material_sizes { size_label }
@@ -1030,7 +1038,7 @@ export const CREATE_JOB_WORK_ITEMS_MUTATION = `
   mutation CreateJobWorkItems($objects: [job_work_items_insert_input!]!) {
     insert_job_work_items(objects: $objects) {
       affected_rows
-      returning { id item_name item_master_id material_types { description } }
+      returning { id item_name item_master_id job_line_id material_types { description } }
     }
   }
 `
@@ -1110,7 +1118,7 @@ export const JOB_WORK_OUTPUT_ITEMS_QUERY = `
     ) {
       id job_work_order_id item_master_id item_name
       material_type_id material_size_id size_label
-      quantity unit source_purchase_line_ids notes
+      quantity unit source_job_line_id notes
       material_types { description }
       material_sizes { size_label }
     }
@@ -1121,7 +1129,7 @@ export const CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION = `
   mutation CreateJobWorkOutputItems($objects: [job_work_output_items_insert_input!]!) {
     insert_job_work_output_items(objects: $objects) {
       affected_rows
-      returning { id item_name quantity unit source_purchase_line_ids }
+      returning { id item_name quantity unit source_job_line_id }
     }
   }
 `
