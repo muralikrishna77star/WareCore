@@ -1,20 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
-import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
-  CREATE_JOB_WORK_ORDER_MUTATION, CREATE_JOB_WORK_ITEMS_MUTATION,
-  CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION,
+  GET_JOB_WORK_ORDER_FOR_EDIT_QUERY,
   ITEM_PURCHASE_LINES_QUERY, PURCHASE_LINES_STOCK_QUERY,
   ALL_PURCHASE_BILL_ITEM_LINES_QUERY, ALL_STOCK_BY_PURCHASE_LINE_QUERY,
   ALL_JOB_WORK_LINE_IDS_QUERY,
   CREATE_ITEM_MASTER_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
 } from '@/lib/hasura/queries'
-import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Supplier, Warehouse, MaterialType, MaterialSize, ItemMaster } from '@/types'
 
 const UNITS = ['MT', 'KG', 'Nos', 'Sheets', 'Meters']
@@ -45,6 +42,7 @@ type InputLine = {
   purchase_line_options: PurchaseLineOption[]
   purchase_lines_loading: boolean
   purchase_line_id: string
+  sub_purchase_line_id: string
   available_quantity: string
   quantity: string
   unit: string
@@ -69,7 +67,7 @@ const emptyInput = (): InputLine => ({
   item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   purchase_line_options: [], purchase_lines_loading: false,
-  purchase_line_id: '', available_quantity: '',
+  purchase_line_id: '', sub_purchase_line_id: '', available_quantity: '',
   quantity: '', unit: 'MT', notes: '',
   job_line_id: '',
 })
@@ -81,8 +79,16 @@ const emptyOutput = (): OutputLine => ({
   job_line_id: '',
 })
 
-export default function NewJobWorkPage() {
+export default function EditJobWorkPage() {
   const router = useRouter()
+  const params = useParams()
+  const orderId = params.id as string
+
+  const [pageLoading, setPageLoading] = useState(true)
+  const [orderStatus, setOrderStatus] = useState('')
+  const [referenceNumber, setReferenceNumber] = useState('')
+  const [hasReturns, setHasReturns] = useState(false)
+  const [notFound, setNotFound] = useState(false)
 
   const [companies, setCompanies] = useState<Company[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -91,7 +97,6 @@ export default function NewJobWorkPage() {
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
   const [itemMasters, setItemMasters] = useState<ItemMaster[]>([])
   const [stockByItem, setStockByItem] = useState<Record<string, number>>({})
-  const [masterDataLoading, setMasterDataLoading] = useState(true)
   const [existingJobLineIds, setExistingJobLineIds] = useState<string[]>([])
 
   // Item search state for inputs and outputs separately
@@ -129,16 +134,85 @@ export default function NewJobWorkPage() {
   const [notes, setNotes] = useState('')
 
   // Line items
-  const [inputLines, setInputLines] = useState<InputLine[]>([emptyInput(), emptyInput(), emptyInput()])
-  const [outputLines, setOutputLines] = useState<OutputLine[]>([emptyOutput(), emptyOutput(), emptyOutput()])
+  const [inputLines, setInputLines] = useState<InputLine[]>([])
+  const [outputLines, setOutputLines] = useState<OutputLine[]>([])
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshingItemMasters, setRefreshingItemMasters] = useState(false)
 
+  // Fetch purchase line options for a given item master. When `preservePurchaseLineId`
+  // is set (initial load of an existing line), keep that selection and add `extraQty`
+  // (the net quantity this order currently holds out at the vendor) back onto its
+  // available stock — that's what edit_job_work_order will restore on save.
+  const fetchPurchaseLinesForItem = useCallback(async (
+    itemMasterId: string,
+    index: number,
+    preservePurchaseLineId?: string,
+    extraQty?: number,
+  ) => {
+    if (!itemMasterId) {
+      setInputLines(prev => {
+        const u = [...prev]
+        u[index] = { ...u[index], purchase_line_options: [], purchase_line_id: '', available_quantity: '' }
+        return u
+      })
+      return
+    }
+
+    setInputLines(prev => {
+      const u = [...prev]
+      u[index] = { ...u[index], purchase_lines_loading: true, purchase_line_options: [] }
+      if (!preservePurchaseLineId) {
+        u[index].purchase_line_id = ''
+        u[index].available_quantity = ''
+      }
+      return u
+    })
+
+    const { data: linesData } = await hasuraFetch<any>(ITEM_PURCHASE_LINES_QUERY, { item_master_id: itemMasterId })
+    const purchaseLineIds: string[] = (linesData?.purchase_bill_items ?? [])
+      .map((r: any) => r.purchase_line_id)
+      .filter(Boolean)
+
+    const stockMap: Record<string, number> = {}
+    if (purchaseLineIds.length) {
+      const { data: stockData } = await hasuraFetch<any>(PURCHASE_LINES_STOCK_QUERY, { purchase_line_ids: purchaseLineIds })
+      for (const row of (stockData?.stock_ledger ?? []) as { purchase_line_id: string; quantity: number }[]) {
+        if (row.purchase_line_id) {
+          stockMap[row.purchase_line_id] = (stockMap[row.purchase_line_id] ?? 0) + Number(row.quantity)
+        }
+      }
+    }
+
+    const ids = new Set(purchaseLineIds)
+    if (preservePurchaseLineId) ids.add(preservePurchaseLineId)
+
+    const options: PurchaseLineOption[] = Array.from(ids)
+      .map(id => {
+        let qty = stockMap[id] ?? 0
+        if (preservePurchaseLineId && id === preservePurchaseLineId) qty += extraQty ?? 0
+        return { purchase_line_id: id, available_qty: Number(qty.toFixed(3)) }
+      })
+      .filter(opt => opt.available_qty > 0)
+      .sort((a, b) => a.purchase_line_id.localeCompare(b.purchase_line_id))
+
+    setInputLines(prev => {
+      const u = [...prev]
+      u[index] = { ...u[index], purchase_lines_loading: false, purchase_line_options: options }
+      if (preservePurchaseLineId) {
+        const opt = options.find(o => o.purchase_line_id === preservePurchaseLineId)
+        u[index].purchase_line_id = preservePurchaseLineId
+        u[index].available_quantity = opt ? opt.available_qty.toFixed(3) : ''
+      }
+      return u
+    })
+  }, [])
+
   useEffect(() => {
     const load = async () => {
-      const [c, s, w, mt, ms, im, billLines, stockRows, jli] = await Promise.all([
+      const [orderRes, c, s, w, mt, ms, im, billLines, stockRows, jli] = await Promise.all([
+        hasuraFetch(GET_JOB_WORK_ORDER_FOR_EDIT_QUERY, { id: orderId }),
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
         hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
@@ -149,14 +223,36 @@ export default function NewJobWorkPage() {
         hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
         hasuraFetch(ALL_JOB_WORK_LINE_IDS_QUERY),
       ])
+
+      const order = (orderRes.data as any)?.job_work_orders_by_pk
+      if (!order) { setNotFound(true); setPageLoading(false); return }
+
+      setOrderStatus(order.status)
+      setReferenceNumber(order.reference_number ?? '')
+      setCompanyId(order.company_id ?? '')
+      setWarehouseId(order.warehouse_id ?? '')
+      setVendorId(order.vendor_id ?? '')
+      setDispatchDate(order.dispatch_date ?? new Date().toISOString().split('T')[0])
+      setExpectedReturnDate(order.expected_return_date ?? '')
+      setWorkDescription(order.work_description ?? '')
+      setNotes(order.notes ?? '')
+
+      const loadedItemMasters: ItemMaster[] = (im.data as any)?.item_master ?? []
       setCompanies((c.data as any)?.companies ?? [])
       setSuppliers((s.data as any)?.suppliers ?? [])
       setWarehouses((w.data as any)?.warehouses ?? [])
       setMaterialTypes((mt.data as any)?.material_types ?? [])
       setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemMasters((im.data as any)?.item_master ?? [])
+      setItemMasters(loadedItemMasters)
+
+      // Exclude this order's own job line IDs so the sequence count isn't inflated by itself
+      const ownLineIds = new Set<string>(
+        (order.job_work_items ?? []).map((i: any) => i.job_line_id).filter(Boolean)
+      )
       setExistingJobLineIds(
-        ((jli.data as any)?.job_work_items ?? []).map((r: any) => r.job_line_id).filter(Boolean)
+        ((jli.data as any)?.job_work_items ?? [])
+          .map((r: any) => r.job_line_id)
+          .filter((id: string) => id && !ownLineIds.has(id))
       )
 
       // Build stock-by-item map: aggregate stock_ledger by purchase_line_id,
@@ -172,10 +268,75 @@ export default function NewJobWorkPage() {
       }
       setStockByItem(itemStockMap)
 
-      setMasterDataLoading(false)
+      // Map existing input items
+      const rawInputs: any[] = order.job_work_items ?? []
+      let anyReturns = false
+      const loadedInputs: (InputLine & { _net_qty: number })[] = rawInputs.map((it) => {
+        const found = loadedItemMasters.find(x => x.id === it.item_master_id)
+        if (Number(it.quantity_received) > 0) anyReturns = true
+        return {
+          item_master_id: it.item_master_id ?? '',
+          item_name: it.item_name ?? '',
+          item_code: found?.item_code ?? '',
+          material_type_id: it.material_type_id ?? '',
+          material_size_id: it.material_size_id ?? '',
+          size_label: it.size_label ?? '',
+          purchase_line_options: [],
+          purchase_lines_loading: false,
+          purchase_line_id: it.purchase_line_id ?? '',
+          sub_purchase_line_id: it.sub_purchase_line_id ?? '',
+          available_quantity: '',
+          quantity: it.quantity_sent != null ? String(it.quantity_sent) : '',
+          unit: it.unit || 'MT',
+          notes: it.notes ?? '',
+          job_line_id: it.job_line_id ?? '',
+          _net_qty: (Number(it.quantity_sent) || 0) - (Number(it.quantity_received) || 0),
+        }
+      })
+      setHasReturns(anyReturns)
+
+      const finalInputs: InputLine[] = (loadedInputs.length ? loadedInputs : [{ ...emptyInput(), _net_qty: 0 }])
+        .map(({ _net_qty, ...rest }) => rest)
+      setInputLines(finalInputs)
+
+      const inSearch: Record<number, string> = {}
+      finalInputs.forEach((l, i) => { if (l.item_name) inSearch[i] = l.item_name })
+      setInputItemSearch(inSearch)
+
+      // Map existing output items
+      const rawOutputs: any[] = order.job_work_output_items ?? []
+      const finalOutputs: OutputLine[] = (rawOutputs.length ? rawOutputs : []).map((it) => {
+        const found = loadedItemMasters.find(x => x.id === it.item_master_id)
+        return {
+          item_master_id: it.item_master_id ?? '',
+          item_name: it.item_name ?? '',
+          item_code: found?.item_code ?? '',
+          material_type_id: it.material_type_id ?? '',
+          material_size_id: it.material_size_id ?? '',
+          size_label: it.size_label ?? '',
+          quantity: it.quantity != null ? String(it.quantity) : '',
+          unit: it.unit || 'MT',
+          notes: it.notes ?? '',
+          job_line_id: it.source_job_line_id ?? '',
+        }
+      })
+      setOutputLines(finalOutputs.length ? finalOutputs : [emptyOutput()])
+
+      const outSearch: Record<number, string> = {}
+      finalOutputs.forEach((l, i) => { if (l.item_name) outSearch[i] = l.item_name })
+      setOutputItemSearch(outSearch)
+
+      setPageLoading(false)
+
+      // Fetch purchase line options for each loaded input line, preserving its current selection
+      loadedInputs.forEach((l, idx) => {
+        if (l.item_master_id) {
+          fetchPurchaseLinesForItem(l.item_master_id, idx, l.purchase_line_id || undefined, l._net_qty)
+        }
+      })
     }
     load()
-  }, [])
+  }, [orderId, fetchPurchaseLinesForItem])
 
   // Refresh item masters and their available stock (e.g. after adding a new item elsewhere)
   const refreshItemMasters = useCallback(async () => {
@@ -198,60 +359,6 @@ export default function NewJobWorkPage() {
     }
     setStockByItem(itemStockMap)
     setRefreshingItemMasters(false)
-  }, [])
-
-  // Fetch purchase line options for a given item master
-  const fetchPurchaseLinesForItem = useCallback(async (itemMasterId: string, index: number) => {
-    if (!itemMasterId) {
-      setInputLines(prev => {
-        const u = [...prev]
-        u[index] = { ...u[index], purchase_line_options: [], purchase_line_id: '', available_quantity: '' }
-        return u
-      })
-      return
-    }
-
-    setInputLines(prev => {
-      const u = [...prev]
-      u[index] = { ...u[index], purchase_lines_loading: true, purchase_line_options: [], purchase_line_id: '', available_quantity: '' }
-      return u
-    })
-
-    const { data: linesData } = await hasuraFetch<any>(ITEM_PURCHASE_LINES_QUERY, { item_master_id: itemMasterId })
-    const purchaseLineIds: string[] = (linesData?.purchase_bill_items ?? [])
-      .map((r: any) => r.purchase_line_id)
-      .filter(Boolean)
-
-    if (!purchaseLineIds.length) {
-      setInputLines(prev => {
-        const u = [...prev]
-        u[index] = { ...u[index], purchase_lines_loading: false, purchase_line_options: [] }
-        return u
-      })
-      return
-    }
-
-    const { data: stockData } = await hasuraFetch<any>(PURCHASE_LINES_STOCK_QUERY, { purchase_line_ids: purchaseLineIds })
-    const ledgerRows: { purchase_line_id: string; quantity: number }[] = stockData?.stock_ledger ?? []
-
-    // Aggregate per purchase_line_id in JS
-    const stockMap: Record<string, number> = {}
-    for (const row of ledgerRows) {
-      if (row.purchase_line_id) {
-        stockMap[row.purchase_line_id] = (stockMap[row.purchase_line_id] ?? 0) + Number(row.quantity)
-      }
-    }
-
-    const options: PurchaseLineOption[] = purchaseLineIds
-      .map(id => ({ purchase_line_id: id, available_qty: Number((stockMap[id] ?? 0).toFixed(3)) }))
-      .filter(opt => opt.available_qty > 0)
-      .sort((a, b) => a.purchase_line_id.localeCompare(b.purchase_line_id))
-
-    setInputLines(prev => {
-      const u = [...prev]
-      u[index] = { ...u[index], purchase_lines_loading: false, purchase_line_options: options }
-      return u
-    })
   }, [])
 
   const updateInputLine = useCallback((index: number, field: keyof InputLine, value: string) => {
@@ -287,6 +394,7 @@ export default function NewJobWorkPage() {
           u[index].job_line_id = ''
         }
         u[index].purchase_line_id = ''
+        u[index].sub_purchase_line_id = ''
         u[index].available_quantity = ''
         u[index].purchase_line_options = []
       }
@@ -294,6 +402,7 @@ export default function NewJobWorkPage() {
       if (field === 'purchase_line_id') {
         const opt = u[index].purchase_line_options.find(o => o.purchase_line_id === value)
         u[index].available_quantity = opt ? opt.available_qty.toFixed(3) : ''
+        u[index].sub_purchase_line_id = ''
       }
 
       return u
@@ -453,6 +562,7 @@ export default function NewJobWorkPage() {
             size_label: created.size_label || '',
             unit: newItemUnit,
             purchase_line_id: '',
+            sub_purchase_line_id: '',
             available_quantity: '',
             purchase_line_options: [],
           }
@@ -501,7 +611,7 @@ export default function NewJobWorkPage() {
       return
     }
 
-    // Validate quantities against available stock
+    // Validate quantities against available stock (already adjusted for this order's own reversal)
     for (const line of validInputs) {
       if (line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)) {
         setError(`Quantity for "${line.item_name}" (${line.quantity}) exceeds available stock (${line.available_quantity}).`)
@@ -524,72 +634,54 @@ export default function NewJobWorkPage() {
       }
     }
 
-    // Create order
-    const { data: orderData, error: oErr } = await hasuraFetch<any>(
-      CREATE_JOB_WORK_ORDER_MUTATION, {
-        reference_number: generateReferenceNumber('JW'),
+    const validOutputs = outputLines.filter(l => l.item_master_id && l.quantity)
+
+    const res = await fetch(`/api/jobwork/${orderId}/save-edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
         vendor_id: vendorId || null,
         dispatch_date: dispatchDate,
         expected_return_date: expectedReturnDate || null,
         work_description: workDescription || null,
-        status: 'dispatched',
         notes: notes || null,
-      }
-    )
-    const order = orderData?.insert_job_work_orders_one
-    if (oErr || !order) {
-      setError(oErr?.message ?? 'Failed to create job work order')
+        input_items: validInputs.map(l => ({
+          purchase_line_id: l.purchase_line_id || null,
+          sub_purchase_line_id: l.sub_purchase_line_id || null,
+          job_line_id: l.job_line_id || null,
+          item_master_id: l.item_master_id || null,
+          item_name: l.item_name || null,
+          material_type_id: l.material_type_id || null,
+          material_size_id: l.material_size_id || null,
+          size_label: l.size_label || null,
+          quantity_sent: parseFloat(l.quantity),
+          unit: l.unit || 'MT',
+          notes: l.notes || null,
+        })),
+        output_items: validOutputs.map(l => ({
+          item_master_id: l.item_master_id || null,
+          item_name: l.item_name || null,
+          material_type_id: l.material_type_id || null,
+          material_size_id: l.material_size_id || null,
+          size_label: l.size_label || null,
+          quantity: parseFloat(l.quantity),
+          unit: l.unit || 'MT',
+          source_job_line_id: l.job_line_id || null,
+          notes: l.notes || null,
+        })),
+      }),
+    })
+
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(json.error ?? 'Save failed')
       setLoading(false)
       return
     }
 
-    // Create input items
-    const inputItems = validInputs.map(l => ({
-      job_work_order_id: order.id,
-      purchase_line_id: l.purchase_line_id || null,
-      job_line_id: l.job_line_id || null,
-      item_master_id: l.item_master_id || null,
-      item_name: l.item_name || null,
-      material_type_id: l.material_type_id || null,
-      material_size_id: l.material_size_id || null,
-      size_label: l.size_label || null,
-      quantity_sent: parseFloat(l.quantity),
-      quantity_received: 0,
-      unit: l.unit || 'MT',
-    }))
-    const { error: iErr } = await hasuraFetch(CREATE_JOB_WORK_ITEMS_MUTATION, { objects: inputItems })
-    if (iErr) {
-      setError(iErr.message)
-      setLoading(false)
-      return
-    }
-
-    // Create output items (if any)
-    const validOutputs = outputLines.filter(l => l.item_master_id && l.quantity)
-    if (validOutputs.length) {
-      const outputItems = validOutputs.map(l => ({
-        job_work_order_id: order.id,
-        item_master_id: l.item_master_id || null,
-        item_name: l.item_name || null,
-        material_type_id: l.material_type_id || null,
-        material_size_id: l.material_size_id || null,
-        size_label: l.size_label || null,
-        quantity: parseFloat(l.quantity),
-        unit: l.unit || 'MT',
-        source_job_line_id: l.job_line_id || null,
-        notes: l.notes || null,
-      }))
-      const { error: outErr } = await hasuraFetch(CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION, { objects: outputItems })
-      if (outErr) {
-        setError(outErr.message)
-        setLoading(false)
-        return
-      }
-    }
-
-    router.push('/jobwork')
+    router.push(`/jobwork/${orderId}`)
     router.refresh()
   }
 
@@ -617,18 +709,44 @@ export default function NewJobWorkPage() {
   const inputFieldCls = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
   const selectCls    = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
 
+  if (pageLoading) {
+    return <div className="max-w-[1800px] mx-auto py-12 text-center text-gray-500">Loading…</div>
+  }
+
+  if (notFound) {
+    return (
+      <div className="max-w-[1800px] mx-auto py-12 text-center">
+        <p className="text-red-600 font-medium">Job work order not found.</p>
+        <a href="/jobwork" className="mt-4 inline-block text-blue-600 hover:underline text-sm">← Back to Job Work</a>
+      </div>
+    )
+  }
+
+  if (orderStatus === 'cancelled' || orderStatus === 'completed') {
+    return (
+      <div className="max-w-[1800px] mx-auto py-12 text-center">
+        <p className="text-red-600 font-medium">
+          This order is {orderStatus} and cannot be edited.
+        </p>
+        <a href={`/jobwork/${orderId}`} className="mt-4 inline-block text-blue-600 hover:underline text-sm">← Back to order</a>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-[1800px] mx-auto">
 
-      <MissingMasterDataBanner
-        loading={masterDataLoading}
-        checks={[
-          { label: 'Companies', count: companies.length, adminPath: '/admin/companies/new' },
-          { label: 'Warehouses', count: warehouses.length, adminPath: '/admin/warehouses/new' },
-          { label: 'Suppliers', count: suppliers.length, adminPath: '/admin/suppliers/new' },
-          { label: 'Material Types', count: materialTypes.length, adminPath: '/admin/materials/new' },
-        ]}
-      />
+      <div className="mb-3">
+        <a href={`/jobwork/${orderId}`} className="text-sm text-blue-600 hover:underline">← Back to order</a>
+      </div>
+
+      <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+        <p className="text-sm font-semibold text-amber-800">Editing will recalculate stock</p>
+        <p className="text-xs text-amber-700 mt-0.5">
+          Saving reverses the original stock movements for this order and re-applies them based on the updated items.
+          {hasReturns && ' This order has recorded returns — quantity received will be reset to 0 for the new line items.'}
+        </p>
+      </div>
 
       {/* ── Single unified card ─────────────────────────────────────────── */}
       <form onSubmit={handleSubmit}>
@@ -636,15 +754,18 @@ export default function NewJobWorkPage() {
 
           {/* Title bar */}
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-            <h1 className="text-base font-semibold text-gray-900">New Job Work Order</h1>
+            <h1 className="text-base font-semibold text-gray-900">
+              Edit Job Work Order
+              {referenceNumber && <span className="ml-2 font-mono text-sm text-gray-500">{referenceNumber}</span>}
+            </h1>
             <div className="flex gap-2">
-              <button type="button" onClick={() => router.back()}
+              <button type="button" onClick={() => router.push(`/jobwork/${orderId}`)}
                 className="rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
               <button type="submit" disabled={loading}
                 className="rounded bg-blue-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {loading ? 'Saving…' : 'Create Order'}
+                {loading ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -741,13 +862,12 @@ export default function NewJobWorkPage() {
                             className={inputFieldCls} />
                           {inputItemOpen[i] && (
                             <div className="absolute z-50 mt-1 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
-                              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
                               <button type="button" onMouseDown={e => e.preventDefault()}
                                 onClick={() => openNewItemDialog(i, 'input', line.material_type_id, line.material_size_id)}
                                 className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                                 + New Item
                               </button>
-                              {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').map(im => (
+                              {filteredInputItems(inputItemSearch[i] ?? '').map(im => (
                                 <button key={im.id} type="button"
                                   onMouseDown={e => e.preventDefault()}
                                   onClick={() => { updateInputLine(i, 'item_master_id', im.id); setInputItemSearch(p => ({ ...p, [i]: im.item_name })); setInputItemOpen(p => ({ ...p, [i]: false })) }}
@@ -762,7 +882,7 @@ export default function NewJobWorkPage() {
                                   </span>
                                 </button>
                               ))}
-                              {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').length === 0 && (
+                              {filteredInputItems(inputItemSearch[i] ?? '').length === 0 && (
                                 <div className="px-3 py-2 text-xs text-gray-400">
                                   {(inputItemSearch[i] ?? '').length > 0 ? 'No matching items with stock' : 'No items with available stock'}
                                 </div>
@@ -907,13 +1027,12 @@ export default function NewJobWorkPage() {
                             className={inputFieldCls} />
                           {outputItemOpen[i] && (
                             <div className="absolute z-50 mt-1 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
-                              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
                               <button type="button" onMouseDown={e => e.preventDefault()}
                                 onClick={() => openNewItemDialog(i, 'output', line.material_type_id, line.material_size_id)}
                                 className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
                                 + New Item
                               </button>
-                              {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').map(im => (
+                              {filteredAllItems(outputItemSearch[i] ?? '').map(im => (
                                 <button key={im.id} type="button"
                                   onMouseDown={e => e.preventDefault()}
                                   onClick={() => { updateOutputLine(i, 'item_master_id', im.id); setOutputItemSearch(p => ({ ...p, [i]: im.item_name })); setOutputItemOpen(p => ({ ...p, [i]: false })) }}
@@ -930,7 +1049,7 @@ export default function NewJobWorkPage() {
                                   )}
                                 </button>
                               ))}
-                              {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
+                              {filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
                                 <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
                               )}
                             </div>

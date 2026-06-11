@@ -87,10 +87,15 @@ export default async function JobWorkPage() {
                           {o.status?.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="px-6 py-3">
+                      <td className="px-6 py-3 space-x-3 whitespace-nowrap">
                         <Link href={`/jobwork/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                           View
                         </Link>
+                        {o.status !== 'cancelled' && o.status !== 'completed' && (
+                          <Link href={`/jobwork/${o.id}/edit`} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
+                            Edit
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   )

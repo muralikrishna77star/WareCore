@@ -1018,6 +1018,27 @@ export const JOB_WORK_ITEMS_QUERY = `
   }
 `
 
+export const GET_JOB_WORK_ORDER_FOR_EDIT_QUERY = `
+  query GetJobWorkOrderForEdit($id: uuid!) {
+    job_work_orders_by_pk(id: $id) {
+      id reference_number status
+      company_id warehouse_id vendor_id
+      dispatch_date expected_return_date work_description notes
+      job_work_items(order_by: {id: asc}) {
+        id purchase_line_id sub_purchase_line_id job_line_id
+        item_master_id item_name
+        material_type_id material_size_id size_label
+        quantity_sent quantity_received unit notes
+      }
+      job_work_output_items(order_by: {created_at: asc}) {
+        id item_master_id item_name
+        material_type_id material_size_id size_label
+        quantity unit source_job_line_id notes
+      }
+    }
+  }
+`
+
 export const CREATE_JOB_WORK_ORDER_MUTATION = `
   mutation CreateJobWorkOrder($reference_number: String!, $company_id: uuid, $warehouse_id: uuid, $vendor_id: uuid, $dispatch_date: date!, $expected_return_date: date, $work_description: String, $status: String!, $notes: String) {
     insert_job_work_orders_one(object: {
