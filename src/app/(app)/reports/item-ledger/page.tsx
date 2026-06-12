@@ -6,8 +6,10 @@ import {
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
+  ACTIVE_MATERIAL_SIZES_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ItemComboBox } from '@/components/ItemComboBox'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -59,7 +61,7 @@ type LedgerEntry = {
 export default async function ItemStockLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ item?: string; company?: string; warehouse?: string; from?: string; to?: string }>
+  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string }>
 }) {
   const params = await searchParams
 
@@ -68,20 +70,27 @@ export default async function ItemStockLedgerPage({
   const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
   const toDate = params.to || today.toISOString().split('T')[0]
 
-  const [itemResult, compResult, whResult] = await Promise.all([
+  const [itemResult, compResult, whResult, sizeResult] = await Promise.all([
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
     hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
+    hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
   ])
 
   const items: ItemMaster[] = itemResult.item_master ?? []
   const companies: { id: string; name: string }[] = compResult.companies ?? []
   const allWarehouses: { id: string; name: string; company_id: string }[] = whResult.warehouses ?? []
+  const allSizes: { id: string; material_type_id: string | null; size_label: string }[] = sizeResult.material_sizes ?? []
   const warehouses = params.company
     ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
 
   const selectedItem = params.item ? items.find((i) => i.id === params.item) ?? null : null
+
+  const sizesForItem = selectedItem
+    ? allSizes.filter((s) => !s.material_type_id || s.material_type_id === selectedItem.material_type_id)
+    : allSizes
+  const selectedSizeId = params.size || selectedItem?.material_size_id || ''
 
   let openingBalance = 0
   let entries: LedgerEntry[] = []
@@ -89,8 +98,8 @@ export default async function ItemStockLedgerPage({
   if (selectedItem) {
     const baseConditions: Record<string, unknown>[] = [
       { material_type_id: { _eq: selectedItem.material_type_id } },
-      selectedItem.material_size_id
-        ? { material_size_id: { _eq: selectedItem.material_size_id } }
+      selectedSizeId
+        ? { material_size_id: { _eq: selectedSizeId } }
         : { material_size_id: { _is_null: true } },
     ]
     if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
@@ -157,21 +166,33 @@ export default async function ItemStockLedgerPage({
         <div className="flex flex-wrap gap-3 items-end">
           <div className="min-w-[16rem]">
             <label className="block text-xs font-medium text-gray-500 mb-1">Item *</label>
-            <select
+            <ItemComboBox
               name="item"
               defaultValue={params.item || ''}
-              required
-              className="rounded border border-gray-300 px-2 py-1.5 text-sm w-full focus:border-blue-500 focus:outline-none"
-            >
-              <option value="" disabled>Select an item…</option>
-              {items.map((i) => {
+              defaultLabel={itemTitle || ''}
+              placeholder="Search item by name or code…"
+              options={items.map((i) => {
                 const size = i.material_sizes?.size_label || i.size_label
-                return (
-                  <option key={i.id} value={i.id}>
-                    {i.item_code} — {i.item_name}{size ? ` (${size})` : ''}
-                  </option>
-                )
+                return {
+                  id: i.id,
+                  label: `${i.item_code} — ${i.item_name}${size ? ` (${size})` : ''}`,
+                  search: `${i.item_code} ${i.item_name} ${size ?? ''}`.toLowerCase(),
+                }
               })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
+            <select
+              name="size"
+              defaultValue={selectedSizeId}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">All Sizes</option>
+              {sizesForItem.map((s) => (
+                <option key={s.id} value={s.id}>{s.size_label}</option>
+              ))}
             </select>
           </div>
 
