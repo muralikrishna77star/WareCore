@@ -90,7 +90,7 @@ export default async function MovementsPage({
       </form>
 
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {movements.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-500">No movements found.</p>
