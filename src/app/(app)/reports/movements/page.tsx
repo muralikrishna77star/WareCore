@@ -133,7 +133,7 @@ export default async function MovementsReportPage({
           <span className="font-semibold text-gray-700 text-sm">{fromDate} → {toDate}</span>
           <span className="text-xs text-gray-500">{movements.length} entr{movements.length !== 1 ? 'ies' : 'y'}</span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {movements.length === 0 ? (
             <p className="p-8 text-center text-gray-500 text-sm">No movements found for the selected period.</p>
           ) : (

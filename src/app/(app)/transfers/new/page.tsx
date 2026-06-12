@@ -317,7 +317,7 @@ export default function NewTransferPage() {
               + Add Line
             </button>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10 bg-gray-50">
                 <tr className="border-b text-left">

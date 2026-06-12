@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
@@ -99,6 +99,8 @@ export default function NewJobWorkPage() {
   const [inputItemOpen, setInputItemOpen] = useState<Record<number, boolean>>({})
   const [outputItemSearch, setOutputItemSearch] = useState<Record<number, string>>({})
   const [outputItemOpen, setOutputItemOpen] = useState<Record<number, boolean>>({})
+  const [outputItemDropUp, setOutputItemDropUp] = useState<Record<number, boolean>>({})
+  const outputItemRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   // ── New Item dialog (input or output line) ──────────────────────────────
   const [showNewItemDialog, setShowNewItemDialog] = useState(false)
@@ -897,16 +899,25 @@ export default function NewJobWorkPage() {
                     <tr key={i} className="hover:bg-emerald-50/30">
                       {/* Item */}
                       <td className="px-2 py-2">
-                        <div className="relative">
+                        <div className="relative" ref={el => { outputItemRefs.current[i] = el }}>
                           <input type="text"
                             value={outputItemSearch[i] ?? line.item_name}
                             onChange={e => { setOutputItemSearch(p => ({ ...p, [i]: e.target.value })); setOutputItemOpen(p => ({ ...p, [i]: true })) }}
-                            onFocus={() => setOutputItemOpen(p => ({ ...p, [i]: true }))}
+                            onFocus={() => {
+                              const el = outputItemRefs.current[i]
+                              if (el) {
+                                const rect = el.getBoundingClientRect()
+                                const spaceBelow = window.innerHeight - rect.bottom
+                                const spaceAbove = rect.top
+                                setOutputItemDropUp(p => ({ ...p, [i]: spaceBelow < 240 && spaceAbove > spaceBelow }))
+                              }
+                              setOutputItemOpen(p => ({ ...p, [i]: true }))
+                            }}
                             onBlur={() => setOutputItemOpen(p => ({ ...p, [i]: false }))}
                             placeholder="Search produced item…"
                             className={inputFieldCls} />
                           {outputItemOpen[i] && (
-                            <div className="absolute z-50 mt-1 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+                            <div className={`absolute z-50 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56 ${outputItemDropUp[i] ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
                               {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
                               <button type="button" onMouseDown={e => e.preventDefault()}
                                 onClick={() => openNewItemDialog(i, 'output', line.material_type_id, line.material_size_id)}

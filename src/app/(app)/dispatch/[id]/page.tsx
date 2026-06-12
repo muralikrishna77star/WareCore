@@ -128,7 +128,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Dispatched Items</h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>

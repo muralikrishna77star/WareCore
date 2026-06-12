@@ -92,7 +92,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
               <p className="text-xs text-gray-400 mt-0.5">Items produced / processed by this job work</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>

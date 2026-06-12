@@ -22,7 +22,7 @@ export default async function PurchaseCancellationsPage() {
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {records.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-400 text-[1.1875rem] mb-3">🗑</p>

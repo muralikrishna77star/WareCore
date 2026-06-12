@@ -97,7 +97,7 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Input Materials <span className="text-sm font-normal text-gray-500">(Sent to Vendor)</span></h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
@@ -151,7 +151,7 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-gray-900">Output Materials <span className="text-sm font-normal text-gray-500">(Produced)</span></h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>

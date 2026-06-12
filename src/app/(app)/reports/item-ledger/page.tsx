@@ -299,7 +299,7 @@ export default async function ItemStockLedgerPage({
               <span className="font-semibold text-gray-700 text-sm">Ledger Entries</span>
               <span className="text-xs text-gray-500">{ledgerRows.length} entr{ledgerRows.length !== 1 ? 'ies' : 'y'}</span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">

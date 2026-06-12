@@ -262,7 +262,7 @@ export default async function StockStatementPage({
           <span className="text-sm text-gray-500">{sorted.length} item{sorted.length !== 1 ? 's' : ''}</span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {sorted.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-4xl mb-3">📊</p>

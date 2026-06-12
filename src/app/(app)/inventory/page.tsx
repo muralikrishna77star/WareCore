@@ -54,7 +54,7 @@ export default async function InventoryPage() {
                 Total: {rows.reduce((s, r) => s + Number(r.current_stock), 0).toFixed(3)} tons
               </span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b text-left bg-gray-50">

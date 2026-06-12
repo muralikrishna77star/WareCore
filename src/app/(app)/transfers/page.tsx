@@ -32,7 +32,7 @@ export default async function TransfersPage() {
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {!transfers || transfers.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-400 text-4xl mb-3">↔️</p>

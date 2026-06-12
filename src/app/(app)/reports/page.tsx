@@ -141,7 +141,7 @@ export default async function ReportsPage() {
         <div className="px-6 py-4 border-b">
           <h2 className="font-semibold text-gray-900">Current Inventory by Company & Material</h2>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {Object.keys(inventoryByCompany).length === 0 ? (
             <p className="p-6 text-sm text-gray-500">No inventory data yet.</p>
           ) : (
@@ -182,7 +182,7 @@ export default async function ReportsPage() {
           <div className="px-6 py-4 border-b">
             <h2 className="font-semibold text-gray-900">Stock at Vendors (Pending Job Work)</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b">

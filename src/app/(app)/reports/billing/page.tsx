@@ -111,7 +111,7 @@ export default async function BillingReportPage({
           <span className="font-semibold text-gray-700 text-sm">{fromDate} → {toDate}</span>
           <span className="text-xs text-gray-500">{bills.length} bill{bills.length !== 1 ? 's' : ''}</span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {bills.length === 0 ? (
             <p className="p-8 text-center text-gray-500 text-sm">No bills found for the selected period.</p>
           ) : (

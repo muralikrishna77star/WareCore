@@ -793,7 +793,7 @@ export default function NewBillPage() {
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto pb-44">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-200 text-left">
@@ -1072,27 +1072,43 @@ export default function NewBillPage() {
                   )
                 })}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-300 bg-gray-50">
-                  <td colSpan={5} className="py-4 text-sm font-semibold text-gray-700 text-right pr-3">Totals:</td>
-                  <td className="py-4 pr-3 text-base font-bold text-gray-900">{totalQty.toFixed(3)}</td>
-                  {showTaxColumns ? (
-                    <>
-                      <td className="py-4 pr-3"></td>
-                      <td className="py-4 pr-3 text-sm text-gray-600">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</td>
-                      <td className="py-4 pr-3"></td>
-                      <td className="py-4 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</td>
-                      <td className="py-4 pr-3 text-right text-sm text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</td>
-                      <td className="py-4 pr-3 text-right text-sm text-red-700">{lines.some(l=>l.tds_amount>0)?`−₹${lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}`:'—'}</td>
-                    </>
-                  ) : (
-                    <td colSpan={2} className="py-4 pr-3"></td>
-                  )}
-                  <td className="py-4 pr-3 text-right text-base font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</td>
-                  <td colSpan={2}></td>
-                </tr>
-              </tfoot>
             </table>
+          </div>
+
+          {/* ── Totals summary ─────────────────────────────────────────────── */}
+          <div className="mt-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-end gap-x-8 gap-y-2 text-sm">
+              <div>
+                <span className="text-gray-500">Total Qty: </span>
+                <span className="font-bold text-gray-900">{totalQty.toFixed(3)}</span>
+              </div>
+              {showTaxColumns && (
+                <>
+                  <div>
+                    <span className="text-gray-500">Taxable: </span>
+                    <span className="text-gray-700">₹{lines.reduce((s,l)=>s+l.taxable_value,0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">CGST: </span>
+                    <span className="text-orange-700">₹{lines.reduce((s,l)=>s+l.cgst_amount,0).toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">SGST: </span>
+                    <span className="text-orange-700">₹{lines.reduce((s,l)=>s+l.sgst_amount,0).toFixed(2)}</span>
+                  </div>
+                  {lines.some(l => l.tds_amount > 0) && (
+                    <div>
+                      <span className="text-gray-500">TDS: </span>
+                      <span className="text-red-700">−₹{lines.reduce((s,l)=>s+l.tds_amount,0).toFixed(2)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="text-base">
+                <span className="font-semibold text-gray-700">Grand Total: </span>
+                <span className="text-lg font-bold text-gray-900">₹{lines.reduce((s,l)=>s+(l.total_with_tax||0),0).toFixed(2)}</span>
+              </div>
+            </div>
           </div>
 
           {error && (

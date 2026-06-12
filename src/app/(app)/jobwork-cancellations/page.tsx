@@ -22,7 +22,7 @@ export default async function JobWorkCancellationsPage() {
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           {records.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-400 text-4xl mb-3">🗑</p>
