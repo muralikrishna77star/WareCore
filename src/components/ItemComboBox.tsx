@@ -15,12 +15,14 @@ export function ItemComboBox({
   defaultValue = '',
   defaultLabel = '',
   placeholder = 'Search item…',
+  onSelect,
 }: {
   options: ComboOption[]
   name: string
   defaultValue?: string
   defaultLabel?: string
   placeholder?: string
+  onSelect?: (option: ComboOption | null) => void
 }) {
   const [search, setSearch] = useState(defaultLabel)
   const [selectedId, setSelectedId] = useState(defaultValue)
@@ -37,6 +39,7 @@ export function ItemComboBox({
     setSearch(option.label)
     setOpen(false)
     setHighlight(-1)
+    onSelect?.(option)
   }
 
   return (
@@ -50,6 +53,7 @@ export function ItemComboBox({
           setSelectedId('')
           setOpen(true)
           setHighlight(-1)
+          onSelect?.(null)
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}

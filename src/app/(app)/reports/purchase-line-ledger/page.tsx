@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
-import { PURCHASE_LINE_LEDGER_QUERY, ALL_PURCHASE_LINE_IDS_QUERY } from '@/lib/hasura/queries'
+import { PURCHASE_LINE_LEDGER_QUERY, ALL_PURCHASE_LINE_IDS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -50,25 +51,50 @@ type LedgerEntry = {
 export default async function PurchaseLineLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ line?: string }>
+  searchParams: Promise<{ line?: string; item?: string }>
 }) {
   const params = await searchParams
   const lineId = (params.line || '').trim()
+  const itemId = params.item || ''
 
-  const [lineIdsResult, entriesResult] = await Promise.all([
+  const [lineIdsResult, itemResult, entriesResult] = await Promise.all([
     hasuraQuery(ALL_PURCHASE_LINE_IDS_QUERY),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
     lineId
       ? hasuraQuery(PURCHASE_LINE_LEDGER_QUERY, { purchase_line_id: lineId })
       : Promise.resolve({ entries: [] }),
   ])
 
-  const allLineIds: string[] = Array.from(
-    new Set(
-      ((lineIdsResult.purchase_bill_items ?? []) as { purchase_line_id: string | null }[])
-        .map((r) => r.purchase_line_id)
-        .filter((id): id is string => !!id)
-    )
-  ).sort()
+  const purchaseLines: PurchaseLineRef[] = (
+    (lineIdsResult.purchase_bill_items ?? []) as {
+      purchase_line_id: string | null
+      material_type_id: string | null
+      material_size_id: string | null
+    }[]
+  )
+    .filter((r): r is PurchaseLineRef => !!r.purchase_line_id)
+
+  type ItemMasterRow = {
+    id: string
+    item_code: string
+    item_name: string
+    material_type_id: string
+    material_size_id: string | null
+    size_label?: string | null
+    material_sizes?: { size_label: string } | null
+  }
+  const itemRows: ItemMasterRow[] = itemResult.item_master ?? []
+  const itemOptions: ItemOption[] = itemRows.map((i) => {
+    const size = i.material_sizes?.size_label || i.size_label
+    return {
+      id: i.id,
+      label: `${i.item_code} — ${i.item_name}${size ? ` (${size})` : ''}`,
+      search: `${i.item_code} ${i.item_name} ${size ?? ''}`.toLowerCase(),
+      material_type_id: i.material_type_id,
+      material_size_id: i.material_size_id,
+    }
+  })
+  const selectedItem = itemId ? itemOptions.find((i) => i.id === itemId) : undefined
 
   const entries: LedgerEntry[] = entriesResult.entries ?? []
 
@@ -115,29 +141,13 @@ export default async function PurchaseLineLedgerPage({
 
       {/* Filter */}
       <form className="bg-white rounded-xl border p-4 print:hidden">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="min-w-[16rem]">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Purchase Line ID *</label>
-            <input
-              type="text"
-              name="line"
-              list="purchase-line-ids"
-              defaultValue={lineId}
-              placeholder="e.g. HR0625-0001"
-              autoComplete="off"
-              className="rounded border border-gray-300 px-2 py-1.5 text-sm font-mono w-full focus:border-blue-500 focus:outline-none"
-            />
-            <datalist id="purchase-line-ids">
-              {allLineIds.map((id) => <option key={id} value={id} />)}
-            </datalist>
-          </div>
-          <button
-            type="submit"
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            View
-          </button>
-        </div>
+        <SearchForm
+          items={itemOptions}
+          purchaseLines={purchaseLines}
+          defaultItemId={itemId}
+          defaultItemLabel={selectedItem?.label || ''}
+          defaultLine={lineId}
+        />
       </form>
 
       {!lineId ? (

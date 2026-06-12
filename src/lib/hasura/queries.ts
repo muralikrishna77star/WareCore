@@ -831,6 +831,8 @@ export const ALL_PURCHASE_LINE_IDS_QUERY = `
   query GetAllPurchaseLineIds {
     purchase_bill_items {
       purchase_line_id
+      material_type_id
+      material_size_id
     }
   }
 `
