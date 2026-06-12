@@ -1414,6 +1414,24 @@ export const ITEM_STOCK_LEDGER_QUERY = `
   }
 `
 
+// ─── Purchase Line Movements Report ─────────────────────────────────────────
+
+export const PURCHASE_LINE_LEDGER_QUERY = `
+  query GetPurchaseLineLedger($purchase_line_id: String!) {
+    entries: stock_ledger(
+      where: { purchase_line_id: { _eq: $purchase_line_id } }
+      order_by: [{entry_date: asc}, {created_at: asc}]
+      limit: 1000
+    ) {
+      id entry_type quantity entry_date reference_number reference_type reference_id sub_purchase_line_id size_label notes
+      companies { name code }
+      warehouses { name }
+      material_types { description unit }
+      material_sizes { size_label }
+    }
+  }
+`
+
 // ─── Tax Rates (Control Database) ────────────────────────────────────────────
 
 export const TAX_RATES_QUERY = `

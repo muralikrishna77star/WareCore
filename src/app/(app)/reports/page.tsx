@@ -118,6 +118,16 @@ export default async function ReportsPage() {
             <p className="text-sm text-gray-500 mt-0.5">Opening, movements, and running balance for a single item between two dates</p>
           </div>
         </Link>
+        <Link
+          href="/reports/purchase-line-ledger"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-pink-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🧭</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-pink-700">Purchase Line Movements</p>
+            <p className="text-sm text-gray-500 mt-0.5">Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns</p>
+          </div>
+        </Link>
       </div>
 
       {/* Summary Cards */}
