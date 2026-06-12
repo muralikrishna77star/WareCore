@@ -707,22 +707,22 @@ export default function NewJobWorkPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[1050px]">
+              <table className="w-full text-sm min-w-[1150px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-56">
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-72">
                       Item
                       <button type="button" onClick={refreshItemMasters} title="Refresh master items"
                         className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
                         {refreshingItemMasters ? '…' : '↻'}
                       </button>
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-32">Job Line ID</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Purchase Line ID</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Avail Stock</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-40">Job Line ID</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-44">Purchase Line ID</th>
+                    <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Avail Stock</th>
+                    <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-32">Notes</th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
@@ -730,7 +730,7 @@ export default function NewJobWorkPage() {
                   {inputLines.map((line, i) => (
                     <tr key={i} className="hover:bg-blue-50/30">
                       {/* Item */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <div className="relative">
                           <input type="text"
                             value={inputItemSearch[i] ?? line.item_name}
@@ -773,7 +773,7 @@ export default function NewJobWorkPage() {
                       </td>
 
                       {/* Job Line ID */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         {line.job_line_id ? (
                           <>
                             <span className="inline-block text-[11px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -795,7 +795,7 @@ export default function NewJobWorkPage() {
                       </td>
 
                       {/* Purchase Line ID */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         {!line.item_master_id
                           ? <span className="text-xs text-gray-400 italic">Select item first</span>
                           : line.purchase_lines_loading
@@ -817,14 +817,14 @@ export default function NewJobWorkPage() {
                       </td>
 
                       {/* Avail Stock */}
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-2 py-2 text-right">
                         {line.available_quantity
                           ? <span className="text-sm font-semibold text-green-700">{Number(line.available_quantity).toFixed(3)} <span className="text-xs font-normal text-green-600">{line.unit}</span></span>
                           : <span className="text-gray-300 text-xs">—</span>}
                       </td>
 
                       {/* Qty Consumed */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <input type="number" value={line.quantity}
                           onChange={e => updateInputLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
@@ -837,14 +837,14 @@ export default function NewJobWorkPage() {
                       </td>
 
                       {/* Unit */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <select value={line.unit} onChange={e => updateInputLine(i, 'unit', e.target.value)} className={selectCls}>
                           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </td>
 
                       {/* Notes */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <input type="text" value={line.notes} onChange={e => updateInputLine(i, 'notes', e.target.value)} className={inputFieldCls} />
                       </td>
 
@@ -875,20 +875,20 @@ export default function NewJobWorkPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm min-w-[850px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-72">
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-72">
                       Produced Item
                       <button type="button" onClick={refreshItemMasters} title="Refresh master items"
                         className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
                         {refreshingItemMasters ? '…' : '↻'}
                       </button>
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-44">Job Line ID</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Produced</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-40">Job Line ID</th>
+                    <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Produced</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-32">Notes</th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
@@ -896,7 +896,7 @@ export default function NewJobWorkPage() {
                   {outputLines.map((line, i) => (
                     <tr key={i} className="hover:bg-emerald-50/30">
                       {/* Item */}
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <div className="relative">
                           <input type="text"
                             value={outputItemSearch[i] ?? line.item_name}
@@ -938,7 +938,7 @@ export default function NewJobWorkPage() {
                         </div>
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <select value={line.job_line_id} onChange={e => updateOutputLine(i, 'job_line_id', e.target.value)} className={selectCls + ' font-mono'}>
                           <option value="">— none —</option>
                           {inputLines.filter(l => l.item_master_id && l.job_line_id).map(l => (
@@ -949,19 +949,19 @@ export default function NewJobWorkPage() {
                         </select>
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <input type="number" value={line.quantity} onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" placeholder="0.000"
                           className="block w-full rounded border border-gray-300 px-2 py-2 text-sm text-right focus:border-blue-500 focus:outline-none" />
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <select value={line.unit} onChange={e => updateOutputLine(i, 'unit', e.target.value)} className={selectCls}>
                           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </td>
 
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2">
                         <input type="text" value={line.notes} onChange={e => updateOutputLine(i, 'notes', e.target.value)} className={inputFieldCls} />
                       </td>
 

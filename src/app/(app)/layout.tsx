@@ -64,6 +64,11 @@ const navItems: NavItem[] = [
     icon: '🏭',
   },
   {
+    title: 'Job Work Cancellations',
+    href: '/jobwork-cancellations',
+    icon: '🗑️',
+  },
+  {
     title: 'Sale Entry',
     href: '/dispatch',
     icon: '🧾',

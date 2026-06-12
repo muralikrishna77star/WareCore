@@ -1557,3 +1557,35 @@ export const DISPATCH_CANCELLATION_BY_ID_QUERY = `
   }
 `
 
+// ─── Job Work Cancellations ──────────────────────────────────────────────────
+
+export const JOB_WORK_CANCELLATIONS_QUERY = `
+  query GetJobWorkCancellations {
+    job_work_cancellations(order_by: {cancelled_at: desc}) {
+      id reference_number dispatch_date
+      company_name warehouse_name vendor_name
+      status cancelled_at cancelled_notes
+    }
+  }
+`
+
+export const JOB_WORK_CANCELLATION_BY_ID_QUERY = `
+  query GetJobWorkCancellation($id: uuid!) {
+    job_work_cancellations_by_pk(id: $id) {
+      id reference_number dispatch_date expected_return_date actual_return_date
+      company_name warehouse_name vendor_name
+      work_description notes status
+      cancelled_at cancelled_notes
+      job_work_cancellation_items(order_by: {id: asc}) {
+        id item_name material_type_name size_label
+        quantity_sent quantity_received unit
+        purchase_line_id job_line_id
+      }
+      job_work_cancellation_output_items(order_by: {id: asc}) {
+        id item_name material_type_name size_label
+        quantity unit source_job_line_id notes
+      }
+    }
+  }
+`
+
