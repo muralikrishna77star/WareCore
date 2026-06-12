@@ -657,7 +657,13 @@ export default function NewJobWorkPage() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
-                <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={selectCls}>
+                <select value={companyId} onChange={e => {
+                  const newCompanyId = e.target.value
+                  setCompanyId(newCompanyId)
+                  if (warehouseId && !warehouses.some(w => w.id === warehouseId && w.company_id === newCompanyId)) {
+                    setWarehouseId('')
+                  }
+                }} className={selectCls}>
                   <option value="">— Select —</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -673,7 +679,7 @@ export default function NewJobWorkPage() {
                 <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
                 <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className={selectCls}>
                   <option value="">— Select —</option>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  {(companyId ? warehouses.filter(w => w.company_id === companyId) : warehouses).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
               <div>
