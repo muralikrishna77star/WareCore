@@ -42,6 +42,8 @@ type LedgerEntry = {
   sub_purchase_line_id?: string | null
   size_label?: string | null
   notes?: string | null
+  material_type_id?: string | null
+  material_size_id?: string | null
   companies?: { name: string; code: string } | null
   warehouses?: { name: string } | null
   material_types?: { description: string; unit: string } | null
@@ -96,6 +98,15 @@ export default async function PurchaseLineLedgerPage({
   })
   const selectedItem = itemId ? itemOptions.find((i) => i.id === itemId) : undefined
 
+  const itemLookup = new Map<string, { item_code: string; item_name: string }>()
+  for (const i of itemRows) {
+    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { item_code: i.item_code, item_name: i.item_name })
+  }
+  const itemLabelFor = (row: Pick<LedgerEntry, 'material_type_id' | 'material_size_id' | 'material_types'>) => {
+    const info = itemLookup.get(`${row.material_type_id ?? ''}|${row.material_size_id ?? ''}`)
+    return info ? `${info.item_code} — ${info.item_name}` : row.material_types?.description || '—'
+  }
+
   const entries: LedgerEntry[] = entriesResult.entries ?? []
 
   let running = 0
@@ -113,7 +124,7 @@ export default async function PurchaseLineLedgerPage({
     .reduce((s, e) => s + Math.abs(Number(e.quantity)), 0)
 
   const first = entries[0]
-  const materialLabel = first?.material_types?.description
+  const itemLabel = first ? itemLabelFor(first) : null
   const sizeLabel = first?.material_sizes?.size_label || first?.size_label
   const unit = first?.material_types?.unit || 'MT'
 
@@ -167,8 +178,9 @@ export default async function PurchaseLineLedgerPage({
             <div>
               <p className="font-semibold text-gray-900 font-mono">{lineId}</p>
               <p className="text-sm text-gray-500">
-                {materialLabel || '—'}{sizeLabel ? ` (${sizeLabel})` : ''} · Unit: {unit}
+                {itemLabel || '—'}{sizeLabel ? ` (${sizeLabel})` : ''} · Unit: {unit}
               </p>
+              <p className="text-xs text-gray-400 mt-0.5">Originating item — may differ from current item if converted via job work</p>
             </div>
             <p className="text-sm text-gray-500">{rows.length} movement{rows.length !== 1 ? 's' : ''}</p>
           </div>
@@ -202,6 +214,7 @@ export default async function PurchaseLineLedgerPage({
                   <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
                     <th className="px-4 py-3 text-left">Date</th>
                     <th className="px-4 py-3 text-left">Type</th>
+                    <th className="px-4 py-3 text-left">Item</th>
                     <th className="px-4 py-3 text-left">Reference</th>
                     <th className="px-4 py-3 text-left">Linked Line ID</th>
                     <th className="px-4 py-3 text-left">Company</th>
@@ -224,6 +237,12 @@ export default async function PurchaseLineLedgerPage({
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cfg.color}`}>
                             {cfg.label}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                          {itemLabelFor(row)}
+                          {(row.material_sizes?.size_label || row.size_label) && (
+                            <span className="ml-1 text-xs text-gray-400">({row.material_sizes?.size_label || row.size_label})</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                           {basePath && row.reference_id ? (
@@ -255,7 +274,7 @@ export default async function PurchaseLineLedgerPage({
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                    <td className="px-4 py-3 text-gray-700" colSpan={6}>Current Balance</td>
+                    <td className="px-4 py-3 text-gray-700" colSpan={7}>Current Balance</td>
                     <td className="px-4 py-3 text-right text-green-800">+{fmtQ(totalIn)}</td>
                     <td className="px-4 py-3 text-right text-red-800">-{fmtQ(totalOut)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${currentBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>

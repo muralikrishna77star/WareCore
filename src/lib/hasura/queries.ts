@@ -1425,7 +1425,7 @@ export const PURCHASE_LINE_LEDGER_QUERY = `
       order_by: [{entry_date: asc}, {created_at: asc}]
       limit: 1000
     ) {
-      id entry_type quantity entry_date reference_number reference_type reference_id sub_purchase_line_id size_label notes
+      id entry_type quantity entry_date reference_number reference_type reference_id sub_purchase_line_id size_label notes material_type_id material_size_id
       companies { name code }
       warehouses { name }
       material_types { description unit }
