@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { DropdownPortal } from '@/components/DropdownPortal'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
@@ -122,6 +123,7 @@ export default function EditDispatchPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
@@ -689,7 +691,7 @@ export default function EditDispatchPage() {
                       {/* Item combo */}
                       <td className="pr-3 py-2">
                         <div className="space-y-1">
-                          <div className="relative">
+                          <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
                             <input
                               type="text"
                               value={itemSearchValue}
@@ -735,8 +737,7 @@ export default function EditDispatchPage() {
                               placeholder="Search item..."
                               className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                             />
-                            {itemOpen[line.rowId] && (
-                              <div className="absolute z-50 mt-1 w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
+                            <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
                                 {filteredItems.map((im, idx) => (
                                   <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => {
@@ -753,8 +754,7 @@ export default function EditDispatchPage() {
                                 {filteredItems.length === 0 && (
                                   <div className="px-2 py-2 text-xs text-gray-400">No items found</div>
                                 )}
-                              </div>
-                            )}
+                            </DropdownPortal>
                           </div>
                           {line.sale_line_id ? (
                             <span className="inline-flex items-center rounded bg-green-50 border border-green-200 px-2 py-1 text-[10px] font-mono font-medium text-green-700 whitespace-nowrap select-all">

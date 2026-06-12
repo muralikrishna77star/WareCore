@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
+import { DropdownPortal } from '@/components/DropdownPortal'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
@@ -97,9 +98,9 @@ export default function NewJobWorkPage() {
   // Item search state for inputs and outputs separately
   const [inputItemSearch, setInputItemSearch] = useState<Record<number, string>>({})
   const [inputItemOpen, setInputItemOpen] = useState<Record<number, boolean>>({})
+  const inputItemRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const [outputItemSearch, setOutputItemSearch] = useState<Record<number, string>>({})
   const [outputItemOpen, setOutputItemOpen] = useState<Record<number, boolean>>({})
-  const [outputItemDropUp, setOutputItemDropUp] = useState<Record<number, boolean>>({})
   const outputItemRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   // ── New Item dialog (input or output line) ──────────────────────────────
@@ -733,7 +734,7 @@ export default function NewJobWorkPage() {
                     <tr key={i} className="hover:bg-blue-50/30">
                       {/* Item */}
                       <td className="px-2 py-2">
-                        <div className="relative">
+                        <div className="relative" ref={el => { inputItemRefs.current[i] = el }}>
                           <input type="text"
                             value={inputItemSearch[i] ?? line.item_name}
                             onChange={e => { setInputItemSearch(p => ({ ...p, [i]: e.target.value })); setInputItemOpen(p => ({ ...p, [i]: true })) }}
@@ -741,8 +742,8 @@ export default function NewJobWorkPage() {
                             onBlur={() => setInputItemOpen(p => ({ ...p, [i]: false }))}
                             placeholder="Search item…"
                             className={inputFieldCls} />
-                          {inputItemOpen[i] && (
-                            <div className="absolute z-50 mt-1 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+                          <DropdownPortal anchorEl={inputItemRefs.current[i]} open={!!inputItemOpen[i]}
+                            className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
                               {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
                               <button type="button" onMouseDown={e => e.preventDefault()}
                                 onClick={() => openNewItemDialog(i, 'input', line.material_type_id, line.material_size_id)}
@@ -769,8 +770,7 @@ export default function NewJobWorkPage() {
                                   {(inputItemSearch[i] ?? '').length > 0 ? 'No matching items with stock' : 'No items with available stock'}
                                 </div>
                               )}
-                            </div>
-                          )}
+                          </DropdownPortal>
                         </div>
                       </td>
 
@@ -903,21 +903,12 @@ export default function NewJobWorkPage() {
                           <input type="text"
                             value={outputItemSearch[i] ?? line.item_name}
                             onChange={e => { setOutputItemSearch(p => ({ ...p, [i]: e.target.value })); setOutputItemOpen(p => ({ ...p, [i]: true })) }}
-                            onFocus={() => {
-                              const el = outputItemRefs.current[i]
-                              if (el) {
-                                const rect = el.getBoundingClientRect()
-                                const spaceBelow = window.innerHeight - rect.bottom
-                                const spaceAbove = rect.top
-                                setOutputItemDropUp(p => ({ ...p, [i]: spaceBelow < 240 && spaceAbove > spaceBelow }))
-                              }
-                              setOutputItemOpen(p => ({ ...p, [i]: true }))
-                            }}
+                            onFocus={() => setOutputItemOpen(p => ({ ...p, [i]: true }))}
                             onBlur={() => setOutputItemOpen(p => ({ ...p, [i]: false }))}
                             placeholder="Search produced item…"
                             className={inputFieldCls} />
-                          {outputItemOpen[i] && (
-                            <div className={`absolute z-50 w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56 ${outputItemDropUp[i] ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                          <DropdownPortal anchorEl={outputItemRefs.current[i]} open={!!outputItemOpen[i]}
+                            className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
                               {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
                               <button type="button" onMouseDown={e => e.preventDefault()}
                                 onClick={() => openNewItemDialog(i, 'output', line.material_type_id, line.material_size_id)}
@@ -944,8 +935,7 @@ export default function NewJobWorkPage() {
                               {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
                                 <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
                               )}
-                            </div>
-                          )}
+                          </DropdownPortal>
                         </div>
                       </td>
 

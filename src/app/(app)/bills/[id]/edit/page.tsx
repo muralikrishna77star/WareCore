@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { DropdownPortal } from '@/components/DropdownPortal'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
@@ -133,6 +134,7 @@ export default function EditBillPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
     const load = async () => {
@@ -869,7 +871,7 @@ export default function EditBillPage() {
                       </td>
                       {/* Item Name */}
                       <td className="pr-2 py-0">
-                        <div className="relative">
+                        <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
                           <input type="text" value={itemSearchValue}
                             onChange={(e) => {
                               setItemSearch(prev => ({ ...prev, [line.rowId]: e.target.value }))
@@ -902,8 +904,7 @@ export default function EditBillPage() {
                             placeholder="Search item..."
                             className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none"
                           />
-                          {itemOpen[line.rowId] && (
-                            <div className="absolute z-50 mt-1 w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+                          <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
                               <button type="button" onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                   setNewItemLineIndex(i)
@@ -931,8 +932,7 @@ export default function EditBillPage() {
                               {filteredDropdownItems.length === 0 && (
                                 <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
                               )}
-                            </div>
-                          )}
+                          </DropdownPortal>
                         </div>
                       </td>
                       {/* Line ID */}

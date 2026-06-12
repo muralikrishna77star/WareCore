@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
+import { DropdownPortal } from '@/components/DropdownPortal'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
@@ -185,6 +186,7 @@ export default function NewBillPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [materialTypeSearch, setMaterialTypeSearch] = useState<Record<string, string>>({})
   const [materialTypeOpen, setMaterialTypeOpen] = useState<Record<string, boolean>>({})
   const [sizeSearch, setSizeSearch] = useState<Record<string, string>>({})
@@ -877,7 +879,7 @@ export default function NewBillPage() {
                       </td>
                       {/* Item Name */}
                       <td className="pr-1 py-2">
-                        <div className="relative">
+                        <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
                           <input type="text" value={itemSearchValue}
                             onChange={(e) => {
                               const val = e.target.value
@@ -932,8 +934,7 @@ export default function NewBillPage() {
                               line.material_type_id && line.quantity && !line.item_name
                                 ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
                             }`} />
-                          {itemOpen[line.rowId] && (
-                            <div className="absolute z-50 mt-1 w-64 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+                          <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-64 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
                               <button type="button" onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                   setNewItemLineIndex(i)
@@ -961,8 +962,7 @@ export default function NewBillPage() {
                               {filteredDropdownItems.length === 0 && (
                                 <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
                               )}
-                            </div>
-                          )}
+                          </DropdownPortal>
                         </div>
                       </td>
                       {/* Line ID */}
