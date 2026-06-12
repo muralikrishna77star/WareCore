@@ -1394,6 +1394,26 @@ export const MOVEMENTS_REPORT_QUERY = `
   }
 `
 
+// ─── Item Stock Ledger Report ────────────────────────────────────────────────
+
+export const ITEM_STOCK_LEDGER_QUERY = `
+  query GetItemStockLedger(
+    $opening_where: stock_ledger_bool_exp = {},
+    $period_where: stock_ledger_bool_exp = {}
+  ) {
+    opening_agg: stock_ledger_aggregate(where: $opening_where) {
+      aggregate { sum { quantity } }
+    }
+    entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
+      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
+      companies { name code }
+      warehouses { name }
+      material_types { description unit }
+      material_sizes { size_label }
+    }
+  }
+`
+
 // ─── Tax Rates (Control Database) ────────────────────────────────────────────
 
 export const TAX_RATES_QUERY = `

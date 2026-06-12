@@ -108,6 +108,16 @@ export default async function ReportsPage() {
             <p className="text-sm text-gray-500 mt-0.5">Detect and fix phantom stock entries from past bill edits</p>
           </div>
         </Link>
+        <Link
+          href="/reports/item-ledger"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-teal-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">📒</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-teal-700">Item Stock Ledger</p>
+            <p className="text-sm text-gray-500 mt-0.5">Opening, movements, and running balance for a single item between two dates</p>
+          </div>
+        </Link>
       </div>
 
       {/* Summary Cards */}
