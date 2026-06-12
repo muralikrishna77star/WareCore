@@ -50,7 +50,7 @@ export default function CollapsibleSection({ title, icon, addHref, href, columns
         <div className="overflow-hidden">
           <div className="border-t border-gray-100 overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-100">
                   {columns.map((col) => (
                     <th

@@ -643,8 +643,8 @@ export default function NewDispatchPage() {
 
         <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gray-50 border-b text-left">
                   <th className="pb-2 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Item
                     <button type="button" onClick={refreshItems} title="Refresh items"

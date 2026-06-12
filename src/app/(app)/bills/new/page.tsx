@@ -795,7 +795,7 @@ export default function NewBillPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-200 text-left">
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Material Type

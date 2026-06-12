@@ -782,8 +782,8 @@ export default function EditBillPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[0.9375rem]">
-              <thead>
-                <tr className="border-b text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gray-50 border-b text-left">
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Material Type</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Name</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Line ID</th>

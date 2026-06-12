@@ -136,7 +136,7 @@ export default async function ReportsPage() {
             <p className="p-6 text-sm text-gray-500">No inventory data yet.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b">
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Company</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Material (Size)</th>
@@ -174,7 +174,7 @@ export default async function ReportsPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b">
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Vendor</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Material</th>

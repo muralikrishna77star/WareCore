@@ -640,8 +640,8 @@ export default function EditDispatchPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gray-50 border-b text-left">
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Item</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Purchase Line</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>

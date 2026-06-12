@@ -162,7 +162,7 @@ async function RecentMovements() {
           <p className="p-6 text-sm text-gray-500">No movements recorded yet.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 text-left">
                 <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
                 <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Type</th>

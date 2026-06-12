@@ -31,7 +31,7 @@ export default async function PurchaseCancellationsPage() {
             </div>
           ) : (
             <table className="w-full text-[0.9375rem]">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
                   <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Bill No.</th>
                   <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Bill Date</th>

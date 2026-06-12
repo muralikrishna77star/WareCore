@@ -218,7 +218,7 @@ export default function NewRolePage() {
 
                 {/* Screen rows */}
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-10">
                     <tr className="border-b bg-white">
                       <th className="px-6 py-2 text-left text-xs font-medium text-gray-400 w-1/2">Screen</th>
                       <th className="px-4 py-2 text-center text-xs font-medium text-blue-500">Read</th>

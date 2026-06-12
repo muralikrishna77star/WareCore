@@ -126,7 +126,7 @@ export default async function JobWorkReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No job work orders found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
                   <th className="px-4 py-3 text-left">Ref No.</th>
                   <th className="px-4 py-3 text-left">Dispatch Date</th>

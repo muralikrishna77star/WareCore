@@ -56,8 +56,8 @@ export default async function InventoryPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b text-left bg-gray-50">
                     <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Warehouse</th>
                     <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Material</th>
                     <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>

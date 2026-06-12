@@ -53,7 +53,7 @@ export default function SuppliersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Contact</th>

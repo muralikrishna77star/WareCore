@@ -829,7 +829,7 @@ export default function EditJobWorkPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[1150px]">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-72">
                       Item
@@ -996,7 +996,7 @@ export default function EditJobWorkPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[850px]">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-72">
                       Produced Item

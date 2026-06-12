@@ -43,7 +43,7 @@ export default async function TransfersPage() {
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">From</th>

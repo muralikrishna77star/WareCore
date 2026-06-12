@@ -271,7 +271,7 @@ export default async function StockStatementPage({
             </div>
           ) : (
             <table className="w-full text-sm whitespace-nowrap">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="border-b text-xs font-semibold uppercase">
                   <th className="px-4 py-3 text-left text-gray-600 bg-white">Item Name</th>
                   <th className="px-4 py-3 text-left text-gray-400 bg-white">Unit</th>

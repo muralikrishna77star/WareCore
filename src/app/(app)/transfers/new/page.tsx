@@ -319,7 +319,7 @@ export default function NewTransferPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-gray-50">
                 <tr className="border-b text-left">
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Material</th>
                   <th className="pb-2 pr-3 text-xs font-medium text-gray-500">Size</th>
