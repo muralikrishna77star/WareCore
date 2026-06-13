@@ -1182,11 +1182,45 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
       order_by: [{entry_date: desc}, {created_at: desc}]
       limit: 200
     ) {
-      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes created_at
+      id entry_type quantity entry_date reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label notes material_type_id material_size_id created_at
       companies { id name code }
-      warehouses { name }
+      warehouses { id name }
       material_types { description unit }
       material_sizes { size_label }
+    }
+  }
+`
+
+// Resolve a vendor/status filter to the underlying purchase_bills / job_work_orders ids
+// so they can be matched against stock_ledger.reference_id.
+export const PURCHASE_BILL_IDS_QUERY = `
+  query GetPurchaseBillIds($where: purchase_bills_bool_exp = {}) {
+    purchase_bills(where: $where) { id }
+  }
+`
+
+export const JOB_WORK_ORDER_IDS_QUERY = `
+  query GetJobWorkOrderIds($where: job_work_orders_bool_exp = {}) {
+    job_work_orders(where: $where) { id }
+  }
+`
+
+// Batch lookups to enrich stock_ledger rows with vendor / job work status for display.
+export const PURCHASE_BILLS_BY_IDS_QUERY = `
+  query GetPurchaseBillsByIds($ids: [uuid!]!) {
+    purchase_bills(where: {id: {_in: $ids}}) {
+      id
+      suppliers { name }
+    }
+  }
+`
+
+export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
+  query GetJobWorkOrdersByIds($ids: [uuid!]!) {
+    job_work_orders(where: {id: {_in: $ids}}) {
+      id
+      status
+      suppliers { name }
     }
   }
 `

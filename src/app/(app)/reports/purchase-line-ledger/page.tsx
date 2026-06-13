@@ -174,30 +174,30 @@ export default async function PurchaseLineLedgerPage({
       ) : (
         <>
           {/* Line header */}
-          <div className="rounded-xl border bg-white p-4 flex items-center justify-between flex-wrap gap-2">
+          <div className="rounded-xl border bg-white px-4 py-2 flex items-center justify-between flex-wrap gap-2">
             <div>
-              <p className="font-semibold text-gray-900 font-mono">{lineId}</p>
-              <p className="text-sm text-gray-500">
+              <p className="font-semibold text-gray-900 font-mono text-sm">{lineId}</p>
+              <p className="text-xs text-gray-500">
                 {itemLabel || '—'}{sizeLabel ? ` (${sizeLabel})` : ''} · Unit: {unit}
+                <span className="ml-1 text-gray-400">— originating item, may differ after job work conversion</span>
               </p>
-              <p className="text-xs text-gray-400 mt-0.5">Originating item — may differ from current item if converted via job work</p>
             </div>
-            <p className="text-sm text-gray-500">{rows.length} movement{rows.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-gray-500">{rows.length} movement{rows.length !== 1 ? 's' : ''}</p>
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border bg-green-50 p-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border bg-green-50 px-3 py-2">
               <p className="text-xs text-gray-500">Total In</p>
-              <p className="text-xl font-bold text-green-700">+{fmtQ(totalIn)}</p>
+              <p className="text-base font-bold text-green-700">+{fmtQ(totalIn)}</p>
             </div>
-            <div className="rounded-xl border bg-red-50 p-4">
+            <div className="rounded-lg border bg-red-50 px-3 py-2">
               <p className="text-xs text-gray-500">Total Out</p>
-              <p className="text-xl font-bold text-red-700">-{fmtQ(totalOut)}</p>
+              <p className="text-base font-bold text-red-700">-{fmtQ(totalOut)}</p>
             </div>
-            <div className="rounded-xl border bg-blue-50 p-4">
+            <div className="rounded-lg border bg-blue-50 px-3 py-2">
               <p className="text-xs text-gray-500">Current Balance</p>
-              <p className={`text-xl font-bold ${currentBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
+              <p className={`text-base font-bold ${currentBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
                 {fmtQ(currentBalance)}
               </p>
             </div>
@@ -205,24 +205,24 @@ export default async function PurchaseLineLedgerPage({
 
           {/* Movements table */}
           <div className="rounded-xl border bg-white overflow-hidden">
-            <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
-              <span className="font-semibold text-gray-700 text-sm">Movement History</span>
+            <div className="px-4 py-1.5 border-b bg-gray-50 flex justify-between items-center">
+              <span className="font-semibold text-gray-700 text-xs">Movement History</span>
             </div>
-            <div className="overflow-auto max-h-[70vh]">
-              <table className="w-full text-sm">
+            <div className="overflow-auto max-h-[80vh]">
+              <table className="w-full text-xs">
                 <thead className="sticky top-0 z-10">
-                  <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Type</th>
-                    <th className="px-4 py-3 text-left">Item</th>
-                    <th className="px-4 py-3 text-left">Reference</th>
-                    <th className="px-4 py-3 text-left">Linked Line ID</th>
-                    <th className="px-4 py-3 text-left">Company</th>
-                    <th className="px-4 py-3 text-left">Warehouse</th>
-                    <th className="px-4 py-3 text-right">In</th>
-                    <th className="px-4 py-3 text-right">Out</th>
-                    <th className="px-4 py-3 text-right">Balance</th>
-                    <th className="px-4 py-3 text-left">Notes</th>
+                  <tr className="border-b bg-gray-50 text-[11px] uppercase text-gray-500">
+                    <th className="px-2 py-1.5 text-left">Date</th>
+                    <th className="px-2 py-1.5 text-left">Type</th>
+                    <th className="px-2 py-1.5 text-left">Item</th>
+                    <th className="px-2 py-1.5 text-left">Reference</th>
+                    <th className="px-2 py-1.5 text-left">Linked Line ID</th>
+                    <th className="px-2 py-1.5 text-left">Company</th>
+                    <th className="px-2 py-1.5 text-left">Warehouse</th>
+                    <th className="px-2 py-1.5 text-right">In</th>
+                    <th className="px-2 py-1.5 text-right">Out</th>
+                    <th className="px-2 py-1.5 text-right">Balance</th>
+                    <th className="px-2 py-1.5 text-left">Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -232,19 +232,19 @@ export default async function PurchaseLineLedgerPage({
                     const basePath = row.reference_type ? referenceBasePath[row.reference_type] : undefined
                     return (
                       <tr key={row.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.entry_date)}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cfg.color}`}>
+                        <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{formatDate(row.entry_date)}</td>
+                        <td className="px-2 py-1">
+                          <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${cfg.color}`}>
                             {cfg.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        <td className="px-2 py-1 text-gray-700 whitespace-nowrap">
                           {itemLabelFor(row)}
                           {(row.material_sizes?.size_label || row.size_label) && (
-                            <span className="ml-1 text-xs text-gray-400">({row.material_sizes?.size_label || row.size_label})</span>
+                            <span className="ml-1 text-[11px] text-gray-400">({row.material_sizes?.size_label || row.size_label})</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                        <td className="px-2 py-1 text-gray-500 text-[11px] whitespace-nowrap">
                           {basePath && row.reference_id ? (
                             <Link href={`${basePath}/${row.reference_id}`} className="text-blue-600 hover:underline">
                               {row.reference_number || '—'}
@@ -253,31 +253,31 @@ export default async function PurchaseLineLedgerPage({
                             row.reference_number || '—'
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-1">
                           {row.sub_purchase_line_id ? (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                               {row.sub_purchase_line_id}
                             </span>
-                          ) : <span className="text-xs text-gray-300">—</span>}
+                          ) : <span className="text-[11px] text-gray-300">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{row.companies?.name || '—'}</td>
-                        <td className="px-4 py-3 text-gray-500">{row.warehouses?.name || '—'}</td>
-                        <td className="px-4 py-3 text-right text-green-700 font-medium">{qty > 0 ? fmtQ(qty) : ''}</td>
-                        <td className="px-4 py-3 text-right text-red-600 font-medium">{qty < 0 ? fmtQ(Math.abs(qty)) : ''}</td>
-                        <td className={`px-4 py-3 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                        <td className="px-2 py-1 text-gray-700">{row.companies?.name || '—'}</td>
+                        <td className="px-2 py-1 text-gray-500">{row.warehouses?.name || '—'}</td>
+                        <td className="px-2 py-1 text-right text-green-700 font-medium">{qty > 0 ? fmtQ(qty) : ''}</td>
+                        <td className="px-2 py-1 text-right text-red-600 font-medium">{qty < 0 ? fmtQ(Math.abs(qty)) : ''}</td>
+                        <td className={`px-2 py-1 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                           {fmtQ(row.balance)}
                         </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{row.notes || '—'}</td>
+                        <td className="px-2 py-1 text-gray-500 text-[11px]">{row.notes || '—'}</td>
                       </tr>
                     )
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                    <td className="px-4 py-3 text-gray-700" colSpan={7}>Current Balance</td>
-                    <td className="px-4 py-3 text-right text-green-800">+{fmtQ(totalIn)}</td>
-                    <td className="px-4 py-3 text-right text-red-800">-{fmtQ(totalOut)}</td>
-                    <td className={`px-4 py-3 text-right font-bold ${currentBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-xs">
+                    <td className="px-2 py-1.5 text-gray-700" colSpan={7}>Current Balance</td>
+                    <td className="px-2 py-1.5 text-right text-green-800">+{fmtQ(totalIn)}</td>
+                    <td className="px-2 py-1.5 text-right text-red-800">-{fmtQ(totalOut)}</td>
+                    <td className={`px-2 py-1.5 text-right font-bold ${currentBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                       {fmtQ(currentBalance)}
                     </td>
                     <td />

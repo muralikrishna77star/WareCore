@@ -40,6 +40,8 @@ export function getEntryTypeLabel(entryType: string) {
     SALE_OUT: 'Sale Dispatch',
     JOB_WORK_OUT: 'Job Work Dispatch',
     JOB_WORK_RETURN_IN: 'Job Work Return',
+    JOB_WORK_OUTPUT_IN: 'Job Work Output',
+    JOB_WORK_CANCEL: 'Job Work Cancelled',
     TRANSFER_OUT: 'Transfer Out',
     TRANSFER_IN: 'Transfer In',
     ADJUSTMENT_IN: 'Adjustment In',
