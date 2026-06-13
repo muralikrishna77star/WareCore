@@ -7,6 +7,7 @@ import {
   UPDATE_JOB_WORK_ITEM_MUTATION,
   UPDATE_JOB_WORK_ORDER_STATUS_MUTATION,
 } from '@/lib/hasura/queries'
+import { getJobWorkOrderStatusLabel } from '@/lib/utils'
 
 interface JobWorkReturnClientProps {
   order: any
@@ -40,10 +41,14 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
       }
     }
 
-    // Check if all items fully returned
+    // Check how much has been returned across all items
     const allReturned = items.every((item) => {
       const qty = parseFloat(quantities[item.id] ?? '0')
       return qty >= (item.quantity_sent || 0)
+    })
+    const noneReturned = items.every((item) => {
+      const qty = parseFloat(quantities[item.id] ?? '0')
+      return qty <= 0
     })
 
     if (allReturned) {
@@ -51,6 +56,13 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
         id: order.id,
         status: 'completed',
         actual_return_date: new Date().toISOString().split('T')[0],
+      })
+    } else if (noneReturned) {
+      // Nothing returned yet — vendor is still working on it, not a partial return
+      await hasuraFetch(UPDATE_JOB_WORK_ORDER_STATUS_MUTATION, {
+        id: order.id,
+        status: 'dispatched',
+        actual_return_date: null,
       })
     } else {
       await hasuraFetch(UPDATE_JOB_WORK_ORDER_STATUS_MUTATION, {
@@ -76,7 +88,7 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
     <div>
       <div className="flex items-center gap-3 mb-4">
         <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
-          {order.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+          {getJobWorkOrderStatusLabel(order.status)}
         </span>
       </div>
 

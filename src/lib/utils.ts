@@ -59,6 +59,16 @@ export function getEntryTypeColor(entryType: string) {
   return inTypes.includes(entryType) ? 'text-green-600' : 'text-red-600'
 }
 
+export function getJobWorkOrderStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    dispatched: 'In Progress At Vendor',
+    partial_return: 'Partial Return',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+  }
+  return labels[status] || status
+}
+
 export function getRoleLabel(role: string) {
   const labels: Record<string, string> = {
     admin: 'Admin',

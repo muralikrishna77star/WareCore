@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { formatDate, getEntryTypeLabel } from '@/lib/utils'
+import { formatDate, getEntryTypeLabel, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   STOCK_LEDGER_FILTERED_QUERY,
@@ -47,14 +47,13 @@ const entryColors: Record<string, string> = {
   ADJUSTMENT_OUT: 'bg-pink-100 text-pink-800',
 }
 
-const jobWorkStatusOptions: { value: string; label: string; color: string }[] = [
-  { value: 'dispatched', label: 'Dispatched', color: 'bg-blue-100 text-blue-800' },
-  { value: 'partial_return', label: 'Partial Return', color: 'bg-orange-100 text-orange-800' },
-  { value: 'completed', label: 'Completed', color: 'bg-green-100 text-green-800' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+const jobWorkStatusOptions: { value: string; color: string }[] = [
+  { value: 'dispatched', color: 'bg-blue-100 text-blue-800' },
+  { value: 'partial_return', color: 'bg-orange-100 text-orange-800' },
+  { value: 'completed', color: 'bg-green-100 text-green-800' },
+  { value: 'cancelled', color: 'bg-red-100 text-red-800' },
 ]
-const jobWorkStatusLabel = (status: string) =>
-  jobWorkStatusOptions.find((s) => s.value === status)?.label ?? status
+const jobWorkStatusLabel = (status: string) => getJobWorkOrderStatusLabel(status)
 const jobWorkStatusColor = (status: string) =>
   jobWorkStatusOptions.find((s) => s.value === status)?.color ?? 'bg-gray-100 text-gray-700'
 
@@ -284,7 +283,7 @@ export default async function MovementsPage({
             >
               <option value="">All</option>
               {jobWorkStatusOptions.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
+                <option key={s.value} value={s.value}>{jobWorkStatusLabel(s.value)}</option>
               ))}
             </select>
           </div>

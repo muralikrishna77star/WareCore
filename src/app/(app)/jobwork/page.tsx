@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_ORDERS_QUERY, VENDOR_STOCK_QUERY } from '@/lib/hasura/queries'
 
@@ -83,8 +83,8 @@ export default async function JobWorkPage() {
                         {isOverdue && <span className="ml-1 text-xs">⚠ Overdue</span>}
                       </td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColors[o.status] || 'bg-gray-100 text-gray-700'}`}>
-                          {o.status?.replace('_', ' ')}
+                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[o.status] || 'bg-gray-100 text-gray-700'}`}>
+                          {getJobWorkOrderStatusLabel(o.status)}
                         </span>
                       </td>
                       <td className="px-6 py-3 space-x-3 whitespace-nowrap">
