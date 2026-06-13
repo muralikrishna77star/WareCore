@@ -61,7 +61,7 @@ export function getEntryTypeColor(entryType: string) {
 
 export function getJobWorkOrderStatusLabel(status: string) {
   const labels: Record<string, string> = {
-    dispatched: 'In Progress At Vendor',
+    dispatched: 'In Progress',
     partial_return: 'Partial Return',
     completed: 'Completed',
     cancelled: 'Cancelled',
