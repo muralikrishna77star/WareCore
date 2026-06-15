@@ -466,12 +466,15 @@ export const ITEM_MASTERS_QUERY = `
 // ─── Purchase Bills ──────────────────────────────────────────────────────────
 
 export const PURCHASE_BILLS_QUERY = `
-  query GetPurchaseBills {
-    purchase_bills(order_by: {bill_date: desc}, limit: 50) {
+  query GetPurchaseBills($where: purchase_bills_bool_exp = {}) {
+    purchase_bills(where: $where, order_by: {bill_date: desc}, limit: 50) {
       id bill_number bill_date total_quantity total_amount notes created_at status
       companies { id name code }
       warehouses { id name }
       suppliers { id name }
+      purchase_bill_items(order_by: {id: asc}) {
+        id item_name purchase_line_id
+      }
     }
   }
 `
