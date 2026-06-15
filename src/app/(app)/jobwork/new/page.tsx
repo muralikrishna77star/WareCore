@@ -30,8 +30,15 @@ function getDDMM(date: Date = new Date()): string {
 
 function generateJobLineId(ddmm: string, allJobLineIds: string[]): string {
   const prefix = `JW-${ddmm}-`
-  const count = allJobLineIds.filter(id => id && id.startsWith(prefix)).length
-  return `${prefix}${String(count + 1).padStart(4, '0')}`
+  // Use the highest existing sequence number + 1, not the count of matching IDs —
+  // counting breaks when sequences have gaps (e.g. an order's first line was removed,
+  // leaving only "-0002"), which would regenerate that same "-0002" as "next".
+  const maxSeq = allJobLineIds.reduce((max, id) => {
+    if (!id || !id.startsWith(prefix)) return max
+    const n = parseInt(id.slice(prefix.length), 10)
+    return Number.isFinite(n) ? Math.max(max, n) : max
+  }, 0)
+  return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`
 }
 
 type PurchaseLineOption = { purchase_line_id: string; available_qty: number }
