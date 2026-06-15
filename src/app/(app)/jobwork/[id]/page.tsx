@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY } from '@/lib/hasura/queries'
-import { formatDate } from '@/lib/utils'
+import { formatDate, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
 
@@ -18,6 +18,14 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
   if (!order) notFound()
   const items = itemsResult.job_work_items ?? []
   const outputItems = outputItemsResult.job_work_output_items ?? []
+
+  // Display output quantities in the same unit as the input item they were produced from,
+  // so input (e.g. MT) and output (e.g. Kgs) are comparable at a glance.
+  const inputUnitByJobLine: Record<string, string> = {}
+  for (const it of items) {
+    if (it.job_line_id && it.unit) inputUnitByJobLine[it.job_line_id] = it.unit
+  }
+  const defaultInputUnit = items.find((it: any) => it.unit)?.unit
 
   const isOverdue =
     order.expected_return_date &&
@@ -104,7 +112,13 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {outputItems.map((item: any, idx: number) => (
+                {outputItems.map((item: any, idx: number) => {
+                  const targetUnit =
+                    (item.source_job_line_id && inputUnitByJobLine[item.source_job_line_id]) || defaultInputUnit
+                  const converted = targetUnit ? convertQuantity(Number(item.quantity), item.unit, targetUnit) : null
+                  const showConverted = converted !== null && !isSameUnit(item.unit, targetUnit)
+
+                  return (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
@@ -112,9 +126,14 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                         {item.size_label && <span className="ml-1 text-gray-400 text-xs">{item.size_label}</span>}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 text-right font-mono">
-                        {Number(item.quantity).toFixed(3)}
+                        {showConverted ? formatNumber(converted, 3) : Number(item.quantity).toFixed(3)}
+                        {showConverted && (
+                          <div className="text-xs text-gray-400 font-normal">
+                            ({Number(item.quantity).toFixed(3)} {item.unit})
+                          </div>
+                        )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{item.unit}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{showConverted ? targetUnit : item.unit}</td>
                       <td className="px-6 py-4">
                         {item.source_job_line_id ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -123,7 +142,8 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                         ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                     </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

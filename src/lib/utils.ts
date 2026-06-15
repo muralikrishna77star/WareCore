@@ -69,6 +69,32 @@ export function getJobWorkOrderStatusLabel(status: string) {
   return labels[status] || status
 }
 
+// Conversion factors to kilograms, for normalizing weight units across job work items
+const UNIT_TO_KG: Record<string, number> = {
+  kg: 1, kgs: 1, kilogram: 1, kilograms: 1,
+  g: 0.001, gram: 0.001, grams: 0.001,
+  mt: 1000, ton: 1000, tons: 1000, tonne: 1000, tonnes: 1000,
+}
+
+// Converts a quantity between weight units (e.g. Kgs <-> MT). Returns null if either
+// unit is unrecognized or not a weight unit, so callers can fall back to the raw value.
+export function convertQuantity(quantity: number, fromUnit?: string | null, toUnit?: string | null): number | null {
+  if (!fromUnit || !toUnit) return null
+  const from = UNIT_TO_KG[fromUnit.trim().toLowerCase()]
+  const to = UNIT_TO_KG[toUnit.trim().toLowerCase()]
+  if (from === undefined || to === undefined) return null
+  return (quantity * from) / to
+}
+
+// True if two unit strings refer to the same weight unit (case/alias insensitive)
+export function isSameUnit(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return a === b
+  const na = UNIT_TO_KG[a.trim().toLowerCase()]
+  const nb = UNIT_TO_KG[b.trim().toLowerCase()]
+  if (na === undefined || nb === undefined) return a.trim().toLowerCase() === b.trim().toLowerCase()
+  return na === nb
+}
+
 export function getRoleLabel(role: string) {
   const labels: Record<string, string> = {
     admin: 'Admin',

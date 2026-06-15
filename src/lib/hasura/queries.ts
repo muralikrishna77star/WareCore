@@ -1012,7 +1012,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received size_label
+      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received size_label unit
       item_master_id item_name
       material_types { description }
       material_sizes { size_label }
