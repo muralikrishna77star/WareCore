@@ -16,12 +16,20 @@ export default async function DispatchPage() {
           <h1 className="text-2xl font-bold text-gray-900">Sale Entry</h1>
           <p className="mt-1 text-sm text-gray-500">Sales invoices and customer dispatches</p>
         </div>
-        <Link
-          href="/dispatch/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          + New Sale
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/dispatch/vendor-direct/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 transition-colors"
+          >
+            Sell from Vendor
+          </Link>
+          <Link
+            href="/dispatch/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            + New Sale
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">
@@ -45,6 +53,7 @@ export default async function DispatchPage() {
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Vehicle</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Qty</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Amount</th>
+                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -72,6 +81,17 @@ export default async function DispatchPage() {
                       <td className="px-6 py-3 text-right font-medium text-gray-700">{totalQty.toFixed(3)}</td>
                       <td className="px-6 py-3 text-right font-medium text-gray-700">
                         {totalAmt > 0 ? `₹${totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td className="px-6 py-3">
+                        {o.is_vendor_direct ? (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
+                            From Vendor
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-500 border border-gray-200">
+                            Warehouse
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-3">
                         {cancelled ? (

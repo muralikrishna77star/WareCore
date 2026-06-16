@@ -42,19 +42,26 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             Dispatch: {order.invoice_number ?? id.slice(0, 8)}
           </h1>
         </div>
-        {isCancelled ? (
-          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
-            Cancelled
-          </span>
-        ) : order.status === 'draft' ? (
-          <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
-            Draft
-          </span>
-        ) : (
-          <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            Active
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {order.is_vendor_direct && (
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 border border-amber-200">
+              From Vendor
+            </span>
+          )}
+          {isCancelled ? (
+            <span className="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-700 border border-red-200">
+              Cancelled
+            </span>
+          ) : order.status === 'draft' ? (
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+              Draft
+            </span>
+          ) : (
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+              Active
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Cancellation notice */}
@@ -104,6 +111,15 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Sale Ref ID</p>
               <p className="text-sm font-medium text-gray-900 mt-1 font-mono">{order.sale_ref_id}</p>
+            </div>
+          )}
+          {order.is_vendor_direct && order.source_job_work_order_id && (
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Source Job Work Order</p>
+              <Link href={`/jobwork/${order.source_job_work_order_id}`}
+                className="text-sm font-medium text-amber-700 hover:underline mt-1 block">
+                View Job Work Order →
+              </Link>
             </div>
           )}
           <div>

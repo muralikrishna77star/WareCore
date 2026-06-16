@@ -43,11 +43,19 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
             Job Work Order: {order.reference_number ?? id.slice(0, 8)}
           </h1>
         </div>
-        {isOverdue && (
-          <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
-            Overdue
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {isOverdue && (
+            <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+              Overdue
+            </span>
+          )}
+          {(order.status === 'dispatched' || order.status === 'partial_return') && (
+            <Link href={`/dispatch/vendor-direct/new?jw=${id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600">
+              Sell from Vendor
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Order Info */}

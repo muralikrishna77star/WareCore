@@ -439,6 +439,37 @@ export const CREATE_ITEM_MASTER_MUTATION = `
   }
 `
 
+export const ITEM_MASTER_BY_ID_QUERY = `
+  query GetItemMasterById($id: uuid!) {
+    item_master_by_pk(id: $id) {
+      id
+      item_code
+      item_name
+      material_type_id
+      material_size_id
+      size_label
+      unit
+      description
+      is_active
+      material_types { id code description }
+      material_sizes { id size_label }
+    }
+  }
+`
+
+export const UPDATE_ITEM_MASTER_MUTATION = `
+  mutation UpdateItemMaster($id: uuid!, $item_name: String!, $unit: String!) {
+    update_item_master_by_pk(
+      pk_columns: { id: $id }
+      _set: { item_name: $item_name, unit: $unit }
+    ) {
+      id
+      item_name
+      unit
+    }
+  }
+`
+
 export const ITEM_MASTERS_QUERY = `
   query GetItemMasters {
     item_master(order_by: {item_code: asc}) {
@@ -676,6 +707,7 @@ export const DISPATCH_ORDERS_QUERY = `
   query GetDispatchOrders {
     dispatch_orders(order_by: {dispatch_date: desc}, limit: 50) {
       id dispatch_date vehicle_number driver_name notes created_at status sale_ref_id
+      is_vendor_direct source_job_work_order_id
       companies { name code }
       customers { name }
       dispatch_items {
@@ -690,6 +722,7 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
     dispatch_orders_by_pk(id: $id) {
       id dispatch_date vehicle_number driver_name notes created_at created_by
       invoice_number status cancelled_at cancelled_notes sale_ref_id
+      is_vendor_direct source_job_work_order_id
       companies { name }
       warehouses { name }
       customers { name }
@@ -719,7 +752,7 @@ export const PURCHASE_LINE_STOCK_QUERY = `
 `
 
 export const CREATE_DISPATCH_ORDER_MUTATION = `
-  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String, $created_by: uuid) {
+  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String, $created_by: uuid, $is_vendor_direct: Boolean, $source_job_work_order_id: uuid) {
     insert_dispatch_orders_one(object: {
       company_id: $company_id
       warehouse_id: $warehouse_id
@@ -734,7 +767,31 @@ export const CREATE_DISPATCH_ORDER_MUTATION = `
       status: $status
       sale_ref_id: $sale_ref_id
       created_by: $created_by
+      is_vendor_direct: $is_vendor_direct
+      source_job_work_order_id: $source_job_work_order_id
     }) { id invoice_number status }
+  }
+`
+
+export const ACTIVE_JOB_WORK_ORDERS_PENDING_QUERY = `
+  query GetActiveJobWorkOrdersPending {
+    job_work_orders(
+      where: { status: { _in: ["dispatched", "partial_return"] } }
+      order_by: { dispatch_date: desc }
+    ) {
+      id reference_number dispatch_date status
+      company_id warehouse_id
+      companies { id name code }
+      warehouses { id name }
+      suppliers { name }
+      job_work_items(order_by: { id: asc }) {
+        id item_name purchase_line_id sub_purchase_line_id job_line_id
+        material_type_id material_size_id size_label
+        quantity_sent quantity_received unit
+        item_master_id
+        material_types { id description code unit }
+      }
+    }
   }
 `
 

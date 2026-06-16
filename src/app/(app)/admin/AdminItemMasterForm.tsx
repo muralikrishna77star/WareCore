@@ -21,7 +21,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
   const [materialTypeId, setMaterialTypeId] = useState('')
   const [materialSizeId, setMaterialSizeId] = useState('')
   const [itemName, setItemName] = useState('')
-  const [unit, setUnit] = useState('tons')
+  const [unit, setUnit] = useState('MT')
   const [description, setDescription] = useState('')
   const [itemCode, setItemCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -32,7 +32,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
   const [showNewMaterialTypeForm, setShowNewMaterialTypeForm] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
   const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
-  const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('tons')
+  const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('MT')
   const [newMaterialTypeLoading, setNewMaterialTypeLoading] = useState(false)
 
   const [showNewSizeForm, setShowNewSizeForm] = useState(false)
@@ -48,7 +48,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
   )
 
   useEffect(() => {
-    if (selectedMaterialType) setUnit(selectedMaterialType.unit || 'tons')
+    if (selectedMaterialType) setUnit(selectedMaterialType.unit || 'MT')
   }, [selectedMaterialType])
 
   useEffect(() => {
@@ -181,7 +181,7 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
                   className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
                   {newMaterialTypeLoading ? 'Adding…' : 'Add Material Type'}
                 </button>
-                <button type="button" onClick={() => { setShowNewMaterialTypeForm(false); setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('tons'); setError('') }}
+                <button type="button" onClick={() => { setShowNewMaterialTypeForm(false); setNewMaterialTypeCode(''); setNewMaterialTypeDescription(''); setNewMaterialTypeUnit('MT'); setError('') }}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
                   Cancel
                 </button>

@@ -98,6 +98,7 @@ export default function ItemMastersPage() {
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Unit</th>
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -119,6 +120,12 @@ export default function ItemMastersPage() {
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${item.is_active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                         {item.is_active ? 'Active' : 'Inactive'}
                       </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Link href={`/admin/items/${item.id}/edit`}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                        Edit
+                      </Link>
                     </td>
                   </tr>
                 ))}
