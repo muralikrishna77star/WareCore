@@ -154,6 +154,9 @@ export default function NewTransferPage() {
   }, [])
 
   const selectItem = useCallback((i: number, item: any) => {
+    const linesForItem = purchaseLinesByItem[item.id] ?? []
+    // Auto-select when there is exactly one purchase line; leave empty for user to choose otherwise
+    const autoLine = linesForItem.length === 1 ? linesForItem[0] : ''
     setLines((prev) => {
       const updated = [...prev]
       updated[i] = {
@@ -164,12 +167,12 @@ export default function NewTransferPage() {
         material_type_id: item.material_type_id ?? '',
         material_size_id: item.material_size_id ?? '',
         size_label: item.size_label ?? item.material_sizes?.size_label ?? '',
-        purchase_line_id: '',
+        purchase_line_id: autoLine,
       }
       return updated
     })
     setOpenDropdown(null)
-  }, [])
+  }, [purchaseLinesByItem])
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
   const removeLine = (i: number) => {
