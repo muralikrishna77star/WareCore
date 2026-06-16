@@ -116,7 +116,6 @@ function VendorDirectSaleForm() {
     })
   }, [])
 
-  // When JW order is selected, build lines from pending items
   useEffect(() => {
     if (!selectedJwId) { setLines([]); return }
     const jwo = jwOrders.find((o: any) => o.id === selectedJwId)
@@ -163,8 +162,7 @@ function VendorDirectSaleForm() {
   const totalQty = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0)
   const totalAmt = lines.reduce((s, l) => {
     const tr = taxRates.find(t => t.id === l.taxRateId)
-    const t = calcTax(parseFloat(l.quantity) || 0, parseFloat(l.rate) || 0, tr)
-    return s + t.total_with_tax
+    return s + calcTax(parseFloat(l.quantity) || 0, parseFloat(l.rate) || 0, tr || null).total_with_tax
   }, 0)
 
   async function handleSave(status: 'active' | 'draft') {
@@ -242,7 +240,7 @@ function VendorDirectSaleForm() {
   const fieldCls = 'block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none'
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full">
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 
         {/* Header */}
@@ -268,8 +266,8 @@ function VendorDirectSaleForm() {
 
         {/* Order header */}
         <div className="px-4 py-3 border-b border-gray-200">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-8">
+            <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1">Job Work Order *</label>
               <select value={selectedJwId} onChange={e => setSelectedJwId(e.target.value)} className={fieldCls} disabled={loading}>
                 <option value="">{loading ? 'Loading…' : '— Select order —'}</option>
@@ -306,13 +304,21 @@ function VendorDirectSaleForm() {
               <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={fieldCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Vehicle / Notes</label>
-              <input value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="Vehicle no." className={fieldCls} />
+              <label className="block text-xs font-medium text-gray-500 mb-1">Vehicle No.</label>
+              <input value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="MH-01-AB-1234" className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Driver</label>
+              <input value={driverName} onChange={e => setDriverName(e.target.value)} className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+              <input value={notes} onChange={e => setNotes(e.target.value)} className={fieldCls} />
             </div>
           </div>
         </div>
 
-        {/* Items */}
+        {/* Items band */}
         <div className="flex items-center justify-between px-4 py-2 bg-amber-50 border-b border-amber-100">
           <span className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Items at Vendor</span>
           {selectedJwo && lines.length === 0 && (
@@ -323,19 +329,23 @@ function VendorDirectSaleForm() {
         {lines.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b text-left">
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Item</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Purchase Line</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Size</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Pending at Vendor</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Qty to Sell</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Rate (₹)</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500">Tax Rate</th>
-                  <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">Total (₹)</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Item</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Purchase Line</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Size</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Pending at Vendor</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Qty to Sell</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Rate (₹)</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Taxable (₹)</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Tax Rate</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 text-right whitespace-nowrap">CGST</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 text-right whitespace-nowrap">SGST</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 text-right whitespace-nowrap">TCS</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 text-right whitespace-nowrap">Total (₹)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-50">
                 {lines.map((line, i) => {
                   const tr = taxRates.find(t => t.id === line.taxRateId)
                   const tax = calcTax(parseFloat(line.quantity) || 0, parseFloat(line.rate) || 0, tr || null)
@@ -343,41 +353,72 @@ function VendorDirectSaleForm() {
                   const overQty = qty > line.pendingQty
                   return (
                     <tr key={line.jwItemId} className="hover:bg-gray-50">
-                      <td className="px-4 py-2">
-                        <span className="font-medium text-gray-900">{line.itemName || '—'}</span>
+                      <td className="px-3 py-2">
+                        <span className="font-medium text-gray-900 whitespace-nowrap">{line.itemName || '—'}</span>
                         {line.saleLineId && (
-                          <span className="block text-[10px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1 mt-0.5 inline-block">{line.saleLineId}</span>
+                          <span className="block text-[10px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1 mt-0.5 select-all">{line.saleLineId}</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-blue-700">{line.purchaseLineId || '—'}</td>
-                      <td className="px-4 py-2 text-xs text-gray-600">{line.sizeLabel || '—'}</td>
-                      <td className="px-4 py-2">
-                        <span className="text-sm font-semibold text-gray-700">
+                      <td className="px-3 py-2 font-mono text-xs text-blue-700 whitespace-nowrap">{line.purchaseLineId || '—'}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{line.sizeLabel || '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
                           {line.pendingQty.toFixed(3)} {line.unit}
                         </span>
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         <input type="number" value={line.quantity}
                           onChange={e => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0.001" max={line.pendingQty}
-                          className={`block w-28 rounded border px-2 py-1.5 text-sm focus:outline-none ${overQty ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`} />
-                        {overQty && <p className="text-[10px] text-red-600 mt-0.5">Exceeds pending qty</p>}
+                          className={`block w-24 rounded border px-2 py-1.5 text-sm focus:outline-none ${overQty ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'}`} />
+                        {overQty && <p className="text-[10px] text-red-600 mt-0.5 whitespace-nowrap">Exceeds pending</p>}
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         <input type="number" value={line.rate}
                           onChange={e => updateLine(i, 'rate', e.target.value)}
                           step="0.01" min="0" placeholder="0.00"
-                          className="block w-28 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
                       </td>
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
+                        <span className="block w-24 rounded border border-gray-100 bg-gray-50 px-2 py-1.5 text-sm text-gray-700 text-right">
+                          {tax.taxable_value > 0 ? `₹${tax.taxable_value.toFixed(2)}` : '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
                         <select value={line.taxRateId} onChange={e => updateLine(i, 'taxRateId', e.target.value)}
                           className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
                           {taxRates.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                       </td>
-                      <td className="px-4 py-2 text-right font-semibold text-gray-900">
-                        {tax.total_with_tax > 0 ? `₹${tax.total_with_tax.toFixed(2)}` : '—'}
+                      <td className="px-3 py-2 text-right">
+                        {tax.cgst_amount > 0 ? (
+                          <span className="text-xs text-orange-700">
+                            <span className="block text-gray-400">{tax.cgst_rate}%</span>
+                            ₹{tax.cgst_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {tax.sgst_amount > 0 ? (
+                          <span className="text-xs text-orange-700">
+                            <span className="block text-gray-400">{tax.sgst_rate}%</span>
+                            ₹{tax.sgst_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {tax.tcs_amount > 0 ? (
+                          <span className="text-xs text-blue-700">
+                            <span className="block text-gray-400">{tax.tcs_rate}%</span>
+                            +₹{tax.tcs_amount.toFixed(2)}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {tax.total_with_tax > 0 ? `₹${tax.total_with_tax.toFixed(2)}` : '—'}
+                        </span>
                       </td>
                     </tr>
                   )
@@ -385,11 +426,10 @@ function VendorDirectSaleForm() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-200">
-                  <td colSpan={4} className="px-4 py-3 text-sm font-semibold text-right">Totals:</td>
-                  <td className="px-4 py-3 text-sm font-bold">{totalQty.toFixed(3)}</td>
-                  <td />
-                  <td />
-                  <td className="px-4 py-3 text-right text-sm font-bold">
+                  <td colSpan={4} className="px-3 py-3 text-sm font-semibold text-right">Totals:</td>
+                  <td className="px-3 py-3 text-sm font-bold">{totalQty.toFixed(3)}</td>
+                  <td colSpan={6} />
+                  <td className="px-3 py-3 text-right text-sm font-bold">
                     ₹{totalAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </td>
                 </tr>

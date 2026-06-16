@@ -542,7 +542,7 @@ export default function NewDispatchPage() {
   const fieldCls = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
 
   return (
-    <div className="max-w-[1800px] mx-auto">
+    <div className="w-full">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}
