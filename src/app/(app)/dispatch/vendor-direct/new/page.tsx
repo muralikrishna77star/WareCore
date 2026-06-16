@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
@@ -66,6 +66,14 @@ type SaleLine = {
 }
 
 export default function VendorDirectSaleNewPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-400 text-sm">Loading…</div>}>
+      <VendorDirectSaleForm />
+    </Suspense>
+  )
+}
+
+function VendorDirectSaleForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preselectedJwId = searchParams.get('jw')
