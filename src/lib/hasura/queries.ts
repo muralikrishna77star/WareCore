@@ -667,6 +667,7 @@ export const TRANSFER_ITEMS_QUERY = `
   query GetTransferItems($transfer_id: uuid!) {
     transfer_items(where: {transfer_id: {_eq: $transfer_id}}, order_by: {id: asc}) {
       id transfer_id quantity notes size_label
+      item_master_id item_name purchase_line_id
       material_types { description }
       material_sizes { size_label }
     }

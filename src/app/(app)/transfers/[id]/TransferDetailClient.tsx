@@ -88,6 +88,8 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
@@ -98,18 +100,24 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
             {items.map((item: any, idx: number) => (
               <tr key={item.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_type?.name ?? '—'}</td>
-                <td className="px-6 py-4 text-sm text-gray-700">{item.material_size?.size_label ?? item.size_label ?? '—'}</td>
-                <td className="px-6 py-4 text-sm text-gray-900 text-right">{item.quantity?.toFixed(3)}</td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  {item.item_name ?? item.material_types?.description ?? '—'}
+                </td>
+                <td className="px-6 py-4 text-sm font-mono text-blue-700">
+                  {item.purchase_line_id ?? '—'}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-700">{item.material_types?.description ?? '—'}</td>
+                <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
+                <td className="px-6 py-4 text-sm text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">{item.notes ?? '—'}</td>
               </tr>
             ))}
           </tbody>
           <tfoot className="bg-gray-50 border-t-2 border-gray-200">
             <tr>
-              <td colSpan={3} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Total</td>
+              <td colSpan={5} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Total</td>
               <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">
-                {items.reduce((s, i) => s + (i.quantity || 0), 0).toFixed(3)} MT
+                {items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0).toFixed(3)} MT
               </td>
               <td></td>
             </tr>
