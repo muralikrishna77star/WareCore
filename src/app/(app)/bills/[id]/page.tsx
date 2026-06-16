@@ -162,8 +162,8 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Line ID</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
-                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
+                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Rate (₹)</th>
                 <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
               </tr>
             </thead>
@@ -188,6 +188,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                   </td>
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-900 text-right">
                     {Number(item.quantity).toFixed(3)}
+                    <span className="ml-1 text-xs text-gray-400">{item.unit ?? 'MT'}</span>
                   </td>
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-900 text-right">
                     {item.rate ? formatCurrency(Number(item.rate)) : '—'}
