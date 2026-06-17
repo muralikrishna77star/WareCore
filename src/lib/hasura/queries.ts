@@ -734,7 +734,7 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
 export const DISPATCH_ITEMS_QUERY = `
   query GetDispatchItems($dispatch_order_id: uuid!) {
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
-      id dispatch_order_id purchase_line_id sub_purchase_line_id quantity rate amount notes size_label
+      id dispatch_order_id item_name purchase_line_id sale_line_id sub_purchase_line_id quantity rate amount notes size_label
       material_types { description }
     }
   }
@@ -753,7 +753,7 @@ export const PURCHASE_LINE_STOCK_QUERY = `
 `
 
 export const CREATE_DISPATCH_ORDER_MUTATION = `
-  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String, $created_by: uuid, $is_vendor_direct: Boolean, $source_job_work_order_id: uuid) {
+  mutation CreateDispatchOrder($company_id: uuid, $warehouse_id: uuid, $customer_id: uuid, $invoice_number: String, $dispatch_date: date!, $vehicle_number: String, $driver_name: String, $total_quantity: numeric, $total_amount: numeric, $notes: String, $status: String, $sale_ref_id: String, $created_by: uuid, $is_vendor_direct: Boolean = false, $source_job_work_order_id: uuid) {
     insert_dispatch_orders_one(object: {
       company_id: $company_id
       warehouse_id: $warehouse_id

@@ -149,7 +149,9 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
@@ -160,7 +162,14 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
               {items.map((item: any, idx: number) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.material_types?.name ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    {item.item_name ?? '—'}
+                    {item.sale_line_id && (
+                      <span className="block text-[10px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1 mt-0.5">{item.sale_line_id}</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_types?.description ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm font-mono text-blue-700">{item.purchase_line_id ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-700">{item.size_label ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
@@ -174,7 +183,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 border-gray-200">
               <tr>
-                <td colSpan={3} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Totals</td>
+                <td colSpan={5} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Totals</td>
                 <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
                 <td></td>
                 <td className="px-6 py-4 text-sm font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>
