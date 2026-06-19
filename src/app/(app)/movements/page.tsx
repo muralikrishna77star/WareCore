@@ -75,6 +75,8 @@ export default async function MovementsPage({
     job_work_status?: string
     from?: string
     to?: string
+    sort?: string
+    dir?: string
   }>
 }) {
   const params = await searchParams
@@ -258,6 +260,62 @@ export default async function MovementsPage({
     return null
   }
 
+  // Column sorting. Balance/vendor/job-work-status sort keys reuse the lookups
+  // above, so this must run after they're built; the chronological order used
+  // to compute `balanceById` is independent of this display order.
+  const sortGetters: Record<string, (m: any) => string | number> = {
+    date: (m) => `${m.entry_date}T${m.created_at}`,
+    type: (m) => getEntryTypeLabel(m.entry_type),
+    company: (m) => m.companies?.code || '',
+    warehouse: (m) => m.warehouses?.name || '',
+    item: (m) => itemLabelFor(m),
+    size: (m) => m.size_label || m.material_sizes?.size_label || '',
+    quantity: (m) => Number(m.quantity),
+    balance: (m) => balanceById.get(m.id) ?? 0,
+    vendor: (m) => vendorFor(m) || '',
+    job_work_status: (m) => jobWorkStatusFor(m) || '',
+    reference: (m) => m.reference_number || '',
+    notes: (m) => m.notes || '',
+  }
+
+  const activeSort = params.sort && sortGetters[params.sort] ? params.sort : null
+  const activeDir = params.dir === 'desc' ? 'desc' : 'asc'
+
+  const displayedMovements = activeSort
+    ? [...movements].sort((a, b) => {
+        const av = sortGetters[activeSort](a)
+        const bv = sortGetters[activeSort](b)
+        const cmp = typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv))
+        return activeDir === 'desc' ? -cmp : cmp
+      })
+    : movements
+
+  const sortHref = (column: string) => {
+    const next = new URLSearchParams()
+    if (params.company) next.set('company', params.company)
+    if (params.warehouse) next.set('warehouse', params.warehouse)
+    if (params.entry_type) next.set('entry_type', params.entry_type)
+    if (params.item) next.set('item', params.item)
+    if (params.vendor) next.set('vendor', params.vendor)
+    if (params.job_work_status) next.set('job_work_status', params.job_work_status)
+    next.set('from', fromDate)
+    next.set('to', toDate)
+    next.set('sort', column)
+    next.set('dir', activeSort === column && activeDir === 'asc' ? 'desc' : 'asc')
+    return `/movements?${next.toString()}`
+  }
+
+  const SortableTh = ({ column, label, align }: { column: string; label: string; align?: 'right' }) => (
+    <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
+      <a href={sortHref(column)} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
+        {label}
+        <span className="text-[10px]">{activeSort === column ? (activeDir === 'desc' ? '▼' : '▲') : ''}</span>
+      </a>
+    </th>
+  )
+
   return (
     <div className="space-y-6">
       <div>
@@ -383,22 +441,22 @@ export default async function MovementsPage({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Warehouse</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase text-right">Quantity</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase text-right">Balance</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Job Work Status</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Reference</th>
-                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Notes</th>
+                  <SortableTh column="date" label="Date" />
+                  <SortableTh column="type" label="Type" />
+                  <SortableTh column="company" label="Company" />
+                  <SortableTh column="warehouse" label="Warehouse" />
+                  <SortableTh column="item" label="Item" />
+                  <SortableTh column="size" label="Size" />
+                  <SortableTh column="quantity" label="Quantity" align="right" />
+                  <SortableTh column="balance" label="Balance" align="right" />
+                  <SortableTh column="vendor" label="Vendor" />
+                  <SortableTh column="job_work_status" label="Job Work Status" />
+                  <SortableTh column="reference" label="Reference" />
+                  <SortableTh column="notes" label="Notes" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {movements.map((m: any) => {
+                {displayedMovements.map((m: any) => {
                   const isIn = Number(m.quantity) > 0
                   const vendor = vendorFor(m)
                   const jwStatus = jobWorkStatusFor(m)
