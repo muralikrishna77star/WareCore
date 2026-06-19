@@ -27,8 +27,9 @@ function nextSeq(ids: string[], pattern: RegExp) {
     return m ? Math.max(max, parseInt(m[1], 10)) : max
   }, 0)
 }
-function generateSaleId(existing: string[]) {
-  return `${getMMYY()}-${String(nextSeq(existing, /^\d{4}-(\d+)$/) + 1).padStart(4, '0')}`
+function generateSaleId(existing: string[], dateStr?: string) {
+  const date = dateStr ? new Date(dateStr + 'T00:00:00') : new Date()
+  return `${getMMYY(date)}-${String(nextSeq(existing, /^\d{4}-(\d+)$/) + 1).padStart(4, '0')}`
 }
 function generateSaleLineId(typeCode: string, all: string[]) {
   const prefix = typeCode.slice(0, 2).toUpperCase()
@@ -111,7 +112,7 @@ function VendorDirectSaleForm() {
       const lineIds: string[] = ((sliRes.data as any)?.dispatch_items ?? []).map((i: any) => i.sale_line_id).filter(Boolean)
       setExistingInvoiceNumbers(invNums)
       setExistingLineIds(lineIds)
-      setSaleId(generateSaleId(invNums))
+      setSaleId(generateSaleId(invNums, saleDate))
       setLoading(false)
     })
   }, [])
@@ -177,7 +178,7 @@ function VendorDirectSaleForm() {
     const freshInvNums: string[] = ((freshInvRes.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
     let invoiceToUse = saleId.trim()
     if (freshInvNums.includes(invoiceToUse)) {
-      const newId = generateSaleId(freshInvNums)
+      const newId = generateSaleId(freshInvNums, saleDate)
       setSaleId(newId); setExistingInvoiceNumbers(freshInvNums)
       setError(`Sale ID "${invoiceToUse}" already taken — assigned "${newId}". Review and save again.`)
       setSaving(false); return
@@ -295,13 +296,17 @@ function VendorDirectSaleForm() {
               <div className="flex gap-1">
                 <input value={saleId} onChange={e => setSaleId(e.target.value)}
                   className="block flex-1 min-w-0 rounded border border-gray-300 px-2 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
-                <button type="button" onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers))}
+                <button type="button" onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers, saleDate))}
                   className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">↻</button>
               </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Sale Date</label>
-              <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)} className={fieldCls} />
+              <input type="date" value={saleDate} onChange={e => {
+                const newDate = e.target.value
+                setSaleDate(newDate)
+                if (newDate) setSaleId(generateSaleId(existingInvoiceNumbers, newDate))
+              }} className={fieldCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Vehicle No.</label>
