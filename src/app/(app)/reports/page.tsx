@@ -128,6 +128,16 @@ export default async function ReportsPage() {
             <p className="text-sm text-gray-500 mt-0.5">Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns</p>
           </div>
         </Link>
+        <Link
+          href="/reports/vendor-movements"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-amber-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">🏗️</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-amber-700">Vendorwise Stock Movement</p>
+            <p className="text-sm text-gray-500 mt-0.5">Job work out, direct sales, returns and pending balance, by vendor</p>
+          </div>
+        </Link>
       </div>
 
       {/* Summary Cards */}

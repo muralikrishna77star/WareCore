@@ -1294,6 +1294,41 @@ export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
   }
 `
 
+// ─── Vendorwise Stock Movement Report ───────────────────────────────────────
+
+export const VENDOR_JOB_WORK_LEDGER_QUERY = `
+  query GetVendorJobWorkLedger($where: stock_ledger_bool_exp = {}) {
+    stock_ledger(where: $where) {
+      id entry_type quantity entry_date reference_id company_id material_type_id material_size_id
+      companies { id name code }
+      material_types { description unit }
+      material_sizes { size_label }
+    }
+  }
+`
+
+export const JOB_WORK_ORDERS_VENDOR_INFO_QUERY = `
+  query GetJobWorkOrdersVendorInfo($ids: [uuid!]!) {
+    job_work_orders(where: {id: {_in: $ids}}) {
+      id
+      vendor_id
+      company_id
+      suppliers { name }
+      companies { name code }
+    }
+  }
+`
+
+export const DISPATCH_ORDERS_VENDOR_INFO_QUERY = `
+  query GetDispatchOrdersVendorInfo($ids: [uuid!]!) {
+    dispatch_orders(where: {id: {_in: $ids}}) {
+      id
+      is_vendor_direct
+      source_job_work_order_id
+    }
+  }
+`
+
 export const RECENT_MOVEMENTS_QUERY = `
   query GetRecentMovements {
     stock_ledger(order_by: {created_at: desc}, limit: 10) {
