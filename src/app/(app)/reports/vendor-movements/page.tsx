@@ -12,6 +12,7 @@ import {
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
 
 type ItemOption = ComboOption & {
@@ -33,6 +34,7 @@ type GroupRow = {
   directSales: number
   returns: number
   balance: number
+  transactions: Transaction[]
 }
 
 export default async function VendorMovementsPage({
@@ -188,6 +190,7 @@ export default async function VendorMovementsPage({
         directSales: 0,
         returns: 0,
         balance: 0,
+        transactions: [],
       }
       groups.set(key, g)
     }
@@ -204,9 +207,19 @@ export default async function VendorMovementsPage({
     const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     if (m.entry_type === 'JOB_WORK_OUT') {
       g.jobWorkOut += Math.abs(Number(m.quantity))
+      g.transactions.push({
+        id: m.id, date: m.entry_date, type: 'Job Work Out',
+        quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+      })
     } else if (m.entry_type === 'JOB_WORK_RETURN_IN') {
       const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
       periodReturnInByKey.set(key, (periodReturnInByKey.get(key) ?? 0) + Number(m.quantity))
+      const isVirtual = (m.notes || '').toLowerCase().includes('virtual return')
+      g.transactions.push({
+        id: m.id, date: m.entry_date,
+        type: isVirtual ? 'Return (paired with direct sale)' : 'Return',
+        quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+      })
     }
   }
 
@@ -220,6 +233,10 @@ export default async function VendorMovementsPage({
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     g.directSales += Math.abs(Number(m.quantity))
+    g.transactions.push({
+      id: m.id, date: m.entry_date, type: 'Direct Sale',
+      quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+    })
   }
 
   // Returns shown to the user are genuine physical returns only — the ledger's
@@ -252,6 +269,9 @@ export default async function VendorMovementsPage({
   let rows = Array.from(groups.values()).filter(
     (g) => g.jobWorkOut > 0 || g.directSales > 0 || g.returns > 0 || Math.abs(g.balance) > 0.0005
   )
+  for (const g of rows) {
+    g.transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  }
 
   // Sorting
   const sortGetters: Record<string, (g: GroupRow) => string | number> = {
@@ -294,15 +314,23 @@ export default async function VendorMovementsPage({
     next.set('dir', activeSort === column && activeDir === 'asc' ? 'desc' : 'asc')
     return `/reports/vendor-movements?${next.toString()}`
   }
-
-  const SortableTh = ({ column, label, align }: { column: string; label: string; align?: 'right' }) => (
-    <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
-      <a href={sortHref(column)} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
-        {label}
-        <span className="text-[10px]">{activeSort === column ? (activeDir === 'desc' ? '▼' : '▲') : ''}</span>
-      </a>
-    </th>
+  const sortHrefs = Object.fromEntries(
+    ['vendor', 'company', 'item', 'size', 'job_work_out', 'direct_sales', 'returns', 'balance'].map((c) => [c, sortHref(c)])
   )
+
+  const tableRows = rows.map((g) => ({
+    key: g.key,
+    vendorName: g.vendorName,
+    companyName: g.companyName,
+    itemLabel: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
+    sizeLabel: g.sizeLabel,
+    unit: g.unit,
+    jobWorkOut: g.jobWorkOut,
+    directSales: g.directSales,
+    returns: g.returns,
+    balance: g.balance,
+    transactions: g.transactions,
+  }))
 
   return (
     <div className="space-y-6">
@@ -389,49 +417,7 @@ export default async function VendorMovementsPage({
           <span className="text-xs text-gray-500">{rows.length} row{rows.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">
-          {rows.length === 0 ? (
-            <p className="p-8 text-center text-gray-500 text-sm">No vendor movements found for the selected period.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 text-left border-b">
-                  <SortableTh column="vendor" label="Vendor" />
-                  <SortableTh column="company" label="Company" />
-                  <SortableTh column="item" label="Item" />
-                  <SortableTh column="size" label="Size" />
-                  <SortableTh column="job_work_out" label="Job Work Out" align="right" />
-                  <SortableTh column="direct_sales" label="Direct Sales" align="right" />
-                  <SortableTh column="returns" label="Returns" align="right" />
-                  <SortableTh column="balance" label="Balance" align="right" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {rows.map((g) => (
-                  <tr key={g.key} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{g.vendorName}</td>
-                    <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{g.companyName}</td>
-                    <td className="px-4 py-2.5 text-gray-900 whitespace-nowrap">{itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName)}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{g.sizeLabel}</td>
-                    <td className="px-4 py-2.5 text-right font-medium text-purple-700">{g.jobWorkOut.toFixed(3)} {g.unit}</td>
-                    <td className="px-4 py-2.5 text-right font-medium text-red-700">{g.directSales.toFixed(3)} {g.unit}</td>
-                    <td className="px-4 py-2.5 text-right font-medium text-teal-700">{g.returns.toFixed(3)} {g.unit}</td>
-                    <td className={`px-4 py-2.5 text-right font-semibold ${g.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                      {g.balance.toFixed(3)} {g.unit}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                  <td className="px-4 py-3 text-gray-700" colSpan={4}>Total</td>
-                  <td className="px-4 py-3 text-right text-purple-800">{totals.jobWorkOut.toFixed(3)}</td>
-                  <td className="px-4 py-3 text-right text-red-800">{totals.directSales.toFixed(3)}</td>
-                  <td className="px-4 py-3 text-right text-teal-800">{totals.returns.toFixed(3)}</td>
-                  <td className={`px-4 py-3 text-right ${totals.balance < 0 ? 'text-red-700' : 'text-gray-900'}`}>{totals.balance.toFixed(3)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
+          <VendorMovementsTable rows={tableRows} sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
         </div>
       </div>
     </div>

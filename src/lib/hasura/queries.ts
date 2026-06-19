@@ -1298,8 +1298,8 @@ export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
 
 export const VENDOR_JOB_WORK_LEDGER_QUERY = `
   query GetVendorJobWorkLedger($where: stock_ledger_bool_exp = {}) {
-    stock_ledger(where: $where) {
-      id entry_type quantity entry_date reference_id company_id material_type_id material_size_id
+    stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}]) {
+      id entry_type quantity entry_date created_at reference_id reference_number notes company_id material_type_id material_size_id
       companies { id name code }
       material_types { description unit }
       material_sizes { size_label }
