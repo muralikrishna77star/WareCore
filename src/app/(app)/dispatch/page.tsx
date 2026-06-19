@@ -47,6 +47,7 @@ export default async function DispatchPage() {
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Invoice Number</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Customer</th>
                   <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Sale Ref ID</th>
@@ -68,6 +69,7 @@ export default async function DispatchPage() {
                   return (
                     <tr key={o.id} className={`hover:bg-gray-50 ${cancelled ? 'opacity-60' : ''}`}>
                       <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-gray-700">{o.invoice_number || '—'}</td>
                       <td className="px-6 py-3">
                         <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
                           {o.companies?.code}

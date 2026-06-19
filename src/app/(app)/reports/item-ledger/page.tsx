@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   ITEM_STOCK_LEDGER_QUERY,
+  ITEM_STOCK_AT_VENDORS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
@@ -94,6 +95,7 @@ export default async function ItemStockLedgerPage({
 
   let openingBalance = 0
   let entries: LedgerEntry[] = []
+  let vendorStock: { vendor_name: string; pending_quantity: number | string; unit: string }[] = []
 
   if (selectedItem) {
     const baseConditions: Record<string, unknown>[] = [
@@ -116,6 +118,15 @@ export default async function ItemStockLedgerPage({
     })
     openingBalance = Number(result.opening_agg?.aggregate?.sum?.quantity ?? 0)
     entries = result.entries ?? []
+
+    const selectedSizeLabel = selectedSizeId
+      ? allSizes.find((s) => s.id === selectedSizeId)?.size_label ?? null
+      : null
+    const vendorWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
+    if (selectedSizeLabel) vendorWhere.size_label = { _eq: selectedSizeLabel }
+    if (params.company) vendorWhere.company_id = { _eq: params.company }
+    const vendorResult = await hasuraQuery(ITEM_STOCK_AT_VENDORS_QUERY, { where: vendorWhere })
+    vendorStock = vendorResult.v_stock_at_vendors ?? []
   }
 
   let running = openingBalance
@@ -270,7 +281,7 @@ export default async function ItemStockLedgerPage({
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <div className="rounded-xl border bg-blue-50 p-4">
               <p className="text-xs text-gray-500">Opening Balance</p>
               <p className={`text-xl font-bold ${openingBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
@@ -290,6 +301,20 @@ export default async function ItemStockLedgerPage({
               <p className={`text-xl font-bold ${closingBalance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                 {fmtQ(closingBalance)}
               </p>
+            </div>
+            <div className="rounded-xl border bg-purple-50 p-4">
+              <p className="text-xs text-gray-500">At Vendor (Job Work)</p>
+              <p className="text-xl font-bold text-purple-800">
+                {fmtQ(vendorStock.reduce((s, v) => s + Number(v.pending_quantity), 0))}
+              </p>
+              {vendorStock.length > 1 && (
+                <p className="text-[11px] text-gray-500 mt-1 leading-tight">
+                  {vendorStock.map((v) => `${v.vendor_name}: ${fmtQ(Number(v.pending_quantity))}`).join(' · ')}
+                </p>
+              )}
+              {vendorStock.length === 1 && (
+                <p className="text-[11px] text-gray-500 mt-1">{vendorStock[0].vendor_name}</p>
+              )}
             </div>
           </div>
 
