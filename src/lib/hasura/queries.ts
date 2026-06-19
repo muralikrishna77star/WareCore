@@ -1252,6 +1252,14 @@ export const STOCK_LEDGER_FILTERED_QUERY = `
   }
 `
 
+export const STOCK_LEDGER_OPENING_BALANCE_QUERY = `
+  query GetStockLedgerOpeningBalance($where: stock_ledger_bool_exp = {}) {
+    stock_ledger_aggregate(where: $where) {
+      aggregate { sum { quantity } }
+    }
+  }
+`
+
 // Resolve a vendor/status filter to the underlying purchase_bills / job_work_orders ids
 // so they can be matched against stock_ledger.reference_id.
 export const PURCHASE_BILL_IDS_QUERY = `

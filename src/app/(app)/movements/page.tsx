@@ -4,6 +4,7 @@ import { formatDate, getEntryTypeLabel, getJobWorkOrderStatusLabel } from '@/lib
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   STOCK_LEDGER_FILTERED_QUERY,
+  STOCK_LEDGER_OPENING_BALANCE_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_SUPPLIERS_QUERY,
@@ -77,6 +78,9 @@ export default async function MovementsPage({
   }>
 }) {
   const params = await searchParams
+  const today = new Date().toISOString().split('T')[0]
+  const fromDate = params.from || today
+  const toDate = params.to || today
 
   const [compResult, whResult, supResult, itemResult] = await Promise.all([
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
@@ -117,8 +121,8 @@ export default async function MovementsPage({
   if (params.company) conditions.push({ company_id: { _eq: params.company } })
   if (params.warehouse) conditions.push({ warehouse_id: { _eq: params.warehouse } })
   if (params.entry_type) conditions.push({ entry_type: { _eq: params.entry_type } })
-  if (params.from) conditions.push({ entry_date: { _gte: params.from } })
-  if (params.to) conditions.push({ entry_date: { _lte: params.to } })
+  conditions.push({ entry_date: { _gte: fromDate } })
+  conditions.push({ entry_date: { _lte: toDate } })
   if (selectedItem) {
     conditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
     if (selectedItem.material_size_id) {
@@ -165,6 +169,58 @@ export default async function MovementsPage({
     ? { stock_ledger: [] }
     : await hasuraQuery(STOCK_LEDGER_FILTERED_QUERY, { where })
   const movements: any[] = movResult.stock_ledger ?? []
+
+  // Running balance is computed per (company, warehouse, material_type, material_size)
+  // group, since stock balance only makes sense within one such combination.
+  const groupKey = (m: any) =>
+    `${m.companies?.id ?? ''}|${m.warehouses?.id ?? ''}|${m.material_type_id ?? ''}|${m.material_size_id ?? ''}`
+
+  const groupsByKey = new Map<string, { company_id: string; warehouse_id: string; material_type_id: string; material_size_id: string | null }>()
+  for (const m of movements) {
+    const key = groupKey(m)
+    if (!groupsByKey.has(key) && m.companies?.id && m.warehouses?.id && m.material_type_id) {
+      groupsByKey.set(key, {
+        company_id: m.companies.id,
+        warehouse_id: m.warehouses.id,
+        material_type_id: m.material_type_id,
+        material_size_id: m.material_size_id ?? null,
+      })
+    }
+  }
+
+  const openingByKey = new Map<string, number>()
+  await Promise.all(
+    Array.from(groupsByKey.entries()).map(async ([key, g]) => {
+      const openingWhere = {
+        company_id: { _eq: g.company_id },
+        warehouse_id: { _eq: g.warehouse_id },
+        material_type_id: { _eq: g.material_type_id },
+        material_size_id: g.material_size_id ? { _eq: g.material_size_id } : { _is_null: true },
+        entry_date: { _lt: fromDate },
+      }
+      const res = await hasuraQuery(STOCK_LEDGER_OPENING_BALANCE_QUERY, { where: openingWhere })
+      openingByKey.set(key, Number(res.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0))
+    })
+  )
+
+  const ascending = [...movements].sort((a, b) => {
+    if (a.entry_date !== b.entry_date) return a.entry_date < b.entry_date ? -1 : 1
+    const ta = new Date(a.created_at).getTime()
+    const tb = new Date(b.created_at).getTime()
+    if (ta !== tb) return ta - tb
+    // Same-instant entries (e.g. a trigger inserting a return + sale together):
+    // apply inflows before outflows so the running balance never dips through a
+    // phantom negative before the offsetting inflow lands.
+    return Number(b.quantity) - Number(a.quantity)
+  })
+  const runningByKey = new Map<string, number>(openingByKey)
+  const balanceById = new Map<string, number>()
+  for (const m of ascending) {
+    const key = groupKey(m)
+    const running = (runningByKey.get(key) ?? 0) + Number(m.quantity)
+    runningByKey.set(key, running)
+    balanceById.set(m.id, running)
+  }
 
   // Enrich purchase / job work entries with vendor name (and job work status) for display.
   const purchaseBillIds = Array.from(new Set(
@@ -292,7 +348,7 @@ export default async function MovementsPage({
             <input
               type="date"
               name="from"
-              defaultValue={params.from || ''}
+              defaultValue={fromDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             />
           </div>
@@ -301,7 +357,7 @@ export default async function MovementsPage({
             <input
               type="date"
               name="to"
-              defaultValue={params.to || ''}
+              defaultValue={toDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             />
           </div>
@@ -334,6 +390,7 @@ export default async function MovementsPage({
                   <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Item</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase text-right">Quantity</th>
+                  <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase text-right">Balance</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Vendor</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Job Work Status</th>
                   <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase">Reference</th>
@@ -361,6 +418,9 @@ export default async function MovementsPage({
                       <td className="px-4 py-2.5 text-gray-600">{m.size_label || m.material_sizes?.size_label || '—'}</td>
                       <td className={`px-4 py-2.5 text-right font-semibold ${isIn ? 'text-green-700' : 'text-red-700'}`}>
                         {isIn ? '+' : '-'}{Math.abs(m.quantity).toFixed(3)} {m.material_types?.unit}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                        {balanceById.has(m.id) ? `${balanceById.get(m.id)!.toFixed(3)} ${m.material_types?.unit ?? ''}` : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{vendor || '—'}</td>
                       <td className="px-4 py-2.5">
