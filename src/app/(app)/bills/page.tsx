@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILLS_QUERY } from '@/lib/hasura/queries'
-import BillRow from './BillRow'
+import BillsTable from './BillsTable'
 
 export default async function BillsPage({
   searchParams,
@@ -75,26 +75,7 @@ export default async function BillsPage({
               )}
             </div>
           ) : (
-            <table className="w-full text-[0.9375rem]">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Bill No.</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Supplier</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Company</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Warehouse</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase text-right">Quantity</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase text-right">Amount</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {bills.map((bill: any) => (
-                  <BillRow key={bill.id} bill={bill} highlight={lineId} />
-                ))}
-              </tbody>
-            </table>
+            <BillsTable bills={bills} highlight={lineId} />
           )}
         </div>
       </div>

@@ -1,17 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_ORDERS_QUERY, VENDOR_STOCK_QUERY } from '@/lib/hasura/queries'
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  dispatched: 'bg-blue-100 text-blue-800',
-  partial_return: 'bg-orange-100 text-orange-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
-}
+import JobWorkTable from './JobWorkTable'
 
 export default async function JobWorkPage() {
   const result = await hasuraQuery(JOB_WORK_ORDERS_QUERY)
@@ -46,62 +38,7 @@ export default async function JobWorkPage() {
               </Link>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Dispatch Date</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Items</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Expected Return</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {orders.map((o: any) => {
-                  const items = o.job_work_items ?? []
-                  const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity_sent), 0)
-                  const totalReturned = items.reduce((s: number, i: any) => s + Number(i.quantity_received || 0), 0)
-                  const isOverdue = o.expected_return_date && !o.actual_return_date && new Date(o.expected_return_date) < new Date()
-
-                  return (
-                    <tr key={o.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
-                      <td className="px-6 py-3">
-                        <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                          {o.companies?.code}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 font-medium text-gray-900">{o.suppliers?.name || '—'}</td>
-                      <td className="px-6 py-3">
-                        <p className="text-gray-700">{items.length} item{items.length !== 1 ? 's' : ''}</p>
-                        <p className="text-xs text-gray-500">{totalQty.toFixed(3)} dispatched · {totalReturned.toFixed(3)} returned</p>
-                      </td>
-                      <td className={`px-6 py-3 whitespace-nowrap ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
-                        {o.expected_return_date ? formatDate(o.expected_return_date) : '—'}
-                        {isOverdue && <span className="ml-1 text-xs">⚠ Overdue</span>}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[o.status] || 'bg-gray-100 text-gray-700'}`}>
-                          {getJobWorkOrderStatusLabel(o.status)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 space-x-3 whitespace-nowrap">
-                        <Link href={`/jobwork/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
-                          View
-                        </Link>
-                        {o.status !== 'cancelled' && o.status !== 'completed' && (
-                          <Link href={`/jobwork/${o.id}/edit`} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
-                            Edit
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <JobWorkTable orders={orders} />
           )}
         </div>
       </div>
