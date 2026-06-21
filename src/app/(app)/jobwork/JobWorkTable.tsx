@@ -37,6 +37,7 @@ const columns: Column[] = [
     filterValue: (o) => (o.expected_return_date ? formatDate(o.expected_return_date) : ''),
   },
   { key: 'status', label: 'Status', filterValue: (o) => getJobWorkOrderStatusLabel(o.status) },
+  { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '' },
 ]
 
 export default function JobWorkTable({ orders }: { orders: any[] }) {
@@ -103,6 +104,7 @@ export default function JobWorkTable({ orders }: { orders: any[] }) {
                   {getJobWorkOrderStatusLabel(o.status)}
                 </span>
               </td>
+              <td className="px-6 py-3 text-gray-600 max-w-xs truncate" title={o.notes || ''}>{o.notes || '—'}</td>
               <td className="px-6 py-3 space-x-3 whitespace-nowrap">
                 <Link href={`/jobwork/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
                   View

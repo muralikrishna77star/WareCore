@@ -20,6 +20,7 @@ const columns: Column[] = [
   { key: 'quantity', label: 'Quantity', align: 'right', filterValue: (b) => String(Number(b.total_quantity || 0)) },
   { key: 'amount', label: 'Amount', align: 'right', filterValue: (b) => String(Number(b.total_amount || 0)) },
   { key: 'status', label: 'Status', filterValue: (b) => (b.status === 'cancelled' ? 'Cancelled' : b.status === 'draft' ? 'Draft' : 'Active') },
+  { key: 'notes', label: 'Notes', filterValue: (b) => b.notes || '' },
 ]
 
 export default function BillsTable({ bills, highlight }: { bills: any[]; highlight?: string }) {

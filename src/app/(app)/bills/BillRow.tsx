@@ -58,6 +58,9 @@ export default function BillRow({ bill, highlight }: { bill: any; highlight?: st
             <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[0.6875rem] font-medium text-green-700">Active</span>
           )}
         </td>
+        <td className="px-6 py-3 text-gray-600 max-w-xs truncate" title={bill.notes || ''}>
+          {bill.notes || '—'}
+        </td>
         <td className="px-6 py-3">
           <Link
             href={`/bills/${bill.id}`}
@@ -69,7 +72,7 @@ export default function BillRow({ bill, highlight }: { bill: any; highlight?: st
       </tr>
       {expanded && items.length > 0 && (
         <tr className="bg-gray-50/60">
-          <td colSpan={9} className="px-6 py-3">
+          <td colSpan={10} className="px-6 py-3">
             <div className="pl-8 space-y-1.5">
               {items.map((item: any) => (
                 <div key={item.id} className="flex items-center gap-3 text-[0.8125rem]">
