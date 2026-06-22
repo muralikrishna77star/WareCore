@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DropdownPortal } from '@/components/DropdownPortal'
 
 export type ComboOption = {
@@ -29,6 +29,18 @@ export function ItemComboBox({
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(-1)
   const anchorRef = useRef<HTMLDivElement | null>(null)
+
+  // Re-sync when a parent component drives a new value externally (e.g. auto-selecting
+  // an item after the Size filter changes) — typing never changes defaultValue, so this
+  // doesn't interfere with normal search input.
+  const prevDefaultValue = useRef(defaultValue)
+  useEffect(() => {
+    if (defaultValue !== prevDefaultValue.current) {
+      prevDefaultValue.current = defaultValue
+      setSelectedId(defaultValue)
+      setSearch(defaultLabel)
+    }
+  }, [defaultValue, defaultLabel])
 
   const filtered = search.trim()
     ? options.filter((o) => o.search.includes(search.trim().toLowerCase()))

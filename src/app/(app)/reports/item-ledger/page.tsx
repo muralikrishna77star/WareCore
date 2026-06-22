@@ -10,7 +10,7 @@ import {
   ACTIVE_MATERIAL_SIZES_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
-import { ItemComboBox } from '@/components/ItemComboBox'
+import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -88,9 +88,6 @@ export default async function ItemStockLedgerPage({
 
   const selectedItem = params.item ? items.find((i) => i.id === params.item) ?? null : null
 
-  const sizesForItem = selectedItem
-    ? allSizes.filter((s) => !s.material_type_id || s.material_type_id === selectedItem.material_type_id)
-    : allSizes
   const selectedSizeId = params.size || selectedItem?.material_size_id || ''
 
   let openingBalance = 0
@@ -175,37 +172,19 @@ export default async function ItemStockLedgerPage({
       {/* Filters */}
       <form className="bg-white rounded-xl border p-4 print:hidden">
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="min-w-[16rem]">
-            <label className="block text-xs font-medium text-gray-500 mb-1">Item *</label>
-            <ItemComboBox
-              name="item"
-              defaultValue={params.item || ''}
-              defaultLabel={itemTitle || ''}
-              placeholder="Search item by name or code…"
-              options={items.map((i) => {
-                const size = i.material_sizes?.size_label || i.size_label
-                return {
-                  id: i.id,
-                  label: `${i.item_code} — ${i.item_name}${size ? ` (${size})` : ''}`,
-                  search: `${i.item_code} ${i.item_name} ${size ?? ''}`.toLowerCase(),
-                }
-              })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
-            <select
-              name="size"
-              defaultValue={selectedSizeId}
-              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-            >
-              <option value="">All Sizes</option>
-              {sizesForItem.map((s) => (
-                <option key={s.id} value={s.id}>{s.size_label}</option>
-              ))}
-            </select>
-          </div>
+          <ItemLedgerItemSizeFields
+            items={items.map((i) => ({
+              id: i.id,
+              item_code: i.item_code,
+              item_name: i.item_name,
+              material_type_id: i.material_type_id,
+              material_size_id: i.material_size_id,
+              size_label: i.material_sizes?.size_label || i.size_label,
+            }))}
+            allSizes={allSizes}
+            defaultItemId={params.item || ''}
+            defaultSizeId={selectedSizeId}
+          />
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
