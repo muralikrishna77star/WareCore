@@ -60,6 +60,7 @@ export function ItemLedgerItemSizeFields({
           onSelect={(option) => {
             if (!option) {
               setItemId('')
+              setSizeId('')
               return
             }
             setItemId(option.id)
