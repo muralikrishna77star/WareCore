@@ -26,6 +26,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
 
   // For Capacitor static export, uncomment when building for mobile:
   // output: 'export',

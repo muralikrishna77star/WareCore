@@ -1,7 +1,6 @@
 // Backup service — uses Hasura run_sql API (no Supabase client needed)
 
-const HASURA_BASE = (process.env.NEXT_PUBLIC_HASURA_URL || '').replace('/v1/graphql', '')
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraRunSql } from '@/lib/hasura/server'
 
 const TABLES = [
   'companies',
@@ -47,30 +46,11 @@ export interface RestoreOptions {
 }
 
 // ─── Hasura run_sql helper ─────────────────────────────────────────────────
+// Delegates to hasuraRunSql, which already branches on LOCAL_MODE — keeps
+// this file from bypassing the desktop/web transport split.
 
-async function runSQL(sql: string, readOnly = true): Promise<{ result_type: string; result: string[][] }> {
-  const res = await fetch(`${HASURA_BASE}/v2/query`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_SECRET,
-    },
-    body: JSON.stringify({
-      type: 'run_sql',
-      args: { source: 'warecore', sql, read_only: readOnly, cascade: false },
-    }),
-    cache: 'no-store',
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Hasura ${res.status}: ${text}`)
-  }
-
-  const json = await res.json()
-  if (json.error) throw new Error(json.error)
-  if (json.code) throw new Error(`${json.code}: ${json.error ?? JSON.stringify(json)}`)
-  return json
+async function runSQL(sql: string): Promise<{ result: string[][] }> {
+  return hasuraRunSql(sql)
 }
 
 /** Convert Hasura result rows (array-of-arrays with header row) to objects */
@@ -151,7 +131,7 @@ export async function saveBackupMetadata(metadata: BackupMetadata): Promise<void
       ${metadata.notes ? `'${esc(metadata.notes)}'` : 'NULL'}
     )
   `
-  await runSQL(sql, false)
+  await runSQL(sql)
 }
 
 export async function listBackups(): Promise<BackupMetadata[]> {
@@ -195,8 +175,7 @@ export async function getBackup(backupId: string): Promise<BackupMetadata | null
 
 export async function deleteBackup(backupId: string): Promise<void> {
   await runSQL(
-    `UPDATE backup_history SET deleted_at = NOW() WHERE id = '${esc(backupId)}'`,
-    false
+    `UPDATE backup_history SET deleted_at = NOW() WHERE id = '${esc(backupId)}'`
   )
 }
 
@@ -213,7 +192,7 @@ export async function restoreFromBackup(
 
     try {
       if (options.truncateFirst) {
-        await runSQL(`TRUNCATE TABLE ${table} CASCADE`, false)
+        await runSQL(`TRUNCATE TABLE ${table} CASCADE`)
       }
 
       const batchSize = 500
@@ -230,8 +209,7 @@ export async function restoreFromBackup(
           }).join(', ') + ')'
         ).join(', ')
         await runSQL(
-          `INSERT INTO ${table} (${cols}) VALUES ${vals} ON CONFLICT DO NOTHING`,
-          false
+          `INSERT INTO ${table} (${cols}) VALUES ${vals} ON CONFLICT DO NOTHING`
         )
         restoredCount += batch.length
       }

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const FIND_USER_BY_TOKEN = `
   query FindUserByToken($token: String!) {
@@ -30,18 +28,7 @@ const RESET_PASSWORD = `
   }
 `
 
-async function hasuraRequest(query: string, variables: Record<string, unknown>) {
-  const res = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_SECRET,
-    },
-    body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
-  })
-  return res.json()
-}
+const hasuraRequest = hasuraFetchEnvelope
 
 function isStrongPassword(password: string): boolean {
   return password.length >= 8

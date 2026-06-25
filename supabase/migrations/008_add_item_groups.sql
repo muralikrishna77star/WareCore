@@ -23,14 +23,18 @@ CREATE INDEX IF NOT EXISTS idx_item_master_group ON item_master(item_group_id);
 ALTER TABLE item_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item_master ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "all_read_item_groups" ON item_groups
-  FOR SELECT USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "all_read_item_groups" ON item_groups;
+CREATE POLICY "all_read_item_groups" ON item_groups
+  FOR SELECT USING (TRUE);
 
-CREATE POLICY IF NOT EXISTS "admins_manage_item_groups" ON item_groups
+DROP POLICY IF EXISTS "admins_manage_item_groups" ON item_groups;
+CREATE POLICY "admins_manage_item_groups" ON item_groups
   FOR ALL USING (get_user_role() = 'admin');
 
-CREATE POLICY IF NOT EXISTS "authenticated_read_item_master" ON item_master
-  FOR SELECT USING (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "authenticated_read_item_master" ON item_master;
+CREATE POLICY "authenticated_read_item_master" ON item_master
+  FOR SELECT USING (TRUE);
 
-CREATE POLICY IF NOT EXISTS "managers_manage_item_master" ON item_master
+DROP POLICY IF EXISTS "managers_manage_item_master" ON item_master;
+CREATE POLICY "managers_manage_item_master" ON item_master
   FOR ALL USING (get_user_role() IN ('admin', 'company_manager', 'billing_staff', 'sales_manager'));

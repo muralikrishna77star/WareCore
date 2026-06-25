@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { signSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
-
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const FIND_USER_QUERY = `
   query FindUser($email: String!) {
@@ -26,16 +24,7 @@ interface UserProfile {
 }
 
 async function findUserByEmail(email: string): Promise<UserProfile | null> {
-  const res = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_SECRET,
-    },
-    body: JSON.stringify({ query: FIND_USER_QUERY, variables: { email } }),
-    cache: 'no-store',
-  })
-  const json = await res.json()
+  const json = await hasuraFetchEnvelope(FIND_USER_QUERY, { email })
   return json?.data?.user_profiles?.[0] ?? null
 }
 

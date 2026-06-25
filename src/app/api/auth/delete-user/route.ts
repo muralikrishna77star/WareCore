@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
-
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || ''
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const DELETE_USER_MUTATION = `
   mutation DeleteUser($id: uuid!) {
@@ -33,13 +31,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 })
   }
 
-  const checkRes = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
-    body: JSON.stringify({ query: GET_USER_QUERY, variables: { id } }),
-    cache: 'no-store',
-  })
-  const checkJson = await checkRes.json()
+  const checkJson = await hasuraFetchEnvelope(GET_USER_QUERY, { id })
   const target = checkJson?.data?.user_profiles_by_pk
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
@@ -48,13 +40,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Only a Developer can delete another Developer account' }, { status: 403 })
   }
 
-  const res = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
-    body: JSON.stringify({ query: DELETE_USER_MUTATION, variables: { id } }),
-    cache: 'no-store',
-  })
-  const json = await res.json()
+  const json = await hasuraFetchEnvelope(DELETE_USER_MUTATION, { id })
   if (json.errors) {
     return NextResponse.json({ error: json.errors[0]?.message ?? 'Failed to delete user' }, { status: 500 })
   }

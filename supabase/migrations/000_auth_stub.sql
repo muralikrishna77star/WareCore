@@ -20,3 +20,15 @@ CREATE OR REPLACE FUNCTION auth.uid()
 RETURNS UUID LANGUAGE sql STABLE AS $$
   SELECT NULL::UUID
 $$;
+
+-- Same rationale — stub auth.jwt() and auth.role(), referenced directly in
+-- a handful of leftover Supabase-era RLS policies (migrations 006, 007).
+CREATE OR REPLACE FUNCTION auth.jwt()
+RETURNS JSONB LANGUAGE sql STABLE AS $$
+  SELECT NULL::JSONB
+$$;
+
+CREATE OR REPLACE FUNCTION auth.role()
+RETURNS TEXT LANGUAGE sql STABLE AS $$
+  SELECT NULL::TEXT
+$$;

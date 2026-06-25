@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
-
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const CREATE_USER_MUTATION = `
   mutation CreateUserProfile($id: uuid!, $email: String!, $password_hash: String!, $full_name: String!, $role: String!, $company_id: uuid, $warehouse_id: uuid) {
@@ -49,13 +47,7 @@ export async function POST(request: NextRequest) {
   const normalizedEmail = email.toLowerCase().trim()
 
   // Check for duplicate email
-  const checkRes = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
-    body: JSON.stringify({ query: CHECK_EMAIL_QUERY, variables: { email: normalizedEmail } }),
-    cache: 'no-store',
-  })
-  const checkJson = await checkRes.json()
+  const checkJson = await hasuraFetchEnvelope(CHECK_EMAIL_QUERY, { email: normalizedEmail })
   if (checkJson?.data?.user_profiles?.length > 0) {
     return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 })
   }
@@ -63,25 +55,15 @@ export async function POST(request: NextRequest) {
   const password_hash = google_only ? '' : await bcrypt.hash(password!, 12)
   const id = crypto.randomUUID()
 
-  const res = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
-    body: JSON.stringify({
-      query: CREATE_USER_MUTATION,
-      variables: {
-        id,
-        email: normalizedEmail,
-        password_hash,
-        full_name,
-        role,
-        company_id: company_id || null,
-        warehouse_id: warehouse_id || null,
-      },
-    }),
-    cache: 'no-store',
+  const json = await hasuraFetchEnvelope(CREATE_USER_MUTATION, {
+    id,
+    email: normalizedEmail,
+    password_hash,
+    full_name,
+    role,
+    company_id: company_id || null,
+    warehouse_id: warehouse_id || null,
   })
-
-  const json = await res.json()
   if (json.errors) {
     return NextResponse.json({ error: json.errors[0]?.message ?? 'Failed to create user' }, { status: 500 })
   }

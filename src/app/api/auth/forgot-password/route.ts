@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import nodemailer from 'nodemailer'
-import { getAppUrl, HASURA_URL, HASURA_ADMIN_SECRET } from '@/lib/env'
+import { getAppUrl } from '@/lib/env'
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const APP_URL = getAppUrl()
-const HASURA_SECRET = HASURA_ADMIN_SECRET
 
 const TOKEN_EXPIRY_HOURS = 1
 
@@ -29,18 +29,7 @@ const SET_RESET_TOKEN = `
   }
 `
 
-async function hasuraRequest(query: string, variables: Record<string, unknown>) {
-  const res = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_SECRET,
-    },
-    body: JSON.stringify({ query, variables }),
-    cache: 'no-store',
-  })
-  return res.json()
-}
+const hasuraRequest = hasuraFetchEnvelope
 
 async function sendResetEmail(to: string, name: string, resetUrl: string): Promise<boolean> {
   const host = process.env.SMTP_HOST

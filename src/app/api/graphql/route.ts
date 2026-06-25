@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
-
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 type RoleSet = ReadonlySet<string>
 
@@ -107,16 +105,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const res = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_SECRET,
-    },
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  })
-
-  const data = await res.json()
-  return NextResponse.json(data, { status: res.status })
+  const data = await hasuraFetchEnvelope(body.query, body.variables)
+  return NextResponse.json(data, { status: data.errors ? 500 : 200 })
 }

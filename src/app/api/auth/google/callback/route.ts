@@ -5,14 +5,11 @@ import {
   getGoogleRedirectUri,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
-  HASURA_URL,
-  HASURA_ADMIN_SECRET,
 } from '@/lib/env'
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const CLIENT_ID = GOOGLE_CLIENT_ID
 const CLIENT_SECRET = GOOGLE_CLIENT_SECRET
-const HASURA_ADMIN_SECRET_VALUE = HASURA_ADMIN_SECRET
-const HASURA_GRAPHQL_URL = HASURA_URL
 
 const FIND_USER_BY_EMAIL = `
   query FindUserByEmail($email: String!) {
@@ -77,16 +74,7 @@ async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo | 
 }
 
 async function findUserByEmail(email: string) {
-  const res = await fetch(HASURA_GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hasura-admin-secret': HASURA_ADMIN_SECRET_VALUE,
-    },
-    body: JSON.stringify({ query: FIND_USER_BY_EMAIL, variables: { email } }),
-    cache: 'no-store',
-  })
-  const json = await res.json()
+  const json = await hasuraFetchEnvelope(FIND_USER_BY_EMAIL, { email })
   return json?.data?.user_profiles?.[0] ?? null
 }
 

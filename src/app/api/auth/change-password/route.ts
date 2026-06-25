@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { verifySessionCookie } from '@/lib/auth/session'
-
-const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
-const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || ''
+import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const GET_USER_HASH_QUERY = `
   query GetUserHash($id: uuid!) {
@@ -46,13 +44,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Fetch current hash
-  const getRes = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
-    body: JSON.stringify({ query: GET_USER_HASH_QUERY, variables: { id: session.userId } }),
-    cache: 'no-store',
-  })
-  const getJson = await getRes.json()
+  const getJson = await hasuraFetchEnvelope(GET_USER_HASH_QUERY, { id: session.userId })
   const user = getJson?.data?.user_profiles_by_pk
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -70,13 +62,7 @@ export async function POST(request: NextRequest) {
 
   const new_hash = await bcrypt.hash(new_password, 12)
 
-  const updateRes = await fetch(HASURA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': HASURA_SECRET },
-    body: JSON.stringify({ query: UPDATE_PASSWORD_MUTATION, variables: { id: session.userId, password_hash: new_hash } }),
-    cache: 'no-store',
-  })
-  const updateJson = await updateRes.json()
+  const updateJson = await hasuraFetchEnvelope(UPDATE_PASSWORD_MUTATION, { id: session.userId, password_hash: new_hash })
   if (updateJson.errors) {
     return NextResponse.json({ error: updateJson.errors[0]?.message ?? 'Failed to update password' }, { status: 500 })
   }
