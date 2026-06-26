@@ -19,6 +19,19 @@ export function DesktopTitleBar() {
       .catch(() => {})
   }, [])
 
+  // The bar is `fixed`, not part of normal document flow, so reserve its
+  // height with body padding instead — relying on flex containers further
+  // down the tree (the (app) layout's sidebar/header) to "push down"
+  // correctly is fragile across nested layouts; an explicit body padding
+  // is correct regardless of what any descendant does with its own height.
+  useEffect(() => {
+    if (!isDesktop) return
+    document.body.style.paddingTop = '2.5rem'
+    return () => {
+      document.body.style.paddingTop = ''
+    }
+  }, [isDesktop])
+
   if (!isDesktop) return null
 
   const handleClose = async () => {
@@ -33,7 +46,7 @@ export function DesktopTitleBar() {
   }
 
   return (
-    <div className="sticky top-0 z-[100] flex h-10 items-center justify-between border-b-2 border-cyan-300 bg-gradient-to-r from-indigo-700 via-blue-600 to-cyan-600 px-3 shadow-sm select-none">
+    <div className="fixed inset-x-0 top-0 z-[100] flex h-10 items-center justify-between border-b-2 border-cyan-300 bg-gradient-to-r from-indigo-700 via-blue-600 to-cyan-600 px-3 shadow-sm select-none">
       <div className="flex items-center gap-2">
         <span className="flex h-5 w-5 items-center justify-center rounded bg-white/15 text-xs font-bold text-white">W</span>
         <span className="text-sm font-semibold text-white">WareCore</span>

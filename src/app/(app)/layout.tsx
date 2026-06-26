@@ -89,6 +89,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const [isDesktop, setIsDesktop] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
 
@@ -112,8 +113,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     loadSession()
   }, [])
 
+  useEffect(() => {
+    fetch('/api/desktop/status')
+      .then((res) => res.json())
+      .then((data) => setIsDesktop(!!data.isDesktop))
+      .catch(() => {})
+  }, [])
+
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden bg-gray-100">
+    // DesktopTitleBar (src/components/DesktopTitleBar.tsx) is `fixed` and
+    // reserves its own 2.5rem via body padding-top — subtract that here too,
+    // so this shell's "fill the viewport, scroll only inside <main>" sizing
+    // doesn't overflow the window by the title bar's height on desktop.
+    <div className={cn('flex overflow-hidden bg-gray-100', isDesktop ? 'h-[calc(100vh-2.5rem)]' : 'h-screen')}>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -126,7 +138,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          isDesktop && 'border-r-2 border-cyan-600/40'
         )}
       >
         {/* Logo */}
@@ -182,7 +195,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top header */}
-        <header className="flex h-16 items-center justify-between bg-white px-6 shadow-sm border-b">
+        <header className={cn('flex h-16 items-center justify-between bg-white px-6 shadow-sm border-b', isDesktop && 'border-b-2 border-cyan-100')}>
           <button
             className="text-gray-500 hover:text-gray-700 lg:hidden"
             onClick={() => setSidebarOpen(true)}
