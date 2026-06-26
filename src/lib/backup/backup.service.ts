@@ -201,7 +201,11 @@ export async function restoreFromBackup(
         const cols = Object.keys(batch[0]).map(c => `"${c}"`).join(', ')
         const vals = batch.map(row =>
           '(' + Object.values(row).map(v => {
-            if (v === null || v === undefined) return 'NULL'
+            // Hasura's run_sql endpoint (used for backups taken from the
+            // online/web deployment) returns SQL NULL as the literal string
+            // "NULL", not JSON null — the local desktop executor returns a
+            // real null for the same case. Treat both the same on restore.
+            if (v === null || v === undefined || v === 'NULL') return 'NULL'
             if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
             if (typeof v === 'number') return v
             if (Array.isArray(v)) return `ARRAY[${v.map(x => `'${esc(String(x))}'`).join(', ')}]`
