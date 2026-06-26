@@ -44,3 +44,8 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# desktop build — embedded Postgres data + standalone build artifacts
+/warecore-data/
+/WC-Installer/dist/
+/WC-Installer/node-runtime/

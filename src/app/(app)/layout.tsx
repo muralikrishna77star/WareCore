@@ -113,7 +113,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100">
+    <div className="flex flex-1 min-h-0 overflow-hidden bg-gray-100">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
