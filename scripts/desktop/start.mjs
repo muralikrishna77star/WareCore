@@ -16,6 +16,7 @@ import { spawn, execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import EmbeddedPostgres from 'embedded-postgres'
 import { runPendingMigrations } from './migrate.mjs'
+import { ensureDefaultUser } from './seed-default-user.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const appDir = join(__dirname, '..', '..')
@@ -199,6 +200,8 @@ async function main() {
       migrationsDir,
     })
     console.log(`Migrations: ${appliedCount} applied, ${alreadyAppliedCount} already up to date (${totalFiles} total).`)
+
+    await ensureDefaultUser({ connectionString })
   } catch (err) {
     await pg.stop().catch(() => {})
     throw err

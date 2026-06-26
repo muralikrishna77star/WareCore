@@ -50,6 +50,7 @@ copy(join(appDir, 'node_modules', 'pg-pool'), 'node_modules/pg-pool')
 copy(join(appDir, 'node_modules', 'pg-protocol'), 'node_modules/pg-protocol')
 copy(join(appDir, 'node_modules', 'pg-types'), 'node_modules/pg-types')
 copy(join(appDir, 'node_modules', 'pgpass'), 'node_modules/pgpass')
+copy(join(appDir, 'node_modules', 'bcryptjs'), 'node_modules/bcryptjs')
 
 // Launches via the signed node-runtime\node.exe directly — no new unsigned
 // executable is ever created or run, so this isn't blocked by endpoint

@@ -3,6 +3,15 @@ import { randomBytes } from 'crypto'
 import { getAppUrl, getGoogleRedirectUri, GOOGLE_CLIENT_ID } from '@/lib/env'
 
 export async function GET(request: NextRequest) {
+  // Never leave the local desktop app — getAppUrl()/getGoogleRedirectUri()
+  // fall back to the build-time NEXT_PUBLIC_APP_URL (the production
+  // deployment's URL), which would otherwise send the OAuth round-trip
+  // through the live site instead of staying on localhost. Bail out using
+  // the actual request origin before any of that runs.
+  if (process.env.LOCAL_MODE === 'true') {
+    return NextResponse.redirect(`${request.nextUrl.origin}/login?error=google_unavailable_offline`)
+  }
+
   const appUrl = getAppUrl(request)
   const redirectUri = getGoogleRedirectUri(request)
   if (!GOOGLE_CLIENT_ID) {

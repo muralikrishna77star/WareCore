@@ -83,6 +83,10 @@ function redirectWithError(error: string, request?: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  if (process.env.LOCAL_MODE === 'true') {
+    return NextResponse.redirect(`${request.nextUrl.origin}/login?error=google_unavailable_offline`)
+  }
+
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const state = searchParams.get('state')

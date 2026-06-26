@@ -9,6 +9,7 @@ const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
   not_registered: 'Your Google account is not registered in WareCore. Contact your administrator.',
   unverified_email: 'Your Google email address is not verified.',
   google_not_configured: 'Google sign-in is not configured yet.',
+  google_unavailable_offline: 'Google sign-in is not available in the offline desktop app.',
   token_failed: 'Google sign-in failed. Please try again.',
   invalid_state: 'Authentication error. Please try again.',
 }
@@ -20,6 +21,14 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/desktop/status')
+      .then((res) => res.json())
+      .then((data) => setIsDesktop(!!data.isDesktop))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const errorParam = searchParams.get('error')
@@ -131,7 +140,7 @@ function LoginForm() {
             </div>
           </form>
 
-          {process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true' && (
+          {process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true' && !isDesktop && (
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
