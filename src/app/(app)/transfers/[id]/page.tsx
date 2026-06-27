@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { TRANSFER_BY_ID_QUERY, TRANSFER_ITEMS_QUERY } from '@/lib/hasura/queries'
 import TransferDetailClient from './TransferDetailClient'
@@ -53,7 +53,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(transfer.created_at)}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(transfer.created_at)}</p>
           </div>
         </div>
         {transfer.notes && (

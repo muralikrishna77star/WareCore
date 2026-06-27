@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
 import CancelDispatchButton from './CancelDispatchButton'
@@ -124,7 +124,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
           )}
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created On</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(order.created_at)}</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(order.created_at)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>

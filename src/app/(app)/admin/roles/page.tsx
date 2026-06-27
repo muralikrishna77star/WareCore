@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { CUSTOM_ROLES_QUERY } from '@/lib/hasura/queries'
+import { formatDateTime } from '@/lib/utils'
 
 export default async function RolesPage() {
   let roles: any[] = []
@@ -66,7 +67,7 @@ export default async function RolesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">
-                    {role.created_at ? new Date(role.created_at).toLocaleDateString('en-IN') : '—'}
+                    {role.created_at ? formatDateTime(role.created_at) : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link

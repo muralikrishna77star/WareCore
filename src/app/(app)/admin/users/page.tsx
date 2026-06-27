@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { formatDateTime } from '@/lib/utils'
 
 const USERS_QUERY = `
   query GetAdminUserProfiles {
@@ -165,7 +166,7 @@ export default function AdminUsersPage() {
                     : <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500"><span className="h-1.5 w-1.5 rounded-full bg-gray-400 inline-block"/>Inactive</span>}
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">
-                  {user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                  {user.created_at ? formatDateTime(user.created_at) : '—'}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <button

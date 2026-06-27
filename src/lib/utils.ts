@@ -13,6 +13,17 @@ export function formatDate(date: string | Date) {
   }).format(new Date(date))
 }
 
+export function formatDateTime(date: string | Date) {
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(date))
+}
+
 export function formatNumber(num: number, decimals = 3) {
   return new Intl.NumberFormat('en-IN', {
     minimumFractionDigits: 0,

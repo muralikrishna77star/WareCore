@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
 import CancelBillButton from './CancelBillButton'
@@ -134,7 +134,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Created On</p>
-            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{formatDate(bill.created_at)}</p>
+            <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{formatDateTime(bill.created_at)}</p>
           </div>
           <div>
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Created By</p>
