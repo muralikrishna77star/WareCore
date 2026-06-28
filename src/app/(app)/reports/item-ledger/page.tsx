@@ -30,6 +30,20 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   ADJUSTMENT_OUT: { label: 'Adjustment Out', color: 'bg-gray-100 text-gray-800' },
 }
 
+// stock_ledger.reference_type → the view page for that reference_id.
+const referenceTypeRoute: Record<string, string> = {
+  purchase_bill: '/bills',
+  dispatch: '/dispatch',
+  job_work: '/jobwork',
+  transfer: '/transfers',
+}
+
+function referenceHref(referenceType?: string | null, referenceId?: string | null): string | null {
+  if (!referenceType || !referenceId) return null
+  const base = referenceTypeRoute[referenceType]
+  return base ? `${base}/${referenceId}` : null
+}
+
 type ItemMaster = {
   id: string
   item_code: string
@@ -49,6 +63,7 @@ type LedgerEntry = {
   entry_date: string
   reference_number?: string | null
   reference_type?: string | null
+  reference_id?: string | null
   purchase_line_id?: string | null
   sub_purchase_line_id?: string | null
   size_label?: string | null
@@ -336,6 +351,7 @@ export default async function ItemStockLedgerPage({
                     const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
                     const qty = Number(row.quantity)
                     const lineId = row.sub_purchase_line_id || row.purchase_line_id
+                    const refHref = referenceHref(row.reference_type, row.reference_id)
                     return (
                       <tr key={row.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.entry_date)}</td>
@@ -345,7 +361,13 @@ export default async function ItemStockLedgerPage({
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                          {row.reference_number || '—'}
+                          {refHref ? (
+                            <Link href={refHref} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                              {row.reference_number || '—'}
+                            </Link>
+                          ) : (
+                            row.reference_number || '—'
+                          )}
                           {lineId && (
                             <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                               {lineId}

@@ -1545,7 +1545,7 @@ export const ITEM_STOCK_LEDGER_QUERY = `
       aggregate { sum { quantity } }
     }
     entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
-      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
+      id entry_type quantity entry_date reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label notes
       companies { name code }
       warehouses { name }
       material_types { description unit }
