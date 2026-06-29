@@ -37,7 +37,7 @@ export default function BillRow({ bill, highlight }: { bill: any; highlight?: st
         </td>
         <td className="px-6 py-3">
           <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-[0.6875rem] font-medium text-blue-700">
-            {bill.companies?.code}
+            {bill.companies?.name}
           </span>
         </td>
         <td className="px-6 py-3 text-gray-600">
