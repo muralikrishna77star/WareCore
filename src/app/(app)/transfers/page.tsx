@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { TRANSFERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { TRANSFERS_QUERY, TRANSFERS_MAX_CREATED_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
 import { ListingFilters } from '@/components/ListingFilters'
 import { ListingSummary } from '@/components/ListingSummary'
 import { ReferenceLink } from '@/components/ReferenceLink'
@@ -22,14 +23,15 @@ export default async function TransfersPage({
 }) {
   const params = await searchParams
 
-  const today = new Date()
-  const fifteenDaysAgo = new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000)
-  const fromDate = params.from || fifteenDaysAgo.toISOString().split('T')[0]
-  const toDate = params.to || today.toISOString().split('T')[0]
+  const maxCreatedResult = await hasuraQuery(TRANSFERS_MAX_CREATED_QUERY)
+  const maxCreatedAt = maxCreatedResult.transfers_aggregate?.aggregate?.max?.created_at
+  const defaults = defaultCreatedRange(maxCreatedAt)
+  const fromDate = params.from || defaults.from
+  const toDate = params.to || defaults.to
 
   const conditions: Record<string, unknown>[] = [
-    { transfer_date: { _gte: fromDate } },
-    { transfer_date: { _lte: toDate } },
+    { created_at: { _gte: fromDate } },
+    { created_at: { _lt: nextDay(toDate) } },
   ]
   if (params.item) conditions.push({ transfer_items: { item_master_id: { _eq: params.item } } })
 

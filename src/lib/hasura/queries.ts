@@ -496,6 +496,12 @@ export const ITEM_MASTERS_QUERY = `
 
 // ─── Purchase Bills ──────────────────────────────────────────────────────────
 
+export const PURCHASE_BILLS_MAX_CREATED_QUERY = `
+  query GetPurchaseBillsMaxCreated {
+    purchase_bills_aggregate { aggregate { max { created_at } } }
+  }
+`
+
 export const PURCHASE_BILLS_QUERY = `
   query GetPurchaseBills($where: purchase_bills_bool_exp = {}) {
     purchase_bills(where: $where, order_by: {bill_date: desc}, limit: 500) {
@@ -634,6 +640,12 @@ export const CREATE_MATERIAL_SIZE_MUTATION = `
 
 // ─── Transfers ───────────────────────────────────────────────────────────────
 
+export const TRANSFERS_MAX_CREATED_QUERY = `
+  query GetTransfersMaxCreated {
+    transfers_aggregate { aggregate { max { created_at } } }
+  }
+`
+
 export const TRANSFERS_QUERY = `
   query GetTransfers($where: transfers_bool_exp = {}) {
     transfers(where: $where, order_by: {transfer_date: desc}, limit: 500) {
@@ -703,6 +715,12 @@ export const UPDATE_TRANSFER_STATUS_MUTATION = `
 `
 
 // ─── Dispatch Orders ─────────────────────────────────────────────────────────
+
+export const DISPATCH_ORDERS_MAX_CREATED_QUERY = `
+  query GetDispatchOrdersMaxCreated {
+    dispatch_orders_aggregate { aggregate { max { created_at } } }
+  }
+`
 
 export const DISPATCH_ORDERS_QUERY = `
   query GetDispatchOrders($where: dispatch_orders_bool_exp = {}) {
@@ -1043,6 +1061,12 @@ export const CUSTOMERS_LIST_QUERY = `
 `
 
 // ─── Job Work Orders ─────────────────────────────────────────────────────────
+
+export const JOB_WORK_ORDERS_MAX_CREATED_QUERY = `
+  query GetJobWorkOrdersMaxCreated {
+    job_work_orders_aggregate { aggregate { max { created_at } } }
+  }
+`
 
 export const JOB_WORK_ORDERS_QUERY = `
   query GetJobWorkOrders($where: job_work_orders_bool_exp = {}) {

@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { JOB_WORK_ORDERS_QUERY, VENDOR_STOCK_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { JOB_WORK_ORDERS_QUERY, JOB_WORK_ORDERS_MAX_CREATED_QUERY, VENDOR_STOCK_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
 import JobWorkTable from './JobWorkTable'
 import { ListingFilters } from '@/components/ListingFilters'
 import { ListingSummary } from '@/components/ListingSummary'
@@ -14,14 +15,15 @@ export default async function JobWorkPage({
 }) {
   const params = await searchParams
 
-  const today = new Date()
-  const fifteenDaysAgo = new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000)
-  const fromDate = params.from || fifteenDaysAgo.toISOString().split('T')[0]
-  const toDate = params.to || today.toISOString().split('T')[0]
+  const maxCreatedResult = await hasuraQuery(JOB_WORK_ORDERS_MAX_CREATED_QUERY)
+  const maxCreatedAt = maxCreatedResult.job_work_orders_aggregate?.aggregate?.max?.created_at
+  const defaults = defaultCreatedRange(maxCreatedAt)
+  const fromDate = params.from || defaults.from
+  const toDate = params.to || defaults.to
 
   const conditions: Record<string, unknown>[] = [
-    { dispatch_date: { _gte: fromDate } },
-    { dispatch_date: { _lte: toDate } },
+    { created_at: { _gte: fromDate } },
+    { created_at: { _lt: nextDay(toDate) } },
   ]
   if (params.vendor) conditions.push({ vendor_id: { _eq: params.vendor } })
   if (params.item) conditions.push({ job_work_items: { item_master_id: { _eq: params.item } } })

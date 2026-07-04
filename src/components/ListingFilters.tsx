@@ -69,7 +69,7 @@ export function ListingFilters({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">From Date</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Created From</label>
           <input
             type="date"
             name="from"
@@ -79,7 +79,7 @@ export function ListingFilters({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">To Date</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Created To</label>
           <input
             type="date"
             name="to"
