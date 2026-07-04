@@ -459,6 +459,33 @@ export default function NewDispatchPage() {
       return
     }
 
+    // Warn (don't block) when a line would take stock negative — nothing in
+    // the app enforces this server-side, so flag it here and let the user
+    // decide whether to proceed (e.g. stock not yet entered, or a known
+    // manual adjustment).
+    if (status === 'active') {
+      const overStockWarnings = validLines
+        .map((l) => {
+          const qty = parseFloat(l.quantity) || 0
+          const avail = l.available_quantity ? parseFloat(l.available_quantity) : null
+          const label = l.item_name || l.size_label || 'this item'
+          if (avail === null) return `${label}: no verified stock on file (dispatching ${qty.toFixed(3)})`
+          if (qty > avail) return `${label}: dispatching ${qty.toFixed(3)} but only ${avail.toFixed(3)} available`
+          return null
+        })
+        .filter((w): w is string => !!w)
+
+      if (overStockWarnings.length) {
+        const proceed = window.confirm(
+          `This will take stock negative for:\n\n${overStockWarnings.join('\n')}\n\nContinue anyway?`
+        )
+        if (!proceed) {
+          setLoading(false)
+          return
+        }
+      }
+    }
+
     if (!saleId.trim()) {
       setError('Sale ID is required.')
       setLoading(false)
