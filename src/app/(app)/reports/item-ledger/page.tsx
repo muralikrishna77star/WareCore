@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
 
-import { hasuraQuery } from '@/lib/hasura/server'
+import { cookies } from 'next/headers'
+import { verifySession } from '@/lib/auth/session'
+import { hasuraQuery, hasuraRunSql } from '@/lib/hasura/server'
 import {
   ITEM_STOCK_LEDGER_QUERY,
   ITEM_STOCK_AT_VENDORS_QUERY,
@@ -11,37 +13,42 @@ import {
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
 import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
+import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
 
-const entryTypeConfig: Record<string, { label: string; color: string }> = {
-  PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
-  VENDOR_RETURN_IN: { label: 'Vendor Return In', color: 'bg-green-100 text-green-800' },
-  SALE_OUT: { label: 'Sale / Dispatch', color: 'bg-red-100 text-red-800' },
-  SALE_CANCEL: { label: 'Sale Cancelled', color: 'bg-gray-100 text-gray-700' },
-  PURCHASE_CANCEL: { label: 'Purchase Cancelled', color: 'bg-gray-100 text-gray-700' },
-  TRANSFER_OUT: { label: 'Transfer Out', color: 'bg-orange-100 text-orange-800' },
-  TRANSFER_IN: { label: 'Transfer In', color: 'bg-blue-100 text-blue-800' },
-  JOB_WORK_OUT: { label: 'Job Work Out', color: 'bg-purple-100 text-purple-800' },
-  JOB_WORK_RETURN_IN: { label: 'Job Work Return In', color: 'bg-teal-100 text-teal-800' },
-  JOB_WORK_OUTPUT_IN: { label: 'Job Work Output In', color: 'bg-teal-100 text-teal-800' },
-  JOB_WORK_CANCEL: { label: 'Job Work Cancelled', color: 'bg-gray-100 text-gray-700' },
-  ADJUSTMENT_IN: { label: 'Adjustment In', color: 'bg-gray-100 text-gray-800' },
-  ADJUSTMENT_OUT: { label: 'Adjustment Out', color: 'bg-gray-100 text-gray-800' },
+// Direct ledger row deletion is raw data surgery — same role gate as
+// /api/stock/ledger-entries.
+const LEDGER_MANAGE_ROLES = new Set(['admin', 'developer'])
+
+// Tables that back each stock_ledger.reference_type, used to detect rows
+// whose reference (bill/dispatch/job work/transfer) no longer exists.
+const REFERENCE_TABLE_BY_TYPE: Record<string, string> = {
+  purchase_bill: 'purchase_bills',
+  dispatch: 'dispatch_orders',
+  job_work: 'job_work_orders',
+  transfer: 'transfers',
 }
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// stock_ledger.reference_type → the view page for that reference_id.
-const referenceTypeRoute: Record<string, string> = {
-  purchase_bill: '/bills',
-  dispatch: '/dispatch',
-  job_work: '/jobwork',
-  transfer: '/transfers',
-}
+async function findOrphanedReferences(pairs: { type: string; id: string }[]): Promise<Set<string>> {
+  const valuesSql = pairs
+    .filter((p) => REFERENCE_TABLE_BY_TYPE[p.type] && UUID_RE.test(p.id))
+    .map((p) => `('${p.type}'::text, '${p.id}'::uuid)`)
+    .join(',')
+  if (!valuesSql) return new Set()
 
-function referenceHref(referenceType?: string | null, referenceId?: string | null): string | null {
-  if (!referenceType || !referenceId) return null
-  const base = referenceTypeRoute[referenceType]
-  return base ? `${base}/${referenceId}` : null
+  const sql = `
+    SELECT refs.reference_type, refs.reference_id::text
+    FROM (VALUES ${valuesSql}) AS refs(reference_type, reference_id)
+    WHERE
+      (refs.reference_type = 'purchase_bill' AND NOT EXISTS (SELECT 1 FROM purchase_bills b WHERE b.id = refs.reference_id))
+      OR (refs.reference_type = 'dispatch' AND NOT EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.id = refs.reference_id))
+      OR (refs.reference_type = 'job_work' AND NOT EXISTS (SELECT 1 FROM job_work_orders j WHERE j.id = refs.reference_id))
+      OR (refs.reference_type = 'transfer' AND NOT EXISTS (SELECT 1 FROM transfers t WHERE t.id = refs.reference_id))
+  `
+  const result = await hasuraRunSql(sql)
+  const rows = result.result?.slice(1) ?? []
+  return new Set(rows.map(([type, id]) => `${type}|${id}`))
 }
 
 type ItemMaster = {
@@ -80,6 +87,11 @@ export default async function ItemStockLedgerPage({
   searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string }>
 }) {
   const params = await searchParams
+
+  const cookieStore = await cookies()
+  const token = cookieStore.get('wc_session')?.value
+  const session = token ? verifySession(token) : null
+  const canManage = !!session && LEDGER_MANAGE_ROLES.has(session.role)
 
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -141,10 +153,35 @@ export default async function ItemStockLedgerPage({
     vendorStock = vendorResult.v_stock_at_vendors ?? []
   }
 
+  let orphanedRefs = new Set<string>()
+  if (canManage && entries.length) {
+    const pairs = entries
+      .filter((e) => e.reference_type && e.reference_id)
+      .map((e) => ({ type: e.reference_type as string, id: e.reference_id as string }))
+    orphanedRefs = await findOrphanedReferences(pairs)
+  }
+
+  // Rows sharing the same reference + line ID are flagged for review — usually
+  // leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs from repeated edits.
+  const dupKeyCounts = new Map<string, number>()
+  for (const e of entries) {
+    const lineId = e.sub_purchase_line_id || e.purchase_line_id
+    if (!e.reference_id || !lineId) continue
+    const key = `${e.reference_id}|${lineId}`
+    dupKeyCounts.set(key, (dupKeyCounts.get(key) ?? 0) + 1)
+  }
+
   let running = openingBalance
   const ledgerRows = entries.map((e) => {
     running += Number(e.quantity)
-    return { ...e, balance: running }
+    const lineId = e.sub_purchase_line_id || e.purchase_line_id
+    const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}` : null
+    return {
+      ...e,
+      balance: running,
+      orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
+      duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
+    }
   })
   const closingBalance = running
 
@@ -322,6 +359,7 @@ export default async function ItemStockLedgerPage({
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
+                    {canManage && <th className="px-2 py-3" />}
                     <th className="px-4 py-3 text-left">Date</th>
                     <th className="px-4 py-3 text-left">Type</th>
                     <th className="px-4 py-3 text-left">Reference</th>
@@ -335,60 +373,24 @@ export default async function ItemStockLedgerPage({
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   <tr className="bg-blue-50/50 font-medium">
-                    <td className="px-4 py-3 text-gray-600" colSpan={7}>Opening Balance as of {fromDate}</td>
+                    <td className="px-4 py-3 text-gray-600" colSpan={canManage ? 8 : 7}>Opening Balance as of {fromDate}</td>
                     <td className={`px-4 py-3 text-right font-bold ${openingBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
                       {fmtQ(openingBalance)}
                     </td>
                     <td />
                   </tr>
-                  {ledgerRows.length === 0 ? (
+                  {ledgerRows.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={canManage ? 10 : 9} className="px-4 py-8 text-center text-gray-400">
                         No movements for this item in the selected period.
                       </td>
                     </tr>
-                  ) : ledgerRows.map((row) => {
-                    const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
-                    const qty = Number(row.quantity)
-                    const lineId = row.sub_purchase_line_id || row.purchase_line_id
-                    const refHref = referenceHref(row.reference_type, row.reference_id)
-                    return (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.entry_date)}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cfg.color}`}>
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                          {refHref ? (
-                            <Link href={refHref} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                              {row.reference_number || '—'}
-                            </Link>
-                          ) : (
-                            row.reference_number || '—'
-                          )}
-                          {lineId && (
-                            <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {lineId}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">{row.companies?.name || '—'}</td>
-                        <td className="px-4 py-3 text-gray-500">{row.warehouses?.name || '—'}</td>
-                        <td className="px-4 py-3 text-right text-green-700 font-medium">{qty > 0 ? fmtQ(qty) : ''}</td>
-                        <td className="px-4 py-3 text-right text-red-600 font-medium">{qty < 0 ? fmtQ(Math.abs(qty)) : ''}</td>
-                        <td className={`px-4 py-3 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                          {fmtQ(row.balance)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{row.notes || '—'}</td>
-                      </tr>
-                    )
-                  })}
+                  )}
                 </tbody>
+                {ledgerRows.length > 0 && <ItemLedgerRows rows={ledgerRows} canManage={canManage} />}
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                    <td className="px-4 py-3 text-gray-700" colSpan={5}>Closing Balance as of {toDate}</td>
+                    <td className="px-4 py-3 text-gray-700" colSpan={canManage ? 6 : 5}>Closing Balance as of {toDate}</td>
                     <td className="px-4 py-3 text-right text-green-800">+{fmtQ(totalIn)}</td>
                     <td className="px-4 py-3 text-right text-red-800">-{fmtQ(totalOut)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${closingBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>
