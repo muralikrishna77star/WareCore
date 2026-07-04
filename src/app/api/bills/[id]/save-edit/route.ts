@@ -28,13 +28,10 @@ export async function POST(
   if (!bill) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
   if (bill.status !== 'active') return NextResponse.json({ error: 'Only active bills can be edited this way' }, { status: 400 })
 
-  // Reverse stock for each free item being removed/replaced (must be valid UUIDs)
+  // Delete the free items being removed/replaced (must be valid UUIDs). The
+  // tr_bill_item_deleted trigger fires PURCHASE_CANCEL for each row automatically —
+  // do not also call reverse_purchase_item() here, or the reversal is double-counted.
   const validFreeIds: string[] = (free_item_ids ?? []).filter((id: unknown) => typeof id === 'string' && UUID_RE.test(id))
-  for (const itemId of validFreeIds) {
-    await hasuraRunSql(`SELECT reverse_purchase_item('${billId}'::uuid, '${itemId}'::uuid)`)
-  }
-
-  // Delete the free items
   if (validFreeIds.length) {
     const idList = validFreeIds.map(id => `'${id}'`).join(',')
     await hasuraRunSql(`DELETE FROM purchase_bill_items WHERE id IN (${idList}) AND bill_id = '${billId}'`)
