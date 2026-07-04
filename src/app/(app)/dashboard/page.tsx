@@ -3,6 +3,9 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DASHBOARD_STATS_QUERY, RECENT_MOVEMENTS_QUERY } from '@/lib/hasura/queries'
 import { formatNumber } from '@/lib/utils'
+import { DashboardStatCard } from '@/components/DashboardStatCard'
+import { ReferenceLink } from '@/components/ReferenceLink'
+import { isReferenceType } from '@/lib/reference'
 
 async function getDashboardStats() {
   try {
@@ -36,11 +39,11 @@ export default async function DashboardPage() {
   }
 
   const statCards = [
-    { title: 'Total Stock', value: `${formatNumber(totalStock, 2)} tons`, icon: '📦', color: 'bg-blue-50 border-blue-200', textColor: 'text-blue-700' },
-    { title: 'Purchase Bills', value: totalBills.toString(), icon: '📋', color: 'bg-green-50 border-green-200', textColor: 'text-green-700' },
-    { title: 'Pending Transfers', value: pendingTransfers.toString(), icon: '↔️', color: 'bg-yellow-50 border-yellow-200', textColor: 'text-yellow-700' },
-    { title: 'Active Job Work', value: pendingJobWork.toString(), icon: '🏭', color: 'bg-purple-50 border-purple-200', textColor: 'text-purple-700' },
-    { title: 'Total Dispatches', value: totalDispatches.toString(), icon: '🚚', color: 'bg-red-50 border-red-200', textColor: 'text-red-700' },
+    { title: 'Total Stock', value: `${formatNumber(totalStock, 2)} tons`, icon: '📦', color: 'bg-blue-50 border-blue-200', textColor: 'text-blue-700', category: 'stock' },
+    { title: 'Purchase Bills', value: totalBills.toString(), icon: '📋', color: 'bg-green-50 border-green-200', textColor: 'text-green-700', category: 'purchase_bills' },
+    { title: 'Pending Transfers', value: pendingTransfers.toString(), icon: '↔️', color: 'bg-yellow-50 border-yellow-200', textColor: 'text-yellow-700', category: 'transfers_pending' },
+    { title: 'Active Job Work', value: pendingJobWork.toString(), icon: '🏭', color: 'bg-purple-50 border-purple-200', textColor: 'text-purple-700', category: 'job_work_active' },
+    { title: 'Total Dispatches', value: totalDispatches.toString(), icon: '🚚', color: 'bg-red-50 border-red-200', textColor: 'text-red-700', category: 'dispatches' },
   ]
 
   return (
@@ -53,13 +56,15 @@ export default async function DashboardPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {statCards.map((card) => (
-          <div key={card.title} className={`rounded-xl border p-5 ${card.color}`}>
-            <div className="flex items-center justify-between">
-              <span className="text-2xl">{card.icon}</span>
-            </div>
-            <p className={`mt-3 text-2xl font-bold ${card.textColor}`}>{card.value}</p>
-            <p className="mt-1 text-sm text-gray-600">{card.title}</p>
-          </div>
+          <DashboardStatCard
+            key={card.title}
+            category={card.category}
+            icon={card.icon}
+            value={card.value}
+            title={card.title}
+            color={card.color}
+            textColor={card.textColor}
+          />
         ))}
       </div>
 
@@ -194,7 +199,15 @@ async function RecentMovements() {
                   </td>
                   <td className="px-6 py-3 text-gray-700">{entry.companies?.name}</td>
                   <td className="px-6 py-3 text-gray-600">{entry.warehouses?.name}</td>
-                  <td className="px-6 py-3 text-gray-500 font-mono text-xs">{entry.reference_number || '-'}</td>
+                  <td className="px-6 py-3 text-gray-500 font-mono text-xs">
+                    {isReferenceType(entry.reference_type) && entry.reference_id ? (
+                      <ReferenceLink type={entry.reference_type} id={entry.reference_id} className="text-blue-600 hover:underline font-mono text-xs">
+                        {entry.reference_number || '-'}
+                      </ReferenceLink>
+                    ) : (
+                      entry.reference_number || '-'
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

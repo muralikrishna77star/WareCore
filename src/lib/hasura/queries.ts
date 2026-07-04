@@ -498,7 +498,7 @@ export const ITEM_MASTERS_QUERY = `
 
 export const PURCHASE_BILLS_QUERY = `
   query GetPurchaseBills($where: purchase_bills_bool_exp = {}) {
-    purchase_bills(where: $where, order_by: {bill_date: desc}, limit: 50) {
+    purchase_bills(where: $where, order_by: {bill_date: desc}, limit: 500) {
       id bill_number bill_date total_quantity total_amount notes created_at status
       companies { id name code }
       warehouses { id name }
@@ -635,8 +635,8 @@ export const CREATE_MATERIAL_SIZE_MUTATION = `
 // ─── Transfers ───────────────────────────────────────────────────────────────
 
 export const TRANSFERS_QUERY = `
-  query GetTransfers {
-    transfers(order_by: {transfer_date: desc}, limit: 50) {
+  query GetTransfers($where: transfers_bool_exp = {}) {
+    transfers(where: $where, order_by: {transfer_date: desc}, limit: 500) {
       id transfer_date status notes created_at
       from_company: companies_from { name code }
       to_company: companies_to { name code }
@@ -705,8 +705,8 @@ export const UPDATE_TRANSFER_STATUS_MUTATION = `
 // ─── Dispatch Orders ─────────────────────────────────────────────────────────
 
 export const DISPATCH_ORDERS_QUERY = `
-  query GetDispatchOrders {
-    dispatch_orders(order_by: {dispatch_date: desc}, limit: 50) {
+  query GetDispatchOrders($where: dispatch_orders_bool_exp = {}) {
+    dispatch_orders(where: $where, order_by: {dispatch_date: desc}, limit: 500) {
       id dispatch_date vehicle_number driver_name notes created_at status sale_ref_id
       is_vendor_direct source_job_work_order_id
       companies { name code }
@@ -1045,8 +1045,8 @@ export const CUSTOMERS_LIST_QUERY = `
 // ─── Job Work Orders ─────────────────────────────────────────────────────────
 
 export const JOB_WORK_ORDERS_QUERY = `
-  query GetJobWorkOrders {
-    job_work_orders(order_by: {dispatch_date: desc}, limit: 50) {
+  query GetJobWorkOrders($where: job_work_orders_bool_exp = {}) {
+    job_work_orders(where: $where, order_by: {dispatch_date: desc}, limit: 500) {
       id reference_number dispatch_date expected_return_date actual_return_date status notes created_at
       companies { name code }
       suppliers { name }
@@ -1332,7 +1332,7 @@ export const DISPATCH_ORDERS_VENDOR_INFO_QUERY = `
 export const RECENT_MOVEMENTS_QUERY = `
   query GetRecentMovements {
     stock_ledger(order_by: {created_at: desc}, limit: 10) {
-      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label
+      id entry_type quantity entry_date reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label
       companies { name }
       warehouses { name }
       material_types { description unit }

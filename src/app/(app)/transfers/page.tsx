@@ -3,7 +3,10 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { TRANSFERS_QUERY } from '@/lib/hasura/queries'
+import { TRANSFERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { ListingFilters } from '@/components/ListingFilters'
+import { ListingSummary } from '@/components/ListingSummary'
+import { ReferenceLink } from '@/components/ReferenceLink'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -12,9 +15,35 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-800',
 }
 
-export default async function TransfersPage() {
-  const result = await hasuraQuery(TRANSFERS_QUERY)
+export default async function TransfersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; item?: string }>
+}) {
+  const params = await searchParams
+
+  const today = new Date()
+  const fifteenDaysAgo = new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000)
+  const fromDate = params.from || fifteenDaysAgo.toISOString().split('T')[0]
+  const toDate = params.to || today.toISOString().split('T')[0]
+
+  const conditions: Record<string, unknown>[] = [
+    { transfer_date: { _gte: fromDate } },
+    { transfer_date: { _lte: toDate } },
+  ]
+  if (params.item) conditions.push({ transfer_items: { item_master_id: { _eq: params.item } } })
+
+  const [result, itemsResult] = await Promise.all([
+    hasuraQuery(TRANSFERS_QUERY, { where: { _and: conditions } }),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
+  ])
   const transfers = result.transfers ?? []
+  const itemOptions: { id: string; item_code: string; item_name: string }[] = itemsResult.item_master ?? []
+
+  const totalQuantity = transfers.reduce(
+    (s: number, t: any) => s + (t.transfer_items ?? []).reduce((s2: number, i: any) => s2 + Number(i.quantity || 0), 0),
+    0
+  )
 
   return (
     <div className="space-y-6">
@@ -31,15 +60,22 @@ export default async function TransfersPage() {
         </Link>
       </div>
 
+      <ListingSummary count={transfers.length} countLabel="transfer" totalQuantity={totalQuantity} />
+
+      <ListingFilters
+        basePath="/transfers"
+        fromDate={fromDate}
+        toDate={toDate}
+        itemValue={params.item || ''}
+        itemOptions={itemOptions}
+      />
+
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
           {!transfers || transfers.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-400 text-4xl mb-3">↔️</p>
-              <p className="text-gray-500">No transfers yet.</p>
-              <Link href="/transfers/new" className="mt-4 inline-block text-blue-600 hover:underline text-sm">
-                Create first transfer →
-              </Link>
+              <p className="text-gray-500">No transfers in the selected range.</p>
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -79,9 +115,9 @@ export default async function TransfersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-3">
-                        <Link href={`/transfers/${t.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                        <ReferenceLink type="transfer" id={t.id}>
                           View
-                        </Link>
+                        </ReferenceLink>
                       </td>
                     </tr>
                   )

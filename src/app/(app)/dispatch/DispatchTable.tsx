@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { ReferenceLink } from '@/components/ReferenceLink'
 
 type Column = {
   key: string
@@ -128,9 +129,9 @@ export default function DispatchTable({ orders }: { orders: any[] }) {
               </td>
               <td className="px-6 py-3 text-gray-600 max-w-xs truncate" title={o.notes || ''}>{o.notes || '—'}</td>
               <td className="px-6 py-3 flex gap-2">
-                <Link href={`/dispatch/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                <ReferenceLink type="dispatch" id={o.id}>
                   View
-                </Link>
+                </ReferenceLink>
                 {(o.status === 'draft' || o.status === 'active') && (
                   <Link href={`/dispatch/${o.id}/edit`} className="text-yellow-600 hover:text-yellow-800 text-xs font-medium">
                     Edit

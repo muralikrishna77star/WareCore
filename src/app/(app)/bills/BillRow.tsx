@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { ReferenceLink } from '@/components/ReferenceLink'
 
 export default function BillRow({ bill, highlight }: { bill: any; highlight?: string }) {
   const items = bill.purchase_bill_items ?? []
@@ -62,12 +62,9 @@ export default function BillRow({ bill, highlight }: { bill: any; highlight?: st
           {bill.notes || '—'}
         </td>
         <td className="px-6 py-3">
-          <Link
-            href={`/bills/${bill.id}`}
-            className="text-blue-600 hover:text-blue-800 text-[0.6875rem] font-medium"
-          >
+          <ReferenceLink type="purchase_bill" id={bill.id} className="text-blue-600 hover:text-blue-800 text-[0.6875rem] font-medium">
             View
-          </Link>
+          </ReferenceLink>
         </td>
       </tr>
       {expanded && items.length > 0 && (

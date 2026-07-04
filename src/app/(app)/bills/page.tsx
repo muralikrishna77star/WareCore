@@ -2,23 +2,43 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { PURCHASE_BILLS_QUERY } from '@/lib/hasura/queries'
+import { PURCHASE_BILLS_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import BillsTable from './BillsTable'
+import { ListingFilters } from '@/components/ListingFilters'
+import { ListingSummary } from '@/components/ListingSummary'
 
 export default async function BillsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ line_id?: string }>
+  searchParams: Promise<{ line_id?: string; from?: string; to?: string; supplier?: string; item?: string }>
 }) {
   const params = await searchParams
   const lineId = params.line_id?.trim() || ''
 
-  const where = lineId
-    ? { purchase_bill_items: { purchase_line_id: { _ilike: `%${lineId}%` } } }
-    : {}
+  const today = new Date()
+  const fifteenDaysAgo = new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000)
+  const fromDate = params.from || fifteenDaysAgo.toISOString().split('T')[0]
+  const toDate = params.to || today.toISOString().split('T')[0]
 
-  const result = await hasuraQuery(PURCHASE_BILLS_QUERY, { where })
-  const bills = result.purchase_bills ?? []
+  const conditions: Record<string, unknown>[] = [
+    { bill_date: { _gte: fromDate } },
+    { bill_date: { _lte: toDate } },
+  ]
+  if (lineId) conditions.push({ purchase_bill_items: { purchase_line_id: { _ilike: `%${lineId}%` } } })
+  if (params.supplier) conditions.push({ supplier_id: { _eq: params.supplier } })
+  if (params.item) conditions.push({ purchase_bill_items: { item_master_id: { _eq: params.item } } })
+
+  const [billsResult, suppliersResult, itemsResult] = await Promise.all([
+    hasuraQuery(PURCHASE_BILLS_QUERY, { where: { _and: conditions } }),
+    hasuraQuery(ACTIVE_SUPPLIERS_QUERY),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
+  ])
+  const bills = billsResult.purchase_bills ?? []
+  const suppliers: { id: string; name: string }[] = suppliersResult.suppliers ?? []
+  const itemOptions: { id: string; item_code: string; item_name: string }[] = itemsResult.item_master ?? []
+
+  const totalQuantity = bills.reduce((s: number, b: any) => s + Number(b.total_quantity || 0), 0)
+  const totalAmount = bills.reduce((s: number, b: any) => s + Number(b.total_amount || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -35,8 +55,24 @@ export default async function BillsPage({
         </Link>
       </div>
 
-      <form className="rounded-xl border bg-white p-4">
-        <div className="flex flex-wrap gap-3 items-end">
+      <ListingSummary
+        count={bills.length}
+        countLabel="bill"
+        totalQuantity={totalQuantity}
+        totalAmount={totalAmount}
+      />
+
+      <ListingFilters
+        basePath="/bills"
+        fromDate={fromDate}
+        toDate={toDate}
+        partyLabel="Supplier"
+        partyName="supplier"
+        partyValue={params.supplier || ''}
+        partyOptions={suppliers}
+        itemValue={params.item || ''}
+        itemOptions={itemOptions}
+        extra={
           <div>
             <label className="block text-[0.6875rem] font-medium text-gray-500 mb-1 uppercase">Purchase Line ID</label>
             <input
@@ -47,16 +83,8 @@ export default async function BillsPage({
               className="rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] w-56"
             />
           </div>
-          <button type="submit" className="rounded bg-blue-600 px-4 py-1.5 text-[0.9375rem] font-medium text-white hover:bg-blue-700">
-            Search
-          </button>
-          {lineId && (
-            <Link href="/bills" className="text-[0.9375rem] text-gray-500 hover:underline">
-              Clear
-            </Link>
-          )}
-        </div>
-      </form>
+        }
+      />
 
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
@@ -66,12 +94,7 @@ export default async function BillsPage({
               {lineId ? (
                 <p className="text-gray-500">No purchase bills found with a line item matching &quot;{lineId}&quot;.</p>
               ) : (
-                <>
-                  <p className="text-gray-500">No purchase bills yet.</p>
-                  <Link href="/bills/new" className="mt-4 inline-block text-blue-600 hover:underline text-[0.9375rem]">
-                    Create your first bill →
-                  </Link>
-                </>
+                <p className="text-gray-500">No purchase bills in the selected range.</p>
               )}
             </div>
           ) : (

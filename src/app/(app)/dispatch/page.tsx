@@ -2,12 +2,47 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { DISPATCH_ORDERS_QUERY } from '@/lib/hasura/queries'
+import { DISPATCH_ORDERS_QUERY, ACTIVE_CUSTOMERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import DispatchTable from './DispatchTable'
+import { ListingFilters } from '@/components/ListingFilters'
+import { ListingSummary } from '@/components/ListingSummary'
 
-export default async function DispatchPage() {
-  const result = await hasuraQuery(DISPATCH_ORDERS_QUERY)
-  const orders = result.dispatch_orders ?? []
+export default async function DispatchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string; customer?: string; item?: string }>
+}) {
+  const params = await searchParams
+
+  const today = new Date()
+  const fifteenDaysAgo = new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000)
+  const fromDate = params.from || fifteenDaysAgo.toISOString().split('T')[0]
+  const toDate = params.to || today.toISOString().split('T')[0]
+
+  const conditions: Record<string, unknown>[] = [
+    { dispatch_date: { _gte: fromDate } },
+    { dispatch_date: { _lte: toDate } },
+  ]
+  if (params.customer) conditions.push({ customer_id: { _eq: params.customer } })
+  if (params.item) conditions.push({ dispatch_items: { item_master_id: { _eq: params.item } } })
+
+  const [ordersResult, customersResult, itemsResult] = await Promise.all([
+    hasuraQuery(DISPATCH_ORDERS_QUERY, { where: { _and: conditions } }),
+    hasuraQuery(ACTIVE_CUSTOMERS_QUERY),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
+  ])
+  const orders = ordersResult.dispatch_orders ?? []
+  const customers: { id: string; name: string }[] = customersResult.customers ?? []
+  const itemOptions: { id: string; item_code: string; item_name: string }[] = itemsResult.item_master ?? []
+
+  const totalQuantity = orders.reduce(
+    (s: number, o: any) => s + (o.dispatch_items ?? []).reduce((s2: number, i: any) => s2 + Number(i.quantity || 0), 0),
+    0
+  )
+  const totalAmount = orders.reduce(
+    (s: number, o: any) => s + (o.dispatch_items ?? []).reduce((s2: number, i: any) => s2 + Number(i.amount || 0), 0),
+    0
+  )
 
   return (
     <div className="space-y-6">
@@ -32,15 +67,26 @@ export default async function DispatchPage() {
         </div>
       </div>
 
+      <ListingSummary count={orders.length} countLabel="sale" totalQuantity={totalQuantity} totalAmount={totalAmount} />
+
+      <ListingFilters
+        basePath="/dispatch"
+        fromDate={fromDate}
+        toDate={toDate}
+        partyLabel="Customer"
+        partyName="customer"
+        partyValue={params.customer || ''}
+        partyOptions={customers}
+        itemValue={params.item || ''}
+        itemOptions={itemOptions}
+      />
+
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
           {!orders || orders.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-gray-400 text-4xl mb-3">🚚</p>
-              <p className="text-gray-500">No sale entries yet.</p>
-              <Link href="/dispatch/new" className="mt-4 inline-block text-blue-600 hover:underline text-sm">
-                Create first sale →
-              </Link>
+              <p className="text-gray-500">No sale entries in the selected range.</p>
             </div>
           ) : (
             <DispatchTable orders={orders} />

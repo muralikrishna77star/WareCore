@@ -84,7 +84,7 @@ type LedgerEntry = {
 export default async function ItemStockLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string }>
+  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string; showCancelled?: string }>
 }) {
   const params = await searchParams
 
@@ -92,6 +92,7 @@ export default async function ItemStockLedgerPage({
   const token = cookieStore.get('wc_session')?.value
   const session = token ? verifySession(token) : null
   const canManage = !!session && LEDGER_MANAGE_ROLES.has(session.role)
+  const showCancelled = canManage && params.showCancelled === '1'
 
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -130,6 +131,12 @@ export default async function ItemStockLedgerPage({
     ]
     if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
     if (params.warehouse) baseConditions.push({ warehouse_id: { _eq: params.warehouse } })
+    // Cancellations have their own dedicated pages (Purchase/Sale/Job Work
+    // Cancellations) — keep the ledger focused on net movements unless an
+    // admin explicitly wants to see them for data correction.
+    if (!showCancelled) {
+      baseConditions.push({ entry_type: { _nin: ['PURCHASE_CANCEL', 'SALE_CANCEL', 'JOB_WORK_CANCEL'] } })
+    }
 
     const openingWhere = { _and: [...baseConditions, { entry_date: { _lt: fromDate } }] }
     const periodWhere = {
@@ -286,6 +293,13 @@ export default async function ItemStockLedgerPage({
             />
           </div>
 
+          {canManage && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 pb-1.5">
+              <input type="checkbox" name="showCancelled" value="1" defaultChecked={showCancelled} className="rounded border-gray-300" />
+              Show cancelled entries (admin)
+            </label>
+          )}
+
           <button
             type="submit"
             className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
@@ -294,6 +308,15 @@ export default async function ItemStockLedgerPage({
           </button>
         </div>
       </form>
+
+      {!showCancelled && (
+        <p className="text-xs text-gray-500 print:hidden">
+          Cancellations are hidden here — see{' '}
+          <Link href="/purchase-cancellations" className="text-blue-600 hover:underline">Purchase</Link>,{' '}
+          <Link href="/sale-cancellations" className="text-blue-600 hover:underline">Sale</Link>, or{' '}
+          <Link href="/jobwork-cancellations" className="text-blue-600 hover:underline">Job Work</Link> Cancellations.
+        </p>
+      )}
 
       {!selectedItem ? (
         <div className="rounded-xl border bg-white p-12 text-center">

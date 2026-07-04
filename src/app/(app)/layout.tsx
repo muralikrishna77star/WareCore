@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
+import { RecordPreviewProvider } from '@/components/RecordPreviewProvider'
 
 type NavItem = {
   title: string
@@ -125,6 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // reserves its own 2.5rem via body padding-top — subtract that here too,
     // so this shell's "fill the viewport, scroll only inside <main>" sizing
     // doesn't overflow the window by the title bar's height on desktop.
+    <RecordPreviewProvider>
     <div className={cn('flex overflow-hidden bg-gray-100', isDesktop ? 'h-[calc(100vh-2.5rem)]' : 'h-screen')}>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
@@ -295,5 +297,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
     </div>
+    </RecordPreviewProvider>
   )
 }

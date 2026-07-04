@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { ReferenceLink } from '@/components/ReferenceLink'
+import { isReferenceType } from '@/lib/reference'
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
@@ -19,19 +20,6 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   JOB_WORK_CANCEL: { label: 'Job Work Cancelled', color: 'bg-gray-100 text-gray-700' },
   ADJUSTMENT_IN: { label: 'Adjustment In', color: 'bg-gray-100 text-gray-800' },
   ADJUSTMENT_OUT: { label: 'Adjustment Out', color: 'bg-gray-100 text-gray-800' },
-}
-
-const referenceTypeRoute: Record<string, string> = {
-  purchase_bill: '/bills',
-  dispatch: '/dispatch',
-  job_work: '/jobwork',
-  transfer: '/transfers',
-}
-
-function referenceHref(referenceType?: string | null, referenceId?: string | null): string | null {
-  if (!referenceType || !referenceId) return null
-  const base = referenceTypeRoute[referenceType]
-  return base ? `${base}/${referenceId}` : null
 }
 
 export type LedgerRow = {
@@ -139,7 +127,6 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
           const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
           const qty = Number(row.quantity)
           const lineId = row.sub_purchase_line_id || row.purchase_line_id
-          const refHref = referenceHref(row.reference_type, row.reference_id)
           return (
             <tr key={row.id} className={`hover:bg-gray-50 ${selected.has(row.id) ? 'bg-red-50/50' : ''}`}>
               {canManage && (
@@ -175,10 +162,10 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
                 )}
               </td>
               <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                {refHref ? (
-                  <Link href={refHref} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {isReferenceType(row.reference_type) && row.reference_id ? (
+                  <ReferenceLink type={row.reference_type} id={row.reference_id} className="text-blue-600 hover:underline">
                     {row.reference_number || '—'}
-                  </Link>
+                  </ReferenceLink>
                 ) : (
                   row.reference_number || '—'
                 )}

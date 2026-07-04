@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
+import { ReferenceLink } from '@/components/ReferenceLink'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -106,9 +107,9 @@ export default function JobWorkTable({ orders }: { orders: any[] }) {
               </td>
               <td className="px-6 py-3 text-gray-600 max-w-xs truncate" title={o.notes || ''}>{o.notes || '—'}</td>
               <td className="px-6 py-3 space-x-3 whitespace-nowrap">
-                <Link href={`/jobwork/${o.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">
+                <ReferenceLink type="job_work" id={o.id}>
                   View
-                </Link>
+                </ReferenceLink>
                 {o.status !== 'cancelled' && o.status !== 'completed' && (
                   <Link href={`/jobwork/${o.id}/edit`} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
                     Edit
