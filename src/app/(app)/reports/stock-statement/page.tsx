@@ -5,6 +5,7 @@ import {
   STOCK_STATEMENT_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
+  ACTIVE_ITEM_MASTER_QUERY,
 } from '@/lib/hasura/queries'
 import Link from 'next/link'
 
@@ -23,6 +24,8 @@ type StockItem = {
   unit: string
   size: string
   item_name: string
+  material_type_id: string
+  material_size_id: string | null
   opening: number
   purchase_in: number
   transfer_in: number
@@ -58,10 +61,11 @@ export default async function StockStatementPage({
   // current_where: all entries up to today (no date ceiling) → gives live stock
   const currentWhere = baseConditions.length > 0 ? { _and: baseConditions } : {}
 
-  const [result, compResult, whResult] = await Promise.all([
+  const [result, compResult, whResult, itemResult] = await Promise.all([
     hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere }),
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
     hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
   ])
 
   const openingRows: LedgerRow[] = result.opening ?? []
@@ -72,6 +76,13 @@ export default async function StockStatementPage({
   const warehouses = params.company
     ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
+
+  // material_type_id + material_size_id → item_master.id, so each row's
+  // summary cells can link to that item's detailed Item Ledger entries.
+  const itemIdByMaterial = new Map<string, string>()
+  for (const it of (itemResult.item_master ?? []) as { id: string; material_type_id: string; material_size_id: string | null }[]) {
+    itemIdByMaterial.set(`${it.material_type_id}|${it.material_size_id ?? ''}`, it.id)
+  }
 
   // Aggregate by material + size
   const items: Record<string, StockItem> = {}
@@ -92,6 +103,8 @@ export default async function StockStatementPage({
         unit: row.material_types?.unit ?? 'tons',
         size,
         item_name: size ? `${material} — ${size}` : material,
+        material_type_id: row.material_type_id,
+        material_size_id: row.material_size_id ?? null,
         opening: 0,
         purchase_in: 0,
         transfer_in: 0,
@@ -151,6 +164,19 @@ export default async function StockStatementPage({
     item.jw_out
 
   const fmtQ = (n: number) => n.toFixed(3)
+
+  // Build a link to this item's Item Ledger, scoped to the same filters and
+  // optionally to specific entry types (e.g. just PURCHASE_IN for that cell).
+  const ledgerLink = (item: StockItem, opts: { from: string; to: string; types?: string[] }) => {
+    const itemId = itemIdByMaterial.get(`${item.material_type_id}|${item.material_size_id ?? ''}`)
+    if (!itemId) return null
+    const qs = new URLSearchParams({ item: itemId, from: opts.from, to: opts.to })
+    if (item.material_size_id) qs.set('size', item.material_size_id)
+    if (params.company) qs.set('company', params.company)
+    if (params.warehouse) qs.set('warehouse', params.warehouse)
+    if (opts.types?.length) qs.set('types', opts.types.join(','))
+    return `/reports/item-ledger?${qs.toString()}`
+  }
 
   const totals = {
     opening:       sorted.reduce((s, i) => s + i.opening, 0),
@@ -295,22 +321,38 @@ export default async function StockStatementPage({
               <tbody className="divide-y divide-gray-100">
                 {sorted.map((item, i) => {
                   const cl = closing(item)
+                  const cell = (value: number, className: string, types?: string[]) => {
+                    const text = value > 0 ? fmtQ(value) : '—'
+                    const href = value > 0 ? ledgerLink(item, { from: fromDate, to: toDate, types }) : null
+                    return (
+                      <td className={className}>
+                        {href ? <Link href={href} className="hover:underline">{text}</Link> : text}
+                      </td>
+                    )
+                  }
+                  const openingHref = ledgerLink(item, { from: '2000-01-01', to: fromDate })
+                  const liveHref = ledgerLink(item, { from: '2000-01-01', to: new Date().toISOString().split('T')[0] })
                   return (
                     <tr key={i} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-gray-900">{item.item_name}</td>
                       <td className="px-4 py-3 text-gray-400">{item.unit}</td>
-                      <td className="px-4 py-3 text-right text-blue-700 bg-blue-50/40">{fmtQ(item.opening)}</td>
-                      <td className="px-4 py-3 text-right text-green-700 bg-green-50/40">{item.purchase_in  > 0 ? fmtQ(item.purchase_in)  : '—'}</td>
-                      <td className="px-4 py-3 text-right text-green-700 bg-green-50/40">{item.transfer_in  > 0 ? fmtQ(item.transfer_in)  : '—'}</td>
-                      <td className="px-4 py-3 text-right text-green-700 bg-green-50/40">{item.jw_return    > 0 ? fmtQ(item.jw_return)    : '—'}</td>
-                      <td className="px-4 py-3 text-right text-red-700 bg-red-50/40">{item.dispatch_out > 0 ? fmtQ(item.dispatch_out) : '—'}</td>
-                      <td className="px-4 py-3 text-right text-red-700 bg-red-50/40">{item.transfer_out > 0 ? fmtQ(item.transfer_out) : '—'}</td>
-                      <td className="px-4 py-3 text-right text-red-700 bg-red-50/40">{item.jw_out       > 0 ? fmtQ(item.jw_out)       : '—'}</td>
+                      <td className="px-4 py-3 text-right text-blue-700 bg-blue-50/40">
+                        {openingHref ? <Link href={openingHref} className="hover:underline">{fmtQ(item.opening)}</Link> : fmtQ(item.opening)}
+                      </td>
+                      {cell(item.purchase_in, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['PURCHASE_IN'])}
+                      {cell(item.transfer_in, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['TRANSFER_IN'])}
+                      {cell(item.jw_return, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['JOB_WORK_RETURN_IN', 'VENDOR_RETURN_IN'])}
+                      {cell(item.dispatch_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['SALE_OUT'])}
+                      {cell(item.transfer_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['TRANSFER_OUT'])}
+                      {cell(item.jw_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['JOB_WORK_OUT'])}
                       <td className={`px-4 py-3 text-right font-bold bg-gray-100/60 ${cl < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                        {fmtQ(cl)}
+                        {(() => {
+                          const href = ledgerLink(item, { from: fromDate, to: toDate })
+                          return href ? <Link href={href} className="hover:underline">{fmtQ(cl)}</Link> : fmtQ(cl)
+                        })()}
                       </td>
                       <td className={`px-4 py-3 text-right font-bold bg-purple-50/60 ${item.current_stock < 0 ? 'text-red-600' : 'text-purple-800'}`}>
-                        {fmtQ(item.current_stock)}
+                        {liveHref ? <Link href={liveHref} className="hover:underline">{fmtQ(item.current_stock)}</Link> : fmtQ(item.current_stock)}
                       </td>
                     </tr>
                   )

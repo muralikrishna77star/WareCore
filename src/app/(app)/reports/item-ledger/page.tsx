@@ -84,7 +84,7 @@ type LedgerEntry = {
 export default async function ItemStockLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string; showCancelled?: string }>
+  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string; showCancelled?: string; types?: string }>
 }) {
   const params = await searchParams
 
@@ -138,9 +138,17 @@ export default async function ItemStockLedgerPage({
       baseConditions.push({ entry_type: { _nin: ['PURCHASE_CANCEL', 'SALE_CANCEL', 'JOB_WORK_CANCEL'] } })
     }
 
+    // Optional drill-down from Stock Statement: scope the visible entries to
+    // one or more entry types (e.g. just PURCHASE_IN) without affecting the
+    // opening balance, which is still the full running total up to fromDate.
+    const typeFilter = params.types?.split(',').map((t) => t.trim()).filter(Boolean)
+    const periodConditions = typeFilter?.length
+      ? [...baseConditions, { entry_type: { _in: typeFilter } }]
+      : baseConditions
+
     const openingWhere = { _and: [...baseConditions, { entry_date: { _lt: fromDate } }] }
     const periodWhere = {
-      _and: [...baseConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
+      _and: [...periodConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
     }
 
     const result = await hasuraQuery(ITEM_STOCK_LEDGER_QUERY, {
