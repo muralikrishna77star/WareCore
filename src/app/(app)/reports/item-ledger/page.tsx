@@ -30,6 +30,10 @@ const REFERENCE_TABLE_BY_TYPE: Record<string, string> = {
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// A reference missing from the live table isn't necessarily orphaned — a
+// cancelled-and-purged order moves to its archive table (original_*_id) and
+// is still a legitimate record. Only flag a reference as orphaned when it's
+// absent from both, same check used by /api/stock/verify's stale-records query.
 async function findOrphanedReferences(pairs: { type: string; id: string }[]): Promise<Set<string>> {
   const valuesSql = pairs
     .filter((p) => REFERENCE_TABLE_BY_TYPE[p.type] && UUID_RE.test(p.id))
@@ -41,9 +45,15 @@ async function findOrphanedReferences(pairs: { type: string; id: string }[]): Pr
     SELECT refs.reference_type, refs.reference_id::text
     FROM (VALUES ${valuesSql}) AS refs(reference_type, reference_id)
     WHERE
-      (refs.reference_type = 'purchase_bill' AND NOT EXISTS (SELECT 1 FROM purchase_bills b WHERE b.id = refs.reference_id))
-      OR (refs.reference_type = 'dispatch' AND NOT EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.id = refs.reference_id))
-      OR (refs.reference_type = 'job_work' AND NOT EXISTS (SELECT 1 FROM job_work_orders j WHERE j.id = refs.reference_id))
+      (refs.reference_type = 'purchase_bill'
+        AND NOT EXISTS (SELECT 1 FROM purchase_bills b WHERE b.id = refs.reference_id)
+        AND NOT EXISTS (SELECT 1 FROM purchase_cancellations pc WHERE pc.original_bill_id = refs.reference_id))
+      OR (refs.reference_type = 'dispatch'
+        AND NOT EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.id = refs.reference_id)
+        AND NOT EXISTS (SELECT 1 FROM dispatch_cancellations dc WHERE dc.original_order_id = refs.reference_id))
+      OR (refs.reference_type = 'job_work'
+        AND NOT EXISTS (SELECT 1 FROM job_work_orders j WHERE j.id = refs.reference_id)
+        AND NOT EXISTS (SELECT 1 FROM job_work_cancellations jc WHERE jc.original_order_id = refs.reference_id))
       OR (refs.reference_type = 'transfer' AND NOT EXISTS (SELECT 1 FROM transfers t WHERE t.id = refs.reference_id))
   `
   const result = await hasuraRunSql(sql)

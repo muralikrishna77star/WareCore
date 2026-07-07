@@ -39,11 +39,11 @@ export async function GET(request: NextRequest) {
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'JOB_WORK_OUT' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
       SELECT 'purchase_cancellations',
-        (SELECT COALESCE(SUM(total_quantity), 0) FROM purchase_cancellations WHERE purged_at::date BETWEEN '${from}' AND '${to}'),
+        (SELECT COALESCE(SUM(total_quantity), 0) FROM purchase_cancellations WHERE cancelled_at::date BETWEEN '${from}' AND '${to}'),
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'PURCHASE_CANCEL' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
       SELECT 'sale_cancellations',
-        (SELECT COALESCE(SUM(total_quantity), 0) FROM dispatch_cancellations WHERE purged_at::date BETWEEN '${from}' AND '${to}'),
+        (SELECT COALESCE(SUM(total_quantity), 0) FROM dispatch_cancellations WHERE cancelled_at::date BETWEEN '${from}' AND '${to}'),
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'SALE_CANCEL' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
       SELECT 'job_work_cancellations',

@@ -34,6 +34,12 @@ const categoryLabels: Record<string, string> = {
   job_work_cancellations: 'Job Work Cancellations',
 }
 
+// Cancellation archive totals can legitimately drift from the ledger in both
+// directions (mid-edit reversals inflate the ledger; orphaned rows deleted
+// after a pre-054 purge inflate the archive) — see the caveat text below the
+// table. Flag these as informational rather than a red "Mismatch" alarm.
+const cancellationCategories = new Set(['purchase_cancellations', 'sale_cancellations', 'job_work_cancellations'])
+
 function todayStr() {
   return new Date().toISOString().split('T')[0]
 }
@@ -237,23 +243,28 @@ export default function StockReconcilePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {totals.map((row) => (
-                    <tr key={row.category}>
-                      <td className="px-4 py-2 font-medium text-gray-900">{categoryLabels[row.category] || row.category}</td>
-                      <td className="px-4 py-2 text-right">{fmt(row.sourceQty)}</td>
-                      <td className="px-4 py-2 text-right">{fmt(row.ledgerQty)}</td>
-                      <td className={`px-4 py-2 text-right font-medium ${row.matches ? 'text-gray-500' : 'text-red-600'}`}>
-                        {fmt(row.diff)}
-                      </td>
-                      <td className="px-4 py-2">
-                        {row.matches ? (
-                          <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Match</span>
-                        ) : (
-                          <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Mismatch</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {totals.map((row) => {
+                    const isInfoOnly = !row.matches && cancellationCategories.has(row.category)
+                    return (
+                      <tr key={row.category}>
+                        <td className="px-4 py-2 font-medium text-gray-900">{categoryLabels[row.category] || row.category}</td>
+                        <td className="px-4 py-2 text-right">{fmt(row.sourceQty)}</td>
+                        <td className="px-4 py-2 text-right">{fmt(row.ledgerQty)}</td>
+                        <td className={`px-4 py-2 text-right font-medium ${row.matches ? 'text-gray-500' : isInfoOnly ? 'text-amber-600' : 'text-red-600'}`}>
+                          {fmt(row.diff)}
+                        </td>
+                        <td className="px-4 py-2">
+                          {row.matches ? (
+                            <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Match</span>
+                          ) : isInfoOnly ? (
+                            <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Info</span>
+                          ) : (
+                            <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Mismatch</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
