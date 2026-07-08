@@ -6,7 +6,13 @@ import {
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY,
+  ACTIVE_MATERIAL_SIZES_QUERY,
+  ACTIVE_SUPPLIERS_QUERY,
+  PURCHASE_BILL_IDS_QUERY,
+  JOB_WORK_ORDER_IDS_QUERY,
 } from '@/lib/hasura/queries'
+import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
 
 type LedgerRow = {
@@ -37,10 +43,24 @@ type StockItem = {
   current_stock: number
 }
 
+type ItemOption = ComboOption & {
+  material_type_id: string
+  material_size_id: string | null
+}
+
 export default async function StockStatementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ company?: string; warehouse?: string; from?: string; to?: string }>
+  searchParams: Promise<{
+    company?: string
+    warehouse?: string
+    material_type?: string
+    size?: string
+    item?: string
+    vendor?: string
+    from?: string
+    to?: string
+  }>
 }) {
   const params = await searchParams
 
@@ -49,10 +69,79 @@ export default async function StockStatementPage({
   const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
   const toDate = params.to || today.toISOString().split('T')[0]
 
+  const [compResult, whResult, itemResult, matTypeResult, matSizeResult, supResult] = await Promise.all([
+    hasuraQuery(ACTIVE_COMPANIES_QUERY),
+    hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
+    hasuraQuery(ACTIVE_MATERIAL_TYPES_QUERY),
+    hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
+    hasuraQuery(ACTIVE_SUPPLIERS_QUERY),
+  ])
+
+  const companies: { id: string; name: string }[] = compResult.companies ?? []
+  const allWarehouses: { id: string; name: string; company_id: string }[] = whResult.warehouses ?? []
+  const warehouses = params.company
+    ? allWarehouses.filter((w) => w.company_id === params.company)
+    : allWarehouses
+  const suppliers: any[] = supResult.suppliers ?? []
+  const materialTypes: any[] = matTypeResult.material_types ?? []
+  const allSizes: any[] = matSizeResult.material_sizes ?? []
+  const sizes = params.material_type
+    ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
+    : allSizes
+
+  // material_type_id + material_size_id → item_master.id, so each row's
+  // summary cells can link to that item's detailed Item Ledger entries.
+  const itemRows = (itemResult.item_master ?? []) as { id: string; item_code: string; item_name: string; material_type_id: string; material_size_id: string | null; size_label?: string | null; material_sizes?: { size_label: string } | null }[]
+  const itemIdByMaterial = new Map<string, string>()
+  for (const it of itemRows) {
+    itemIdByMaterial.set(`${it.material_type_id}|${it.material_size_id ?? ''}`, it.id)
+  }
+  const itemOptions: ItemOption[] = itemRows.map((i) => {
+    const size = i.material_sizes?.size_label || i.size_label
+    return {
+      id: i.id,
+      label: `${i.item_code} — ${i.item_name}${size ? ` (${size})` : ''}`,
+      search: `${i.item_code} ${i.item_name} ${size ?? ''}`.toLowerCase(),
+      material_type_id: i.material_type_id,
+      material_size_id: i.material_size_id,
+    }
+  })
+  const selectedItem = params.item ? itemOptions.find((i) => i.id === params.item) : undefined
+
   // Build dynamic where clauses — never pass null to _eq
   const baseConditions: Record<string, unknown>[] = []
   if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
   if (params.warehouse) baseConditions.push({ warehouse_id: { _eq: params.warehouse } })
+  if (selectedItem) {
+    baseConditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
+    if (selectedItem.material_size_id) {
+      baseConditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
+    }
+  } else {
+    if (params.material_type) baseConditions.push({ material_type_id: { _eq: params.material_type } })
+    if (params.size) baseConditions.push({ material_size_id: { _eq: params.size } })
+  }
+
+  // Vendor isn't stored on stock_ledger directly — resolve it to the set of
+  // purchase bill / job work order IDs it appears on, same approach as the
+  // Stock Movements ledger and Movements Report pages.
+  let noResults = false
+  if (params.vendor) {
+    const [billIdsResult, jobOrderIdsResult] = await Promise.all([
+      hasuraQuery(PURCHASE_BILL_IDS_QUERY, { where: { supplier_id: { _eq: params.vendor } } }),
+      hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
+    ])
+    const refIds = [
+      ...(billIdsResult.purchase_bills ?? []).map((b: any) => b.id),
+      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: any) => o.id),
+    ]
+    if (refIds.length === 0) {
+      noResults = true
+    } else {
+      baseConditions.push({ reference_id: { _in: refIds } })
+    }
+  }
 
   const openingWhere = { _and: [...baseConditions, { entry_date: { _lt: fromDate } }] }
   const periodWhere = {
@@ -61,28 +150,13 @@ export default async function StockStatementPage({
   // current_where: all entries up to today (no date ceiling) → gives live stock
   const currentWhere = baseConditions.length > 0 ? { _and: baseConditions } : {}
 
-  const [result, compResult, whResult, itemResult] = await Promise.all([
-    hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere }),
-    hasuraQuery(ACTIVE_COMPANIES_QUERY),
-    hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
-    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
-  ])
+  const result = noResults
+    ? { opening: [], period: [], current: [] }
+    : await hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere })
 
   const openingRows: LedgerRow[] = result.opening ?? []
   const periodRows: LedgerRow[] = result.period ?? []
   const currentRows: LedgerRow[] = result.current ?? []
-  const companies: { id: string; name: string }[] = compResult.companies ?? []
-  const allWarehouses: { id: string; name: string; company_id: string }[] = whResult.warehouses ?? []
-  const warehouses = params.company
-    ? allWarehouses.filter((w) => w.company_id === params.company)
-    : allWarehouses
-
-  // material_type_id + material_size_id → item_master.id, so each row's
-  // summary cells can link to that item's detailed Item Ledger entries.
-  const itemIdByMaterial = new Map<string, string>()
-  for (const it of (itemResult.item_master ?? []) as { id: string; material_type_id: string; material_size_id: string | null }[]) {
-    itemIdByMaterial.set(`${it.material_type_id}|${it.material_size_id ?? ''}`, it.id)
-  }
 
   // Aggregate by material + size
   const items: Record<string, StockItem> = {}
@@ -237,6 +311,59 @@ export default async function StockStatementPage({
               <option value="">All Warehouses</option>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Material Type</label>
+            <select
+              name="material_type"
+              defaultValue={params.material_type || ''}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">All Material Types</option>
+              {materialTypes.map((mt: any) => (
+                <option key={mt.id} value={mt.id}>{mt.description}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
+            <select
+              name="size"
+              defaultValue={params.size || ''}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">All Sizes</option>
+              {sizes.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.size_label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="min-w-[14rem]">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Item</label>
+            <ItemComboBox
+              name="item"
+              defaultValue={params.item || ''}
+              defaultLabel={selectedItem?.label || ''}
+              placeholder="Search item…"
+              options={itemOptions}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Supplier</label>
+            <select
+              name="vendor"
+              defaultValue={params.vendor || ''}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">All Suppliers</option>
+              {suppliers.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
