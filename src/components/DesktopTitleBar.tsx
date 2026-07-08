@@ -6,8 +6,11 @@ import { APP_VERSION } from '@/lib/version'
 /** Only renders in the desktop (embedded Postgres) build — invisible on the
  * web deployment, where /api/desktop/status reports isDesktop: false. Gives
  * the kiosk window (no browser chrome at all) a recognizable app shell and
- * a way to fully exit, since Alt+F4 alone only closes the window, leaving
- * the server/Postgres running. */
+ * a way to fully exit. The kiosk window itself was opened from the command
+ * line (not via window.open()), so this page's JS can't close it directly —
+ * instead it tells the server to shut down, and the launcher
+ * (scripts/desktop/start.mjs) force-closes the kiosk window once the server
+ * process exits. */
 export function DesktopTitleBar() {
   const [isDesktop, setIsDesktop] = useState(false)
   const [closing, setClosing] = useState(false)
@@ -42,7 +45,8 @@ export function DesktopTitleBar() {
     } catch {
       // server is going down — fetch may fail/abort, that's expected
     }
-    window.close()
+    // The launcher force-closes this kiosk window once the server process
+    // it's watching exits — see scripts/desktop/start.mjs.
   }
 
   return (

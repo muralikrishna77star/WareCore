@@ -1,8 +1,19 @@
 export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
-import { MOVEMENTS_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
+import {
+  MOVEMENTS_REPORT_QUERY,
+  ACTIVE_COMPANIES_QUERY,
+  ACTIVE_WAREHOUSES_QUERY,
+  ACTIVE_SUPPLIERS_QUERY,
+  ACTIVE_ITEM_MASTER_QUERY,
+  ACTIVE_MATERIAL_TYPES_QUERY,
+  ACTIVE_MATERIAL_SIZES_QUERY,
+  PURCHASE_BILL_IDS_QUERY,
+  JOB_WORK_ORDER_IDS_QUERY,
+} from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -16,16 +27,65 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   adjustment: { label: 'Adjustment', color: 'bg-gray-100 text-gray-800' },
 }
 
+type ItemOption = ComboOption & {
+  material_type_id: string
+  material_size_id: string | null
+}
+
 export default async function MovementsReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ company?: string; warehouse?: string; entry_type?: string; from?: string; to?: string }>
+  searchParams: Promise<{
+    company?: string
+    warehouse?: string
+    entry_type?: string
+    material_type?: string
+    size?: string
+    item?: string
+    vendor?: string
+    from?: string
+    to?: string
+  }>
 }) {
   const params = await searchParams
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
   const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
   const toDate = params.to || today.toISOString().split('T')[0]
+
+  const [compResult, whResult, supResult, itemResult, matTypeResult, matSizeResult] = await Promise.all([
+    hasuraQuery(ACTIVE_COMPANIES_QUERY),
+    hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
+    hasuraQuery(ACTIVE_SUPPLIERS_QUERY),
+    hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
+    hasuraQuery(ACTIVE_MATERIAL_TYPES_QUERY),
+    hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
+  ])
+
+  const companies: any[] = compResult.companies ?? []
+  const allWarehouses: any[] = whResult.warehouses ?? []
+  const warehouses = params.company
+    ? allWarehouses.filter((w: any) => w.company_id === params.company)
+    : allWarehouses
+  const suppliers: any[] = supResult.suppliers ?? []
+  const materialTypes: any[] = matTypeResult.material_types ?? []
+  const allSizes: any[] = matSizeResult.material_sizes ?? []
+  const sizes = params.material_type
+    ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
+    : allSizes
+
+  const itemRows: any[] = itemResult.item_master ?? []
+  const itemOptions: ItemOption[] = itemRows.map((i) => {
+    const size = i.material_sizes?.size_label || i.size_label
+    return {
+      id: i.id,
+      label: `${i.item_code} — ${i.item_name}${size ? ` (${size})` : ''}`,
+      search: `${i.item_code} ${i.item_name} ${size ?? ''}`.toLowerCase(),
+      material_type_id: i.material_type_id,
+      material_size_id: i.material_size_id,
+    }
+  })
+  const selectedItem = params.item ? itemOptions.find((i) => i.id === params.item) : undefined
 
   const conditions: Record<string, unknown>[] = [
     { entry_date: { _gte: fromDate } },
@@ -34,19 +94,41 @@ export default async function MovementsReportPage({
   if (params.company) conditions.push({ company_id: { _eq: params.company } })
   if (params.warehouse) conditions.push({ warehouse_id: { _eq: params.warehouse } })
   if (params.entry_type) conditions.push({ entry_type: { _eq: params.entry_type } })
+  if (selectedItem) {
+    conditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
+    if (selectedItem.material_size_id) {
+      conditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
+    }
+  } else {
+    if (params.material_type) conditions.push({ material_type_id: { _eq: params.material_type } })
+    if (params.size) conditions.push({ material_size_id: { _eq: params.size } })
+  }
 
-  const [result, compResult, whResult] = await Promise.all([
-    hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: { _and: conditions } }),
-    hasuraQuery(ACTIVE_COMPANIES_QUERY),
-    hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
-  ])
+  // Vendor isn't stored on stock_ledger directly — resolve it to the set of
+  // purchase bill / job work order IDs it appears on, same approach as the
+  // Stock Movements ledger page.
+  let noResults = false
+  if (params.vendor) {
+    const [billIdsResult, jobOrderIdsResult] = await Promise.all([
+      hasuraQuery(PURCHASE_BILL_IDS_QUERY, { where: { supplier_id: { _eq: params.vendor } } }),
+      hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
+    ])
+    const refIds = [
+      ...(billIdsResult.purchase_bills ?? []).map((b: any) => b.id),
+      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: any) => o.id),
+    ]
+    if (refIds.length === 0) {
+      noResults = true
+    } else {
+      conditions.push({ reference_id: { _in: refIds } })
+    }
+  }
+
+  const result = noResults
+    ? { stock_ledger: [] }
+    : await hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: { _and: conditions } })
 
   const movements: any[] = result.stock_ledger ?? []
-  const companies: any[] = compResult.companies ?? []
-  const allWarehouses: any[] = whResult.warehouses ?? []
-  const warehouses = params.company
-    ? allWarehouses.filter((w: any) => w.company_id === params.company)
-    : allWarehouses
 
   const totalIn = movements
     .filter(m => ['purchase', 'transfer_in', 'job_work_return'].includes(m.entry_type))
@@ -96,6 +178,43 @@ export default async function MovementsReportPage({
               <option value="">All Types</option>
               {Object.entries(entryTypeConfig).map(([k, v]) => (
                 <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Material Type</label>
+            <select name="material_type" defaultValue={params.material_type || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+              <option value="">All Material Types</option>
+              {materialTypes.map((mt: any) => (
+                <option key={mt.id} value={mt.id}>{mt.description}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
+            <select name="size" defaultValue={params.size || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+              <option value="">All Sizes</option>
+              {sizes.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.size_label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[14rem]">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Item</label>
+            <ItemComboBox
+              name="item"
+              defaultValue={params.item || ''}
+              defaultLabel={selectedItem?.label || ''}
+              placeholder="Search item…"
+              options={itemOptions}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Supplier</label>
+            <select name="vendor" defaultValue={params.vendor || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
+              <option value="">All Suppliers</option>
+              {suppliers.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>

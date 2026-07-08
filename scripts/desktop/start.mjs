@@ -65,6 +65,11 @@ function findKioskBrowser() {
   return KIOSK_BROWSER_PATHS.find((p) => existsSync(p))
 }
 
+// Returns the spawned browser's child process so the caller can force-close
+// it later (e.g. when the desktop title bar's Close button shuts down the
+// server) — null when we can't track a meaningful pid (the generic
+// open/xdg-open/cmd-start fallback below spawns a short-lived launcher, not
+// the browser itself).
 function openBrowser(url, browserProfileDir) {
   const browser = findKioskBrowser()
 
@@ -72,17 +77,20 @@ function openBrowser(url, browserProfileDir) {
     // --kiosk --app=<url>: full-screen, no address bar/tabs/title bar — looks
     // like a standalone app rather than a browser window. A dedicated
     // --user-data-dir avoids touching the user's normal browser profile and
-    // skips first-run prompts. Closing it requires Alt+F4 (no visible close
-    // button in kiosk mode) — that only closes the window, the launcher
-    // (and its embedded Postgres) keeps running until Ctrl+C in its console.
-    spawn(browser, [
+    // skips first-run prompts. This window was opened from the command line,
+    // not via window.open(), so the page's own JS can't call window.close()
+    // on it (browsers block scripts from closing windows they didn't open) —
+    // the title bar's Close button instead shuts down the server, and
+    // killBrowser() below force-closes this process in response.
+    const child = spawn(browser, [
       `--app=${url}`,
       '--kiosk',
       `--user-data-dir=${browserProfileDir}`,
       '--no-first-run',
       '--no-default-browser-check',
-    ], { detached: true, stdio: 'ignore' }).unref()
-    return
+    ], { detached: true, stdio: 'ignore' })
+    child.unref()
+    return child
   }
 
   console.warn('No Chromium-based browser found for kiosk mode — opening in the default browser instead.')
@@ -92,6 +100,24 @@ function openBrowser(url, browserProfileDir) {
     spawn('open', [url], { detached: true, stdio: 'ignore' }).unref()
   } else {
     spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref()
+  }
+  return null
+}
+
+// Force-closes the kiosk browser window spawned above. `detached: true`
+// gives it its own process group on POSIX (so killing the negative pid hits
+// the whole group — the browser forks helper processes) and its own console
+// on Windows (so `taskkill /T` walks the resulting process tree).
+function killBrowser(browserProcess) {
+  if (!browserProcess || !browserProcess.pid || browserProcess.killed) return
+  try {
+    if (process.platform === 'win32') {
+      execSync(`taskkill /PID ${browserProcess.pid} /T /F`, { stdio: 'ignore' })
+    } else {
+      process.kill(-browserProcess.pid, 'SIGKILL')
+    }
+  } catch {
+    // already exited, or the pid/group is gone — nothing to do
   }
 }
 
@@ -167,9 +193,11 @@ async function main() {
   })
 
   let nextProcess
+  let browserProcess
 
   const shutdown = async () => {
     if (nextProcess) nextProcess.kill()
+    killBrowser(browserProcess)
     try {
       await pg.stop()
     } catch {
@@ -233,6 +261,10 @@ async function main() {
   })
 
   nextProcess.on('exit', (code) => {
+    // Covers both crashes and a deliberate shutdown via the title bar's
+    // Close button (POST /api/desktop/shutdown), which exits this process
+    // but has no way to close the kiosk window itself.
+    killBrowser(browserProcess)
     pg.stop().finally(() => process.exit(code ?? 0))
   })
 
@@ -243,7 +275,7 @@ async function main() {
     return
   }
   console.log(`WareCore is ready at ${appUrl}`)
-  openBrowser(appUrl, join(dataDir, 'browser-profile'))
+  browserProcess = openBrowser(appUrl, join(dataDir, 'browser-profile'))
 }
 
 main().catch((err) => {
