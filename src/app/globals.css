@@ -40,3 +40,29 @@ body {
   .space-y-6 > :first-child { margin-top: 0; }
 }
 
+/* AI Copilot button — idle float, periodic pulse ring, click ripple */
+@keyframes copilot-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.animate-copilot-float {
+  animation: copilot-float 3s ease-in-out infinite;
+}
+
+@keyframes copilot-pulse {
+  0%, 88% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  92% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0.25); }
+  100% { box-shadow: 0 0 0 16px rgba(37, 99, 235, 0); }
+}
+.animate-copilot-pulse {
+  animation: copilot-pulse 5s ease-in-out infinite;
+}
+
+@keyframes copilot-ripple {
+  from { transform: scale(0); opacity: 0.45; }
+  to { transform: scale(2.5); opacity: 0; }
+}
+.animate-copilot-ripple {
+  animation: copilot-ripple 600ms ease-out forwards;
+}
+

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
 import { RecordPreviewProvider } from '@/components/RecordPreviewProvider'
+import { Copilot } from '@/components/ai/Copilot'
 
 type NavItem = {
   title: string
@@ -296,6 +297,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </div>
       </nav>
+
+      <Copilot />
     </div>
     </RecordPreviewProvider>
   )
