@@ -1,14 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Minus, X } from 'lucide-react'
 import { WelcomeScreen } from '@/components/ai/WelcomeScreen'
 import { SuggestionCards } from '@/components/ai/SuggestionCards'
 import { ChatInput } from '@/components/ai/ChatInput'
+import { ChatMessage, type Message } from '@/components/ai/ChatMessage'
 
 export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [draft, setDraft] = useState('')
-  const [notice, setNotice] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loading, setLoading] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -19,14 +22,48 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
     return () => document.removeEventListener('keydown', onKey)
   }, [isOpen, onClose])
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
   const handleNewChat = () => {
     setDraft('')
-    setNotice(false)
+    setMessages([])
   }
 
-  const handleSend = () => {
-    setNotice(true)
+  const handleSend = async () => {
+    const text = draft.trim()
+    if (!text) return
+    const nextMessages: Message[] = [...messages, { role: 'user', content: text }]
+    setMessages(nextMessages)
     setDraft('')
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: data.error || 'Sorry, something went wrong — try again.' },
+        ])
+        return
+      }
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply, ledger: data.ledger }])
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, something went wrong — try again.' },
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -90,14 +127,27 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
         </div>
 
         {/* Body */}
-        <div className="flex-1 space-y-6 overflow-y-auto p-4">
-          <WelcomeScreen />
-          <SuggestionCards onPick={setDraft} />
-          {notice && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-              🚧 Copilot chat isn&apos;t connected yet — full AI chat is coming in the next phase.
-            </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          {messages.length === 0 ? (
+            <>
+              <WelcomeScreen />
+              <SuggestionCards onPick={setDraft} />
+            </>
+          ) : (
+            <>
+              {messages.map((m, i) => (
+                <ChatMessage key={i} message={m} />
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-500">
+                    Thinking…
+                  </div>
+                </div>
+              )}
+            </>
           )}
+          <div ref={bottomRef} />
         </div>
 
         <ChatInput value={draft} onChange={setDraft} onSend={handleSend} />

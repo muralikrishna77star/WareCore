@@ -11,6 +11,7 @@
     "start:desktop": "node scripts/desktop/start.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
     "@types/nodemailer": "^8.0.0",
