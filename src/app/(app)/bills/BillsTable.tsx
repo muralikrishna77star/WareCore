@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { formatDate } from '@/lib/utils'
 import BillRow from './BillRow'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 type Column = {
   key: string
@@ -23,7 +24,17 @@ const columns: Column[] = [
   { key: 'notes', label: 'Notes', filterValue: (b) => b.notes || '' },
 ]
 
-export default function BillsTable({ bills, highlight }: { bills: any[]; highlight?: string }) {
+export default function BillsTable({
+  bills,
+  highlight,
+  fromDate,
+  toDate,
+}: {
+  bills: any[]
+  highlight?: string
+  fromDate?: string
+  toDate?: string
+}) {
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const filtered = useMemo(() => {
@@ -38,7 +49,29 @@ export default function BillsTable({ bills, highlight }: { bills: any[]; highlig
     )
   }, [bills, filters])
 
+  const exportRows = filtered.map((b: any) => ({
+    'Bill No.': b.bill_number || '',
+    'Date': formatDate(b.bill_date),
+    'Supplier': b.suppliers?.name || '',
+    'Company': b.companies?.name || '',
+    'Warehouse': b.warehouses?.name || '',
+    'Quantity': Number(b.total_quantity || 0),
+    'Amount': Number(b.total_amount || 0),
+    'Status': b.status === 'cancelled' ? 'Cancelled' : b.status === 'draft' ? 'Draft' : 'Active',
+    'Notes': b.notes || '',
+  }))
+
   return (
+    <>
+      {filtered.length > 0 && (
+        <div className="flex justify-end px-6 py-2 bg-white border-b">
+          <ExportExcelButton
+            rows={exportRows}
+            filename={`purchase-bills_${fromDate ?? ''}_to_${toDate ?? ''}`}
+            sheetName="Purchase Bills"
+          />
+        </div>
+      )}
     <table className="w-full text-[0.9375rem]">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr className="text-left border-b">
@@ -77,5 +110,6 @@ export default function BillsTable({ bills, highlight }: { bills: any[]; highlig
         ))}
       </tbody>
     </table>
+    </>
   )
 }

@@ -82,7 +82,7 @@ export default async function JobWorkPage({
               <p className="text-gray-500">No job work orders in the selected range.</p>
             </div>
           ) : (
-            <JobWorkTable orders={orders} />
+            <JobWorkTable orders={orders} fromDate={fromDate} toDate={toDate} />
           )}
         </div>
       </div>

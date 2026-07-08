@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
 import { CURRENT_STOCK_QUERY } from '@/lib/hasura/queries'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 export default async function InventoryPage() {
   const result = await hasuraQuery(CURRENT_STOCK_QUERY)
@@ -30,11 +31,31 @@ export default async function InventoryPage() {
     grouped[row.company_id].rows.push(row)
   }
 
+  const exportRows = (stock as StockRow[])
+    .filter((row) => Number(row.current_stock) !== 0)
+    .map((row) => ({
+      'Company': row.company_name,
+      'Warehouse': row.warehouse_name,
+      'Material': row.material_type_name,
+      'Size': row.size_label || '',
+      'Stock': Number(row.current_stock),
+      'Unit': row.unit,
+    }))
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Current Inventory</h1>
-        <p className="mt-1 text-sm text-gray-500">Live stock levels across all companies and warehouses</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Current Inventory</h1>
+          <p className="mt-1 text-sm text-gray-500">Live stock levels across all companies and warehouses</p>
+        </div>
+        {exportRows.length > 0 && (
+          <ExportExcelButton
+            rows={exportRows}
+            filename={`current-inventory_${new Date().toISOString().split('T')[0]}`}
+            sheetName="Inventory"
+          />
+        )}
       </div>
 
       {Object.keys(grouped).length === 0 ? (

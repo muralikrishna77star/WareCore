@@ -11,6 +11,7 @@ import {
   ACTIVE_ITEM_MASTER_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
@@ -332,6 +333,17 @@ export default async function VendorMovementsPage({
     transactions: g.transactions,
   }))
 
+  const exportRows = tableRows.map((r) => ({
+    'Vendor': r.vendorName,
+    'Company': r.companyName,
+    'Item': r.itemLabel,
+    'Size': r.sizeLabel || '',
+    'Job Work Out': r.jobWorkOut,
+    'Direct Sales': r.directSales,
+    'Returns': r.returns,
+    'Balance': r.balance,
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
@@ -340,6 +352,9 @@ export default async function VendorMovementsPage({
           <p className="text-sm text-gray-500 mt-1">Job work out, direct sales, returns and pending balance, by vendor</p>
         </div>
         <div className="flex items-center gap-2">
+          {tableRows.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`vendor-movements-${fromDate}-to-${toDate}`} sheetName="Vendor Movements" />
+          )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>

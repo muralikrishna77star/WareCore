@@ -4,10 +4,23 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_CANCELLATIONS_QUERY } from '@/lib/hasura/queries'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 export default async function SaleCancellationsPage() {
   const result = await hasuraQuery(DISPATCH_CANCELLATIONS_QUERY)
   const records = result.dispatch_cancellations ?? []
+
+  const exportRows = records.map((r: any) => ({
+    'Invoice No.': r.invoice_number || '',
+    'Dispatch Date': formatDate(r.dispatch_date),
+    'Customer': r.customer_name || '',
+    'Company': r.company_name || '',
+    'Warehouse': r.warehouse_name || '',
+    'Qty': Number(r.total_quantity || 0),
+    'Amount': r.total_amount ? Number(r.total_amount) : '',
+    'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
+    'Purged': formatDate(r.purged_at),
+  }))
 
   return (
     <div className="space-y-6">
@@ -16,9 +29,12 @@ export default async function SaleCancellationsPage() {
           <h1 className="text-[1.4375rem] font-bold text-gray-900">Sale Cancellations</h1>
           <p className="mt-1 text-[0.9375rem] text-gray-500">Archived cancelled sale / dispatch orders</p>
         </div>
-        <Link href="/dispatch" className="text-[0.9375rem] text-blue-600 hover:underline">
-          ← Sale Entry
-        </Link>
+        <div className="flex items-center gap-4">
+          {records.length > 0 && <ExportExcelButton rows={exportRows} filename="sale-cancellations" sheetName="Sale Cancellations" />}
+          <Link href="/dispatch" className="text-[0.9375rem] text-blue-600 hover:underline">
+            ← Sale Entry
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">

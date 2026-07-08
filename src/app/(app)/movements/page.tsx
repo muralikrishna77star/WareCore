@@ -15,6 +15,7 @@ import {
   JOB_WORK_ORDERS_BY_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 const entryTypeOptions = [
   'PURCHASE_IN',
@@ -307,6 +308,21 @@ export default async function MovementsPage({
     return `/movements?${next.toString()}`
   }
 
+  const exportRows = displayedMovements.map((m: any) => ({
+    'Date': formatDate(m.entry_date),
+    'Type': getEntryTypeLabel(m.entry_type),
+    'Company': m.companies?.code || '',
+    'Warehouse': m.warehouses?.name || '',
+    'Item': itemLabelFor(m),
+    'Size': m.size_label || m.material_sizes?.size_label || '',
+    'Quantity': Number(m.quantity),
+    'Balance': balanceById.get(m.id) ?? '',
+    'Vendor': vendorFor(m) || '',
+    'Job Work Status': jobWorkStatusFor(m) ? jobWorkStatusLabel(jobWorkStatusFor(m)!) : '',
+    'Reference': m.reference_number || '',
+    'Notes': m.notes || '',
+  }))
+
   const SortableTh = ({ column, label, align }: { column: string; label: string; align?: 'right' }) => (
     <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
       <a href={sortHref(column)} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
@@ -318,9 +334,14 @@ export default async function MovementsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Stock Movements</h1>
-        <p className="mt-1 text-sm text-gray-500">Full ledger of all inventory movements</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Stock Movements</h1>
+          <p className="mt-1 text-sm text-gray-500">Full ledger of all inventory movements</p>
+        </div>
+        {movements.length > 0 && (
+          <ExportExcelButton rows={exportRows} filename={`stock-movements_${fromDate}_to_${toDate}`} sheetName="Movements" />
+        )}
       </div>
 
       {/* Filters */}

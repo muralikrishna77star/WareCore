@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { TRANSFERS_REPORT_QUERY, ACTIVE_COMPANIES_QUERY } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -43,6 +44,28 @@ export default async function TransfersReportPage({
     return s + (t.transfer_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity || 0), 0)
   }, 0)
 
+  const exportRows = transfers.flatMap((t: any) => {
+    const items = t.transfer_items ?? []
+    const base = {
+      'Date': formatDate(t.transfer_date),
+      'From Company': t.companies_from?.name || '',
+      'From Warehouse': t.warehouses_from?.name || '',
+      'To Company': t.companies_to?.name || '',
+      'To Warehouse': t.warehouses_to?.name || '',
+    }
+    const status = t.status?.replace('_', ' ') ?? ''
+    if (items.length === 0) {
+      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Status': status }]
+    }
+    return items.map((item: any) => ({
+      ...base,
+      'Material': item.material_types?.description || '',
+      'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
+      'Qty (T)': Number(item.quantity),
+      'Status': status,
+    }))
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
@@ -51,6 +74,9 @@ export default async function TransfersReportPage({
           <p className="text-sm text-gray-500 mt-1">Inter-company and inter-warehouse transfers</p>
         </div>
         <div className="flex items-center gap-2">
+          {transfers.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`transfers-report-${fromDate}-to-${toDate}`} sheetName="Transfers" />
+          )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>

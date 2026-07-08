@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -41,7 +42,15 @@ const columns: Column[] = [
   { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '' },
 ]
 
-export default function JobWorkTable({ orders }: { orders: any[] }) {
+export default function JobWorkTable({
+  orders,
+  fromDate,
+  toDate,
+}: {
+  orders: any[]
+  fromDate?: string
+  toDate?: string
+}) {
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const filtered = useMemo(() => {
@@ -56,7 +65,30 @@ export default function JobWorkTable({ orders }: { orders: any[] }) {
     )
   }, [orders, filters])
 
+  const exportRows = filtered.map((o: any) => {
+    const items = o.job_work_items ?? []
+    return {
+      'Dispatch Date': formatDate(o.dispatch_date),
+      'Company': o.companies?.code || '',
+      'Vendor': o.suppliers?.name || '',
+      'Items': items.length,
+      'Expected Return': o.expected_return_date ? formatDate(o.expected_return_date) : '',
+      'Status': getJobWorkOrderStatusLabel(o.status),
+      'Notes': o.notes || '',
+    }
+  })
+
   return (
+    <>
+      {filtered.length > 0 && (
+        <div className="flex justify-end px-6 py-2 bg-white border-b">
+          <ExportExcelButton
+            rows={exportRows}
+            filename={`job-work-orders_${fromDate ?? ''}_to_${toDate ?? ''}`}
+            sheetName="Job Work"
+          />
+        </div>
+      )}
     <table className="w-full text-sm">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr className="text-left border-b">
@@ -121,6 +153,7 @@ export default function JobWorkTable({ orders }: { orders: any[] }) {
         })}
       </tbody>
     </table>
+    </>
   )
 }
 

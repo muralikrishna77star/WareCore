@@ -4,10 +4,21 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_CANCELLATIONS_QUERY } from '@/lib/hasura/queries'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 export default async function JobWorkCancellationsPage() {
   const result = await hasuraQuery(JOB_WORK_CANCELLATIONS_QUERY)
   const records = result.job_work_cancellations ?? []
+
+  const exportRows = records.map((r: any) => ({
+    'Reference No.': r.reference_number || '',
+    'Dispatch Date': formatDate(r.dispatch_date),
+    'Vendor': r.vendor_name || '',
+    'Company': r.company_name || '',
+    'Warehouse': r.warehouse_name || '',
+    'Status at Cancellation': r.status?.replace('_', ' ') || '',
+    'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
+  }))
 
   return (
     <div className="space-y-6">
@@ -16,9 +27,12 @@ export default async function JobWorkCancellationsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Job Work Cancellations</h1>
           <p className="mt-1 text-sm text-gray-500">Archived cancelled job work orders</p>
         </div>
-        <Link href="/jobwork" className="text-sm text-blue-600 hover:underline">
-          ← Job Work
-        </Link>
+        <div className="flex items-center gap-4">
+          {records.length > 0 && <ExportExcelButton rows={exportRows} filename="jobwork-cancellations" sheetName="Job Work Cancellations" />}
+          <Link href="/jobwork" className="text-sm text-blue-600 hover:underline">
+            ← Job Work
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">

@@ -100,7 +100,7 @@ export default async function BillsPage({
               )}
             </div>
           ) : (
-            <BillsTable bills={bills} highlight={lineId} />
+            <BillsTable bills={bills} highlight={lineId} fromDate={fromDate} toDate={toDate} />
           )}
         </div>
       </div>

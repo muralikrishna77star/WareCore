@@ -8,6 +8,7 @@ import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
 import { ListingFilters } from '@/components/ListingFilters'
 import { ListingSummary } from '@/components/ListingSummary'
 import { ReferenceLink } from '@/components/ReferenceLink'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -47,6 +48,19 @@ export default async function TransfersPage({
     0
   )
 
+  const exportRows = transfers.map((t: any) => {
+    const items = t.transfer_items ?? []
+    const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
+    return {
+      'Date': formatDate(t.transfer_date),
+      'From': `${t.companies_from?.code || ''} / ${t.warehouses_from?.name || ''}`,
+      'To': `${t.companies_to?.code || ''} / ${t.warehouses_to?.name || ''}`,
+      'Items': items.length,
+      'Qty': totalQty,
+      'Status': t.status?.replace('_', ' ') ?? '',
+    }
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -54,12 +68,17 @@ export default async function TransfersPage({
           <h1 className="text-2xl font-bold text-gray-900">Transfers</h1>
           <p className="mt-1 text-sm text-gray-500">Inter-company and inter-warehouse material transfers</p>
         </div>
-        <Link
-          href="/transfers/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          + New Transfer
-        </Link>
+        <div className="flex items-center gap-2">
+          {transfers.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`transfers_${fromDate}_to_${toDate}`} sheetName="Transfers" />
+          )}
+          <Link
+            href="/transfers/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            + New Transfer
+          </Link>
+        </div>
       </div>
 
       <ListingSummary count={transfers.length} countLabel="transfer" totalQuantity={totalQuantity} />

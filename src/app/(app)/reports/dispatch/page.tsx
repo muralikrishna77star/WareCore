@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -52,6 +53,31 @@ export default async function DispatchReportPage({
     return s + (o.dispatch_items ?? []).reduce((si: number, i: any) => si + Number(i.amount || 0), 0)
   }, 0)
 
+  const exportRows = orders.flatMap((o: any) => {
+    const items = o.dispatch_items ?? []
+    const base = {
+      'Date': formatDate(o.dispatch_date),
+      'Invoice No.': o.invoice_number ?? '',
+      'Company': o.companies?.name || '',
+      'Warehouse': o.warehouses?.name || '',
+      'Customer': o.customers?.name || '',
+      'Vehicle': o.vehicle_number ?? '',
+    }
+    const status = o.status?.replace(/_/g, ' ') ?? ''
+    if (items.length === 0) {
+      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Rate': '', 'Amount (₹)': '', 'Status': status }]
+    }
+    return items.map((item: any) => ({
+      ...base,
+      'Material': item.material_types?.description || '',
+      'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
+      'Qty (T)': Number(item.quantity),
+      'Rate': item.rate ? Number(item.rate) : '',
+      'Amount (₹)': item.amount ? Number(item.amount) : '',
+      'Status': status,
+    }))
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
@@ -60,6 +86,9 @@ export default async function DispatchReportPage({
           <p className="text-sm text-gray-500 mt-1">Goods dispatched to customers</p>
         </div>
         <div className="flex items-center gap-2">
+          {orders.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`dispatch-report-${fromDate}-to-${toDate}`} sheetName="Dispatch" />
+          )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>

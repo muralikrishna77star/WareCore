@@ -12,9 +12,11 @@ import {
   ACTIVE_MATERIAL_SIZES_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
+import { formatDate } from '@/lib/utils'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
 // /api/stock/ledger-entries.
@@ -225,6 +227,36 @@ export default async function ItemStockLedgerPage({
 
   const fmtQ = (n: number) => n.toFixed(3)
 
+  const ENTRY_TYPE_LABELS: Record<string, string> = {
+    PURCHASE_IN: 'Purchase In',
+    VENDOR_RETURN_IN: 'Vendor Return In',
+    SALE_OUT: 'Sale / Dispatch',
+    SALE_CANCEL: 'Sale Cancelled',
+    PURCHASE_CANCEL: 'Purchase Cancelled',
+    TRANSFER_OUT: 'Transfer Out',
+    TRANSFER_IN: 'Transfer In',
+    JOB_WORK_OUT: 'Job Work Out',
+    JOB_WORK_RETURN_IN: 'Job Work Return In',
+    JOB_WORK_OUTPUT_IN: 'Job Work Output In',
+    JOB_WORK_CANCEL: 'Job Work Cancelled',
+    ADJUSTMENT_IN: 'Adjustment In',
+    ADJUSTMENT_OUT: 'Adjustment Out',
+  }
+  const exportRows = ledgerRows.map((row) => {
+    const qty = Number(row.quantity)
+    return {
+      'Date': formatDate(row.entry_date),
+      'Type': ENTRY_TYPE_LABELS[row.entry_type ?? ''] ?? row.entry_type ?? '',
+      'Reference': row.reference_number || '',
+      'Company': row.companies?.name || '',
+      'Warehouse': row.warehouses?.name || '',
+      'In': qty > 0 ? qty : '',
+      'Out': qty < 0 ? Math.abs(qty) : '',
+      'Balance': row.balance,
+      'Notes': row.notes || '',
+    }
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
@@ -235,6 +267,9 @@ export default async function ItemStockLedgerPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedItem && ledgerRows.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`Item_Ledger_${selectedItem.item_code}_${fromDate}_to_${toDate}`} sheetName="Item Ledger" />
+          )}
           {selectedItem && <PrintButton />}
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 type TotalRow = { category: string; sourceQty: number; ledgerQty: number; diff: number; matches: boolean }
 type StaleRecord = {
@@ -231,6 +232,20 @@ export default function StockReconcilePage() {
 
         {totals && (
           <div className="border-t pt-4 space-y-2">
+            <div className="flex justify-end">
+              <ExportExcelButton
+                rows={totals.map((row) => ({
+                  'Category': categoryLabels[row.category] || row.category,
+                  'Source Total': row.sourceQty,
+                  'Ledger Total': row.ledgerQty,
+                  'Diff': row.diff,
+                  'Status': row.matches ? 'Match' : cancellationCategories.has(row.category) ? 'Info' : 'Mismatch',
+                }))}
+                filename={`stock-reconcile-totals-${from}-to-${to}`}
+                sheetName="Totals"
+                label="Export"
+              />
+            </div>
             <div className="overflow-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead>
@@ -278,9 +293,25 @@ export default function StockReconcilePage() {
 
         {staleRecords && (
           <div className="border-t pt-4">
-            <h3 className="font-medium text-gray-900 mb-2">
-              Stale Records {staleRecords.length > 0 && <span className="text-red-600">({staleRecords.length})</span>}
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-gray-900">
+                Stale Records {staleRecords.length > 0 && <span className="text-red-600">({staleRecords.length})</span>}
+              </h3>
+              {staleRecords.length > 0 && (
+                <ExportExcelButton
+                  rows={staleRecords.map((r) => ({
+                    'Date': r.entryDate,
+                    'Type': r.entryType,
+                    'Reference': r.referenceNumber || '',
+                    'Material': `${r.materialCode ?? ''}${r.sizeLabel ? ` (${r.sizeLabel})` : ''}`,
+                    'Qty': r.quantity,
+                  }))}
+                  filename={`stock-reconcile-stale-${from}-to-${to}`}
+                  sheetName="Stale Records"
+                  label="Export"
+                />
+              )}
+            </div>
             {staleRecords.length === 0 ? (
               <p className="text-sm text-green-700">None found — every ledger entry traces back to a live or archived order.</p>
             ) : (
@@ -319,9 +350,26 @@ export default function StockReconcilePage() {
 
         {duplicateGroups && (
           <div className="border-t pt-4">
-            <h3 className="font-medium text-gray-900 mb-2">
-              Duplicate Ledger Rows {duplicateGroups.length > 0 && <span className="text-orange-600">({duplicateGroups.length})</span>}
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-gray-900">
+                Duplicate Ledger Rows {duplicateGroups.length > 0 && <span className="text-orange-600">({duplicateGroups.length})</span>}
+              </h3>
+              {duplicateGroups.length > 0 && (
+                <ExportExcelButton
+                  rows={duplicateGroups.map((g) => ({
+                    'Reference': g.referenceNumber || '',
+                    'Type': g.entryType,
+                    'Line': `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
+                    'Rows': g.rowCount,
+                    'Net Qty': g.netQty,
+                    'Latest': g.latestEntryDate,
+                  }))}
+                  filename={`stock-reconcile-duplicates-${from}-to-${to}`}
+                  sheetName="Duplicates"
+                  label="Export"
+                />
+              )}
+            </div>
             {duplicateGroups.length === 0 ? (
               <p className="text-sm text-green-700">None found — every order line has exactly one in-type ledger row.</p>
             ) : (

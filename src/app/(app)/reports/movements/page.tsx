@@ -13,6 +13,7 @@ import {
   JOB_WORK_ORDER_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
@@ -137,6 +138,17 @@ export default async function MovementsReportPage({
     .filter(m => ['transfer_out', 'dispatch', 'job_work_out'].includes(m.entry_type))
     .reduce((s, m) => s + Number(m.quantity || 0), 0)
 
+  const exportRows = movements.map((m: any) => ({
+    'Date': formatDate(m.entry_date),
+    'Type': (entryTypeConfig[m.entry_type] ?? { label: m.entry_type }).label,
+    'Company': m.companies?.name ?? '',
+    'Warehouse': m.warehouses?.name ?? '',
+    'Material': m.material_types?.description ?? '',
+    'Size': m.material_sizes?.size_label ?? m.size_label ?? '',
+    'Qty (T)': Number(m.quantity),
+    'Reference': m.reference_id ?? '',
+  }))
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
@@ -145,6 +157,9 @@ export default async function MovementsReportPage({
           <p className="text-sm text-gray-500 mt-1">Stock ledger movements by type</p>
         </div>
         <div className="flex items-center gap-2">
+          {movements.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`Movements_Report_${fromDate}_to_${toDate}`} sheetName="Movements" />
+          )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>

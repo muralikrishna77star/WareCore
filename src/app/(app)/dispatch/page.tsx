@@ -91,7 +91,7 @@ export default async function DispatchPage({
               <p className="text-gray-500">No sale entries in the selected range.</p>
             </div>
           ) : (
-            <DispatchTable orders={orders} />
+            <DispatchTable orders={orders} fromDate={fromDate} toDate={toDate} />
           )}
         </div>
       </div>

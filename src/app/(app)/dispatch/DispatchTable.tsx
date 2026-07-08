@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 type Column = {
   key: string
@@ -28,7 +29,15 @@ const columns: Column[] = [
   { key: 'actions', label: 'Actions', searchable: false },
 ]
 
-export default function DispatchTable({ orders }: { orders: any[] }) {
+export default function DispatchTable({
+  orders,
+  fromDate,
+  toDate,
+}: {
+  orders: any[]
+  fromDate?: string
+  toDate?: string
+}) {
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const filtered = useMemo(() => {
@@ -43,7 +52,36 @@ export default function DispatchTable({ orders }: { orders: any[] }) {
     )
   }, [orders, filters])
 
+  const exportRows = filtered.map((o: any) => {
+    const dispItems = o.dispatch_items ?? []
+    const totalQty = dispItems.reduce((s: number, i: any) => s + Number(i.quantity), 0)
+    const totalAmt = dispItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+    return {
+      'Date': formatDate(o.dispatch_date),
+      'Invoice Number': o.invoice_number || '',
+      'Company': o.companies?.code || '',
+      'Customer': o.customers?.name || '',
+      'Sale Ref ID': o.sale_ref_id || '',
+      'Vehicle': o.vehicle_number || '',
+      'Qty': totalQty,
+      'Amount': totalAmt,
+      'Type': o.is_vendor_direct ? 'From Vendor' : 'Warehouse',
+      'Status': o.status === 'cancelled' ? 'Cancelled' : o.status === 'draft' ? 'Draft' : 'Active',
+      'Notes': o.notes || '',
+    }
+  })
+
   return (
+    <>
+      {filtered.length > 0 && (
+        <div className="flex justify-end px-6 py-2 bg-white border-b">
+          <ExportExcelButton
+            rows={exportRows}
+            filename={`sales_${fromDate ?? ''}_to_${toDate ?? ''}`}
+            sheetName="Sales"
+          />
+        </div>
+      )}
     <table className="w-full text-sm">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr className="text-left border-b">
@@ -143,5 +181,6 @@ export default function DispatchTable({ orders }: { orders: any[] }) {
         })}
       </tbody>
     </table>
+    </>
   )
 }

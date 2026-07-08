@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -48,6 +49,34 @@ export default async function JobWorkReportPage({
   }, 0)
   const totalPending = totalSent - totalReceived
 
+  const exportRows = orders.flatMap((o: any) => {
+    const items = o.job_work_items ?? []
+    const base = {
+      'Ref No.': o.reference_number,
+      'Dispatch Date': formatDate(o.dispatch_date),
+      'Exp. Return': o.expected_return_date ? formatDate(o.expected_return_date) : '',
+      'Company': o.companies?.name || '',
+      'Supplier': o.suppliers?.name || '',
+    }
+    const status = o.status?.replace(/_/g, ' ') ?? ''
+    if (items.length === 0) {
+      return [{ ...base, 'Material': '', 'Size': '', 'Sent (T)': '', 'Received (T)': '', 'Pending (T)': '', 'Status': status }]
+    }
+    return items.map((item: any) => {
+      const sent = Number(item.quantity_sent || 0)
+      const received = Number(item.quantity_received || 0)
+      return {
+        ...base,
+        'Material': item.material_types?.description || '',
+        'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
+        'Sent (T)': sent,
+        'Received (T)': received,
+        'Pending (T)': sent - received,
+        'Status': status,
+      }
+    })
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
@@ -56,6 +85,9 @@ export default async function JobWorkReportPage({
           <p className="text-sm text-gray-500 mt-1">Material sent to vendors for processing</p>
         </div>
         <div className="flex items-center gap-2">
+          {orders.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`jobwork-report-${fromDate}-to-${toDate}`} sheetName="Job Work" />
+          )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>

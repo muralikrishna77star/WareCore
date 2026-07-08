@@ -13,6 +13,7 @@ import {
   JOB_WORK_ORDER_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import Link from 'next/link'
 
 type LedgerRow = {
@@ -239,6 +240,20 @@ export default async function StockStatementPage({
 
   const fmtQ = (n: number) => n.toFixed(3)
 
+  const exportRows = sorted.map((item) => ({
+    'Item Name': item.item_name,
+    'Unit': item.unit,
+    'Opening': item.opening,
+    'Purchase In': item.purchase_in,
+    'Transfer In': item.transfer_in,
+    'JW Return': item.jw_return,
+    'Dispatch': item.dispatch_out,
+    'Transfer Out': item.transfer_out,
+    'Job Work Out': item.jw_out,
+    'Closing': closing(item),
+    'Live Stock': item.current_stock,
+  }))
+
   // Build a link to this item's Item Ledger, scoped to the same filters and
   // optionally to specific entry types (e.g. just PURCHASE_IN for that cell).
   const ledgerLink = (item: StockItem, opts: { from: string; to: string; types?: string[] }) => {
@@ -275,6 +290,9 @@ export default async function StockStatementPage({
           </p>
         </div>
         <div className="flex items-center gap-4">
+          {sorted.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`Stock_Statement_${fromDate}_to_${toDate}`} sheetName="Stock Statement" />
+          )}
           <Link href="/reports/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
             Reconcile Stock
           </Link>

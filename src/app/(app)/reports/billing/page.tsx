@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { BILLING_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
+import { ExportExcelButton } from '@/components/ExportExcelButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
@@ -40,6 +41,28 @@ export default async function BillingReportPage({
   const totalQty = bills.reduce((s, b) => s + Number(b.total_quantity || 0), 0)
   const totalAmt = bills.reduce((s, b) => s + Number(b.total_amount || 0), 0)
 
+  const exportRows = bills.flatMap((bill: any) => {
+    const items = bill.purchase_bill_items ?? []
+    const base = {
+      'Bill No.': bill.bill_number,
+      'Date': formatDate(bill.bill_date),
+      'Supplier': bill.suppliers?.name || '',
+      'Company': bill.companies?.name || '',
+      'Warehouse': bill.warehouses?.name || '',
+    }
+    if (items.length === 0) {
+      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Rate': '', 'Amount (₹)': '' }]
+    }
+    return items.map((item: any) => ({
+      ...base,
+      'Material': item.material_types?.description || '',
+      'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
+      'Qty (T)': Number(item.quantity),
+      'Rate': item.rate ? Number(item.rate) : '',
+      'Amount (₹)': item.amount ? Number(item.amount) : '',
+    }))
+  })
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -49,6 +72,9 @@ export default async function BillingReportPage({
           <p className="text-sm text-gray-500 mt-1">Purchase bills with item details</p>
         </div>
         <div className="flex items-center gap-2">
+          {bills.length > 0 && (
+            <ExportExcelButton rows={exportRows} filename={`Billing_Report_${fromDate}_to_${toDate}`} sheetName="Billing" />
+          )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
         </div>
