@@ -49,3 +49,5 @@ next-env.d.ts
 /warecore-data/
 /WC-Installer/dist/
 /WC-Installer/node-runtime/
+
+.vercel
