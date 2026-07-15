@@ -1582,6 +1582,8 @@ export const ITEM_STOCK_AT_VENDORS_QUERY = `
   query GetItemStockAtVendors($where: v_stock_at_vendors_bool_exp = {}) {
     v_stock_at_vendors(where: $where, order_by: {vendor_name: asc}) {
       vendor_name
+      material_type_id
+      size_label
       pending_quantity
       unit
     }

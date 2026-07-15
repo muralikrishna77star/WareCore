@@ -11,6 +11,7 @@ import {
   ACTIVE_SUPPLIERS_QUERY,
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
+  ITEM_STOCK_AT_VENDORS_QUERY,
 } from '@/lib/hasura/queries'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
@@ -42,6 +43,7 @@ type StockItem = {
   jw_return: number
   adjustment: number
   current_stock: number
+  at_vendor: number
 }
 
 type ItemOption = ComboOption & {
@@ -86,6 +88,7 @@ export default async function StockStatementPage({
     : allWarehouses
   const suppliers: any[] = supResult.suppliers ?? []
   const materialTypes: any[] = matTypeResult.material_types ?? []
+  const materialTypeById = new Map(materialTypes.map((mt: any) => [mt.id, mt]))
   const allSizes: any[] = matSizeResult.material_sizes ?? []
   const sizes = params.material_type
     ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
@@ -151,13 +154,38 @@ export default async function StockStatementPage({
   // current_where: all entries up to today (no date ceiling) → gives live stock
   const currentWhere = baseConditions.length > 0 ? { _and: baseConditions } : {}
 
-  const result = noResults
-    ? { opening: [], period: [], current: [] }
-    : await hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere })
+  // Stock still sitting at a vendor for job work isn't in stock_ledger at all
+  // (it only records the JOB_WORK_OUT/RETURN legs), so it has to be pulled
+  // separately from v_stock_at_vendors and merged in below.
+  const vendorWhere: Record<string, unknown> = {}
+  if (params.company) vendorWhere.company_id = { _eq: params.company }
+  if (params.vendor) vendorWhere.vendor_id = { _eq: params.vendor }
+  if (selectedItem) {
+    vendorWhere.material_type_id = { _eq: selectedItem.material_type_id }
+    if (selectedItem.material_size_id) {
+      const label = allSizes.find((s: any) => s.id === selectedItem.material_size_id)?.size_label
+      if (label) vendorWhere.size_label = { _eq: label }
+    }
+  } else {
+    if (params.material_type) vendorWhere.material_type_id = { _eq: params.material_type }
+    if (params.size) {
+      const label = allSizes.find((s: any) => s.id === params.size)?.size_label
+      if (label) vendorWhere.size_label = { _eq: label }
+    }
+  }
+
+  const [result, vendorResult] = noResults
+    ? [{ opening: [], period: [], current: [] }, { v_stock_at_vendors: [] }]
+    : await Promise.all([
+        hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere }),
+        hasuraQuery(ITEM_STOCK_AT_VENDORS_QUERY, { where: vendorWhere }),
+      ])
 
   const openingRows: LedgerRow[] = result.opening ?? []
   const periodRows: LedgerRow[] = result.period ?? []
   const currentRows: LedgerRow[] = result.current ?? []
+  const vendorRows: { material_type_id: string; size_label: string | null; pending_quantity: number | string }[] =
+    vendorResult.v_stock_at_vendors ?? []
 
   // Aggregate by material + size
   const items: Record<string, StockItem> = {}
@@ -189,6 +217,7 @@ export default async function StockStatementPage({
         jw_return: 0,
         adjustment: 0,
         current_stock: 0,
+        at_vendor: 0,
       }
     }
     return items[key]
@@ -224,6 +253,36 @@ export default async function StockStatementPage({
     item.current_stock += Number(row.quantity)
   }
 
+  // Stock at vendor (open job work) doesn't touch stock_ledger, so it's merged
+  // in by material + size rather than through ensureItem/getKey.
+  for (const row of vendorRows) {
+    const mt = materialTypeById.get(row.material_type_id) as { description?: string; unit?: string } | undefined
+    const material = mt?.description ?? '?'
+    const size = row.size_label ?? ''
+    const key = `${material}||${size || '—'}`
+    if (!items[key]) {
+      items[key] = {
+        material,
+        unit: mt?.unit ?? 'tons',
+        size,
+        item_name: size ? `${material} — ${size}` : material,
+        material_type_id: row.material_type_id,
+        material_size_id: null,
+        opening: 0,
+        purchase_in: 0,
+        transfer_in: 0,
+        transfer_out: 0,
+        dispatch_out: 0,
+        jw_out: 0,
+        jw_return: 0,
+        adjustment: 0,
+        current_stock: 0,
+        at_vendor: 0,
+      }
+    }
+    items[key].at_vendor += Number(row.pending_quantity)
+  }
+
   const sorted = Object.values(items).sort(
     (a, b) => a.material.localeCompare(b.material) || a.size.localeCompare(b.size),
   )
@@ -245,12 +304,13 @@ export default async function StockStatementPage({
     'Unit': item.unit,
     'Opening': item.opening,
     'Purchase In': item.purchase_in,
+    'Job Work Out': item.jw_out,
     'Transfer In': item.transfer_in,
     'JW Return': item.jw_return,
     'Dispatch': item.dispatch_out,
     'Transfer Out': item.transfer_out,
-    'Job Work Out': item.jw_out,
     'Closing': closing(item),
+    'At Vendor': item.at_vendor,
     'Live Stock': item.current_stock,
   }))
 
@@ -276,6 +336,7 @@ export default async function StockStatementPage({
     dispatch_out:  sorted.reduce((s, i) => s + i.dispatch_out, 0),
     jw_out:        sorted.reduce((s, i) => s + i.jw_out, 0),
     closing:       sorted.reduce((s, i) => s + closing(i), 0),
+    at_vendor:     sorted.reduce((s, i) => s + i.at_vendor, 0),
     current_stock: sorted.reduce((s, i) => s + i.current_stock, 0),
   }
 
@@ -421,6 +482,7 @@ export default async function StockStatementPage({
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block" /> Stock In</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> Stock Out</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-700 inline-block" /> Closing Stock</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> At Vendor (open job work)</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" /> Live Stock (all-time)</span>
       </div>
 
@@ -450,15 +512,17 @@ export default async function StockStatementPage({
                   <th className="px-4 py-3 text-right text-blue-700 bg-blue-50">Opening</th>
                   {/* IN columns */}
                   <th className="px-4 py-3 text-right text-green-700 bg-green-50">Purchase In</th>
+                  {/* Job Work Out sits right after Purchase In — mirrors the purchase → sent-for-job-work flow */}
+                  <th className="px-4 py-3 text-right text-red-700 bg-red-50">Job Work Out</th>
                   <th className="px-4 py-3 text-right text-green-700 bg-green-50">Transfer In</th>
                   <th className="px-4 py-3 text-right text-green-700 bg-green-50">JW Return</th>
                   {/* OUT columns */}
                   <th className="px-4 py-3 text-right text-red-700 bg-red-50">Dispatch</th>
                   <th className="px-4 py-3 text-right text-red-700 bg-red-50">Transfer Out</th>
-                  <th className="px-4 py-3 text-right text-red-700 bg-red-50">Job Work Out</th>
                   {/* Closing */}
                   <th className="px-4 py-3 text-right text-gray-800 bg-gray-100">Closing</th>
-                  {/* Current / Live */}
+                  {/* At Vendor / Current / Live */}
+                  <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">At Vendor</th>
                   <th className="px-4 py-3 text-right text-purple-700 bg-purple-50">Live Stock</th>
                 </tr>
               </thead>
@@ -485,16 +549,19 @@ export default async function StockStatementPage({
                         {openingHref ? <Link href={openingHref} className="hover:underline">{fmtQ(item.opening)}</Link> : fmtQ(item.opening)}
                       </td>
                       {cell(item.purchase_in, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['PURCHASE_IN'])}
+                      {cell(item.jw_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['JOB_WORK_OUT'])}
                       {cell(item.transfer_in, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['TRANSFER_IN'])}
                       {cell(item.jw_return, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['JOB_WORK_RETURN_IN', 'VENDOR_RETURN_IN'])}
                       {cell(item.dispatch_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['SALE_OUT'])}
                       {cell(item.transfer_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['TRANSFER_OUT'])}
-                      {cell(item.jw_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['JOB_WORK_OUT'])}
                       <td className={`px-4 py-3 text-right font-bold bg-gray-100/60 ${cl < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                         {(() => {
                           const href = ledgerLink(item, { from: fromDate, to: toDate })
                           return href ? <Link href={href} className="hover:underline">{fmtQ(cl)}</Link> : fmtQ(cl)
                         })()}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-bold bg-amber-50/60 ${item.at_vendor < 0 ? 'text-red-600' : 'text-amber-800'}`}>
+                        {item.at_vendor > 0 ? fmtQ(item.at_vendor) : '—'}
                       </td>
                       <td className={`px-4 py-3 text-right font-bold bg-purple-50/60 ${item.current_stock < 0 ? 'text-red-600' : 'text-purple-800'}`}>
                         {liveHref ? <Link href={liveHref} className="hover:underline">{fmtQ(item.current_stock)}</Link> : fmtQ(item.current_stock)}
@@ -510,13 +577,16 @@ export default async function StockStatementPage({
                   <td className="px-4 py-3 text-gray-700" colSpan={2}>Total</td>
                   <td className="px-4 py-3 text-right text-blue-800">{fmtQ(totals.opening)}</td>
                   <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.purchase_in)}</td>
+                  <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.jw_out)}</td>
                   <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.transfer_in)}</td>
                   <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.jw_return)}</td>
                   <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.dispatch_out)}</td>
                   <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.transfer_out)}</td>
-                  <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.jw_out)}</td>
                   <td className={`px-4 py-3 text-right font-bold ${totals.closing < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                     {fmtQ(totals.closing)}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-bold ${totals.at_vendor < 0 ? 'text-red-700' : 'text-amber-800'}`}>
+                    {fmtQ(totals.at_vendor)}
                   </td>
                   <td className={`px-4 py-3 text-right font-bold ${totals.current_stock < 0 ? 'text-red-700' : 'text-purple-800'}`}>
                     {fmtQ(totals.current_stock)}

@@ -67,91 +67,82 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
   }
 
   return (
-    <>
-      <div
-        className={`fixed inset-0 z-50 bg-black/40 transition-opacity ${
-          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="WareCore Copilot"
-        className={`fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-white shadow-2xl transition-transform duration-300 ease-out md:w-[80%] lg:w-[420px] ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div>
-            <p className="flex items-center gap-1.5 font-semibold text-gray-900">
-              🧠 WareCore Copilot
-            </p>
-            <p className="flex items-center gap-1.5 text-xs text-gray-500">
-              AI Warehouse Assistant
-              <span className="inline-flex items-center gap-1 text-green-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                Connected
-              </span>
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleNewChat}
-              title="New Chat"
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              title="Minimize"
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              title="Close"
-              aria-label="Close"
-              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+    <div
+      role="dialog"
+      aria-modal="false"
+      aria-label="WareCore Copilot"
+      className={`fixed bottom-40 right-4 z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition-all duration-200 ease-out lg:bottom-24 lg:right-6 ${
+        isOpen ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none translate-y-2 scale-95 opacity-0'
+      }`}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div>
+          <p className="flex items-center gap-1.5 font-semibold text-gray-900">
+            🧠 WareCore Copilot
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-gray-500">
+            AI Warehouse Assistant
+            <span className="inline-flex items-center gap-1 text-green-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              Connected
+            </span>
+          </p>
         </div>
-
-        {/* Body */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
-          {messages.length === 0 ? (
-            <>
-              <WelcomeScreen />
-              <SuggestionCards onPick={setDraft} />
-            </>
-          ) : (
-            <>
-              {messages.map((m, i) => (
-                <ChatMessage key={i} message={m} />
-              ))}
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-500">
-                    Thinking…
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          <div ref={bottomRef} />
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            title="New Chat"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Minimize"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close"
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-
-        <ChatInput value={draft} onChange={setDraft} onSend={handleSend} />
       </div>
-    </>
+
+      {/* Body */}
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {messages.length === 0 ? (
+          <>
+            <WelcomeScreen />
+            <SuggestionCards onPick={setDraft} />
+          </>
+        ) : (
+          <>
+            {messages.map((m, i) => (
+              <ChatMessage key={i} message={m} />
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-500">
+                  Thinking…
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <ChatInput value={draft} onChange={setDraft} onSend={handleSend} />
+    </div>
   )
 }
