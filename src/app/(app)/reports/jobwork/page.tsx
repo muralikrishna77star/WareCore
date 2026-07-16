@@ -195,7 +195,7 @@ export default async function JobWorkReportPage({
                           <td className="px-4 py-3 text-right">{Number(item.quantity_sent || 0).toFixed(3)}</td>
                           <td className="px-4 py-3 text-right text-green-700">{Number(item.quantity_received || 0).toFixed(3)}</td>
                           <td className="px-4 py-3 text-right text-yellow-700">
-                            {(Number(item.quantity_sent || 0) - Number(item.quantity_received || 0)).toFixed(3)}
+                            {(Number(item.quantity_sent || 0) - Number(item.quantity_received || 0) - Number(item.quantity_transferred_out || 0)).toFixed(3)}
                           </td>
                         </>
                       ) : (

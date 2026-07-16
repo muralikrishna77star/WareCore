@@ -126,7 +126,7 @@ function VendorDirectSaleForm() {
     const newLines: SaleLine[] = []
 
     for (const item of jwo.job_work_items ?? []) {
-      const pending = Number(item.quantity_sent) - Number(item.quantity_received ?? 0)
+      const pending = Number(item.quantity_sent) - Number(item.quantity_received ?? 0) - Number(item.quantity_transferred_out ?? 0)
       if (pending <= 0) continue
       const typeCode = item.material_types?.code ?? ''
       const saleLineId = generateSaleLineId(typeCode, [...usedLineIds])

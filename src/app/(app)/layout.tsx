@@ -66,6 +66,11 @@ const navItems: NavItem[] = [
     icon: '🏭',
   },
   {
+    title: 'Job Work Transfers',
+    href: '/jobwork-transfers',
+    icon: '⇄',
+  },
+  {
     title: 'Job Work Cancellations',
     href: '/jobwork-cancellations',
     icon: '🗑️',

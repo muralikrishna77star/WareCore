@@ -41,10 +41,12 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
       }
     }
 
-    // Check how much has been returned across all items
+    // Check how much has been returned across all items (a line's receivable
+    // ceiling is quantity_sent minus whatever's already been transferred to
+    // another vendor — that portion will never come back to this order)
     const allReturned = items.every((item) => {
       const qty = parseFloat(quantities[item.id] ?? '0')
-      return qty >= (item.quantity_sent || 0)
+      return qty >= (item.quantity_sent || 0) - (item.quantity_transferred_out || 0)
     })
     const noneReturned = items.every((item) => {
       const qty = parseFloat(quantities[item.id] ?? '0')
@@ -128,6 +130,11 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                   <td className="px-6 py-4 text-sm text-gray-600">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
                     {item.quantity_sent?.toFixed(3)} <span className="text-xs text-gray-400">{item.unit ?? 'MT'}</span>
+                    {Number(item.quantity_transferred_out) > 0 && (
+                      <div className="text-[10px] text-purple-600 font-normal">
+                        {Number(item.quantity_transferred_out).toFixed(3)} transferred out
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     {order.status === 'completed' ? (
@@ -137,7 +144,7 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                         type="number"
                         step="0.001"
                         min="0"
-                        max={item.quantity_sent}
+                        max={item.quantity_sent - (item.quantity_transferred_out || 0)}
                         value={quantities[item.id] ?? '0'}
                         onChange={(e) => setQuantities((prev) => ({ ...prev, [item.id]: e.target.value }))}
                         className="w-28 px-2 py-1 text-sm border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-blue-500"

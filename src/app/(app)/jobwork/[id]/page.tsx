@@ -55,6 +55,12 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
               Sell from Vendor
             </Link>
           )}
+          {(order.status === 'dispatched' || order.status === 'partial_return') && (
+            <Link href={`/jobwork/${id}/transfer`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">
+              Transfer to Another Vendor
+            </Link>
+          )}
         </div>
       </div>
 

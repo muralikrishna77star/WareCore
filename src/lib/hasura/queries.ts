@@ -799,14 +799,14 @@ export const ACTIVE_JOB_WORK_ORDERS_PENDING_QUERY = `
       order_by: { dispatch_date: desc }
     ) {
       id reference_number dispatch_date status
-      company_id warehouse_id
+      vendor_id company_id warehouse_id
       companies { id name code }
       warehouses { id name }
       suppliers { name }
       job_work_items(order_by: { id: asc }) {
         id item_name purchase_line_id sub_purchase_line_id job_line_id
         material_type_id material_size_id size_label
-        quantity_sent quantity_received unit
+        quantity_sent quantity_received quantity_transferred_out unit
         item_master_id
         material_types { id description code unit }
       }
@@ -1075,7 +1075,7 @@ export const JOB_WORK_ORDERS_QUERY = `
       companies { name code }
       suppliers { name }
       job_work_items {
-        quantity_sent quantity_received size_label
+        quantity_sent quantity_received quantity_transferred_out size_label
         material_types { description }
         material_sizes { size_label }
       }
@@ -1087,6 +1087,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
   query GetJobWorkOrderById($id: uuid!) {
     job_work_orders_by_pk(id: $id) {
       id reference_number dispatch_date expected_return_date actual_return_date status notes created_at
+      company_id warehouse_id vendor_id
       companies { name }
       warehouses { name }
       suppliers { name }
@@ -1097,7 +1098,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received size_label unit
+      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received quantity_transferred_out size_label unit
       item_master_id item_name
       material_types { description }
       material_sizes { size_label }
@@ -1115,7 +1116,7 @@ export const GET_JOB_WORK_ORDER_FOR_EDIT_QUERY = `
         id purchase_line_id sub_purchase_line_id job_line_id
         item_master_id item_name
         material_type_id material_size_id size_label
-        quantity_sent quantity_received unit notes
+        quantity_sent quantity_received quantity_transferred_out unit notes
       }
       job_work_output_items(order_by: {created_at: asc}) {
         id item_master_id item_name
@@ -1238,6 +1239,64 @@ export const CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION = `
     insert_job_work_output_items(objects: $objects) {
       affected_rows
       returning { id item_name quantity unit source_job_line_id }
+    }
+  }
+`
+
+// ─── Job Work Vendor Transfers ───────────────────────────────────────────────
+
+export const UPDATE_JOB_WORK_ITEM_TRANSFERRED_OUT_MUTATION = `
+  mutation UpdateJobWorkItemTransferredOut($id: uuid!, $quantity_transferred_out: numeric!) {
+    update_job_work_items_by_pk(pk_columns: {id: $id}, _set: {quantity_transferred_out: $quantity_transferred_out}) {
+      id quantity_transferred_out
+    }
+  }
+`
+
+export const CREATE_JOB_WORK_TRANSFER_MUTATION = `
+  mutation CreateJobWorkTransfer(
+    $transfer_number: String!, $transfer_date: date!,
+    $from_job_work_order_id: uuid!, $from_vendor_id: uuid!,
+    $to_job_work_order_id: uuid!, $to_vendor_id: uuid!,
+    $reason: String, $notes: String, $created_by: uuid
+  ) {
+    insert_job_work_transfers_one(object: {
+      transfer_number: $transfer_number
+      transfer_date: $transfer_date
+      from_job_work_order_id: $from_job_work_order_id
+      from_vendor_id: $from_vendor_id
+      to_job_work_order_id: $to_job_work_order_id
+      to_vendor_id: $to_vendor_id
+      reason: $reason
+      notes: $notes
+      created_by: $created_by
+    }) { id transfer_number }
+  }
+`
+
+export const CREATE_JOB_WORK_TRANSFER_ITEMS_MUTATION = `
+  mutation CreateJobWorkTransferItems($objects: [job_work_transfer_items_insert_input!]!) {
+    insert_job_work_transfer_items(objects: $objects) { affected_rows }
+  }
+`
+
+export const ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY = `
+  query GetAllJobWorkTransferNumbers {
+    job_work_transfers { transfer_number }
+  }
+`
+
+export const JOB_WORK_TRANSFERS_QUERY = `
+  query GetJobWorkTransfers {
+    job_work_transfers(order_by: {transfer_date: desc, created_at: desc}, limit: 500) {
+      id transfer_number transfer_date reason notes created_at
+      from_job_work_order { id reference_number }
+      to_job_work_order { id reference_number }
+      from_vendor { name }
+      to_vendor { name }
+      job_work_transfer_items {
+        id purchase_line_id sub_purchase_line_id item_name quantity_transferred unit size_label
+      }
     }
   }
 `
@@ -1536,7 +1595,7 @@ export const JOB_WORK_REPORT_QUERY = `
       warehouses { name }
       suppliers { name }
       job_work_items {
-        quantity_sent quantity_received size_label
+        quantity_sent quantity_received quantity_transferred_out size_label
         material_types { description unit }
         material_sizes { size_label }
       }

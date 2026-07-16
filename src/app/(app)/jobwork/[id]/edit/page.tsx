@@ -96,6 +96,7 @@ export default function EditJobWorkPage() {
   const [orderStatus, setOrderStatus] = useState('')
   const [referenceNumber, setReferenceNumber] = useState('')
   const [hasReturns, setHasReturns] = useState(false)
+  const [hasTransfers, setHasTransfers] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
   const [companies, setCompanies] = useState<Company[]>([])
@@ -281,9 +282,11 @@ export default function EditJobWorkPage() {
       // Map existing input items
       const rawInputs: any[] = order.job_work_items ?? []
       let anyReturns = false
+      let anyTransfers = false
       const loadedInputs: (InputLine & { _net_qty: number })[] = rawInputs.map((it) => {
         const found = loadedItemMasters.find(x => x.id === it.item_master_id)
         if (Number(it.quantity_received) > 0) anyReturns = true
+        if (Number(it.quantity_transferred_out) > 0) anyTransfers = true
         return {
           item_master_id: it.item_master_id ?? '',
           item_name: it.item_name ?? '',
@@ -300,10 +303,11 @@ export default function EditJobWorkPage() {
           unit: it.unit || 'MT',
           notes: it.notes ?? '',
           job_line_id: it.job_line_id ?? '',
-          _net_qty: (Number(it.quantity_sent) || 0) - (Number(it.quantity_received) || 0),
+          _net_qty: (Number(it.quantity_sent) || 0) - (Number(it.quantity_received) || 0) - (Number(it.quantity_transferred_out) || 0),
         }
       })
       setHasReturns(anyReturns)
+      setHasTransfers(anyTransfers)
 
       const finalInputs: InputLine[] = (loadedInputs.length ? loadedInputs : [{ ...emptyInput(), _net_qty: 0 }])
         .map(({ _net_qty, ...rest }) => rest)
@@ -755,6 +759,7 @@ export default function EditJobWorkPage() {
         <p className="text-xs text-amber-700 mt-0.5">
           Saving reverses the original stock movements for this order and re-applies them based on the updated items.
           {hasReturns && ' This order has recorded returns — quantity received will be reset to 0 for the new line items.'}
+          {hasTransfers && ' This order has quantity transferred to another vendor — that link will be lost if you save changes here.'}
         </p>
       </div>
 

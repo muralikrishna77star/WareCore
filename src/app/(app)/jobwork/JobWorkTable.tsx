@@ -113,6 +113,7 @@ export default function JobWorkTable({
           const items = o.job_work_items ?? []
           const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity_sent), 0)
           const totalReturned = items.reduce((s: number, i: any) => s + Number(i.quantity_received || 0), 0)
+          const totalTransferred = items.reduce((s: number, i: any) => s + Number(i.quantity_transferred_out || 0), 0)
           const isOverdue = o.expected_return_date && !o.actual_return_date && new Date(o.expected_return_date) < new Date()
 
           return (
@@ -126,7 +127,10 @@ export default function JobWorkTable({
               <td className="px-6 py-3 font-medium text-gray-900">{o.suppliers?.name || '—'}</td>
               <td className="px-6 py-3">
                 <p className="text-gray-700">{items.length} item{items.length !== 1 ? 's' : ''}</p>
-                <p className="text-xs text-gray-500">{totalQty.toFixed(3)} dispatched · {totalReturned.toFixed(3)} returned</p>
+                <p className="text-xs text-gray-500">
+                  {totalQty.toFixed(3)} dispatched · {totalReturned.toFixed(3)} returned
+                  {totalTransferred > 0 && ` · ${totalTransferred.toFixed(3)} transferred`}
+                </p>
               </td>
               <td className={`px-6 py-3 whitespace-nowrap ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
                 {o.expected_return_date ? formatDate(o.expected_return_date) : '—'}
