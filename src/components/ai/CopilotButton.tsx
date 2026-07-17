@@ -19,7 +19,7 @@ export function CopilotButton({ isOpen, onClick }: { isOpen: boolean; onClick: (
   }
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 lg:bottom-6 lg:right-6 print:hidden">
+    <div className="fixed bottom-24 right-0 z-50 lg:bottom-16 print:hidden">
       <div className="group relative">
         <span
           role="tooltip"
@@ -31,11 +31,14 @@ export function CopilotButton({ isOpen, onClick }: { isOpen: boolean; onClick: (
           type="button"
           onClick={handleClick}
           aria-label="Ask WareCore Copilot"
-          className={`relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg backdrop-blur-sm transition-transform hover:scale-110 ${
-            isOpen ? '' : 'animate-copilot-float animate-copilot-pulse'
+          className={`relative flex h-20 w-10 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-l-2xl border border-r-0 border-white/20 bg-gradient-to-b from-blue-500 to-blue-700 shadow-lg backdrop-blur-sm transition-transform hover:-translate-x-1 ${
+            isOpen ? '' : 'animate-copilot-pulse'
           }`}
         >
-          <Sparkles className="h-7 w-7 text-white" />
+          <Sparkles className="h-5 w-5 shrink-0 text-white" />
+          <span className="text-[10px] font-semibold tracking-wide text-white [writing-mode:vertical-rl]">
+            AI
+          </span>
           {ripples.map((r) => (
             <span
               key={r.id}

@@ -71,7 +71,7 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
       role="dialog"
       aria-modal="false"
       aria-label="WareCore Copilot"
-      className={`fixed bottom-40 right-4 z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition-all duration-200 ease-out lg:bottom-24 lg:right-6 ${
+      className={`fixed bottom-48 right-2 z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition-all duration-200 ease-out lg:bottom-40 lg:right-4 ${
         isOpen ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none translate-y-2 scale-95 opacity-0'
       }`}
     >
