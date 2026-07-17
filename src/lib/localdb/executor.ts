@@ -2,7 +2,7 @@ import { DocumentNode, FieldNode, OperationDefinitionNode, parse, valueFromASTUn
 import { evalArgs, fieldSelections, resultKey } from './ast'
 import { selectMany, selectByPk, selectAggregate } from './compile-select'
 import { insertOne, insertMany } from './compile-insert'
-import { updateByPk } from './compile-update'
+import { updateByPk, updateMany } from './compile-update'
 import { deleteByPk, deleteMany } from './compile-delete'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,6 +56,9 @@ async function dispatch(field: FieldNode, args: Record<string, unknown>, variabl
 
   m = /^update_(\w+)_by_pk$/.exec(name)
   if (m) return updateByPk(m[1], args, field, variables)
+
+  m = /^update_(\w+)$/.exec(name)
+  if (m) return updateMany(m[1], args, field, variables)
 
   m = /^delete_(\w+)_by_pk$/.exec(name)
   if (m) return deleteByPk(m[1], args, field, variables)

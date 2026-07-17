@@ -1,17 +1,30 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Minus, X } from 'lucide-react'
+import { Plus, Minus, X, History } from 'lucide-react'
 import { WelcomeScreen } from '@/components/ai/WelcomeScreen'
 import { SuggestionCards } from '@/components/ai/SuggestionCards'
 import { ChatInput } from '@/components/ai/ChatInput'
-import { ChatMessage, type Message } from '@/components/ai/ChatMessage'
+import { ChatMessage } from '@/components/ai/ChatMessage'
+import { ConversationList } from '@/components/ai/ConversationList'
+import { useCopilotChat } from '@/hooks/useCopilotChat'
+import { useCopilotConversations } from '@/hooks/useCopilotConversations'
+
+const MIN_WIDTH = 320
+const MAX_WIDTH = 640
+const MIN_HEIGHT = 400
+const DEFAULT_WIDTH = 360
+const DEFAULT_HEIGHT = 560
+const HISTORY_SIDEBAR_WIDTH = 224 // matches ConversationList's w-56
 
 export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [draft, setDraft] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const chat = useCopilotChat()
+  const conversations = useCopilotConversations()
 
   useEffect(() => {
     if (!isOpen) return
@@ -23,58 +36,92 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
   }, [isOpen, onClose])
 
   useEffect(() => {
+    if (isOpen) conversations.refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  const wasStreamingRef = useRef(false)
+  useEffect(() => {
+    if (wasStreamingRef.current && !chat.isStreaming) {
+      conversations.refresh()
+    }
+    wasStreamingRef.current = chat.isStreaming
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.isStreaming])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [chat.messages])
 
-  const handleNewChat = () => {
-    setDraft('')
-    setMessages([])
-  }
-
-  const handleSend = async () => {
+  const handleSend = () => {
     const text = draft.trim()
     if (!text) return
-    const nextMessages: Message[] = [...messages, { role: 'user', content: text }]
-    setMessages(nextMessages)
+    chat.sendMessage(text)
     setDraft('')
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: data.error || 'Sorry, something went wrong — try again.' },
-        ])
-        return
-      }
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply, ledger: data.ledger }])
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, something went wrong — try again.' },
-      ])
-    } finally {
-      setLoading(false)
-    }
   }
+
+  const handleNewChat = () => {
+    chat.newChat()
+    setDraft('')
+    setShowHistory(false)
+  }
+
+  const handleSelectConversation = async (id: string) => {
+    const loaded = await conversations.selectConversation(id)
+    chat.hydrate(id, loaded)
+    setDraft('')
+    setShowHistory(false)
+  }
+
+  const handleDeleteConversation = async (id: string) => {
+    await conversations.remove(id)
+    if (id === chat.conversationId) handleNewChat()
+  }
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startY = e.clientY
+    const startSize = { ...size }
+    const maxHeight = Math.min(window.innerHeight * 0.9, 900)
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const dx = startX - moveEvent.clientX
+      const dy = startY - moveEvent.clientY
+      setSize({
+        width: Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startSize.width + dx)),
+        height: Math.min(maxHeight, Math.max(MIN_HEIGHT, startSize.height + dy)),
+      })
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  const lastAssistantId = [...chat.messages].reverse().find((m) => m.role === 'assistant')?.id
 
   return (
     <div
       role="dialog"
       aria-modal="false"
       aria-label="WareCore Copilot"
-      className={`fixed bottom-48 right-2 z-50 flex h-[70vh] max-h-[560px] w-[92vw] max-w-[360px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition-all duration-200 ease-out lg:bottom-40 lg:right-4 ${
+      style={{ width: size.width + (showHistory ? HISTORY_SIDEBAR_WIDTH : 0), height: size.height }}
+      className={`fixed bottom-48 right-2 z-50 flex max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition-[opacity,transform] duration-200 ease-out lg:bottom-40 lg:right-4 ${
         isOpen ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none translate-y-2 scale-95 opacity-0'
       }`}
     >
+      {/* Resize handle — panel is anchored bottom-right, so dragging up-left grows it */}
+      <div
+        onMouseDown={handleResizeStart}
+        title="Resize"
+        className="absolute left-0 top-0 z-10 h-4 w-4 cursor-nwse-resize"
+      >
+        <div className="absolute left-1 top-1 h-2 w-2 border-l-2 border-t-2 border-gray-300" />
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
@@ -90,6 +137,14 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
           </p>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            title="Chat history"
+            className={`rounded-lg p-1.5 hover:bg-gray-100 ${showHistory ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <History className="h-4 w-4" />
+          </button>
           <button
             type="button"
             onClick={handleNewChat}
@@ -119,30 +174,51 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
       </div>
 
       {/* Body */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {messages.length === 0 ? (
-          <>
-            <WelcomeScreen />
-            <SuggestionCards onPick={setDraft} />
-          </>
-        ) : (
-          <>
-            {messages.map((m, i) => (
-              <ChatMessage key={i} message={m} />
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl bg-gray-100 px-3 py-2 text-sm text-gray-500">
-                  Thinking…
-                </div>
-              </div>
-            )}
-          </>
+      <div className="flex min-h-0 flex-1">
+        {showHistory && (
+          <ConversationList
+            conversations={conversations.conversations}
+            activeConversationId={chat.conversationId}
+            loading={conversations.loading}
+            onSelect={handleSelectConversation}
+            onRename={conversations.rename}
+            onDelete={handleDeleteConversation}
+            onNewChat={handleNewChat}
+          />
         )}
-        <div ref={bottomRef} />
-      </div>
 
-      <ChatInput value={draft} onChange={setDraft} onSend={handleSend} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            {chat.messages.length === 0 ? (
+              <>
+                <WelcomeScreen />
+                <SuggestionCards onPick={setDraft} />
+              </>
+            ) : (
+              chat.messages.map((m) => (
+                <ChatMessage
+                  key={m.id}
+                  message={m}
+                  isLastAssistant={m.id === lastAssistantId}
+                  onRegenerate={chat.regenerate}
+                />
+              ))
+            )}
+            {chat.error && (
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{chat.error}</div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          <ChatInput
+            value={draft}
+            onChange={setDraft}
+            onSend={handleSend}
+            isStreaming={chat.isStreaming}
+            onStop={chat.stop}
+          />
+        </div>
+      </div>
     </div>
   )
 }

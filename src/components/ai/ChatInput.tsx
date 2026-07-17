@@ -1,20 +1,24 @@
 'use client'
 
-import { Mic, Paperclip, Send } from 'lucide-react'
+import { Mic, Paperclip, Send, Square } from 'lucide-react'
 
 export function ChatInput({
   value,
   onChange,
   onSend,
+  isStreaming = false,
+  onStop,
 }: {
   value: string
   onChange: (value: string) => void
   onSend: () => void
+  isStreaming?: boolean
+  onStop?: () => void
 }) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (value.trim()) onSend()
+      if (value.trim() && !isStreaming) onSend()
     }
   }
 
@@ -44,15 +48,27 @@ export function ChatInput({
         rows={1}
         className="max-h-32 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
       />
-      <button
-        type="button"
-        onClick={() => value.trim() && onSend()}
-        disabled={!value.trim()}
-        aria-label="Send"
-        className="rounded-lg bg-blue-600 p-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-      >
-        <Send className="h-5 w-5" />
-      </button>
+      {isStreaming ? (
+        <button
+          type="button"
+          onClick={onStop}
+          aria-label="Stop generating"
+          title="Stop generating"
+          className="rounded-lg bg-gray-700 p-2 text-white transition-colors hover:bg-gray-800"
+        >
+          <Square className="h-5 w-5" fill="currentColor" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => value.trim() && onSend()}
+          disabled={!value.trim()}
+          aria-label="Send"
+          className="rounded-lg bg-blue-600 p-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          <Send className="h-5 w-5" />
+        </button>
+      )}
     </div>
   )
 }

@@ -92,4 +92,10 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
     job_work_cancellation_items: { kind: 'array', table: 'job_work_cancellation_items', foreignKey: 'cancellation_id' },
     job_work_cancellation_output_items: { kind: 'array', table: 'job_work_cancellation_output_items', foreignKey: 'cancellation_id' },
   },
+  ai_messages: {
+    ai_conversations: { kind: 'object', table: 'ai_conversations', localKey: 'conversation_id' },
+  },
+  ai_conversations: {
+    ai_messages: { kind: 'array', table: 'ai_messages', foreignKey: 'conversation_id' },
+  },
 }

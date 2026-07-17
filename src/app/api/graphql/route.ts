@@ -57,6 +57,24 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
 // from the verified session so the client can't spoof another user's identity.
 const CREATED_BY_MUTATIONS = new Set(['CreatePurchaseBill', 'CreateDispatchOrder'])
 
+// Personal-resource ops: any authenticated user may act on their own rows.
+// Ownership is enforced by force-overwriting this variable with the caller's
+// session id — Rename/DeleteAiConversation are not domain-privileged actions,
+// so they deliberately do NOT go through MUTATION_PERMISSIONS (a custom-role
+// user renaming their own chat thread shouldn't need an ALL_STAFF role check).
+const SESSION_SCOPED_OPERATIONS: Record<string, string> = {
+  GetMyAiConversations: 'owner_id',
+  GetAiConversationMessages: 'owner_id',
+  RenameAiConversation: 'owner_id',
+  DeleteAiConversation: 'owner_id',
+}
+
+// Tables sensitive enough to require a whitelisted named query even for reads.
+// Queries otherwise pass through unrestricted by name in this app — without
+// this check, an anonymous or relabeled query touching these tables would skip
+// the owner_id injection above and read any user's conversations.
+const GUARDED_QUERY_TABLES = ['ai_conversations', 'ai_messages']
+
 /** Returns the operation type and name from a GraphQL query string. */
 function parseOperation(query: string): { type: string; name: string | null } {
   const match = /^\s*(query|mutation|subscription)\s*(\w+)?/i.exec(query ?? '')
@@ -82,26 +100,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const allowedRoles = MUTATION_PERMISSIONS[opName]
-    if (!allowedRoles) {
-      // Unknown mutation — deny by default to prevent privilege escalation from
-      // mutations added in the future without a corresponding permission entry.
+    const ownerVar = SESSION_SCOPED_OPERATIONS[opName]
+    if (ownerVar) {
+      // Ownership-only op — bypass role checks entirely, force the scoping variable.
+      body.variables = { ...body.variables, [ownerVar]: session.userId }
+    } else {
+      const allowedRoles = MUTATION_PERMISSIONS[opName]
+      if (!allowedRoles) {
+        // Unknown mutation — deny by default to prevent privilege escalation from
+        // mutations added in the future without a corresponding permission entry.
+        return NextResponse.json(
+          { errors: [{ message: 'Forbidden: operation not permitted' }] },
+          { status: 403 }
+        )
+      }
+
+      if (!allowedRoles.has(session.role)) {
+        return NextResponse.json(
+          { errors: [{ message: 'Forbidden: insufficient permissions' }] },
+          { status: 403 }
+        )
+      }
+
+      // Stamp the creating user server-side — the client cannot be trusted to supply this.
+      if (CREATED_BY_MUTATIONS.has(opName)) {
+        body.variables = { ...body.variables, created_by: session.userId }
+      }
+    }
+  }
+
+  if (opType === 'query') {
+    const ownerVar = opName ? SESSION_SCOPED_OPERATIONS[opName] : undefined
+    const touchesGuardedTable = GUARDED_QUERY_TABLES.some((t) => (body.query ?? '').includes(t))
+    if (touchesGuardedTable && !ownerVar) {
       return NextResponse.json(
         { errors: [{ message: 'Forbidden: operation not permitted' }] },
         { status: 403 }
       )
     }
-
-    if (!allowedRoles.has(session.role)) {
-      return NextResponse.json(
-        { errors: [{ message: 'Forbidden: insufficient permissions' }] },
-        { status: 403 }
-      )
-    }
-
-    // Stamp the creating user server-side — the client cannot be trusted to supply this.
-    if (CREATED_BY_MUTATIONS.has(opName)) {
-      body.variables = { ...body.variables, created_by: session.userId }
+    if (ownerVar) {
+      body.variables = { ...body.variables, [ownerVar]: session.userId }
     }
   }
 

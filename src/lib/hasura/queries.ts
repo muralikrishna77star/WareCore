@@ -1862,3 +1862,50 @@ export const JOB_WORK_CANCELLATION_BY_ID_QUERY = `
   }
 `
 
+// ─── AI Copilot Conversations ────────────────────────────────────────────────
+// $owner_id on every op below is declared but never supplied by the client —
+// /api/graphql force-overwrites it with the caller's session id before
+// forwarding, so these are safe to expose without any other server-side check.
+
+export const GET_MY_AI_CONVERSATIONS_QUERY = `
+  query GetMyAiConversations($owner_id: uuid) {
+    ai_conversations(
+      where: {created_by: {_eq: $owner_id}, ai_messages: {id: {_is_null: false}}}
+      order_by: {updated_at: desc}
+    ) {
+      id title created_at updated_at
+    }
+  }
+`
+
+export const GET_AI_CONVERSATION_MESSAGES_QUERY = `
+  query GetAiConversationMessages($conversation_id: uuid!, $owner_id: uuid) {
+    ai_messages(
+      where: {conversation_id: {_eq: $conversation_id}, ai_conversations: {created_by: {_eq: $owner_id}}}
+      order_by: {created_at: asc}
+    ) {
+      id role content ledger created_at
+    }
+  }
+`
+
+export const RENAME_AI_CONVERSATION_MUTATION = `
+  mutation RenameAiConversation($id: uuid!, $title: String!, $updated_at: timestamptz!, $owner_id: uuid) {
+    update_ai_conversations(
+      where: {id: {_eq: $id}, created_by: {_eq: $owner_id}}
+      _set: {title: $title, updated_at: $updated_at}
+    ) {
+      affected_rows
+      returning { id title updated_at }
+    }
+  }
+`
+
+export const DELETE_AI_CONVERSATION_MUTATION = `
+  mutation DeleteAiConversation($id: uuid!, $owner_id: uuid) {
+    delete_ai_conversations(where: {id: {_eq: $id}, created_by: {_eq: $owner_id}}) {
+      affected_rows
+    }
+  }
+`
+
