@@ -16,7 +16,10 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   // Company / warehouse setup
   CreateCompany:    ADMIN,
   UpdateCompany:    ADMIN,
+  DeleteCompany:    ADMIN,
   CreateWarehouse:  ADMIN,
+  UpdateWarehouse:  ADMIN,
+  DeleteWarehouse:  ADMIN,
   // User management
   CreateUserProfile: ADMIN,
   // Tax rate control database
@@ -24,27 +27,45 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   UpdateTaxRate:    ADMIN,
   // Material catalogue
   CreateMaterialType: ADMIN_MANAGER,
+  UpdateMaterialType: ADMIN_MANAGER,
+  DeleteMaterialType: ADMIN_MANAGER,
   CreateMaterialSize: ADMIN_MANAGER,
+  UpdateMaterialSize: ADMIN_MANAGER,
+  DeleteMaterialSize: ADMIN_MANAGER,
   // Supplier / customer master
   CreateSupplier: ADMIN_MANAGER,
+  UpdateSupplier: ADMIN_MANAGER,
+  DeleteSupplier: ADMIN_MANAGER,
   CreateCustomer: ADMIN_MANAGER,
+  UpdateCustomer: ADMIN_MANAGER,
+  DeleteCustomer: ADMIN_MANAGER,
   // Item master
   CreateItemMaster: ALL_STAFF,
+  UpdateItemMaster: ALL_STAFF,
   // Purchase transactions
   CreatePurchaseBill:      ALL_STAFF,
   CreatePurchaseBillItems: ALL_STAFF,
+  UpdatePurchaseBill:      ALL_STAFF,
+  DeletePurchaseBillItems: ALL_STAFF,
   // Dispatch
-  CreateDispatchOrder: ALL_STAFF,
-  CreateDispatchItems: ALL_STAFF,
+  CreateDispatchOrder:       ALL_STAFF,
+  CreateDispatchItems:       ALL_STAFF,
+  UpdateDispatchOrder:       ALL_STAFF,
+  DeleteDispatchItemsByOrder: ALL_STAFF,
   // Transfers
   CreateTransfer:       ALL_STAFF,
   CreateTransferItems:  ALL_STAFF,
   UpdateTransferStatus: ALL_STAFF,
   // Job work
-  CreateJobWorkOrder:       ALL_STAFF,
-  CreateJobWorkItems:       ALL_STAFF,
-  UpdateJobWorkItem:        ALL_STAFF,
-  UpdateJobWorkOrderStatus: ALL_STAFF,
+  CreateJobWorkOrder:              ALL_STAFF,
+  CreateJobWorkItems:              ALL_STAFF,
+  UpdateJobWorkItem:               ALL_STAFF,
+  UpdateJobWorkOrderStatus:        ALL_STAFF,
+  CreateJobWorkOutputItems:        ALL_STAFF,
+  // Job work vendor transfer
+  UpdateJobWorkItemTransferredOut: ALL_STAFF,
+  CreateJobWorkTransfer:           ALL_STAFF,
+  CreateJobWorkTransferItems:      ALL_STAFF,
   // Financial entries
   CreateFinancialEntry: ALL_STAFF,
   // Roles & permissions management
