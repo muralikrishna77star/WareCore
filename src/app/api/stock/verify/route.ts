@@ -55,6 +55,39 @@ export async function GET(request: NextRequest) {
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'JOB_WORK_CANCEL' AND entry_date BETWEEN '${from}' AND '${to}')
     `
 
+    // ── Explained residuals: an IN/OUT ledger row dated in-window whose order
+    // was later deleted/cancelled OUTSIDE this window. The original entry
+    // correctly stays as history (so it still counts on the ledger side),
+    // but the live source row is gone — and the reversing CANCEL entry landed
+    // in a different window, so it can't net out here either. This isn't a
+    // stale/orphaned row (it IS validly archived) — just a legitimate,
+    // permanent artifact of comparing two different date fields per window.
+    const explainedSql = `
+      SELECT 'purchases' AS category,
+        COALESCE(SUM(sl.quantity), 0) AS explained_qty, COUNT(DISTINCT sl.reference_id) AS explained_count
+      FROM stock_ledger sl
+      WHERE sl.entry_type = 'PURCHASE_IN' AND sl.entry_date BETWEEN '${from}' AND '${to}'
+        AND sl.reference_type = 'purchase_bill'
+        AND NOT EXISTS (SELECT 1 FROM purchase_bills b WHERE b.id = sl.reference_id)
+        AND EXISTS (SELECT 1 FROM purchase_cancellations pc WHERE pc.original_bill_id = sl.reference_id)
+      UNION ALL
+      SELECT 'sales',
+        COALESCE(SUM(ABS(sl.quantity)), 0), COUNT(DISTINCT sl.reference_id)
+      FROM stock_ledger sl
+      WHERE sl.entry_type = 'SALE_OUT' AND sl.entry_date BETWEEN '${from}' AND '${to}'
+        AND sl.reference_type = 'dispatch'
+        AND NOT EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.id = sl.reference_id)
+        AND EXISTS (SELECT 1 FROM dispatch_cancellations dc WHERE dc.original_order_id = sl.reference_id)
+      UNION ALL
+      SELECT 'job_work',
+        COALESCE(SUM(ABS(sl.quantity)), 0), COUNT(DISTINCT sl.reference_id)
+      FROM stock_ledger sl
+      WHERE sl.entry_type = 'JOB_WORK_OUT' AND sl.entry_date BETWEEN '${from}' AND '${to}'
+        AND sl.reference_type = 'job_work'
+        AND NOT EXISTS (SELECT 1 FROM job_work_orders jwo WHERE jwo.id = sl.reference_id)
+        AND EXISTS (SELECT 1 FROM job_work_cancellations jwc WHERE jwc.original_order_id = sl.reference_id)
+    `
+
     // ── Stale records: ledger entries pointing at an order that no longer
     // exists either live or in its cancellation archive ──────────────────────
     const staleSql = `
@@ -94,21 +127,40 @@ export async function GET(request: NextRequest) {
       LIMIT 500
     `
 
-    const [totalsRes, staleRes, dupRes] = await Promise.all([
+    const [totalsRes, explainedRes, staleRes, dupRes] = await Promise.all([
       hasuraRunSql(totalsSql),
+      hasuraRunSql(explainedSql),
       hasuraRunSql(staleSql),
       hasuraRunSql(duplicatesSql),
     ])
 
+    const explainedByCategory = new Map(
+      parseRows(explainedRes).map(([category, explainedQty, explainedCount]) => [
+        category,
+        { explainedQty: Number(explainedQty), explainedCount: Number(explainedCount) },
+      ])
+    )
+
     const totals = parseRows(totalsRes).map(([category, sourceQty, ledgerQty]) => {
       const source = Number(sourceQty)
       const ledger = Number(ledgerQty)
+      const diff = Math.round((source - ledger) * 1000) / 1000
+      const matches = Math.abs(source - ledger) < 0.001
+      const explained = explainedByCategory.get(category)
+      const explainedQty = explained?.explainedQty ?? 0
       return {
         category,
         sourceQty: source,
         ledgerQty: ledger,
-        diff: Math.round((source - ledger) * 1000) / 1000,
-        matches: Math.abs(source - ledger) < 0.001,
+        diff,
+        matches,
+        explainedQty,
+        explainedCount: explained?.explainedCount ?? 0,
+        // Fully explained when the residual diff matches the explained qty in
+        // magnitude (diff is always source - ledger, and these orders are
+        // always missing from source but present in ledger, so diff is
+        // negative — explainedQty is a positive magnitude).
+        fullyExplained: !matches && explainedQty > 0 && Math.abs(Math.abs(diff) - explainedQty) < 0.001,
       }
     })
 

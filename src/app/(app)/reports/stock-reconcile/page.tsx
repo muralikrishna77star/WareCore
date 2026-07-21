@@ -4,7 +4,16 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 
-type TotalRow = { category: string; sourceQty: number; ledgerQty: number; diff: number; matches: boolean }
+type TotalRow = {
+  category: string
+  sourceQty: number
+  ledgerQty: number
+  diff: number
+  matches: boolean
+  explainedQty: number
+  explainedCount: number
+  fullyExplained: boolean
+}
 type StaleRecord = {
   id: string
   entryType: string
@@ -259,7 +268,7 @@ export default function StockReconcilePage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {totals.map((row) => {
-                    const isInfoOnly = !row.matches && cancellationCategories.has(row.category)
+                    const isInfoOnly = !row.matches && (cancellationCategories.has(row.category) || row.fullyExplained)
                     return (
                       <tr key={row.category}>
                         <td className="px-4 py-2 font-medium text-gray-900">{categoryLabels[row.category] || row.category}</td>
@@ -272,7 +281,16 @@ export default function StockReconcilePage() {
                           {row.matches ? (
                             <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Match</span>
                           ) : isInfoOnly ? (
-                            <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Info</span>
+                            <span
+                              className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                              title={
+                                row.fullyExplained
+                                  ? `Fully explained: ${row.explainedCount} order(s) dispatched in this window were deleted/cancelled outside it.`
+                                  : undefined
+                              }
+                            >
+                              {row.fullyExplained ? 'Explained' : 'Info'}
+                            </span>
                           ) : (
                             <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Mismatch</span>
                           )}
@@ -283,17 +301,19 @@ export default function StockReconcilePage() {
                 </tbody>
               </table>
             </div>
+            {totals.some((r) => r.explainedCount > 0) && (
+              <p className="text-xs text-amber-700">
+                {totals
+                  .filter((r) => r.explainedCount > 0)
+                  .map((r) => `${categoryLabels[r.category] || r.category}: ${r.explainedCount} order(s) totalling ${fmt(r.explainedQty)} were dispatched in this window but deleted/cancelled outside it`)
+                  .join('; ')}
+                {' — '}rows marked <strong>Explained</strong> above have no unaccounted residual.
+              </p>
+            )}
             <p className="text-xs text-gray-500">
               Cancellation rows can legitimately differ from the ledger total — a mid-edit stock reversal
               creates the same PURCHASE_CANCEL / SALE_CANCEL / JOB_WORK_CANCEL entry type as a full order
               cancellation, so the ledger total may run higher than the cancelled-order archive total.
-            </p>
-            <p className="text-xs text-gray-500">
-              A small residual mismatch on Purchases / Sales / Job Work (Out) can also be legitimate: if an
-              order was dispatched inside this date range but deleted or cancelled outside it, its original
-              IN/OUT ledger entry stays here as history while the reversing CANCEL entry lands in a different
-              window — check the reversing entry&apos;s Reference on the Cancellations page for that period
-              before assuming a real data problem.
             </p>
           </div>
         )}
