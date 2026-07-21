@@ -1286,6 +1286,28 @@ export const ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY = `
   }
 `
 
+export const JOB_WORK_TRANSFERS_FOR_ITEM_QUERY = `
+  query GetJobWorkTransfersForItem($item_id: uuid!) {
+    job_work_transfer_items(
+      where: { from_job_work_item_id: { _eq: $item_id } }
+      order_by: { job_work_transfer: { transfer_date: desc } }
+    ) {
+      id
+      item_name
+      purchase_line_id
+      quantity_transferred
+      unit
+      job_work_transfer {
+        id
+        transfer_date
+        transfer_number
+        to_vendor { name }
+        to_job_work_order { id reference_number }
+      }
+    }
+  }
+`
+
 export const JOB_WORK_TRANSFERS_QUERY = `
   query GetJobWorkTransfers {
     job_work_transfers(order_by: {transfer_date: desc, created_at: desc}, limit: 500) {

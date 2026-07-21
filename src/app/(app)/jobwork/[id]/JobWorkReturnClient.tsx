@@ -8,6 +8,7 @@ import {
   UPDATE_JOB_WORK_ORDER_STATUS_MUTATION,
 } from '@/lib/hasura/queries'
 import { getJobWorkOrderStatusLabel } from '@/lib/utils'
+import { useRecordPreview } from '@/components/RecordPreviewProvider'
 
 interface JobWorkReturnClientProps {
   order: any
@@ -16,6 +17,7 @@ interface JobWorkReturnClientProps {
 
 export default function JobWorkReturnClient({ order, items }: JobWorkReturnClientProps) {
   const router = useRouter()
+  const { openList } = useRecordPreview()
   const [quantities, setQuantities] = useState<Record<number, string>>(
     Object.fromEntries(items.map((i) => [i.id, String(i.quantity_received ?? 0)]))
   )
@@ -131,9 +133,14 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                   <td className="px-6 py-4 text-sm text-gray-900 text-right">
                     {item.quantity_sent?.toFixed(3)} <span className="text-xs text-gray-400">{item.unit ?? 'MT'}</span>
                     {Number(item.quantity_transferred_out) > 0 && (
-                      <div className="text-[10px] text-purple-600 font-normal">
-                        {Number(item.quantity_transferred_out).toFixed(3)} transferred out
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openList('job_work_transfers_for_item', { itemId: item.id })}
+                        className="text-[10px] text-purple-600 font-normal underline decoration-dotted hover:text-purple-800"
+                        title="View which job(s) this was transferred to"
+                      >
+                        {Number(item.quantity_transferred_out).toFixed(3)} transferred out ↗
+                      </button>
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">

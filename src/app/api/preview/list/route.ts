@@ -7,13 +7,16 @@ import {
   JOB_WORK_ORDERS_QUERY,
   TRANSFERS_QUERY,
   CURRENT_STOCK_QUERY,
+  JOB_WORK_TRANSFERS_FOR_ITEM_QUERY,
 } from '@/lib/hasura/queries'
 import { formatDate } from '@/lib/utils'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const fmtQ = (n: unknown) => Number(n || 0).toFixed(3)
 const fmtAmt = (n: unknown) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
-const CATEGORIES = ['purchase_bills', 'transfers_pending', 'job_work_active', 'dispatches', 'stock'] as const
+const CATEGORIES = ['purchase_bills', 'transfers_pending', 'job_work_active', 'dispatches', 'stock', 'job_work_transfers_for_item'] as const
 type Category = (typeof CATEGORIES)[number]
 
 async function loadPurchaseBills() {
@@ -89,6 +92,32 @@ async function loadStock() {
   return { title: 'Current Stock', rows, viewAllUrl: '/inventory' }
 }
 
+async function loadJobWorkTransfersForItem(itemId: string) {
+  const result = await hasuraQuery(JOB_WORK_TRANSFERS_FOR_ITEM_QUERY, { item_id: itemId })
+  const transferItems: any[] = result.job_work_transfer_items ?? []
+  const rows = transferItems.map((ti: any) => {
+    const destOrder = ti.job_work_transfer?.to_job_work_order
+    return {
+      id: destOrder?.id || ti.job_work_transfer?.id,
+      type: destOrder ? ('job_work' as const) : null,
+      label: destOrder?.reference_number || ti.job_work_transfer?.transfer_number || '—',
+      date: formatDate(ti.job_work_transfer?.transfer_date),
+      party: ti.job_work_transfer?.to_vendor?.name || '—',
+      amount: `${fmtQ(ti.quantity_transferred)} ${ti.unit || ''}`.trim(),
+      status: '',
+    }
+  })
+  const itemName = transferItems[0]?.item_name
+  const purchaseLine = transferItems[0]?.purchase_line_id
+  return {
+    title: itemName
+      ? `Transferred Out — ${itemName}${purchaseLine ? ` (${purchaseLine})` : ''}`
+      : 'Vendor Transfers',
+    rows,
+    viewAllUrl: '/jobwork',
+  }
+}
+
 export async function GET(request: NextRequest) {
   const session = await verifySessionCookie(request)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -97,6 +126,20 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get('category') as Category | null
   if (!category || !CATEGORIES.includes(category)) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
+  }
+
+  if (category === 'job_work_transfers_for_item') {
+    const itemId = searchParams.get('itemId')
+    if (!itemId || !UUID_RE.test(itemId)) {
+      return NextResponse.json({ error: 'Invalid itemId' }, { status: 400 })
+    }
+    try {
+      const data = await loadJobWorkTransfersForItem(itemId)
+      return NextResponse.json({ category, ...data })
+    } catch (err) {
+      console.error('[preview/list]', err)
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to load list' }, { status: 500 })
+    }
   }
 
   try {

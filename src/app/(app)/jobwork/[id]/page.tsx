@@ -33,7 +33,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
     new Date(order.expected_return_date) < new Date()
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <Link href="/jobwork" className="text-sm text-blue-600 hover:underline mb-1 block">

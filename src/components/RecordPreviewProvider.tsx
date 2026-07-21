@@ -7,12 +7,12 @@ import { REFERENCE_LABEL } from '@/lib/reference'
 
 type PreviewState =
   | { mode: 'record'; type: ReferenceType; id: string }
-  | { mode: 'list'; category: string }
+  | { mode: 'list'; category: string; params?: Record<string, string> }
   | null
 
 type Ctx = {
   openRecord: (type: ReferenceType, id: string) => void
-  openList: (category: string) => void
+  openList: (category: string, params?: Record<string, string>) => void
 }
 
 const RecordPreviewContext = createContext<Ctx | null>(null)
@@ -30,7 +30,7 @@ export function RecordPreviewProvider({ children }: { children: ReactNode }) {
     <RecordPreviewContext.Provider
       value={{
         openRecord: (type, id) => setState({ mode: 'record', type, id }),
-        openList: (category) => setState({ mode: 'list', category }),
+        openList: (category, params) => setState({ mode: 'list', category, params }),
       }}
     >
       {children}
@@ -80,10 +80,11 @@ function PreviewDialog({
     setRecord(null)
     setList(null)
 
+    const extraParams = state.mode === 'list' && state.params ? `&${new URLSearchParams(state.params).toString()}` : ''
     const url =
       state.mode === 'record'
         ? `/api/preview?type=${state.type}&id=${state.id}`
-        : `/api/preview/list?category=${state.category}`
+        : `/api/preview/list?category=${state.category}${extraParams}`
 
     fetch(url)
       .then(async (res) => {

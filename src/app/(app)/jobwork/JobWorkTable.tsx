@@ -1,10 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -42,16 +44,79 @@ const columns: Column[] = [
   { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '' },
 ]
 
+type PartyOption = { id: string; name: string }
+type ItemOption = { id: string; item_code: string; item_name: string }
+
 export default function JobWorkTable({
   orders,
   fromDate,
   toDate,
+  basePath,
+  vendors,
+  vendorValue,
+  itemOptions,
+  itemValue,
+  emptyMessage,
 }: {
   orders: any[]
   fromDate?: string
   toDate?: string
+  basePath: string
+  vendors: PartyOption[]
+  vendorValue: string
+  itemOptions: ItemOption[]
+  itemValue: string
+  emptyMessage?: string
 }) {
+  const router = useRouter()
   const [filters, setFilters] = useState<Record<string, string>>({})
+
+  // Vendor / Item / Date range are server-driven (they decide which orders get
+  // fetched at all), so they're staged locally and only applied on demand —
+  // unlike the other columns' filters, which narrow the already-loaded rows instantly.
+  const [pendingVendor, setPendingVendor] = useState(vendorValue)
+  const [pendingItem, setPendingItem] = useState(itemValue)
+  const [pendingFrom, setPendingFrom] = useState(fromDate ?? '')
+  const [pendingTo, setPendingTo] = useState(toDate ?? '')
+
+  const dirty =
+    pendingVendor !== vendorValue ||
+    pendingItem !== itemValue ||
+    pendingFrom !== (fromDate ?? '') ||
+    pendingTo !== (toDate ?? '')
+
+  const applyServerFilters = () => {
+    const qs = new URLSearchParams()
+    if (pendingFrom) qs.set('from', pendingFrom)
+    if (pendingTo) qs.set('to', pendingTo)
+    if (pendingVendor) qs.set('vendor', pendingVendor)
+    if (pendingItem) qs.set('item', pendingItem)
+    router.push(`${basePath}?${qs.toString()}`)
+  }
+
+  const clearAll = () => {
+    setPendingVendor('')
+    setPendingItem('')
+    router.push(basePath)
+  }
+
+  const vendorCombo: ComboOption[] = useMemo(
+    () => vendors.map((v) => ({ id: v.id, label: v.name, search: v.name.toLowerCase() })),
+    [vendors]
+  )
+  const itemCombo: ComboOption[] = useMemo(
+    () =>
+      itemOptions.map((i) => ({
+        id: i.id,
+        label: `${i.item_code} — ${i.item_name}`,
+        search: `${i.item_code} ${i.item_name}`.toLowerCase(),
+      })),
+    [itemOptions]
+  )
+  const selectedVendor = vendors.find((v) => v.id === vendorValue)
+  const selectedItem = itemOptions.find((i) => i.id === itemValue)
+
+  const hasAppliedFilters = !!(vendorValue || itemValue)
 
   const filtered = useMemo(() => {
     const active = Object.entries(filters).filter(([, v]) => v.trim() !== '')
@@ -99,13 +164,111 @@ export default function JobWorkTable({
           ))}
           <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
         </tr>
-        <FilterInputs filters={filters} setFilters={setFilters} />
+        <tr className="border-b bg-white">
+          <th className="px-6 py-2 align-top">
+            <div className="flex flex-col gap-1">
+              <input
+                type="date"
+                value={pendingFrom}
+                onChange={(e) => setPendingFrom(e.target.value)}
+                aria-label="Created from"
+                className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+              />
+              <input
+                type="date"
+                value={pendingTo}
+                onChange={(e) => setPendingTo(e.target.value)}
+                aria-label="Created to"
+                className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+              />
+            </div>
+          </th>
+          <th className="px-6 py-2 align-top">
+            <input
+              type="text"
+              value={filters.company ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, company: e.target.value }))}
+              placeholder="Search..."
+              className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+            />
+          </th>
+          <th className="px-6 py-2 align-top">
+            <ItemComboBox
+              name="vendor"
+              defaultValue={vendorValue}
+              defaultLabel={selectedVendor?.name || ''}
+              placeholder="Search vendor…"
+              options={vendorCombo}
+              onSelect={(opt) => setPendingVendor(opt?.id ?? '')}
+            />
+          </th>
+          <th className="px-6 py-2 align-top">
+            <ItemComboBox
+              name="item"
+              defaultValue={itemValue}
+              defaultLabel={selectedItem ? `${selectedItem.item_code} — ${selectedItem.item_name}` : ''}
+              placeholder="Search item…"
+              options={itemCombo}
+              onSelect={(opt) => setPendingItem(opt?.id ?? '')}
+            />
+          </th>
+          <th className="px-6 py-2 align-top">
+            <input
+              type="text"
+              value={filters.expected_return ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, expected_return: e.target.value }))}
+              placeholder="Search..."
+              className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+            />
+          </th>
+          <th className="px-6 py-2 align-top">
+            <input
+              type="text"
+              value={filters.status ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+              placeholder="Search..."
+              className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+            />
+          </th>
+          <th className="px-6 py-2 align-top">
+            <input
+              type="text"
+              value={filters.notes ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, notes: e.target.value }))}
+              placeholder="Search..."
+              className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+            />
+          </th>
+          <th className="px-6 py-2 align-top">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={applyServerFilters}
+                className={`rounded px-2.5 py-1 text-xs font-medium ${
+                  dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+                title="Apply Vendor / Item / Date filters"
+              >
+                Apply
+              </button>
+              {hasAppliedFilters && (
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-xs text-gray-500 hover:underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </th>
+        </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
         {filtered.length === 0 && (
           <tr>
             <td colSpan={columns.length + 1} className="px-6 py-12 text-center text-gray-500">
-              No job work orders match your search.
+              {orders.length === 0 ? (emptyMessage || 'No job work orders in the selected range.') : 'No job work orders match your search.'}
             </td>
           </tr>
         )}
@@ -158,30 +321,5 @@ export default function JobWorkTable({
       </tbody>
     </table>
     </>
-  )
-}
-
-function FilterInputs({
-  filters,
-  setFilters,
-}: {
-  filters: Record<string, string>
-  setFilters: React.Dispatch<React.SetStateAction<Record<string, string>>>
-}) {
-  return (
-    <tr className="border-b bg-white">
-      {columns.map((col) => (
-        <th key={col.key} className="px-6 py-2">
-          <input
-            type="text"
-            value={filters[col.key] ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, [col.key]: e.target.value }))}
-            placeholder="Search..."
-            className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
-          />
-        </th>
-      ))}
-      <th className="px-6 py-2" />
-    </tr>
   )
 }
