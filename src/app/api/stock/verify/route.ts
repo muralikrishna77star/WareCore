@@ -34,8 +34,12 @@ export async function GET(request: NextRequest) {
         (SELECT COALESCE(SUM(total_quantity), 0) FROM dispatch_orders WHERE status = 'active' AND dispatch_date BETWEEN '${from}' AND '${to}'),
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'SALE_OUT' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
+      -- is_transfer_line = false excludes destination lines created by a vendor
+      -- transfer (migration 056) — those post JOB_WORK_TRANSFER_IN, not
+      -- JOB_WORK_OUT, so counting their quantity_sent here double-counted
+      -- against a ledger total that never included them.
       SELECT 'job_work',
-        (SELECT COALESCE(SUM(jwi.quantity_sent), 0) FROM job_work_items jwi JOIN job_work_orders jwo ON jwo.id = jwi.job_work_order_id WHERE jwo.dispatch_date BETWEEN '${from}' AND '${to}'),
+        (SELECT COALESCE(SUM(jwi.quantity_sent), 0) FROM job_work_items jwi JOIN job_work_orders jwo ON jwo.id = jwi.job_work_order_id WHERE jwi.is_transfer_line = false AND jwo.dispatch_date BETWEEN '${from}' AND '${to}'),
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'JOB_WORK_OUT' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
       SELECT 'purchase_cancellations',

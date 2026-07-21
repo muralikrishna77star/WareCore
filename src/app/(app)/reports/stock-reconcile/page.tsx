@@ -288,6 +288,13 @@ export default function StockReconcilePage() {
               creates the same PURCHASE_CANCEL / SALE_CANCEL / JOB_WORK_CANCEL entry type as a full order
               cancellation, so the ledger total may run higher than the cancelled-order archive total.
             </p>
+            <p className="text-xs text-gray-500">
+              A small residual mismatch on Purchases / Sales / Job Work (Out) can also be legitimate: if an
+              order was dispatched inside this date range but deleted or cancelled outside it, its original
+              IN/OUT ledger entry stays here as history while the reversing CANCEL entry lands in a different
+              window — check the reversing entry&apos;s Reference on the Cancellations page for that period
+              before assuming a real data problem.
+            </p>
           </div>
         )}
 
