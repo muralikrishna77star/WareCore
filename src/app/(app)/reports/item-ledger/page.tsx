@@ -188,13 +188,17 @@ export default async function ItemStockLedgerPage({
     orphanedRefs = await findOrphanedReferences(pairs)
   }
 
-  // Rows sharing the same reference + line ID are flagged for review — usually
-  // leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs from repeated edits.
+  // Rows sharing the same reference + line ID + entry type are flagged for
+  // review — usually leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs
+  // from repeated edits. entry_type must match too: a job work line's
+  // original JOB_WORK_OUT and a later JOB_WORK_TRANSFER_OUT legitimately
+  // share the same reference_id + purchase_line_id (the transfer-out is
+  // recorded against the source order), and aren't duplicates.
   const dupKeyCounts = new Map<string, number>()
   for (const e of entries) {
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     if (!e.reference_id || !lineId) continue
-    const key = `${e.reference_id}|${lineId}`
+    const key = `${e.reference_id}|${lineId}|${e.entry_type}`
     dupKeyCounts.set(key, (dupKeyCounts.get(key) ?? 0) + 1)
   }
 
@@ -202,7 +206,7 @@ export default async function ItemStockLedgerPage({
   const ledgerRows = entries.map((e) => {
     running += Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
-    const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}` : null
+    const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
     return {
       ...e,
       balance: running,

@@ -53,52 +53,56 @@ export default async function JobWorkTransfersPage() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Transfer No.</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">From Vendor</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">To Vendor</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Items</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Reason</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase"></th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Transfer No.</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">From</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">To</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Purchase Line</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Size</th>
+                  <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                  <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Reason</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {records.map((t: any) => {
+                {records.flatMap((t: any) => {
                   const items = t.job_work_transfer_items ?? []
-                  const totalQty = items.reduce((s: number, it: any) => s + Number(it.quantity_transferred || 0), 0)
-                  return (
-                    <tr key={t.id} className="hover:bg-gray-50 align-top">
-                      <td className="px-6 py-3 font-mono text-xs text-purple-700 whitespace-nowrap">{t.transfer_number}</td>
-                      <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDate(t.transfer_date)}</td>
-                      <td className="px-6 py-3">
-                        <span className="text-gray-700">{t.from_vendor?.name || '—'}</span>
-                        {t.from_job_work_order && (
-                          <Link href={`/jobwork/${t.from_job_work_order.id}`} className="block text-[10px] font-mono text-blue-600 hover:underline">
-                            {t.from_job_work_order.reference_number}
-                          </Link>
-                        )}
+                  const rowCount = Math.max(items.length, 1)
+                  return (items.length > 0 ? items : [null]).map((it: any, idx: number) => (
+                    <tr key={it?.id ?? t.id} className={`hover:bg-gray-50 align-top ${idx > 0 ? 'border-t border-gray-50' : ''}`}>
+                      {idx === 0 && (
+                        <>
+                          <td className="px-2 py-2 font-mono text-xs text-purple-700 whitespace-nowrap" rowSpan={rowCount}>{t.transfer_number}</td>
+                          <td className="px-2 py-2 text-gray-600 whitespace-nowrap" rowSpan={rowCount}>{formatDate(t.transfer_date)}</td>
+                          <td className="px-2 py-2 whitespace-nowrap" rowSpan={rowCount}>
+                            <span className="text-gray-700">{t.from_vendor?.name || '—'}</span>
+                            {t.from_job_work_order && (
+                              <Link href={`/jobwork/${t.from_job_work_order.id}`} className="block text-[10px] font-mono text-blue-600 hover:underline">
+                                {t.from_job_work_order.reference_number}
+                              </Link>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap" rowSpan={rowCount}>
+                            <span className="text-gray-700">{t.to_vendor?.name || '—'}</span>
+                            {t.to_job_work_order && (
+                              <Link href={`/jobwork/${t.to_job_work_order.id}`} className="block text-[10px] font-mono text-blue-600 hover:underline">
+                                {t.to_job_work_order.reference_number}
+                              </Link>
+                            )}
+                          </td>
+                        </>
+                      )}
+                      <td className="px-2 py-2 font-mono text-xs text-blue-700 whitespace-nowrap">{it?.purchase_line_id || '—'}</td>
+                      <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{it?.item_name || '—'}</td>
+                      <td className="px-2 py-2 text-gray-600 whitespace-nowrap">{it?.size_label || '—'}</td>
+                      <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">
+                        {it ? `${Number(it.quantity_transferred).toFixed(3)} ${it.unit || ''}` : '—'}
                       </td>
-                      <td className="px-6 py-3">
-                        <span className="text-gray-700">{t.to_vendor?.name || '—'}</span>
-                        {t.to_job_work_order && (
-                          <Link href={`/jobwork/${t.to_job_work_order.id}`} className="block text-[10px] font-mono text-blue-600 hover:underline">
-                            {t.to_job_work_order.reference_number}
-                          </Link>
-                        )}
-                      </td>
-                      <td className="px-6 py-3">
-                        {items.map((it: any) => (
-                          <div key={it.id} className="text-xs text-gray-700 whitespace-nowrap">
-                            <span className="font-mono text-blue-700">{it.purchase_line_id || '—'}</span>
-                            {' · '}{it.item_name || '—'}{' · '}{Number(it.quantity_transferred).toFixed(3)} {it.unit}
-                          </div>
-                        ))}
-                        <div className="text-[10px] text-gray-400 mt-1">Total: {totalQty.toFixed(3)}</div>
-                      </td>
-                      <td className="px-6 py-3 text-gray-600">{t.reason || '—'}</td>
-                      <td className="px-6 py-3"></td>
+                      {idx === 0 && (
+                        <td className="px-2 py-2 text-gray-600" rowSpan={rowCount}>{t.reason || '—'}</td>
+                      )}
                     </tr>
-                  )
+                  ))
                 })}
               </tbody>
             </table>
