@@ -24,6 +24,14 @@ type StaleRecord = {
   materialCode: string | null
   sizeLabel: string | null
 }
+type ExplainedRecord = {
+  category: string
+  cancellationId: string
+  referenceNumber: string | null
+  qty: number
+  cancelledDate: string
+  url: string
+}
 type DuplicateGroup = {
   referenceType: string
   referenceNumber: string | null
@@ -85,6 +93,7 @@ export default function StockReconcilePage() {
   const [verifying, setVerifying] = useState(false)
   const [verifyError, setVerifyError] = useState('')
   const [totals, setTotals] = useState<TotalRow[] | null>(null)
+  const [explainedRecords, setExplainedRecords] = useState<ExplainedRecord[] | null>(null)
   const [staleRecords, setStaleRecords] = useState<StaleRecord[] | null>(null)
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[] | null>(null)
 
@@ -103,6 +112,7 @@ export default function StockReconcilePage() {
     setVerifying(true)
     setVerifyError('')
     setTotals(null)
+    setExplainedRecords(null)
     setStaleRecords(null)
     setDuplicateGroups(null)
     try {
@@ -110,6 +120,7 @@ export default function StockReconcilePage() {
       const data = await res.json()
       if (!res.ok) { setVerifyError(data.error || `Server error (${res.status})`); return }
       setTotals(data.totals)
+      setExplainedRecords(data.explainedRecords)
       setStaleRecords(data.staleRecords)
       setDuplicateGroups(data.duplicateGroups)
     } catch (err) {
@@ -301,20 +312,52 @@ export default function StockReconcilePage() {
                 </tbody>
               </table>
             </div>
-            {totals.some((r) => r.explainedCount > 0) && (
-              <p className="text-xs text-amber-700">
-                {totals
-                  .filter((r) => r.explainedCount > 0)
-                  .map((r) => `${categoryLabels[r.category] || r.category}: ${r.explainedCount} order(s) totalling ${fmt(r.explainedQty)} were dispatched in this window but deleted/cancelled outside it`)
-                  .join('; ')}
-                {' — '}rows marked <strong>Explained</strong> above have no unaccounted residual.
-              </p>
-            )}
             <p className="text-xs text-gray-500">
               Cancellation rows can legitimately differ from the ledger total — a mid-edit stock reversal
               creates the same PURCHASE_CANCEL / SALE_CANCEL / JOB_WORK_CANCEL entry type as a full order
               cancellation, so the ledger total may run higher than the cancelled-order archive total.
             </p>
+          </div>
+        )}
+
+        {explainedRecords && explainedRecords.length > 0 && (
+          <div className="border-t pt-4">
+            <h3 className="font-medium text-gray-900 mb-1">
+              Residuals Explained by Later Cancellations <span className="text-amber-600">({explainedRecords.length})</span>
+            </h3>
+            <p className="text-sm text-gray-600 mb-2">
+              These orders were dispatched/billed inside the selected window but deleted or cancelled
+              outside it, so their original ledger entry stays here as history with no live source row to
+              match it. Open one to verify manually.
+            </p>
+            <div className="overflow-auto max-h-80 rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr className="border-b text-left">
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Category</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Reference</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Qty</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Cancelled On</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {explainedRecords.map((r) => (
+                    <tr key={r.cancellationId}>
+                      <td className="px-4 py-2">{categoryLabels[r.category] || r.category}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{r.referenceNumber || '—'}</td>
+                      <td className="px-4 py-2 text-right">{fmt(r.qty)}</td>
+                      <td className="px-4 py-2 whitespace-nowrap">{r.cancelledDate}</td>
+                      <td className="px-4 py-2 text-right">
+                        <Link href={r.url} className="text-blue-600 hover:underline whitespace-nowrap">
+                          View cancellation →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

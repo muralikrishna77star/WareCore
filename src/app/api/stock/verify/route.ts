@@ -62,30 +62,30 @@ export async function GET(request: NextRequest) {
     // in a different window, so it can't net out here either. This isn't a
     // stale/orphaned row (it IS validly archived) — just a legitimate,
     // permanent artifact of comparing two different date fields per window.
+    // Carries the archive record's own id so the UI can link straight to it.
     const explainedSql = `
-      SELECT 'purchases' AS category,
-        COALESCE(SUM(sl.quantity), 0) AS explained_qty, COUNT(DISTINCT sl.reference_id) AS explained_count
+      SELECT 'purchases' AS category, pc.id AS cancellation_id, sl.reference_number,
+        sl.quantity AS qty, pc.cancelled_at::date AS cancelled_date
       FROM stock_ledger sl
+      JOIN purchase_cancellations pc ON pc.original_bill_id = sl.reference_id
       WHERE sl.entry_type = 'PURCHASE_IN' AND sl.entry_date BETWEEN '${from}' AND '${to}'
         AND sl.reference_type = 'purchase_bill'
         AND NOT EXISTS (SELECT 1 FROM purchase_bills b WHERE b.id = sl.reference_id)
-        AND EXISTS (SELECT 1 FROM purchase_cancellations pc WHERE pc.original_bill_id = sl.reference_id)
       UNION ALL
-      SELECT 'sales',
-        COALESCE(SUM(ABS(sl.quantity)), 0), COUNT(DISTINCT sl.reference_id)
+      SELECT 'sales', dc.id, sl.reference_number, ABS(sl.quantity), dc.cancelled_at::date
       FROM stock_ledger sl
+      JOIN dispatch_cancellations dc ON dc.original_order_id = sl.reference_id
       WHERE sl.entry_type = 'SALE_OUT' AND sl.entry_date BETWEEN '${from}' AND '${to}'
         AND sl.reference_type = 'dispatch'
         AND NOT EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.id = sl.reference_id)
-        AND EXISTS (SELECT 1 FROM dispatch_cancellations dc WHERE dc.original_order_id = sl.reference_id)
       UNION ALL
-      SELECT 'job_work',
-        COALESCE(SUM(ABS(sl.quantity)), 0), COUNT(DISTINCT sl.reference_id)
+      SELECT 'job_work', jwc.id, sl.reference_number, ABS(sl.quantity), jwc.cancelled_at::date
       FROM stock_ledger sl
+      JOIN job_work_cancellations jwc ON jwc.original_order_id = sl.reference_id
       WHERE sl.entry_type = 'JOB_WORK_OUT' AND sl.entry_date BETWEEN '${from}' AND '${to}'
         AND sl.reference_type = 'job_work'
         AND NOT EXISTS (SELECT 1 FROM job_work_orders jwo WHERE jwo.id = sl.reference_id)
-        AND EXISTS (SELECT 1 FROM job_work_cancellations jwc WHERE jwc.original_order_id = sl.reference_id)
+      ORDER BY category, cancelled_date DESC
     `
 
     // ── Stale records: ledger entries pointing at an order that no longer
@@ -134,12 +134,27 @@ export async function GET(request: NextRequest) {
       hasuraRunSql(duplicatesSql),
     ])
 
-    const explainedByCategory = new Map(
-      parseRows(explainedRes).map(([category, explainedQty, explainedCount]) => [
+    const explainedRoute: Record<string, string> = {
+      purchases: '/purchase-cancellations',
+      sales: '/sale-cancellations',
+      job_work: '/jobwork-cancellations',
+    }
+    const explainedRecords = parseRows(explainedRes).map(
+      ([category, cancellationId, referenceNumber, qty, cancelledDate]) => ({
         category,
-        { explainedQty: Number(explainedQty), explainedCount: Number(explainedCount) },
-      ])
+        cancellationId,
+        referenceNumber,
+        qty: Number(qty),
+        cancelledDate,
+        url: `${explainedRoute[category] ?? ''}/${cancellationId}`,
+      })
     )
+
+    const explainedByCategory = new Map<string, { explainedQty: number; explainedCount: number }>()
+    for (const rec of explainedRecords) {
+      const prev = explainedByCategory.get(rec.category) ?? { explainedQty: 0, explainedCount: 0 }
+      explainedByCategory.set(rec.category, { explainedQty: prev.explainedQty + rec.qty, explainedCount: prev.explainedCount + 1 })
+    }
 
     const totals = parseRows(totalsRes).map(([category, sourceQty, ledgerQty]) => {
       const source = Number(sourceQty)
@@ -177,7 +192,7 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    return NextResponse.json({ totals, staleRecords, duplicateGroups })
+    return NextResponse.json({ totals, explainedRecords, staleRecords, duplicateGroups })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Verification failed'
     console.error('[stock/verify]', message)
