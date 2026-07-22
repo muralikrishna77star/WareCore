@@ -50,9 +50,13 @@ export async function GET(request: NextRequest) {
         (SELECT COALESCE(SUM(total_quantity), 0) FROM dispatch_cancellations WHERE cancelled_at::date BETWEEN '${from}' AND '${to}'),
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'SALE_CANCEL' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
+      -- Job work cancellations no longer post a JOB_WORK_CANCEL ledger row at
+      -- all (migration 061 deletes the order's ledger rows outright instead
+      -- of reversing them) — ledger_qty is always 0 here going forward. This
+      -- row is purely archive-side reporting now, not a reconciliation check.
       SELECT 'job_work_cancellations',
         (SELECT COALESCE(SUM(jwci.quantity_sent), 0) FROM job_work_cancellation_items jwci JOIN job_work_cancellations jwc ON jwc.id = jwci.cancellation_id WHERE jwc.cancelled_at::date BETWEEN '${from}' AND '${to}'),
-        (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'JOB_WORK_CANCEL' AND entry_date BETWEEN '${from}' AND '${to}')
+        0
     `
 
     // ── Explained residuals: an IN/OUT ledger row dated in-window whose order
@@ -63,6 +67,12 @@ export async function GET(request: NextRequest) {
     // stale/orphaned row (it IS validly archived) — just a legitimate,
     // permanent artifact of comparing two different date fields per window.
     // Carries the archive record's own id so the UI can link straight to it.
+    //
+    // job_work has no branch here: delete_job_work_order() now deletes the
+    // order's stock_ledger rows outright instead of reversing them (see
+    // migration 061), so a cancelled order's JOB_WORK_OUT row disappears
+    // immediately regardless of window boundaries — this residual can no
+    // longer occur for job_work.
     const explainedSql = `
       SELECT 'purchases' AS category, pc.id AS cancellation_id, sl.reference_number,
         sl.quantity AS qty, pc.cancelled_at::date AS cancelled_date
@@ -78,13 +88,6 @@ export async function GET(request: NextRequest) {
       WHERE sl.entry_type = 'SALE_OUT' AND sl.entry_date BETWEEN '${from}' AND '${to}'
         AND sl.reference_type = 'dispatch'
         AND NOT EXISTS (SELECT 1 FROM dispatch_orders d WHERE d.id = sl.reference_id)
-      UNION ALL
-      SELECT 'job_work', jwc.id, sl.reference_number, ABS(sl.quantity), jwc.cancelled_at::date
-      FROM stock_ledger sl
-      JOIN job_work_cancellations jwc ON jwc.original_order_id = sl.reference_id
-      WHERE sl.entry_type = 'JOB_WORK_OUT' AND sl.entry_date BETWEEN '${from}' AND '${to}'
-        AND sl.reference_type = 'job_work'
-        AND NOT EXISTS (SELECT 1 FROM job_work_orders jwo WHERE jwo.id = sl.reference_id)
       ORDER BY category, cancelled_date DESC
     `
 
@@ -137,7 +140,6 @@ export async function GET(request: NextRequest) {
     const explainedRoute: Record<string, string> = {
       purchases: '/purchase-cancellations',
       sales: '/sale-cancellations',
-      job_work: '/jobwork-cancellations',
     }
     const explainedRecords = parseRows(explainedRes).map(
       ([category, cancellationId, referenceNumber, qty, cancelledDate]) => ({

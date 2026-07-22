@@ -1884,6 +1884,36 @@ export const JOB_WORK_CANCELLATION_BY_ID_QUERY = `
   }
 `
 
+// ─── Job Work Transfer Cancellations (deleted vendor transfers) ────────────
+
+export const JOB_WORK_TRANSFER_CANCELLATIONS_QUERY = `
+  query GetJobWorkTransferCancellations {
+    job_work_transfer_cancellations(order_by: {cancelled_at: desc}) {
+      id transfer_number transfer_date
+      from_reference_number from_vendor_name
+      to_reference_number to_vendor_name
+      reason cancelled_at cancelled_notes
+      job_work_cancellation_id
+    }
+  }
+`
+
+export const JOB_WORK_TRANSFER_CANCELLATION_BY_ID_QUERY = `
+  query GetJobWorkTransferCancellation($id: uuid!) {
+    job_work_transfer_cancellations_by_pk(id: $id) {
+      id transfer_number transfer_date
+      from_reference_number from_vendor_name
+      to_reference_number to_vendor_name
+      reason notes cancelled_at cancelled_notes
+      job_work_cancellation_id
+      job_work_transfer_cancellation_items(order_by: {id: asc}) {
+        id item_name material_type_name size_label
+        quantity_transferred unit purchase_line_id
+      }
+    }
+  }
+`
+
 // ─── AI Copilot Conversations ────────────────────────────────────────────────
 // $owner_id on every op below is declared but never supplied by the client —
 // /api/graphql force-overwrites it with the caller's session id before

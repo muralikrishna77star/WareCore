@@ -25,9 +25,14 @@ export default async function JobWorkTransfersPage() {
           <h1 className="text-2xl font-bold text-gray-900">Job Work Vendor Transfers</h1>
           <p className="mt-1 text-sm text-gray-500">Audit trail of pending job work handed from one vendor to another</p>
         </div>
-        <Link href="/jobwork" className="text-sm text-blue-600 hover:underline">
-          ← Job Work
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/jobwork-transfer-cancellations" className="text-sm text-blue-600 hover:underline">
+            Deleted Transfers →
+          </Link>
+          <Link href="/jobwork" className="text-sm text-blue-600 hover:underline">
+            ← Job Work
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">

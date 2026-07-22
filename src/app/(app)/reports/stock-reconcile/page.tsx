@@ -313,9 +313,11 @@ export default function StockReconcilePage() {
               </table>
             </div>
             <p className="text-xs text-gray-500">
-              Cancellation rows can legitimately differ from the ledger total — a mid-edit stock reversal
-              creates the same PURCHASE_CANCEL / SALE_CANCEL / JOB_WORK_CANCEL entry type as a full order
+              Purchase/Sale Cancellation rows can legitimately differ from the ledger total — a mid-edit
+              stock reversal creates the same PURCHASE_CANCEL / SALE_CANCEL entry type as a full order
               cancellation, so the ledger total may run higher than the cancelled-order archive total.
+              Job Work Cancellations no longer post a ledger entry at all (the order&apos;s ledger rows are
+              removed outright on cancellation) — that row is archive-side reporting only, not a reconciliation check.
             </p>
           </div>
         )}
