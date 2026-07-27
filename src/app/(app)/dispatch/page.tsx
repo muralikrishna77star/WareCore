@@ -55,7 +55,7 @@ export default async function DispatchPage({
         </div>
         <div className="flex gap-2">
           <Link
-            href="/dispatch/vendor-direct/new"
+            href="/dispatch/vendor-direct"
             className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 transition-colors"
           >
             Sell from Vendor
