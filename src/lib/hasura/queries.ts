@@ -1644,9 +1644,13 @@ export const MOVEMENTS_REPORT_QUERY = `
 export const ITEM_STOCK_LEDGER_QUERY = `
   query GetItemStockLedger(
     $opening_where: stock_ledger_bool_exp = {},
+    $vendor_opening_where: stock_ledger_bool_exp = {},
     $period_where: stock_ledger_bool_exp = {}
   ) {
     opening_agg: stock_ledger_aggregate(where: $opening_where) {
+      aggregate { sum { quantity } }
+    }
+    vendor_opening_agg: stock_ledger_aggregate(where: $vendor_opening_where) {
       aggregate { sum { quantity } }
     }
     entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {

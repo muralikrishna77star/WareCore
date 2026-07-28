@@ -32,6 +32,13 @@ const REFERENCE_TABLE_BY_TYPE: Record<string, string> = {
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// Entry types that move stock to/from a vendor under job work — used to
+// derive a running "Balance at Vendor" column alongside the main balance.
+// JOB_WORK_OUTPUT_IN is deliberately excluded: it posts against the output
+// item's own material_type_id (finished good), never the raw material sent
+// out, so it never contributes to this item's vendor-held quantity.
+const VENDOR_MOVEMENT_TYPES = ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL', 'JOB_WORK_TRANSFER_OUT', 'JOB_WORK_TRANSFER_IN']
+
 // A reference missing from the live table isn't necessarily orphaned — a
 // cancelled-and-purged order moves to its archive table (original_*_id) and
 // is still a legitimate record. Only flag a reference as orphaned when it's
@@ -131,6 +138,7 @@ export default async function ItemStockLedgerPage({
   const selectedSizeId = params.size || selectedItem?.material_size_id || ''
 
   let openingBalance = 0
+  let vendorOpeningBalance = 0
   let entries: LedgerEntry[] = []
   let vendorStock: { vendor_name: string; pending_quantity: number | string; unit: string }[] = []
 
@@ -159,15 +167,20 @@ export default async function ItemStockLedgerPage({
       : baseConditions
 
     const openingWhere = { _and: [...baseConditions, { entry_date: { _lt: fromDate } }] }
+    const vendorOpeningWhere = {
+      _and: [...baseConditions, { entry_date: { _lt: fromDate } }, { entry_type: { _in: VENDOR_MOVEMENT_TYPES } }],
+    }
     const periodWhere = {
       _and: [...periodConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
     }
 
     const result = await hasuraQuery(ITEM_STOCK_LEDGER_QUERY, {
       opening_where: openingWhere,
+      vendor_opening_where: vendorOpeningWhere,
       period_where: periodWhere,
     })
     openingBalance = Number(result.opening_agg?.aggregate?.sum?.quantity ?? 0)
+    vendorOpeningBalance = -Number(result.vendor_opening_agg?.aggregate?.sum?.quantity ?? 0)
     entries = result.entries ?? []
 
     const selectedSizeLabel = selectedSizeId
@@ -203,18 +216,22 @@ export default async function ItemStockLedgerPage({
   }
 
   let running = openingBalance
+  let vendorRunning = vendorOpeningBalance
   const ledgerRows = entries.map((e) => {
     running += Number(e.quantity)
+    if (VENDOR_MOVEMENT_TYPES.includes(e.entry_type)) vendorRunning -= Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
     return {
       ...e,
       balance: running,
+      vendorBalance: vendorRunning,
       orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
     }
   })
   const closingBalance = running
+  const vendorClosingBalance = vendorRunning
 
   const totalIn = entries
     .filter((e) => Number(e.quantity) > 0)
@@ -257,6 +274,7 @@ export default async function ItemStockLedgerPage({
       'In': qty > 0 ? qty : '',
       'Out': qty < 0 ? Math.abs(qty) : '',
       'Balance': row.balance,
+      'Balance at Vendor': row.vendorBalance,
       'Notes': row.notes || '',
     }
   })
@@ -448,6 +466,7 @@ export default async function ItemStockLedgerPage({
                     <th className="px-4 py-3 text-right">In</th>
                     <th className="px-4 py-3 text-right">Out</th>
                     <th className="px-4 py-3 text-right">Balance</th>
+                    <th className="px-4 py-3 text-right">Balance at Vendor</th>
                     <th className="px-4 py-3 text-left">Notes</th>
                   </tr>
                 </thead>
@@ -457,11 +476,14 @@ export default async function ItemStockLedgerPage({
                     <td className={`px-4 py-3 text-right font-bold ${openingBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
                       {fmtQ(openingBalance)}
                     </td>
+                    <td className={`px-4 py-3 text-right font-bold ${vendorOpeningBalance < 0 ? 'text-red-600' : 'text-purple-800'}`}>
+                      {fmtQ(vendorOpeningBalance)}
+                    </td>
                     <td />
                   </tr>
                   {ledgerRows.length === 0 && (
                     <tr>
-                      <td colSpan={canManage ? 10 : 9} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-gray-400">
                         No movements for this item in the selected period.
                       </td>
                     </tr>
@@ -475,6 +497,9 @@ export default async function ItemStockLedgerPage({
                     <td className="px-4 py-3 text-right text-red-800">-{fmtQ(totalOut)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${closingBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                       {fmtQ(closingBalance)}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-bold ${vendorClosingBalance < 0 ? 'text-red-700' : 'text-purple-900'}`}>
+                      {fmtQ(vendorClosingBalance)}
                     </td>
                     <td />
                   </tr>

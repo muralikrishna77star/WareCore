@@ -36,6 +36,7 @@ export type LedgerRow = {
   companies?: { name: string } | null
   warehouses?: { name: string } | null
   balance: number
+  vendorBalance: number
   orphaned: boolean
   duplicateCount: number
 }
@@ -181,6 +182,9 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
               <td className="px-4 py-3 text-right text-red-600 font-medium">{qty < 0 ? fmtQ(Math.abs(qty)) : ''}</td>
               <td className={`px-4 py-3 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                 {fmtQ(row.balance)}
+              </td>
+              <td className={`px-4 py-3 text-right ${row.vendorBalance < 0 ? 'text-red-600' : 'text-purple-800'}`}>
+                {fmtQ(row.vendorBalance)}
               </td>
               <td className="px-4 py-3 text-gray-500 text-xs">{row.notes || '—'}</td>
             </tr>
