@@ -233,6 +233,80 @@ export default async function ItemStockLedgerPage({
   const closingBalance = running
   const vendorClosingBalance = vendorRunning
 
+  // Vendor-direct-sale pairs post as two separate ledger rows (a
+  // JOB_WORK_RETURN_IN "virtual return" from the vendor + the SALE_OUT
+  // dispatch) since they carry distinct references (job work order vs.
+  // invoice) that must stay individually traceable in stock_ledger. But
+  // shown as two rows they read as unrelated movements — merge them into
+  // one display-only row here so the report reads as a single event
+  // without touching the underlying data. Matched by shared line ID +
+  // entry date + exactly-offsetting quantity.
+  const VENDOR_DIRECT_SALE_NOTE = 'Vendor direct sale — virtual return'
+  type DisplayRow = (typeof ledgerRows)[number] & {
+    mergedIds?: string[]
+    isVendorDirectSale?: boolean
+    jobWorkReferenceNumber?: string | null
+    jobWorkReferenceType?: string | null
+    jobWorkReferenceId?: string | null
+    netQuantity?: number
+  }
+  const consumed = new Set<number>()
+  const mergeAtLaterIndex = new Map<number, { saleIdx: number; returnIdx: number }>()
+  for (let i = 0; i < ledgerRows.length; i++) {
+    const row = ledgerRows[i]
+    if (row.entry_type !== 'JOB_WORK_RETURN_IN' || row.notes !== VENDOR_DIRECT_SALE_NOTE) continue
+    if (consumed.has(i)) continue
+    const lineId = row.sub_purchase_line_id || row.purchase_line_id
+    if (!lineId) continue
+    const qty = Number(row.quantity)
+    const j = ledgerRows.findIndex((r, idx) =>
+      idx !== i &&
+      !consumed.has(idx) &&
+      r.entry_type === 'SALE_OUT' &&
+      (r.sub_purchase_line_id || r.purchase_line_id) === lineId &&
+      r.entry_date === row.entry_date &&
+      Math.abs(Number(r.quantity) + qty) < 0.0005
+    )
+    if (j === -1) continue
+    consumed.add(i)
+    consumed.add(j)
+    // Whichever of the pair is processed later in running-balance order
+    // always lands back at the pre-pair balance/vendorBalance (the delta
+    // nets to zero either way) — use its values regardless of which side
+    // (return or sale) happens to sort first on a same-day tie.
+    mergeAtLaterIndex.set(Math.max(i, j), { saleIdx: j, returnIdx: i })
+  }
+  const displayRows: DisplayRow[] = []
+  for (let i = 0; i < ledgerRows.length; i++) {
+    const merge = mergeAtLaterIndex.get(i)
+    if (merge) {
+      const saleRow = ledgerRows[merge.saleIdx]
+      const returnRow = ledgerRows[merge.returnIdx]
+      const laterRow = ledgerRows[i]
+      displayRows.push({
+        ...saleRow,
+        id: `vds-${returnRow.id}-${saleRow.id}`,
+        mergedIds: [returnRow.id, saleRow.id],
+        isVendorDirectSale: true,
+        entry_type: 'VENDOR_DIRECT_SALE',
+        entry_date: laterRow.entry_date,
+        quantity: saleRow.quantity,
+        netQuantity: 0,
+        jobWorkReferenceNumber: returnRow.reference_number,
+        jobWorkReferenceType: returnRow.reference_type,
+        jobWorkReferenceId: returnRow.reference_id,
+        balance: laterRow.balance,
+        vendorBalance: laterRow.vendorBalance,
+        orphaned: false,
+        duplicateCount: 1,
+        notes: 'Direct from vendor — no warehouse movement',
+      })
+      continue
+    }
+    if (consumed.has(i)) continue
+    displayRows.push(ledgerRows[i])
+  }
+
   const totalIn = entries
     .filter((e) => Number(e.quantity) > 0)
     .reduce((s, e) => s + Number(e.quantity), 0)
@@ -263,12 +337,18 @@ export default async function ItemStockLedgerPage({
     ADJUSTMENT_IN: 'Adjustment In',
     ADJUSTMENT_OUT: 'Adjustment Out',
   }
-  const exportRows = ledgerRows.map((row) => {
+  const exportRows = displayRows.map((row) => {
     const qty = Number(row.quantity)
+    const typeLabel = row.isVendorDirectSale
+      ? 'Vendor Direct Sale'
+      : ENTRY_TYPE_LABELS[row.entry_type ?? ''] ?? row.entry_type ?? ''
+    const referenceLabel = row.isVendorDirectSale
+      ? `${row.reference_number || ''}${row.jobWorkReferenceNumber ? ` (via ${row.jobWorkReferenceNumber})` : ''}`
+      : row.reference_number || ''
     return {
       'Date': formatDate(row.entry_date),
-      'Type': ENTRY_TYPE_LABELS[row.entry_type ?? ''] ?? row.entry_type ?? '',
-      'Reference': row.reference_number || '',
+      'Type': typeLabel,
+      'Reference': referenceLabel,
       'Company': row.companies?.name || '',
       'Warehouse': row.warehouses?.name || '',
       'In': qty > 0 ? qty : '',
@@ -289,7 +369,7 @@ export default async function ItemStockLedgerPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {selectedItem && ledgerRows.length > 0 && (
+          {selectedItem && displayRows.length > 0 && (
             <ExportExcelButton rows={exportRows} filename={`Item_Ledger_${selectedItem.item_code}_${fromDate}_to_${toDate}`} sheetName="Item Ledger" />
           )}
           {selectedItem && <PrintButton />}
@@ -451,7 +531,7 @@ export default async function ItemStockLedgerPage({
           <div className="rounded-xl border bg-white overflow-hidden">
             <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
               <span className="font-semibold text-gray-700 text-sm">Ledger Entries</span>
-              <span className="text-xs text-gray-500">{ledgerRows.length} entr{ledgerRows.length !== 1 ? 'ies' : 'y'}</span>
+              <span className="text-xs text-gray-500">{displayRows.length} entr{displayRows.length !== 1 ? 'ies' : 'y'}</span>
             </div>
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
@@ -481,7 +561,7 @@ export default async function ItemStockLedgerPage({
                     </td>
                     <td />
                   </tr>
-                  {ledgerRows.length === 0 && (
+                  {displayRows.length === 0 && (
                     <tr>
                       <td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-gray-400">
                         No movements for this item in the selected period.
@@ -489,7 +569,7 @@ export default async function ItemStockLedgerPage({
                     </tr>
                   )}
                 </tbody>
-                {ledgerRows.length > 0 && <ItemLedgerRows rows={ledgerRows} canManage={canManage} />}
+                {displayRows.length > 0 && <ItemLedgerRows rows={displayRows} canManage={canManage} />}
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
                     <td className="px-4 py-3 text-gray-700" colSpan={canManage ? 6 : 5}>Closing Balance as of {toDate}</td>

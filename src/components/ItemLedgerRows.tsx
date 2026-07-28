@@ -39,6 +39,12 @@ export type LedgerRow = {
   vendorBalance: number
   orphaned: boolean
   duplicateCount: number
+  mergedIds?: string[]
+  isVendorDirectSale?: boolean
+  jobWorkReferenceNumber?: string | null
+  jobWorkReferenceType?: string | null
+  jobWorkReferenceId?: string | null
+  netQuantity?: number
 }
 
 const fmtQ = (n: number) => n.toFixed(3)
@@ -59,7 +65,11 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
   }
 
   const selectedRows = rows.filter((r) => selected.has(r.id))
-  const netEffect = selectedRows.reduce((s, r) => s + Number(r.quantity), 0)
+  const netEffect = selectedRows.reduce((s, r) => s + Number(r.netQuantity ?? r.quantity), 0)
+  // A merged vendor-direct-sale row stands in for two real stock_ledger
+  // rows — expand it back to both underlying ids before sending to the
+  // delete API, which only knows about real rows.
+  const idsToDelete = selectedRows.flatMap((r) => r.mergedIds ?? [r.id])
 
   const handleDelete = async () => {
     if (!selectedRows.length) return
@@ -67,7 +77,7 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
       ? `\n\nWarning: the selected rows do NOT net to zero (net ${fmtQ(netEffect)}) — deleting them will change this item's current stock balance.`
       : ''
     const ok = window.confirm(
-      `Permanently delete ${selectedRows.length} ledger row${selectedRows.length !== 1 ? 's' : ''}? This cannot be undone.${netWarning}`
+      `Permanently delete ${idsToDelete.length} ledger row${idsToDelete.length !== 1 ? 's' : ''}? This cannot be undone.${netWarning}`
     )
     if (!ok) return
 
@@ -77,7 +87,7 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
       const res = await fetch('/api/stock/ledger-entries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: Array.from(selected) }),
+        body: JSON.stringify({ ids: idsToDelete }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -125,7 +135,9 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
       )}
       <tbody className="divide-y divide-gray-100">
         {rows.map((row) => {
-          const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
+          const cfg = row.isVendorDirectSale
+            ? { label: 'Vendor Direct Sale', color: 'bg-indigo-100 text-indigo-800' }
+            : entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
           const qty = Number(row.quantity)
           const lineId = row.sub_purchase_line_id || row.purchase_line_id
           return (
@@ -174,6 +186,18 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
                   <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {lineId}
                   </span>
+                )}
+                {row.isVendorDirectSale && row.jobWorkReferenceNumber && (
+                  <div className="mt-0.5 text-gray-400">
+                    via{' '}
+                    {isReferenceType(row.jobWorkReferenceType) && row.jobWorkReferenceId ? (
+                      <ReferenceLink type={row.jobWorkReferenceType} id={row.jobWorkReferenceId} className="text-blue-600 hover:underline">
+                        {row.jobWorkReferenceNumber}
+                      </ReferenceLink>
+                    ) : (
+                      row.jobWorkReferenceNumber
+                    )}
+                  </div>
                 )}
               </td>
               <td className="px-4 py-3 text-gray-700">{row.companies?.name || '—'}</td>
