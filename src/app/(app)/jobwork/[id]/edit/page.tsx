@@ -74,6 +74,7 @@ type OutputLine = {
   unit: string
   notes: string
   job_line_id: string
+  received_date: string
 }
 
 const emptyInput = (): InputLine => ({
@@ -90,7 +91,7 @@ const emptyOutput = (): OutputLine => ({
   item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   quantity: '', unit: 'MT', notes: '',
-  job_line_id: '',
+  job_line_id: '', received_date: '',
 })
 
 export default function EditJobWorkPage() {
@@ -347,6 +348,7 @@ export default function EditJobWorkPage() {
           unit: it.unit || 'MT',
           notes: it.notes ?? '',
           job_line_id: it.source_job_line_id ?? '',
+          received_date: it.received_date ?? '',
         }
       })
       setOutputLines(finalOutputs.length ? finalOutputs : [emptyOutput()])
@@ -718,6 +720,7 @@ export default function EditJobWorkPage() {
           unit: l.unit || 'MT',
           source_job_line_id: l.job_line_id || null,
           notes: l.notes || null,
+          received_date: l.received_date || null,
         })),
       }),
     })
@@ -1096,7 +1099,9 @@ export default function EditJobWorkPage() {
                       </button>
                     </th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-40">Job Line ID</th>
+                    <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
                     <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Produced</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-36">Received Date</th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-32">Notes</th>
                     <th className="w-8"></th>
@@ -1156,10 +1161,28 @@ export default function EditJobWorkPage() {
                         </select>
                       </td>
 
+                      {/* Qty Consumed — read-only reference to the linked input line, since
+                          several output rows (different size/category) can share one Job Line ID */}
+                      <td className="px-2 py-2 text-right">
+                        {(() => {
+                          const sourceLine = inputLines.find(l => l.job_line_id === line.job_line_id)
+                          return sourceLine
+                            ? <span className="text-sm text-gray-700">{(parseFloat(sourceLine.quantity) || 0).toFixed(3)} <span className="text-xs text-gray-400">{sourceLine.unit}</span></span>
+                            : <span className="text-gray-300 text-xs">—</span>
+                        })()}
+                      </td>
+
                       <td className="px-2 py-2">
                         <input type="number" value={line.quantity} onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" placeholder="0.000"
                           className="block w-full rounded border border-gray-300 px-2 py-2 text-sm text-right focus:border-blue-500 focus:outline-none" />
+                      </td>
+
+                      {/* Received Date */}
+                      <td className="px-2 py-2">
+                        <input type="date" value={line.received_date}
+                          onChange={e => updateOutputLine(i, 'received_date', e.target.value)}
+                          className={inputFieldCls} />
                       </td>
 
                       <td className="px-2 py-2">

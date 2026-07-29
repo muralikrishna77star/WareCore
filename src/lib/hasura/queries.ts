@@ -1121,7 +1121,7 @@ export const GET_JOB_WORK_ORDER_FOR_EDIT_QUERY = `
       job_work_output_items(order_by: {created_at: asc}) {
         id item_master_id item_name
         material_type_id material_size_id size_label
-        quantity unit source_job_line_id notes
+        quantity unit source_job_line_id notes received_date
       }
     }
   }
@@ -1245,7 +1245,7 @@ export const JOB_WORK_OUTPUT_ITEMS_QUERY = `
     ) {
       id job_work_order_id item_master_id item_name
       material_type_id material_size_id size_label
-      quantity unit source_job_line_id notes
+      quantity unit source_job_line_id notes received_date
       material_types { description }
       material_sizes { size_label }
     }

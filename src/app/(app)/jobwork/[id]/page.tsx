@@ -123,6 +123,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -154,6 +155,9 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                             {item.source_job_line_id}
                           </span>
                         ) : <span className="text-xs text-gray-400">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {item.received_date ? formatDate(item.received_date) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                     </tr>
                   )
