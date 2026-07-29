@@ -21,6 +21,7 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
   const [quantities, setQuantities] = useState<Record<number, string>>(
     Object.fromEntries(items.map((i) => [i.id, String(i.quantity_received ?? 0)]))
   )
+  const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split('T')[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -35,6 +36,7 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
       const { error: err } = await hasuraFetch(UPDATE_JOB_WORK_ITEM_MUTATION, {
         id: item.id,
         quantity_received: qty,
+        received_date: receivedDate || null,
       })
       if (err) {
         setError(err.message)
@@ -94,6 +96,17 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
         <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
           {getJobWorkOrderStatusLabel(order.status)}
         </span>
+        {order.status !== 'completed' && order.status !== 'cancelled' && (
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            Received Date
+            <input
+              type="date"
+              value={receivedDate}
+              onChange={(e) => setReceivedDate(e.target.value)}
+              className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4">{error}</p>}

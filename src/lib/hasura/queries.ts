@@ -1153,9 +1153,9 @@ export const CREATE_JOB_WORK_ITEMS_MUTATION = `
 `
 
 export const UPDATE_JOB_WORK_ITEM_MUTATION = `
-  mutation UpdateJobWorkItem($id: uuid!, $quantity_received: numeric!) {
-    update_job_work_items_by_pk(pk_columns: {id: $id}, _set: {quantity_received: $quantity_received}) {
-      id quantity_received
+  mutation UpdateJobWorkItem($id: uuid!, $quantity_received: numeric!, $received_date: date) {
+    update_job_work_items_by_pk(pk_columns: {id: $id}, _set: {quantity_received: $quantity_received, received_date: $received_date}) {
+      id quantity_received received_date
     }
   }
 `
@@ -1659,6 +1659,17 @@ export const ITEM_STOCK_LEDGER_QUERY = `
       warehouses { name }
       material_types { description unit }
       material_sizes { size_label }
+    }
+  }
+`
+
+// Looks up the vendor for a batch of job_work_orders ids — used by the Item
+// Stock Ledger report to show which vendor each JOB_WORK_* row belongs to.
+export const JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY = `
+  query GetJobWorkOrdersVendorLookup($ids: [uuid!]!) {
+    job_work_orders(where: {id: {_in: $ids}}) {
+      id
+      suppliers { name }
     }
   }
 `

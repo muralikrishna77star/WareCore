@@ -45,6 +45,7 @@ export type LedgerRow = {
   jobWorkReferenceType?: string | null
   jobWorkReferenceId?: string | null
   netQuantity?: number
+  vendorName?: string | null
 }
 
 const fmtQ = (n: number) => n.toFixed(3)
@@ -210,6 +211,7 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
               <td className={`px-4 py-3 text-right ${row.vendorBalance < 0 ? 'text-red-600' : 'text-purple-800'}`}>
                 {fmtQ(row.vendorBalance)}
               </td>
+              <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{row.vendorName || '—'}</td>
               <td className="px-4 py-3 text-gray-500 text-xs">{row.notes || '—'}</td>
             </tr>
           )

@@ -6,6 +6,7 @@ import { hasuraQuery, hasuraRunSql } from '@/lib/hasura/server'
 import {
   ITEM_STOCK_LEDGER_QUERY,
   ITEM_STOCK_AT_VENDORS_QUERY,
+  JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
@@ -201,6 +202,20 @@ export default async function ItemStockLedgerPage({
     orphanedRefs = await findOrphanedReferences(pairs)
   }
 
+  // Vendor name per row — job-work movements (out/return/transfer/cancel) all
+  // reference a job_work_orders.id, which carries the vendor. Batched once
+  // per distinct order id rather than joined in the main query, since
+  // reference_id is polymorphic across entry types.
+  let vendorNameByJobWorkOrderId = new Map<string, string>()
+  const jobWorkOrderIds = Array.from(
+    new Set(entries.filter((e) => e.reference_type === 'job_work' && e.reference_id).map((e) => e.reference_id as string))
+  )
+  if (jobWorkOrderIds.length) {
+    const vendorLookupResult = await hasuraQuery(JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY, { ids: jobWorkOrderIds })
+    const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
+    vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? '']))
+  }
+
   // Rows sharing the same reference + line ID + entry type are flagged for
   // review — usually leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs
   // from repeated edits. entry_type must match too: a job work line's
@@ -228,6 +243,7 @@ export default async function ItemStockLedgerPage({
       vendorBalance: vendorRunning,
       orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
+      vendorName: e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null,
     }
   })
   const closingBalance = running
@@ -295,6 +311,7 @@ export default async function ItemStockLedgerPage({
         jobWorkReferenceNumber: returnRow.reference_number,
         jobWorkReferenceType: returnRow.reference_type,
         jobWorkReferenceId: returnRow.reference_id,
+        vendorName: returnRow.vendorName,
         balance: laterRow.balance,
         vendorBalance: laterRow.vendorBalance,
         orphaned: false,
@@ -355,6 +372,7 @@ export default async function ItemStockLedgerPage({
       'Out': qty < 0 ? Math.abs(qty) : '',
       'Balance': row.balance,
       'Balance at Vendor': row.vendorBalance,
+      'Vendor': row.vendorName || '',
       'Notes': row.notes || '',
     }
   })
@@ -547,6 +565,7 @@ export default async function ItemStockLedgerPage({
                     <th className="px-4 py-3 text-right">Out</th>
                     <th className="px-4 py-3 text-right">Balance</th>
                     <th className="px-4 py-3 text-right">Balance at Vendor</th>
+                    <th className="px-4 py-3 text-left">Vendor</th>
                     <th className="px-4 py-3 text-left">Notes</th>
                   </tr>
                 </thead>
@@ -560,10 +579,11 @@ export default async function ItemStockLedgerPage({
                       {fmtQ(vendorOpeningBalance)}
                     </td>
                     <td />
+                    <td />
                   </tr>
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={canManage ? 11 : 10} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={canManage ? 12 : 11} className="px-4 py-8 text-center text-gray-400">
                         No movements for this item in the selected period.
                       </td>
                     </tr>
@@ -581,6 +601,7 @@ export default async function ItemStockLedgerPage({
                     <td className={`px-4 py-3 text-right font-bold ${vendorClosingBalance < 0 ? 'text-red-700' : 'text-purple-900'}`}>
                       {fmtQ(vendorClosingBalance)}
                     </td>
+                    <td />
                     <td />
                   </tr>
                 </tfoot>
