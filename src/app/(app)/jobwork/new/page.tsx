@@ -504,7 +504,7 @@ export default function NewJobWorkPage() {
     setLoading(true)
     setError(null)
 
-    const validInputs = inputLines.filter(l => l.item_master_id && l.quantity)
+    const validInputs = inputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
     if (!validInputs.length) {
       setError('Add at least one input item with an item and quantity.')
       setLoading(false)
@@ -577,7 +577,7 @@ export default function NewJobWorkPage() {
     }
 
     // Create output items (if any)
-    const validOutputs = outputLines.filter(l => l.item_master_id && l.quantity)
+    const validOutputs = outputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
     if (validOutputs.length) {
       const outputItems = validOutputs.map(l => ({
         job_work_order_id: order.id,

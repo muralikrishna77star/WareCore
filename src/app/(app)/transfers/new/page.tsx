@@ -224,7 +224,7 @@ export default function NewTransferPage() {
     e.preventDefault()
     setLoading(true); setError(null)
 
-    const validLines = lines.filter((l) => l.material_type_id && l.quantity)
+    const validLines = lines.filter((l) => l.material_type_id && parseFloat(l.quantity) > 0)
     if (!validLines.length) {
       setError('Add at least one line item with material type and quantity.')
       setLoading(false); return

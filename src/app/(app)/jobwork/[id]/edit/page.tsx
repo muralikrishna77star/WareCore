@@ -618,7 +618,7 @@ export default function EditJobWorkPage() {
     setLoading(true)
     setError(null)
 
-    const validInputs = inputLines.filter(l => l.item_master_id && l.quantity)
+    const validInputs = inputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
     if (!validInputs.length) {
       setError('Add at least one input item with an item and quantity.')
       setLoading(false)
@@ -648,7 +648,7 @@ export default function EditJobWorkPage() {
       }
     }
 
-    const validOutputs = outputLines.filter(l => l.item_master_id && l.quantity)
+    const validOutputs = outputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
 
     const res = await fetch(`/api/jobwork/${orderId}/save-edit`, {
       method: 'POST',

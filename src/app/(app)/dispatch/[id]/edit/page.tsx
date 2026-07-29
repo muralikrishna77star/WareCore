@@ -411,7 +411,7 @@ export default function EditDispatchPage() {
     setLoading(true)
     setError(null)
 
-    const validLines = lines.filter((l) => l.material_type_id && l.quantity)
+    const validLines = lines.filter((l) => l.material_type_id && parseFloat(l.quantity) > 0)
     if (status === 'active' && !validLines.length) {
       setError('Add at least one line item.')
       setLoading(false)
