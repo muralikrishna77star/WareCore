@@ -7,6 +7,7 @@ import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
   GET_JOB_WORK_ORDER_FOR_EDIT_QUERY,
+  JOB_WORK_VENDOR_DIRECT_RETURNS_QUERY,
   ITEM_PURCHASE_LINES_QUERY, PURCHASE_LINES_STOCK_QUERY,
   ALL_PURCHASE_BILL_ITEM_LINES_QUERY, ALL_STOCK_BY_PURCHASE_LINE_QUERY,
   ALL_JOB_WORK_LINE_IDS_QUERY,
@@ -56,6 +57,10 @@ type InputLine = {
   unit: string
   notes: string
   job_line_id: string
+  quantity_received: string
+  received_date: string
+  vendor_direct_baseline: number
+  quantity_transferred_out: number
 }
 
 type OutputLine = {
@@ -78,6 +83,7 @@ const emptyInput = (): InputLine => ({
   purchase_line_id: '', sub_purchase_line_id: '', available_quantity: '',
   quantity: '', unit: 'MT', notes: '',
   job_line_id: '',
+  quantity_received: '0', received_date: '', vendor_direct_baseline: 0, quantity_transferred_out: 0,
 })
 
 const emptyOutput = (): OutputLine => ({
@@ -95,7 +101,6 @@ export default function EditJobWorkPage() {
   const [pageLoading, setPageLoading] = useState(true)
   const [orderStatus, setOrderStatus] = useState('')
   const [referenceNumber, setReferenceNumber] = useState('')
-  const [hasReturns, setHasReturns] = useState(false)
   const [hasTransfers, setHasTransfers] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
@@ -222,7 +227,7 @@ export default function EditJobWorkPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [orderRes, c, s, w, mt, ms, im, billLines, stockRows, jli] = await Promise.all([
+      const [orderRes, c, s, w, mt, ms, im, billLines, stockRows, jli, vendorDirect] = await Promise.all([
         hasuraFetch(GET_JOB_WORK_ORDER_FOR_EDIT_QUERY, { id: orderId }),
         hasuraFetch(ACTIVE_COMPANIES_QUERY),
         hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
@@ -233,6 +238,7 @@ export default function EditJobWorkPage() {
         hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
         hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
         hasuraFetch(ALL_JOB_WORK_LINE_IDS_QUERY),
+        hasuraFetch(JOB_WORK_VENDOR_DIRECT_RETURNS_QUERY, { job_work_order_id: orderId }),
       ])
 
       const order = (orderRes.data as any)?.job_work_orders_by_pk
@@ -279,13 +285,19 @@ export default function EditJobWorkPage() {
       }
       setStockByItem(itemStockMap)
 
+      // Vendor-direct-sale contributions to quantity_received, summed per
+      // purchase_line_id — the floor each line's Qty Returned can't go below.
+      const vendorDirectBaselineByLine: Record<string, number> = {}
+      for (const row of (vendorDirect.data as any)?.stock_ledger ?? []) {
+        if (!row.purchase_line_id) continue
+        vendorDirectBaselineByLine[row.purchase_line_id] = (vendorDirectBaselineByLine[row.purchase_line_id] ?? 0) + Number(row.quantity)
+      }
+
       // Map existing input items
       const rawInputs: any[] = order.job_work_items ?? []
-      let anyReturns = false
       let anyTransfers = false
       const loadedInputs: (InputLine & { _net_qty: number })[] = rawInputs.map((it) => {
         const found = loadedItemMasters.find(x => x.id === it.item_master_id)
-        if (Number(it.quantity_received) > 0) anyReturns = true
         if (Number(it.quantity_transferred_out) > 0) anyTransfers = true
         return {
           item_master_id: it.item_master_id ?? '',
@@ -303,10 +315,13 @@ export default function EditJobWorkPage() {
           unit: it.unit || 'MT',
           notes: it.notes ?? '',
           job_line_id: it.job_line_id ?? '',
+          quantity_received: it.quantity_received != null ? String(it.quantity_received) : '0',
+          received_date: it.received_date ?? '',
+          vendor_direct_baseline: (it.purchase_line_id && vendorDirectBaselineByLine[it.purchase_line_id]) || 0,
+          quantity_transferred_out: Number(it.quantity_transferred_out) || 0,
           _net_qty: (Number(it.quantity_sent) || 0) - (Number(it.quantity_received) || 0) - (Number(it.quantity_transferred_out) || 0),
         }
       })
-      setHasReturns(anyReturns)
       setHasTransfers(anyTransfers)
 
       const finalInputs: InputLine[] = (loadedInputs.length ? loadedInputs : [{ ...emptyInput(), _net_qty: 0 }])
@@ -634,6 +649,23 @@ export default function EditJobWorkPage() {
       }
     }
 
+    // Validate Qty Returned stays within [vendor-direct baseline, sent − transferred]
+    for (const line of validInputs) {
+      const sent = parseFloat(line.quantity) || 0
+      const ceiling = sent - (line.quantity_transferred_out || 0)
+      const received = parseFloat(line.quantity_received) || 0
+      if (received > ceiling + 0.0005) {
+        setError(`Qty Returned for "${line.item_name}" (${received.toFixed(3)}) exceeds sent minus transferred (${ceiling.toFixed(3)}).`)
+        setLoading(false)
+        return
+      }
+      if (received < line.vendor_direct_baseline - 0.0005) {
+        setError(`Qty Returned for "${line.item_name}" can't be less than ${line.vendor_direct_baseline.toFixed(3)}, already sold direct from vendor.`)
+        setLoading(false)
+        return
+      }
+    }
+
     // Validate output quantities don't exceed input quantities per Job Line ID
     for (const line of validInputs) {
       if (!line.job_line_id) continue
@@ -671,6 +703,8 @@ export default function EditJobWorkPage() {
           material_size_id: l.material_size_id || null,
           size_label: l.size_label || null,
           quantity_sent: parseFloat(l.quantity),
+          quantity_received: parseFloat(l.quantity_received) || 0,
+          received_date: l.received_date || null,
           unit: l.unit || 'MT',
           notes: l.notes || null,
         })),
@@ -757,8 +791,8 @@ export default function EditJobWorkPage() {
       <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
         <p className="text-sm font-semibold text-amber-800">Editing will recalculate stock</p>
         <p className="text-xs text-amber-700 mt-0.5">
-          Saving reverses the original stock movements for this order and re-applies them based on the updated items.
-          {hasReturns && ' This order has recorded returns — quantity received will be reset to 0 for the new line items.'}
+          Saving reverses the original stock movements for this order and re-applies them based on the updated items,
+          including the Qty Returned and Received Date values below.
           {hasTransfers && ' This order has quantity transferred to another vendor — that link will be lost if you save changes here.'}
         </p>
       </div>
@@ -863,6 +897,8 @@ export default function EditJobWorkPage() {
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-44">Purchase Line ID</th>
                     <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Avail Stock</th>
                     <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Consumed</th>
+                    <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 w-28">Qty Returned</th>
+                    <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-36">Received Date</th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-24">Unit</th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-32">Notes</th>
                     <th className="w-8"></th>
@@ -973,6 +1009,41 @@ export default function EditJobWorkPage() {
                         {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
                           <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
                         )}
+                      </td>
+
+                      {/* Qty Returned */}
+                      <td className="px-2 py-2">
+                        {(() => {
+                          const sent = parseFloat(line.quantity) || 0
+                          const ceiling = sent - (line.quantity_transferred_out || 0)
+                          const received = parseFloat(line.quantity_received) || 0
+                          const overCeiling = received > ceiling + 0.0005
+                          const underBaseline = received < line.vendor_direct_baseline - 0.0005
+                          return (
+                            <>
+                              <input type="number" value={line.quantity_received}
+                                onChange={e => updateInputLine(i, 'quantity_received', e.target.value)}
+                                step="0.001" min={line.vendor_direct_baseline || 0} max={ceiling || undefined} placeholder="0.000"
+                                className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
+                                  overCeiling || underBaseline ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+                              {overCeiling && (
+                                <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds sent − transferred</p>
+                              )}
+                              {underBaseline && (
+                                <p className="text-[10px] text-red-500 mt-0.5 text-right">
+                                  Below {line.vendor_direct_baseline.toFixed(3)} already sold direct from vendor
+                                </p>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </td>
+
+                      {/* Received Date */}
+                      <td className="px-2 py-2">
+                        <input type="date" value={line.received_date}
+                          onChange={e => updateInputLine(i, 'received_date', e.target.value)}
+                          className={inputFieldCls} />
                       </td>
 
                       {/* Unit */}

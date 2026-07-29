@@ -1098,7 +1098,7 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received quantity_transferred_out size_label unit
+      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received quantity_transferred_out received_date size_label unit
       item_master_id item_name material_type_id material_size_id
       material_types { description }
       material_sizes { size_label }
@@ -1116,13 +1116,31 @@ export const GET_JOB_WORK_ORDER_FOR_EDIT_QUERY = `
         id purchase_line_id sub_purchase_line_id job_line_id
         item_master_id item_name
         material_type_id material_size_id size_label
-        quantity_sent quantity_received quantity_transferred_out unit notes
+        quantity_sent quantity_received quantity_transferred_out received_date unit notes
       }
       job_work_output_items(order_by: {created_at: asc}) {
         id item_master_id item_name
         material_type_id material_size_id size_label
         quantity unit source_job_line_id notes
       }
+    }
+  }
+`
+
+// Vendor-direct-sale contributions to this order's return quantities —
+// used by Edit Order to floor each line's Qty Returned input at whatever's
+// already been sold direct from the vendor (that portion can't be edited
+// down, it's a separate flow's ledger row).
+export const JOB_WORK_VENDOR_DIRECT_RETURNS_QUERY = `
+  query GetJobWorkVendorDirectReturns($job_work_order_id: uuid!) {
+    stock_ledger(where: {
+      reference_type: {_eq: "job_work"},
+      reference_id: {_eq: $job_work_order_id},
+      entry_type: {_eq: "JOB_WORK_RETURN_IN"},
+      notes: {_eq: "Vendor direct sale — virtual return"}
+    }) {
+      purchase_line_id
+      quantity
     }
   }
 `
