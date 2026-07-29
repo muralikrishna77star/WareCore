@@ -6,10 +6,18 @@ import { useRecordPreview } from '@/components/RecordPreviewProvider'
 interface JobWorkReturnClientProps {
   order: any
   items: any[]
+  outputItems: any[]
 }
 
-export default function JobWorkReturnClient({ order, items }: JobWorkReturnClientProps) {
+export default function JobWorkReturnClient({ order, items, outputItems }: JobWorkReturnClientProps) {
   const { openList } = useRecordPreview()
+
+  const getReturnedQuantity = (jobLineId: string | null | undefined) => {
+    if (!jobLineId) return 0
+    return outputItems
+      .filter(item => item.source_job_line_id === jobLineId)
+      .reduce((total, item) => total + (Number(item.quantity) || 0), 0)
+  }
 
   const statusColors: Record<string, string> = {
     dispatched: 'bg-blue-100 text-blue-800',
@@ -40,6 +48,7 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Returned</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -68,6 +77,10 @@ export default function JobWorkReturnClient({ order, items }: JobWorkReturnClien
                         {Number(item.quantity_transferred_out).toFixed(3)} transferred out ↗
                       </button>
                     )}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
+                    {item.job_line_id ? getReturnedQuantity(item.job_line_id).toFixed(3) : '—'}
+                    {item.job_line_id && <span className="text-xs font-normal text-gray-400 ml-1">{item.unit ?? 'MT'}</span>}
                   </td>
                 </tr>
               ))}

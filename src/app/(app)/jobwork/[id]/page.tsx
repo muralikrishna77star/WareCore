@@ -169,7 +169,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       )}
 
       {/* Status + Return Form (client) */}
-      <JobWorkReturnClient order={order} items={items ?? []} />
+      <JobWorkReturnClient order={order} items={items ?? []} outputItems={outputItems} />
 
       <div className="flex gap-3 mt-6">
         {order.status !== 'cancelled' && order.status !== 'completed' && (
