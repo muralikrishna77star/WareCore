@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   VENDOR_JOB_WORK_LEDGER_QUERY,
+  VENDOR_JOB_WORK_ITEM_BALANCES_QUERY,
   JOB_WORK_ORDERS_VENDOR_INFO_QUERY,
   DISPATCH_ORDERS_VENDOR_INFO_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
@@ -94,7 +95,7 @@ export default async function VendorMovementsPage({
     }
   }
 
-  const [periodJobWorkResult, cumulativeJobWorkResult, periodSaleResult] = await Promise.all([
+  const [periodJobWorkResult, cumulativeJobWorkResult, periodSaleResult, jobWorkItemBalanceResult] = await Promise.all([
     hasuraQuery(VENDOR_JOB_WORK_LEDGER_QUERY, {
       where: {
         _and: [
@@ -127,11 +128,21 @@ export default async function VendorMovementsPage({
         ],
       },
     }),
+    hasuraQuery(VENDOR_JOB_WORK_ITEM_BALANCES_QUERY, {
+      where: {
+        _and: [
+          ...baseConditions,
+          { job_work_orders: { status: { _neq: 'cancelled' } } },
+          { job_work_orders: { dispatch_date: { _lte: toDate } } },
+        ],
+      },
+    }),
   ])
 
   const periodJobWork: any[] = periodJobWorkResult.stock_ledger ?? []
   const cumulativeJobWork: any[] = cumulativeJobWorkResult.stock_ledger ?? []
   const periodSales: any[] = periodSaleResult.stock_ledger ?? []
+  const jobWorkItemBalances: any[] = jobWorkItemBalanceResult.job_work_items ?? []
 
   // Resolve dispatch orders behind the SALE_OUT entries to find which were
   // vendor-direct (sold straight from the vendor's site, never returned to a
@@ -249,17 +260,24 @@ export default async function VendorMovementsPage({
   }
 
   // Cumulative-to-date balance (as of the To date), independent of the From date.
+  // quantity_sent is used for the outbound side because historic/imported job
+  // work lines can exist without their matching JOB_WORK_OUT ledger entry.
   const cumulativeOutByKey = new Map<string, number>()
   const cumulativeReturnInByKey = new Map<string, number>()
+  for (const item of jobWorkItemBalances) {
+    const order = item.job_work_orders
+    if (!order?.vendor_id) continue
+    if (vendorFilter && order.vendor_id !== vendorFilter) continue
+    const key = groupKey(order.vendor_id, item.material_type_id, item.material_size_id ?? null)
+    cumulativeOutByKey.set(key, (cumulativeOutByKey.get(key) ?? 0) + Number(item.quantity_sent ?? 0))
+  }
   for (const m of cumulativeJobWork) {
     const info = jwoInfoById.get(m.reference_id)
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
-    if (m.entry_type === 'JOB_WORK_OUT') {
-      cumulativeOutByKey.set(key, (cumulativeOutByKey.get(key) ?? 0) + Math.abs(Number(m.quantity)))
-    } else if (m.entry_type === 'JOB_WORK_RETURN_IN') {
+    if (m.entry_type === 'JOB_WORK_RETURN_IN') {
       cumulativeReturnInByKey.set(key, (cumulativeReturnInByKey.get(key) ?? 0) + Number(m.quantity))
     }
   }

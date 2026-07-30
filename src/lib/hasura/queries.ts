@@ -1430,6 +1430,26 @@ export const VENDOR_JOB_WORK_LEDGER_QUERY = `
   }
 `
 
+// The ledger records returns and direct-sale clearances, but older imported job
+// work orders do not always have a JOB_WORK_OUT ledger row.  The job-work line
+// is the authoritative record of the quantity originally sent to the vendor.
+export const VENDOR_JOB_WORK_ITEM_BALANCES_QUERY = `
+  query GetVendorJobWorkItemBalances($where: job_work_items_bool_exp = {}) {
+    job_work_items(where: $where) {
+      quantity_sent
+      material_type_id
+      material_size_id
+      job_work_orders {
+        vendor_id
+        dispatch_date
+        status
+        suppliers { name }
+        companies { name }
+      }
+    }
+  }
+`
+
 export const JOB_WORK_ORDERS_VENDOR_INFO_QUERY = `
   query GetJobWorkOrdersVendorInfo($ids: [uuid!]!) {
     job_work_orders(where: {id: {_in: $ids}}) {
