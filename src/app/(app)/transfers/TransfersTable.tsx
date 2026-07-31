@@ -94,11 +94,12 @@ export default function TransfersTable({
     const items = t.transfer_items ?? []
     const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
     return {
-      'Date': formatDate(t.transfer_date),
+      'Transaction Date': formatDate(t.transfer_date),
       'From': `${t.from_company?.code || ''} / ${t.from_warehouse?.name || ''}`,
       'To': `${t.to_company?.code || ''} / ${t.to_warehouse?.name || ''}`,
       'Items': items.length,
       'Qty': totalQty,
+      'Rate': '',
       'Status': t.status?.replace('_', ' ') ?? '',
     }
   })

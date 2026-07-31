@@ -53,14 +53,14 @@ export default async function JobWorkReportPage({
     const items = o.job_work_items ?? []
     const base = {
       'Ref No.': o.reference_number,
-      'Dispatch Date': formatDate(o.dispatch_date),
+      'Transaction Date': formatDate(o.dispatch_date),
       'Exp. Return': o.expected_return_date ? formatDate(o.expected_return_date) : '',
       'Company': o.companies?.name || '',
       'Supplier': o.suppliers?.name || '',
     }
     const status = o.status?.replace(/_/g, ' ') ?? ''
     if (items.length === 0) {
-      return [{ ...base, 'Material': '', 'Size': '', 'Sent (T)': '', 'Received (T)': '', 'Pending (T)': '', 'Status': status }]
+      return [{ ...base, 'Material': '', 'Size': '', 'Sent (T)': '', 'Received (T)': '', 'Pending (T)': '', 'Rate': '', 'Status': status }]
     }
     return items.map((item: any) => {
       const sent = Number(item.quantity_sent || 0)
@@ -72,6 +72,7 @@ export default async function JobWorkReportPage({
         'Sent (T)': sent,
         'Received (T)': received,
         'Pending (T)': sent - received,
+        'Rate': '',
         'Status': status,
       }
     })

@@ -352,6 +352,7 @@ export default async function VendorMovementsPage({
   }))
 
   const exportRows = tableRows.map((r) => ({
+    'As Of': toDate,
     'Vendor': r.vendorName,
     'Company': r.companyName,
     'Item': r.itemLabel,

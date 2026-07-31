@@ -10,17 +10,22 @@ export default async function SaleCancellationsPage() {
   const result = await hasuraQuery(DISPATCH_CANCELLATIONS_QUERY)
   const records = result.dispatch_cancellations ?? []
 
-  const exportRows = records.map((r: any) => ({
-    'Invoice No.': r.invoice_number || '',
-    'Dispatch Date': formatDate(r.dispatch_date),
-    'Customer': r.customer_name || '',
-    'Company': r.company_name || '',
-    'Warehouse': r.warehouse_name || '',
-    'Qty': Number(r.total_quantity || 0),
-    'Amount': r.total_amount ? Number(r.total_amount) : '',
-    'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
-    'Purged': formatDate(r.purged_at),
-  }))
+  const exportRows = records.map((r: any) => {
+    const qty = Number(r.total_quantity || 0)
+    const amount = r.total_amount ? Number(r.total_amount) : 0
+    return {
+      'Invoice No.': r.invoice_number || '',
+      'Transaction Date': formatDate(r.dispatch_date),
+      'Customer': r.customer_name || '',
+      'Company': r.company_name || '',
+      'Warehouse': r.warehouse_name || '',
+      'Qty': qty,
+      'Rate': qty > 0 && amount ? amount / qty : '',
+      'Amount': amount || '',
+      'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
+      'Purged': formatDate(r.purged_at),
+    }
+  })
 
   return (
     <div className="space-y-6">

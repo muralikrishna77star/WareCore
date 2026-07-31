@@ -10,17 +10,22 @@ export default async function PurchaseCancellationsPage() {
   const result = await hasuraQuery(PURCHASE_CANCELLATIONS_QUERY)
   const records = result.purchase_cancellations ?? []
 
-  const exportRows = records.map((r: any) => ({
-    'Bill No.': r.bill_number,
-    'Bill Date': formatDate(r.bill_date),
-    'Supplier': r.supplier_name || '',
-    'Company': r.company_name || '',
-    'Warehouse': r.warehouse_name || '',
-    'Qty': Number(r.total_quantity || 0),
-    'Amount': Number(r.total_amount || 0),
-    'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
-    'Purged': formatDate(r.purged_at),
-  }))
+  const exportRows = records.map((r: any) => {
+    const qty = Number(r.total_quantity || 0)
+    const amount = Number(r.total_amount || 0)
+    return {
+      'Bill No.': r.bill_number,
+      'Transaction Date': formatDate(r.bill_date),
+      'Supplier': r.supplier_name || '',
+      'Company': r.company_name || '',
+      'Warehouse': r.warehouse_name || '',
+      'Qty': qty,
+      'Rate': qty > 0 ? amount / qty : '',
+      'Amount': amount,
+      'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
+      'Purged': formatDate(r.purged_at),
+    }
+  })
 
   return (
     <div className="space-y-6">

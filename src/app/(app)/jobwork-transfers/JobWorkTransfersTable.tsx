@@ -93,7 +93,7 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
 
   const exportRows = filtered.map((row) => ({
     'Transfer No.': row.transferNo,
-    'Transfer Date': row.date,
+    'Transaction Date': row.date,
     'From Vendor': row.fromVendor,
     'To Vendor': row.toVendor,
     'From Order': row.fromOrderRef,
@@ -102,6 +102,7 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
     'Item': row.item,
     'Qty Transferred': row.qty || '',
     'Unit': row.unit,
+    'Rate': '',
     'Reason': row.reason,
   }))
 

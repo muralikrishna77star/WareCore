@@ -95,9 +95,12 @@ export async function GET(request: NextRequest) {
     // exists either live or in its cancellation archive ──────────────────────
     const staleSql = `
       SELECT sl.id, sl.entry_type, sl.reference_type, sl.reference_number, sl.quantity,
-             sl.entry_date, mt.code AS material_code, sl.size_label
+             sl.entry_date, mt.code AS material_code, sl.size_label, pbi.rate
       FROM stock_ledger sl
       LEFT JOIN material_types mt ON mt.id = sl.material_type_id
+      LEFT JOIN LATERAL (
+        SELECT rate FROM purchase_bill_items WHERE purchase_line_id = sl.purchase_line_id LIMIT 1
+      ) pbi ON true
       WHERE sl.entry_date BETWEEN '${from}' AND '${to}'
         AND (
           (sl.reference_type = 'purchase_bill'
@@ -119,14 +122,22 @@ export async function GET(request: NextRequest) {
     // ── Duplicate rows: more than one IN-type ledger row for the same order
     // line (the edit-dedup bug class fixed in migrations 041/052) ────────────
     const duplicatesSql = `
-      SELECT reference_type, reference_number, entry_type, purchase_line_id, size_label,
-             count(*) AS row_count, sum(quantity) AS net_qty, max(entry_date) AS latest_entry_date
-      FROM stock_ledger
-      WHERE entry_type IN ('PURCHASE_IN', 'SALE_OUT', 'JOB_WORK_OUT')
-        AND entry_date BETWEEN '${from}' AND '${to}'
-      GROUP BY reference_type, reference_id, reference_number, entry_type, purchase_line_id, size_label
-      HAVING count(*) > 1
-      ORDER BY max(entry_date) DESC
+      WITH dup AS (
+        SELECT reference_type, reference_number, entry_type, purchase_line_id, size_label,
+               count(*) AS row_count, sum(quantity) AS net_qty, max(entry_date) AS latest_entry_date
+        FROM stock_ledger
+        WHERE entry_type IN ('PURCHASE_IN', 'SALE_OUT', 'JOB_WORK_OUT')
+          AND entry_date BETWEEN '${from}' AND '${to}'
+        GROUP BY reference_type, reference_id, reference_number, entry_type, purchase_line_id, size_label
+        HAVING count(*) > 1
+      )
+      SELECT dup.reference_type, dup.reference_number, dup.entry_type, dup.purchase_line_id, dup.size_label,
+             dup.row_count, dup.net_qty, dup.latest_entry_date, pbi.rate
+      FROM dup
+      LEFT JOIN LATERAL (
+        SELECT rate FROM purchase_bill_items WHERE purchase_line_id = dup.purchase_line_id LIMIT 1
+      ) pbi ON true
+      ORDER BY dup.latest_entry_date DESC
       LIMIT 500
     `
 
@@ -182,15 +193,17 @@ export async function GET(request: NextRequest) {
     })
 
     const staleRecords = parseRows(staleRes).map(
-      ([id, entryType, referenceType, referenceNumber, quantity, entryDate, materialCode, sizeLabel]) => ({
+      ([id, entryType, referenceType, referenceNumber, quantity, entryDate, materialCode, sizeLabel, rate]) => ({
         id, entryType, referenceType, referenceNumber, quantity: Number(quantity), entryDate, materialCode, sizeLabel,
+        rate: rate ? Number(rate) : null,
       })
     )
 
     const duplicateGroups = parseRows(dupRes).map(
-      ([referenceType, referenceNumber, entryType, purchaseLineId, sizeLabel, rowCount, netQty, latestEntryDate]) => ({
+      ([referenceType, referenceNumber, entryType, purchaseLineId, sizeLabel, rowCount, netQty, latestEntryDate, rate]) => ({
         referenceType, referenceNumber, entryType, purchaseLineId, sizeLabel,
         rowCount: Number(rowCount), netQty: Number(netQty), latestEntryDate,
+        rate: rate ? Number(rate) : null,
       })
     )
 

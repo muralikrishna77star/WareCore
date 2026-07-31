@@ -57,13 +57,14 @@ export default function DispatchTable({
     const totalQty = dispItems.reduce((s: number, i: any) => s + Number(i.quantity), 0)
     const totalAmt = dispItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
     return {
-      'Date': formatDate(o.dispatch_date),
+      'Transaction Date': formatDate(o.dispatch_date),
       'Invoice Number': o.invoice_number || '',
       'Company': o.companies?.code || '',
       'Customer': o.customers?.name || '',
       'Sale Ref ID': o.sale_ref_id || '',
       'Vehicle': o.vehicle_number || '',
       'Qty': totalQty,
+      'Rate': totalQty > 0 ? totalAmt / totalQty : '',
       'Amount': totalAmt,
       'Type': o.is_vendor_direct ? 'From Vendor' : 'Warehouse',
       'Status': o.status === 'cancelled' ? 'Cancelled' : o.status === 'draft' ? 'Draft' : 'Active',

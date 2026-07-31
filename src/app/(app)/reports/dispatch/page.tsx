@@ -56,7 +56,7 @@ export default async function DispatchReportPage({
   const exportRows = orders.flatMap((o: any) => {
     const items = o.dispatch_items ?? []
     const base = {
-      'Date': formatDate(o.dispatch_date),
+      'Transaction Date': formatDate(o.dispatch_date),
       'Invoice No.': o.invoice_number ?? '',
       'Company': o.companies?.name || '',
       'Warehouse': o.warehouses?.name || '',

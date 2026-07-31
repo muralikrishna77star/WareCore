@@ -1967,6 +1967,18 @@ export const JOB_WORK_TRANSFER_CANCELLATION_BY_ID_QUERY = `
   }
 `
 
+// Batch rate lookup for stock_ledger rows — the ledger itself carries no
+// price, so exports that need a Rate column resolve it back to the
+// originating purchase line's billed rate.
+export const PURCHASE_LINE_RATES_QUERY = `
+  query GetPurchaseLineRates($line_ids: [String!]!) {
+    purchase_bill_items(where: {purchase_line_id: {_in: $line_ids}}) {
+      purchase_line_id
+      rate
+    }
+  }
+`
+
 // ─── AI Copilot Conversations ────────────────────────────────────────────────
 // $owner_id on every op below is declared but never supplied by the client —
 // /api/graphql force-overwrites it with the caller's session id before

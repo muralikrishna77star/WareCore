@@ -12,10 +12,11 @@ export default async function JobWorkCancellationsPage() {
 
   const exportRows = records.map((r: any) => ({
     'Reference No.': r.reference_number || '',
-    'Dispatch Date': formatDate(r.dispatch_date),
+    'Transaction Date': formatDate(r.dispatch_date),
     'Vendor': r.vendor_name || '',
     'Company': r.company_name || '',
     'Warehouse': r.warehouse_name || '',
+    'Rate': '',
     'Status at Cancellation': r.status?.replace('_', ' ') || '',
     'Cancelled': r.cancelled_at ? formatDate(r.cancelled_at) : '',
   }))

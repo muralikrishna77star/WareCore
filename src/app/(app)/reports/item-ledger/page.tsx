@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { cookies } from 'next/headers'
 import { verifySession } from '@/lib/auth/session'
 import { hasuraQuery, hasuraRunSql } from '@/lib/hasura/server'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import {
   ITEM_STOCK_LEDGER_QUERY,
   ITEM_STOCK_AT_VENDORS_QUERY,
@@ -354,6 +355,7 @@ export default async function ItemStockLedgerPage({
     ADJUSTMENT_IN: 'Adjustment In',
     ADJUSTMENT_OUT: 'Adjustment Out',
   }
+  const ledgerRateMap = await fetchPurchaseLineRateMap(displayRows.map((row) => row.purchase_line_id))
   const exportRows = displayRows.map((row) => {
     const qty = Number(row.quantity)
     const typeLabel = row.isVendorDirectSale
@@ -363,13 +365,14 @@ export default async function ItemStockLedgerPage({
       ? `${row.reference_number || ''}${row.jobWorkReferenceNumber ? ` (via ${row.jobWorkReferenceNumber})` : ''}`
       : row.reference_number || ''
     return {
-      'Date': formatDate(row.entry_date),
+      'Transaction Date': formatDate(row.entry_date),
       'Type': typeLabel,
       'Reference': referenceLabel,
       'Company': row.companies?.name || '',
       'Warehouse': row.warehouses?.name || '',
       'In': qty > 0 ? qty : '',
       'Out': qty < 0 ? Math.abs(qty) : '',
+      'Rate': row.purchase_line_id ? ledgerRateMap.get(row.purchase_line_id) ?? '' : '',
       'Balance': row.balance,
       'Balance at Vendor': row.vendorBalance,
       'Vendor': row.vendorName || '',

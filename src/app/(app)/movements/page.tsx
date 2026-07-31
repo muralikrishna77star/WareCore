@@ -14,6 +14,7 @@ import {
   PURCHASE_BILLS_BY_IDS_QUERY,
   JOB_WORK_ORDERS_BY_IDS_QUERY,
 } from '@/lib/hasura/queries'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 
@@ -308,14 +309,16 @@ export default async function MovementsPage({
     return `/movements?${next.toString()}`
   }
 
+  const mainMovementRateMap = await fetchPurchaseLineRateMap(displayedMovements.map((m: any) => m.purchase_line_id))
   const exportRows = displayedMovements.map((m: any) => ({
-    'Date': formatDate(m.entry_date),
+    'Transaction Date': formatDate(m.entry_date),
     'Type': getEntryTypeLabel(m.entry_type),
     'Company': m.companies?.code || '',
     'Warehouse': m.warehouses?.name || '',
     'Item': itemLabelFor(m),
     'Size': m.size_label || m.material_sizes?.size_label || '',
     'Quantity': Number(m.quantity),
+    'Rate': m.purchase_line_id ? mainMovementRateMap.get(m.purchase_line_id) ?? '' : '',
     'Balance': balanceById.get(m.id) ?? '',
     'Vendor': vendorFor(m) || '',
     'Job Work Status': jobWorkStatusFor(m) ? jobWorkStatusLabel(jobWorkStatusFor(m)!) : '',

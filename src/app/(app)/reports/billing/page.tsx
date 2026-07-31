@@ -45,7 +45,7 @@ export default async function BillingReportPage({
     const items = bill.purchase_bill_items ?? []
     const base = {
       'Bill No.': bill.bill_number,
-      'Date': formatDate(bill.bill_date),
+      'Transaction Date': formatDate(bill.bill_date),
       'Supplier': bill.suppliers?.name || '',
       'Company': bill.companies?.name || '',
       'Warehouse': bill.warehouses?.name || '',

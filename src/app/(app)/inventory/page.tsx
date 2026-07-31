@@ -31,9 +31,11 @@ export default async function InventoryPage() {
     grouped[row.company_id].rows.push(row)
   }
 
+  const asOfDate = new Date().toISOString().split('T')[0]
   const exportRows = (stock as StockRow[])
     .filter((row) => Number(row.current_stock) !== 0)
     .map((row) => ({
+      'As Of': asOfDate,
       'Company': row.company_name,
       'Warehouse': row.warehouse_name,
       'Material': row.material_type_name,

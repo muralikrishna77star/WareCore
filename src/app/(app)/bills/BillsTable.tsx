@@ -49,17 +49,22 @@ export default function BillsTable({
     )
   }, [bills, filters])
 
-  const exportRows = filtered.map((b: any) => ({
-    'Bill No.': b.bill_number || '',
-    'Date': formatDate(b.bill_date),
-    'Supplier': b.suppliers?.name || '',
-    'Company': b.companies?.name || '',
-    'Warehouse': b.warehouses?.name || '',
-    'Quantity': Number(b.total_quantity || 0),
-    'Amount': Number(b.total_amount || 0),
-    'Status': b.status === 'cancelled' ? 'Cancelled' : b.status === 'draft' ? 'Draft' : 'Active',
-    'Notes': b.notes || '',
-  }))
+  const exportRows = filtered.map((b: any) => {
+    const qty = Number(b.total_quantity || 0)
+    const amount = Number(b.total_amount || 0)
+    return {
+      'Bill No.': b.bill_number || '',
+      'Transaction Date': formatDate(b.bill_date),
+      'Supplier': b.suppliers?.name || '',
+      'Company': b.companies?.name || '',
+      'Warehouse': b.warehouses?.name || '',
+      'Quantity': qty,
+      'Rate': qty > 0 ? amount / qty : '',
+      'Amount': amount,
+      'Status': b.status === 'cancelled' ? 'Cancelled' : b.status === 'draft' ? 'Draft' : 'Active',
+      'Notes': b.notes || '',
+    }
+  })
 
   return (
     <>

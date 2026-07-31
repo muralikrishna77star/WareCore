@@ -23,6 +23,7 @@ type StaleRecord = {
   entryDate: string
   materialCode: string | null
   sizeLabel: string | null
+  rate: number | null
 }
 type ExplainedRecord = {
   category: string
@@ -41,6 +42,7 @@ type DuplicateGroup = {
   rowCount: number
   netQty: number
   latestEntryDate: string
+  rate: number | null
 }
 
 const categoryLabels: Record<string, string> = {
@@ -255,6 +257,7 @@ export default function StockReconcilePage() {
             <div className="flex justify-end">
               <ExportExcelButton
                 rows={totals.map((row) => ({
+                  'As Of': to,
                   'Category': categoryLabels[row.category] || row.category,
                   'Source Total': row.sourceQty,
                   'Ledger Total': row.ledgerQty,
@@ -372,11 +375,12 @@ export default function StockReconcilePage() {
               {staleRecords.length > 0 && (
                 <ExportExcelButton
                   rows={staleRecords.map((r) => ({
-                    'Date': r.entryDate,
+                    'Transaction Date': r.entryDate,
                     'Type': r.entryType,
                     'Reference': r.referenceNumber || '',
                     'Material': `${r.materialCode ?? ''}${r.sizeLabel ? ` (${r.sizeLabel})` : ''}`,
                     'Qty': r.quantity,
+                    'Rate': r.rate ?? '',
                   }))}
                   filename={`stock-reconcile-stale-${from}-to-${to}`}
                   sheetName="Stale Records"
@@ -434,7 +438,8 @@ export default function StockReconcilePage() {
                     'Line': `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
                     'Rows': g.rowCount,
                     'Net Qty': g.netQty,
-                    'Latest': g.latestEntryDate,
+                    'Rate': g.rate ?? '',
+                    'Transaction Date': g.latestEntryDate,
                   }))}
                   filename={`stock-reconcile-duplicates-${from}-to-${to}`}
                   sheetName="Duplicates"

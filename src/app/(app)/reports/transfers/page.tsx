@@ -47,7 +47,7 @@ export default async function TransfersReportPage({
   const exportRows = transfers.flatMap((t: any) => {
     const items = t.transfer_items ?? []
     const base = {
-      'Date': formatDate(t.transfer_date),
+      'Transaction Date': formatDate(t.transfer_date),
       'From Company': t.companies_from?.name || '',
       'From Warehouse': t.warehouses_from?.name || '',
       'To Company': t.companies_to?.name || '',
@@ -55,13 +55,14 @@ export default async function TransfersReportPage({
     }
     const status = t.status?.replace('_', ' ') ?? ''
     if (items.length === 0) {
-      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Status': status }]
+      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Rate': '', 'Status': status }]
     }
     return items.map((item: any) => ({
       ...base,
       'Material': item.material_types?.description || '',
       'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
       'Qty (T)': Number(item.quantity),
+      'Rate': '',
       'Status': status,
     }))
   })

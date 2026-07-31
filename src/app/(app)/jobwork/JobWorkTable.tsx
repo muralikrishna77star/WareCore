@@ -133,11 +133,12 @@ export default function JobWorkTable({
   const exportRows = filtered.map((o: any) => {
     const items = o.job_work_items ?? []
     return {
-      'Dispatch Date': formatDate(o.dispatch_date),
+      'Transaction Date': formatDate(o.dispatch_date),
       'Company': o.companies?.code || '',
       'Vendor': o.suppliers?.name || '',
       'Items': items.length,
       'Expected Return': o.expected_return_date ? formatDate(o.expected_return_date) : '',
+      'Rate': '',
       'Status': getJobWorkOrderStatusLabel(o.status),
       'Notes': o.notes || '',
     }

@@ -300,6 +300,7 @@ export default async function StockStatementPage({
   const fmtQ = (n: number) => n.toFixed(3)
 
   const exportRows = sorted.map((item) => ({
+    'As Of': toDate,
     'Item Name': item.item_name,
     'Unit': item.unit,
     'Opening': item.opening,

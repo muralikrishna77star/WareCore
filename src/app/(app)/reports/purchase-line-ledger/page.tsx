@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_LINE_LEDGER_QUERY, ALL_PURCHASE_LINE_IDS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
@@ -131,12 +132,14 @@ export default async function PurchaseLineLedgerPage({
 
   const fmtQ = (n: number) => n.toFixed(3)
 
+  const lineRateMap = lineId ? await fetchPurchaseLineRateMap([lineId]) : new Map<string, number>()
+  const lineRate = lineId ? lineRateMap.get(lineId) ?? '' : ''
   const exportRows = rows.map((row) => {
     const qty = Number(row.quantity)
     const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type }
     const itemSize = row.material_sizes?.size_label || row.size_label
     return {
-      'Date': formatDate(row.entry_date),
+      'Transaction Date': formatDate(row.entry_date),
       'Type': cfg.label,
       'Item': `${itemLabelFor(row)}${itemSize ? ` (${itemSize})` : ''}`,
       'Reference': row.reference_number || '',
@@ -145,6 +148,7 @@ export default async function PurchaseLineLedgerPage({
       'Warehouse': row.warehouses?.name || '',
       'In': qty > 0 ? qty : '',
       'Out': qty < 0 ? Math.abs(qty) : '',
+      'Rate': lineRate,
       'Balance': row.balance,
       'Notes': row.notes || '',
     }
