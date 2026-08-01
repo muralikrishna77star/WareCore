@@ -1560,9 +1560,10 @@ export const STOCK_STATEMENT_QUERY = `
       material_sizes { size_label }
     }
     current: stock_ledger(where: $current_where, limit: 5000) {
-      quantity material_type_id material_size_id size_label
+      quantity material_type_id material_size_id size_label warehouse_id
       material_types { description unit }
       material_sizes { size_label }
+      warehouses { name }
     }
   }
 `
@@ -1735,6 +1736,7 @@ export const JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY = `
 export const ITEM_STOCK_AT_VENDORS_QUERY = `
   query GetItemStockAtVendors($where: v_stock_at_vendors_bool_exp = {}) {
     v_stock_at_vendors(where: $where, order_by: {vendor_name: asc}) {
+      vendor_id
       vendor_name
       material_type_id
       size_label

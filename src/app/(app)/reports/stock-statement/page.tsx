@@ -16,6 +16,7 @@ import {
 } from '@/lib/hasura/queries'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import StockStatementTable, { type StatementRow } from './StockStatementTable'
 import Link from 'next/link'
 
 type LedgerRow = {
@@ -26,6 +27,8 @@ type LedgerRow = {
   size_label?: string | null
   material_types: { description: string; unit: string }
   material_sizes?: { size_label: string } | null
+  warehouse_id?: string
+  warehouses?: { name: string } | null
 }
 
 type StockItem = {
@@ -46,6 +49,8 @@ type StockItem = {
   current_stock: number
   at_vendor: number
   rate: number
+  warehouseBreakdown: Map<string, number>
+  vendorBreakdown: Map<string, number>
 }
 
 type ItemOption = ComboOption & {
@@ -209,7 +214,7 @@ export default async function StockStatementPage({
   const openingRows: LedgerRow[] = result.opening ?? []
   const periodRows: LedgerRow[] = result.period ?? []
   const currentRows: LedgerRow[] = result.current ?? []
-  const vendorRows: { material_type_id: string; size_label: string | null; pending_quantity: number | string }[] =
+  const vendorRows: { vendor_name: string; material_type_id: string; size_label: string | null; pending_quantity: number | string }[] =
     vendorResult.v_stock_at_vendors ?? []
 
   // Weighted average = total billed amount / total quantity across every
@@ -267,6 +272,8 @@ export default async function StockStatementPage({
         current_stock: 0,
         at_vendor: 0,
         rate: 0,
+        warehouseBreakdown: new Map(),
+        vendorBreakdown: new Map(),
       }
     }
     return items[key]
@@ -300,6 +307,8 @@ export default async function StockStatementPage({
     const item = ensureItem(row)
     // We accumulate sum then assign at end — reset first pass handled by current_stock: 0 init
     item.current_stock += Number(row.quantity)
+    const whName = row.warehouses?.name ?? 'Unknown Warehouse'
+    item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + Number(row.quantity))
   }
 
   // Stock at vendor (open job work) doesn't touch stock_ledger, so it's merged
@@ -328,9 +337,13 @@ export default async function StockStatementPage({
         current_stock: 0,
         at_vendor: 0,
         rate: 0,
+        warehouseBreakdown: new Map(),
+        vendorBreakdown: new Map(),
       }
     }
     items[key].at_vendor += Number(row.pending_quantity)
+    const vendorName = row.vendor_name ?? 'Unknown Vendor'
+    items[key].vendorBreakdown.set(vendorName, (items[key].vendorBreakdown.get(vendorName) ?? 0) + Number(row.pending_quantity))
   }
 
   const sorted = Object.values(items).sort(
@@ -355,27 +368,16 @@ export default async function StockStatementPage({
 
   // Valuation = Closing Stock × weighted average purchase rate.
   const itemValue = (item: StockItem) => closing(item) * item.rate
-
-  const fmtQ = (n: number) => n.toFixed(3)
   const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
-  const exportRows = sorted.map((item) => ({
-    'As Of': toDate,
-    'Item Name': item.item_name,
-    'Unit': item.unit,
-    'Opening': item.opening,
-    'Purchase In': item.purchase_in,
-    'Job Work Out': item.jw_out,
-    'Transfer In': item.transfer_in,
-    'JW Return': item.jw_return,
-    'Dispatch': item.dispatch_out,
-    'Transfer Out': item.transfer_out,
-    'Closing': closing(item),
-    'At Vendor': item.at_vendor,
-    'Live Stock': item.current_stock,
-    'Avg Rate': item.rate || '',
-    'Value (₹)': item.rate ? itemValue(item) : '',
-  }))
+  // Live Stock split by warehouse and At Vendor split by vendor — dropped
+  // to a sorted array (zero/near-zero entries excluded) for both the
+  // expandable UI row and the Excel export beneath it.
+  const breakdownArray = (map: Map<string, number>) =>
+    Array.from(map.entries())
+      .filter(([, qty]) => Math.abs(qty) > 0.0005)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, qty]) => ({ name, qty }))
 
   // Build a link to this item's Item Ledger, scoped to the same filters and
   // optionally to specific entry types (e.g. just PURCHASE_IN for that cell).
@@ -390,6 +392,60 @@ export default async function StockStatementPage({
     return `/reports/item-ledger?${qs.toString()}`
   }
 
+  const emptyStatColumns = {
+    'Opening': '', 'Purchase In': '', 'Job Work Out': '', 'Transfer In': '', 'JW Return': '',
+    'Dispatch': '', 'Transfer Out': '', 'Closing': '', 'At Vendor': '', 'Live Stock': '',
+    'Avg Rate': '', 'Value (₹)': '',
+  }
+
+  // One summary row per item, immediately followed by its Warehouse and
+  // Vendor breakdown rows — same grouping as the expandable UI, flattened
+  // for Excel since a worksheet can't nest/collapse rows.
+  const exportRows = sorted.flatMap((item) => {
+    const warehouseRows = breakdownArray(item.warehouseBreakdown)
+    const vendorRows = breakdownArray(item.vendorBreakdown)
+    return [
+      {
+        'As Of': toDate,
+        'Item Name': item.item_name,
+        'Unit': item.unit,
+        'Opening': item.opening,
+        'Purchase In': item.purchase_in,
+        'Job Work Out': item.jw_out,
+        'Transfer In': item.transfer_in,
+        'JW Return': item.jw_return,
+        'Dispatch': item.dispatch_out,
+        'Transfer Out': item.transfer_out,
+        'Closing': closing(item),
+        'At Vendor': item.at_vendor,
+        'Live Stock': item.current_stock,
+        'Avg Rate': item.rate || '',
+        'Value (₹)': item.rate ? itemValue(item) : '',
+        'Breakdown Type': '',
+        'Breakdown Name': '',
+        'Breakdown Qty': '',
+      },
+      ...warehouseRows.map((w) => ({
+        'As Of': toDate,
+        'Item Name': item.item_name,
+        'Unit': item.unit,
+        ...emptyStatColumns,
+        'Breakdown Type': 'Warehouse',
+        'Breakdown Name': w.name,
+        'Breakdown Qty': w.qty,
+      })),
+      ...vendorRows.map((v) => ({
+        'As Of': toDate,
+        'Item Name': item.item_name,
+        'Unit': item.unit,
+        ...emptyStatColumns,
+        'Breakdown Type': 'Vendor',
+        'Breakdown Name': v.name,
+        'Breakdown Qty': v.qty,
+      })),
+    ]
+  })
+
   const totals = {
     opening:       sorted.reduce((s, i) => s + i.opening, 0),
     purchase_in:   sorted.reduce((s, i) => s + i.purchase_in, 0),
@@ -403,6 +459,36 @@ export default async function StockStatementPage({
     current_stock: sorted.reduce((s, i) => s + i.current_stock, 0),
     value:         sorted.reduce((s, i) => s + itemValue(i), 0),
   }
+
+  const liveDate = new Date().toISOString().split('T')[0]
+  const tableRows: StatementRow[] = sorted.map((item) => ({
+    key: `${item.material_type_id}|${item.material_size_id ?? ''}`,
+    itemName: item.item_name,
+    unit: item.unit,
+    opening: item.opening,
+    openingHref: ledgerLink(item, { from: '2000-01-01', to: fromDate }),
+    purchaseIn: item.purchase_in,
+    purchaseInHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['PURCHASE_IN'] }),
+    jwOut: item.jw_out,
+    jwOutHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['JOB_WORK_OUT'] }),
+    transferIn: item.transfer_in,
+    transferInHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['TRANSFER_IN'] }),
+    jwReturn: item.jw_return,
+    jwReturnHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['JOB_WORK_RETURN_IN', 'VENDOR_RETURN_IN'] }),
+    dispatch: item.dispatch_out,
+    dispatchHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['SALE_OUT'] }),
+    transferOut: item.transfer_out,
+    transferOutHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['TRANSFER_OUT'] }),
+    closing: closing(item),
+    closingHref: ledgerLink(item, { from: fromDate, to: toDate }),
+    atVendor: item.at_vendor,
+    liveStock: item.current_stock,
+    liveHref: ledgerLink(item, { from: '2000-01-01', to: liveDate }),
+    rate: item.rate,
+    value: itemValue(item),
+    warehouseBreakdown: breakdownArray(item.warehouseBreakdown),
+    vendorBreakdown: breakdownArray(item.vendorBreakdown),
+  }))
 
   return (
     <div className="space-y-6">
@@ -559,6 +645,9 @@ export default async function StockStatementPage({
           </h2>
           <div className="flex items-center gap-4">
             {sorted.length > 0 && (
+              <span className="text-xs text-gray-400">Click a row for warehouse &amp; vendor breakdown</span>
+            )}
+            {sorted.length > 0 && (
               <span className="text-sm font-semibold text-teal-800">Total Value: {fmtC(totals.value)}</span>
             )}
             <span className="text-sm text-gray-500">{sorted.length} item{sorted.length !== 1 ? 's' : ''}</span>
@@ -573,110 +662,7 @@ export default async function StockStatementPage({
               <p className="text-gray-400 text-xs mt-1">Try adjusting the date range or company filter.</p>
             </div>
           ) : (
-            <table className="w-full text-sm whitespace-nowrap">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b text-xs font-semibold uppercase">
-                  <th className="px-4 py-3 text-left text-gray-600 bg-white">Item Name</th>
-                  <th className="px-4 py-3 text-left text-gray-400 bg-white">Unit</th>
-                  {/* Opening */}
-                  <th className="px-4 py-3 text-right text-blue-700 bg-blue-50">Opening</th>
-                  {/* IN columns */}
-                  <th className="px-4 py-3 text-right text-green-700 bg-green-50">Purchase In</th>
-                  {/* Job Work Out sits right after Purchase In — mirrors the purchase → sent-for-job-work flow */}
-                  <th className="px-4 py-3 text-right text-red-700 bg-red-50">Job Work Out</th>
-                  <th className="px-4 py-3 text-right text-green-700 bg-green-50">Transfer In</th>
-                  <th className="px-4 py-3 text-right text-green-700 bg-green-50">JW Return</th>
-                  {/* OUT columns */}
-                  <th className="px-4 py-3 text-right text-red-700 bg-red-50">Dispatch</th>
-                  <th className="px-4 py-3 text-right text-red-700 bg-red-50">Transfer Out</th>
-                  {/* Closing */}
-                  <th className="px-4 py-3 text-right text-gray-800 bg-gray-100">Closing</th>
-                  {/* At Vendor / Current / Live */}
-                  <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">At Vendor</th>
-                  <th className="px-4 py-3 text-right text-purple-700 bg-purple-50">Live Stock</th>
-                  {/* Valuation */}
-                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Avg Rate</th>
-                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Value</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {sorted.map((item, i) => {
-                  const cl = closing(item)
-                  const cell = (value: number, className: string, types?: string[]) => {
-                    const text = value > 0 ? fmtQ(value) : '—'
-                    const href = value > 0 ? ledgerLink(item, { from: fromDate, to: toDate, types }) : null
-                    return (
-                      <td className={className}>
-                        {href ? <Link href={href} className="hover:underline">{text}</Link> : text}
-                      </td>
-                    )
-                  }
-                  const openingHref = ledgerLink(item, { from: '2000-01-01', to: fromDate })
-                  const liveHref = ledgerLink(item, { from: '2000-01-01', to: new Date().toISOString().split('T')[0] })
-                  return (
-                    <tr key={i} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-900">{item.item_name}</td>
-                      <td className="px-4 py-3 text-gray-400">{item.unit}</td>
-                      <td className="px-4 py-3 text-right text-blue-700 bg-blue-50/40">
-                        {openingHref ? <Link href={openingHref} className="hover:underline">{fmtQ(item.opening)}</Link> : fmtQ(item.opening)}
-                      </td>
-                      {cell(item.purchase_in, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['PURCHASE_IN'])}
-                      {cell(item.jw_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['JOB_WORK_OUT'])}
-                      {cell(item.transfer_in, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['TRANSFER_IN'])}
-                      {cell(item.jw_return, 'px-4 py-3 text-right text-green-700 bg-green-50/40', ['JOB_WORK_RETURN_IN', 'VENDOR_RETURN_IN'])}
-                      {cell(item.dispatch_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['SALE_OUT'])}
-                      {cell(item.transfer_out, 'px-4 py-3 text-right text-red-700 bg-red-50/40', ['TRANSFER_OUT'])}
-                      <td className={`px-4 py-3 text-right font-bold bg-gray-100/60 ${cl < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                        {(() => {
-                          const href = ledgerLink(item, { from: fromDate, to: toDate })
-                          return href ? <Link href={href} className="hover:underline">{fmtQ(cl)}</Link> : fmtQ(cl)
-                        })()}
-                      </td>
-                      <td className={`px-4 py-3 text-right font-bold bg-amber-50/60 ${item.at_vendor < 0 ? 'text-red-600' : 'text-amber-800'}`}>
-                        {item.at_vendor > 0 ? fmtQ(item.at_vendor) : '—'}
-                      </td>
-                      <td className={`px-4 py-3 text-right font-bold bg-purple-50/60 ${item.current_stock < 0 ? 'text-red-600' : 'text-purple-800'}`}>
-                        {liveHref ? <Link href={liveHref} className="hover:underline">{fmtQ(item.current_stock)}</Link> : fmtQ(item.current_stock)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">
-                        {item.rate ? fmtC(item.rate) : '—'}
-                      </td>
-                      <td className={`px-4 py-3 text-right font-bold bg-teal-50/60 ${itemValue(item) < 0 ? 'text-red-600' : 'text-teal-800'}`}>
-                        {item.rate ? fmtC(itemValue(item)) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-
-              {/* Totals */}
-              <tfoot>
-                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                  <td className="px-4 py-3 text-gray-700" colSpan={2}>Total</td>
-                  <td className="px-4 py-3 text-right text-blue-800">{fmtQ(totals.opening)}</td>
-                  <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.purchase_in)}</td>
-                  <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.jw_out)}</td>
-                  <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.transfer_in)}</td>
-                  <td className="px-4 py-3 text-right text-green-800">{fmtQ(totals.jw_return)}</td>
-                  <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.dispatch_out)}</td>
-                  <td className="px-4 py-3 text-right text-red-800">{fmtQ(totals.transfer_out)}</td>
-                  <td className={`px-4 py-3 text-right font-bold ${totals.closing < 0 ? 'text-red-700' : 'text-gray-900'}`}>
-                    {fmtQ(totals.closing)}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-bold ${totals.at_vendor < 0 ? 'text-red-700' : 'text-amber-800'}`}>
-                    {fmtQ(totals.at_vendor)}
-                  </td>
-                  <td className={`px-4 py-3 text-right font-bold ${totals.current_stock < 0 ? 'text-red-700' : 'text-purple-800'}`}>
-                    {fmtQ(totals.current_stock)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-400">—</td>
-                  <td className={`px-4 py-3 text-right font-bold ${totals.value < 0 ? 'text-red-700' : 'text-teal-800'}`}>
-                    {fmtC(totals.value)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <StockStatementTable rows={tableRows} totals={totals} />
           )}
         </div>
       </div>
