@@ -232,7 +232,7 @@ export default async function StockStatementPage({
   }
   const rateMap = new Map<string, number>()
   for (const [key, { qty, amt }] of rateTotals) {
-    if (qty > 0) rateMap.set(key, amt / qty)
+    if (qty > 0) rateMap.set(key, Math.round((amt / qty) * 100) / 100)
   }
 
   // Aggregate by material + size
