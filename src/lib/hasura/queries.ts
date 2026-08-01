@@ -1979,6 +1979,21 @@ export const PURCHASE_LINE_RATES_QUERY = `
   }
 `
 
+// All billed purchase lines (rate + quantity + amount) per material_type +
+// size, up to a given date — used by Stock Statement to value closing stock
+// at the quantity-weighted average purchase rate across every matching bill.
+export const AVERAGE_PURCHASE_RATES_QUERY = `
+  query GetAveragePurchaseRates($where: purchase_bill_items_bool_exp!) {
+    purchase_bill_items(where: $where) {
+      material_type_id
+      material_size_id
+      quantity
+      rate
+      amount
+    }
+  }
+`
+
 // ─── AI Copilot Conversations ────────────────────────────────────────────────
 // $owner_id on every op below is declared but never supplied by the client —
 // /api/graphql force-overwrites it with the caller's session id before

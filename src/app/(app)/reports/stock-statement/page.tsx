@@ -12,6 +12,7 @@ import {
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
   ITEM_STOCK_AT_VENDORS_QUERY,
+  AVERAGE_PURCHASE_RATES_QUERY,
 } from '@/lib/hasura/queries'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
@@ -44,6 +45,7 @@ type StockItem = {
   adjustment: number
   current_stock: number
   at_vendor: number
+  rate: number
 }
 
 type ItemOption = ComboOption & {
@@ -174,11 +176,34 @@ export default async function StockStatementPage({
     }
   }
 
-  const [result, vendorResult] = noResults
-    ? [{ opening: [], period: [], current: [] }, { v_stock_at_vendors: [] }]
+  // Rate for valuation: quantity-weighted average of every billed rate for
+  // that material_type + size, up to the To Date — mirrors the Item
+  // Ledger's purchase-line rate lookup, but resolved by material/size
+  // instead of by ledger row since Stock Statement rows are aggregated
+  // across many transactions.
+  const rateConditions: Record<string, unknown>[] = [
+    { rate: { _is_null: false } },
+    { purchase_bill: { status: { _eq: 'active' }, bill_date: { _lte: toDate } } },
+  ]
+  if (params.company) rateConditions.push({ purchase_bill: { company_id: { _eq: params.company } } })
+  if (params.warehouse) rateConditions.push({ purchase_bill: { warehouse_id: { _eq: params.warehouse } } })
+  if (selectedItem) {
+    rateConditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
+    if (selectedItem.material_size_id) {
+      rateConditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
+    }
+  } else {
+    if (params.material_type) rateConditions.push({ material_type_id: { _eq: params.material_type } })
+    if (params.size) rateConditions.push({ material_size_id: { _eq: params.size } })
+  }
+  const rateWhere = { _and: rateConditions }
+
+  const [result, vendorResult, rateResult] = noResults
+    ? [{ opening: [], period: [], current: [] }, { v_stock_at_vendors: [] }, { purchase_bill_items: [] }]
     : await Promise.all([
         hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere }),
         hasuraQuery(ITEM_STOCK_AT_VENDORS_QUERY, { where: vendorWhere }),
+        hasuraQuery(AVERAGE_PURCHASE_RATES_QUERY, { where: rateWhere }),
       ])
 
   const openingRows: LedgerRow[] = result.opening ?? []
@@ -186,6 +211,29 @@ export default async function StockStatementPage({
   const currentRows: LedgerRow[] = result.current ?? []
   const vendorRows: { material_type_id: string; size_label: string | null; pending_quantity: number | string }[] =
     vendorResult.v_stock_at_vendors ?? []
+
+  // Weighted average = total billed amount / total quantity across every
+  // matching purchase line, per material_type_id|material_size_id key.
+  const rateTotals = new Map<string, { qty: number; amt: number }>()
+  for (const row of (rateResult.purchase_bill_items ?? []) as {
+    material_type_id: string
+    material_size_id: string | null
+    quantity: number | string
+    rate: number | string
+    amount: number | string | null
+  }[]) {
+    const key = `${row.material_type_id}|${row.material_size_id ?? ''}`
+    const qty = Number(row.quantity)
+    const amt = row.amount != null ? Number(row.amount) : qty * Number(row.rate)
+    const running = rateTotals.get(key) ?? { qty: 0, amt: 0 }
+    running.qty += qty
+    running.amt += amt
+    rateTotals.set(key, running)
+  }
+  const rateMap = new Map<string, number>()
+  for (const [key, { qty, amt }] of rateTotals) {
+    if (qty > 0) rateMap.set(key, amt / qty)
+  }
 
   // Aggregate by material + size
   const items: Record<string, StockItem> = {}
@@ -218,6 +266,7 @@ export default async function StockStatementPage({
         adjustment: 0,
         current_stock: 0,
         at_vendor: 0,
+        rate: 0,
       }
     }
     return items[key]
@@ -278,6 +327,7 @@ export default async function StockStatementPage({
         adjustment: 0,
         current_stock: 0,
         at_vendor: 0,
+        rate: 0,
       }
     }
     items[key].at_vendor += Number(row.pending_quantity)
@@ -286,6 +336,12 @@ export default async function StockStatementPage({
   const sorted = Object.values(items).sort(
     (a, b) => a.material.localeCompare(b.material) || a.size.localeCompare(b.size),
   )
+
+  // Rate = quantity-weighted average billed rate up to the To Date for that
+  // material + size; 0 (shown as —) when the item has never been purchased.
+  for (const item of sorted) {
+    item.rate = rateMap.get(`${item.material_type_id}|${item.material_size_id ?? ''}`) ?? 0
+  }
 
   const closing = (item: StockItem) =>
     item.opening +
@@ -297,7 +353,11 @@ export default async function StockStatementPage({
     item.dispatch_out -
     item.jw_out
 
+  // Valuation = Closing Stock × weighted average purchase rate.
+  const itemValue = (item: StockItem) => closing(item) * item.rate
+
   const fmtQ = (n: number) => n.toFixed(3)
+  const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
   const exportRows = sorted.map((item) => ({
     'As Of': toDate,
@@ -313,6 +373,8 @@ export default async function StockStatementPage({
     'Closing': closing(item),
     'At Vendor': item.at_vendor,
     'Live Stock': item.current_stock,
+    'Avg Rate': item.rate || '',
+    'Value (₹)': item.rate ? itemValue(item) : '',
   }))
 
   // Build a link to this item's Item Ledger, scoped to the same filters and
@@ -339,6 +401,7 @@ export default async function StockStatementPage({
     closing:       sorted.reduce((s, i) => s + closing(i), 0),
     at_vendor:     sorted.reduce((s, i) => s + i.at_vendor, 0),
     current_stock: sorted.reduce((s, i) => s + i.current_stock, 0),
+    value:         sorted.reduce((s, i) => s + itemValue(i), 0),
   }
 
   return (
@@ -485,6 +548,7 @@ export default async function StockStatementPage({
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-700 inline-block" /> Closing Stock</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> At Vendor (open job work)</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" /> Live Stock (all-time)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-teal-500 inline-block" /> Avg Rate &amp; Value (weighted average purchase rate × Closing)</span>
       </div>
 
       {/* Table */}
@@ -493,7 +557,12 @@ export default async function StockStatementPage({
           <h2 className="font-semibold text-gray-900">
             {fromDate} &rarr; {toDate}
           </h2>
-          <span className="text-sm text-gray-500">{sorted.length} item{sorted.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-4">
+            {sorted.length > 0 && (
+              <span className="text-sm font-semibold text-teal-800">Total Value: {fmtC(totals.value)}</span>
+            )}
+            <span className="text-sm text-gray-500">{sorted.length} item{sorted.length !== 1 ? 's' : ''}</span>
+          </div>
         </div>
 
         <div className="overflow-auto max-h-[70vh]">
@@ -525,6 +594,9 @@ export default async function StockStatementPage({
                   {/* At Vendor / Current / Live */}
                   <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">At Vendor</th>
                   <th className="px-4 py-3 text-right text-purple-700 bg-purple-50">Live Stock</th>
+                  {/* Valuation */}
+                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Avg Rate</th>
+                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Value</th>
                 </tr>
               </thead>
 
@@ -567,6 +639,12 @@ export default async function StockStatementPage({
                       <td className={`px-4 py-3 text-right font-bold bg-purple-50/60 ${item.current_stock < 0 ? 'text-red-600' : 'text-purple-800'}`}>
                         {liveHref ? <Link href={liveHref} className="hover:underline">{fmtQ(item.current_stock)}</Link> : fmtQ(item.current_stock)}
                       </td>
+                      <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">
+                        {item.rate ? fmtC(item.rate) : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-bold bg-teal-50/60 ${itemValue(item) < 0 ? 'text-red-600' : 'text-teal-800'}`}>
+                        {item.rate ? fmtC(itemValue(item)) : '—'}
+                      </td>
                     </tr>
                   )
                 })}
@@ -591,6 +669,10 @@ export default async function StockStatementPage({
                   </td>
                   <td className={`px-4 py-3 text-right font-bold ${totals.current_stock < 0 ? 'text-red-700' : 'text-purple-800'}`}>
                     {fmtQ(totals.current_stock)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-400">—</td>
+                  <td className={`px-4 py-3 text-right font-bold ${totals.value < 0 ? 'text-red-700' : 'text-teal-800'}`}>
+                    {fmtC(totals.value)}
                   </td>
                 </tr>
               </tfoot>
