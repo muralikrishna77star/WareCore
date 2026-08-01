@@ -9,6 +9,8 @@ export type Transaction = {
   quantity: number
   reference_number: string | null
   notes: string | null
+  purchaseDate: string | null
+  rate: number | null
 }
 
 export type GroupRow = {
@@ -22,8 +24,12 @@ export type GroupRow = {
   directSales: number
   returns: number
   balance: number
+  rate: number | null
+  purchaseDate: string | null
   transactions: Transaction[]
 }
+
+const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
 const typeColors: Record<Transaction['type'], string> = {
   'Job Work Out': 'bg-purple-100 text-purple-800',
@@ -85,6 +91,9 @@ export default function VendorMovementsTable({
           <SortableTh column="direct_sales" label="Direct Sales" align="right" />
           <SortableTh column="returns" label="Returns" align="right" />
           <SortableTh column="balance" label="Balance" align="right" />
+          <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-left whitespace-nowrap">Purchase Date</th>
+          <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-right">Rate</th>
+          <th className="px-4 py-3 text-xs font-medium text-amber-700 bg-amber-50 uppercase text-right">Valuation</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
@@ -109,10 +118,15 @@ export default function VendorMovementsTable({
                 <td className={`px-4 py-2.5 text-right font-semibold ${g.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                   {g.balance.toFixed(3)} {g.unit}
                 </td>
+                <td className="px-4 py-2.5 text-teal-700 bg-teal-50/40 whitespace-nowrap">{g.purchaseDate ? formatDate(g.purchaseDate) : '—'}</td>
+                <td className="px-4 py-2.5 text-right text-teal-700 bg-teal-50/40">{g.rate ? fmtC(g.rate) : '—'}</td>
+                <td className={`px-4 py-2.5 text-right font-semibold bg-amber-50/40 ${g.rate && g.balance * g.rate < 0 ? 'text-red-600' : 'text-amber-800'}`}>
+                  {g.rate ? fmtC(g.balance * g.rate) : '—'}
+                </td>
               </tr>
               {isOpen && (
                 <tr key={`${g.key}-detail`} className="bg-gray-50/60">
-                  <td colSpan={9} className="px-4 py-3">
+                  <td colSpan={12} className="px-4 py-3">
                     {g.transactions.length === 0 ? (
                       <p className="text-xs text-gray-400 px-2">No individual transactions in this period.</p>
                     ) : (
@@ -124,6 +138,9 @@ export default function VendorMovementsTable({
                             <th className="px-3 py-2 text-right">Quantity</th>
                             <th className="px-3 py-2">Reference</th>
                             <th className="px-3 py-2">Notes</th>
+                            <th className="px-3 py-2 text-teal-700">Purchase Date</th>
+                            <th className="px-3 py-2 text-right text-teal-700">Rate</th>
+                            <th className="px-3 py-2 text-right text-amber-700">Value</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -140,6 +157,9 @@ export default function VendorMovementsTable({
                               </td>
                               <td className="px-3 py-2 font-mono text-gray-500">{t.reference_number || '—'}</td>
                               <td className="px-3 py-2 text-gray-500">{t.notes || '—'}</td>
+                              <td className="px-3 py-2 text-teal-700 whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
+                              <td className="px-3 py-2 text-right text-teal-700">{t.rate ? fmtC(t.rate) : '—'}</td>
+                              <td className="px-3 py-2 text-right text-amber-700">{t.rate ? fmtC(Math.abs(t.quantity) * t.rate) : '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -159,6 +179,11 @@ export default function VendorMovementsTable({
           <td className="px-4 py-3 text-right text-red-800">{rows.reduce((s, g) => s + g.directSales, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-teal-800">{rows.reduce((s, g) => s + g.returns, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-gray-900">{rows.reduce((s, g) => s + g.balance, 0).toFixed(3)}</td>
+          <td className="px-4 py-3 text-gray-400">—</td>
+          <td className="px-4 py-3 text-right text-gray-400">—</td>
+          <td className="px-4 py-3 text-right text-amber-800">
+            {fmtC(rows.reduce((s, g) => s + (g.rate ? g.balance * g.rate : 0), 0))}
+          </td>
         </tr>
       </tfoot>
     </table>

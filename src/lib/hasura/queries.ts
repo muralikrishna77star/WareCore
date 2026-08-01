@@ -1422,10 +1422,30 @@ export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
 export const VENDOR_JOB_WORK_LEDGER_QUERY = `
   query GetVendorJobWorkLedger($where: stock_ledger_bool_exp = {}) {
     stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}]) {
-      id entry_type quantity entry_date created_at reference_id reference_number notes company_id material_type_id material_size_id
+      id entry_type quantity entry_date created_at reference_id reference_number notes company_id material_type_id material_size_id purchase_line_id
       companies { id name code }
       material_types { description unit }
       material_sizes { size_label }
+    }
+  }
+`
+
+// Every billed purchase line up to a given date, newest-first — used by
+// Vendor Movements to resolve two things from the same result set: the
+// exact purchase (date + rate) behind a specific movement's purchase_line_id,
+// and the latest purchase (date + rate) per material_type + size for the
+// vendor+item summary row's valuation.
+export const VENDOR_MOVEMENT_PURCHASE_RATES_QUERY = `
+  query GetVendorMovementPurchaseRates($where: purchase_bill_items_bool_exp!) {
+    purchase_bill_items(
+      where: $where
+      order_by: [{ purchase_bill: { bill_date: desc } }, { created_at: desc }]
+    ) {
+      purchase_line_id
+      material_type_id
+      material_size_id
+      rate
+      purchase_bill { bill_date }
     }
   }
 `

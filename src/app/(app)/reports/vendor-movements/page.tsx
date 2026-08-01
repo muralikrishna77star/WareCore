@@ -10,12 +10,15 @@ import {
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
+  VENDOR_MOVEMENT_PURCHASE_RATES_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
+
+const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
 type ItemOption = ComboOption & {
   material_type_id: string
@@ -36,6 +39,8 @@ type GroupRow = {
   directSales: number
   returns: number
   balance: number
+  rate: number | null
+  purchaseDate: string | null
   transactions: Transaction[]
 }
 
@@ -95,7 +100,23 @@ export default async function VendorMovementsPage({
     }
   }
 
-  const [periodJobWorkResult, cumulativeJobWorkResult, periodSaleResult, jobWorkItemBalanceResult] = await Promise.all([
+  // Purchase rate lookup: same result set resolves both the exact purchase
+  // behind a specific movement's purchase_line_id, and the latest purchase
+  // (date + rate) per material_type + size for the summary row's valuation.
+  const rateConditions: Record<string, unknown>[] = [
+    { rate: { _is_null: false } },
+    { purchase_bill: { status: { _eq: 'active' }, bill_date: { _lte: toDate } } },
+  ]
+  if (params.company) rateConditions.push({ purchase_bill: { company_id: { _eq: params.company } } })
+  if (selectedItem) {
+    rateConditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
+    if (selectedItem.material_size_id) {
+      rateConditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
+    }
+  }
+  const rateWhere = { _and: rateConditions }
+
+  const [periodJobWorkResult, cumulativeJobWorkResult, periodSaleResult, jobWorkItemBalanceResult, purchaseRatesResult] = await Promise.all([
     hasuraQuery(VENDOR_JOB_WORK_LEDGER_QUERY, {
       where: {
         _and: [
@@ -137,12 +158,36 @@ export default async function VendorMovementsPage({
         ],
       },
     }),
+    hasuraQuery(VENDOR_MOVEMENT_PURCHASE_RATES_QUERY, { where: rateWhere }),
   ])
 
   const periodJobWork: any[] = periodJobWorkResult.stock_ledger ?? []
   const cumulativeJobWork: any[] = cumulativeJobWorkResult.stock_ledger ?? []
   const periodSales: any[] = periodSaleResult.stock_ledger ?? []
   const jobWorkItemBalances: any[] = jobWorkItemBalanceResult.job_work_items ?? []
+
+  // Newest-first order: first hit per purchase_line_id is that exact line;
+  // first hit per material_type_id|material_size_id is the latest purchase.
+  const lineDateRateMap = new Map<string, { rate: number; date: string }>()
+  const latestByMaterialMap = new Map<string, { rate: number; date: string }>()
+  for (const row of (purchaseRatesResult.purchase_bill_items ?? []) as {
+    purchase_line_id: string | null
+    material_type_id: string
+    material_size_id: string | null
+    rate: number | string
+    purchase_bill: { bill_date: string } | null
+  }[]) {
+    const rate = Number(row.rate)
+    const date = row.purchase_bill?.bill_date
+    if (!date) continue
+    if (row.purchase_line_id && !lineDateRateMap.has(row.purchase_line_id)) {
+      lineDateRateMap.set(row.purchase_line_id, { rate, date })
+    }
+    const materialKey = `${row.material_type_id}|${row.material_size_id ?? ''}`
+    if (!latestByMaterialMap.has(materialKey)) {
+      latestByMaterialMap.set(materialKey, { rate, date })
+    }
+  }
 
   // Resolve dispatch orders behind the SALE_OUT entries to find which were
   // vendor-direct (sold straight from the vendor's site, never returned to a
@@ -202,6 +247,8 @@ export default async function VendorMovementsPage({
         directSales: 0,
         returns: 0,
         balance: 0,
+        rate: null,
+        purchaseDate: null,
         transactions: [],
       }
       groups.set(key, g)
@@ -217,11 +264,13 @@ export default async function VendorMovementsPage({
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
+    const purchaseInfo = m.purchase_line_id ? lineDateRateMap.get(m.purchase_line_id) : undefined
     if (m.entry_type === 'JOB_WORK_OUT') {
       g.jobWorkOut += Math.abs(Number(m.quantity))
       g.transactions.push({
         id: m.id, date: m.entry_date, type: 'Job Work Out',
         quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+        purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
     } else if (m.entry_type === 'JOB_WORK_RETURN_IN') {
       const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
@@ -231,6 +280,7 @@ export default async function VendorMovementsPage({
         id: m.id, date: m.entry_date,
         type: isVirtual ? 'Return (paired with direct sale)' : 'Return',
         quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+        purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
     }
   }
@@ -245,9 +295,11 @@ export default async function VendorMovementsPage({
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     g.directSales += Math.abs(Number(m.quantity))
+    const purchaseInfo = m.purchase_line_id ? lineDateRateMap.get(m.purchase_line_id) : undefined
     g.transactions.push({
       id: m.id, date: m.entry_date, type: 'Direct Sale',
       quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+      purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
     })
   }
 
@@ -283,6 +335,11 @@ export default async function VendorMovementsPage({
   }
   for (const g of groups.values()) {
     g.balance = (cumulativeOutByKey.get(g.key) ?? 0) - (cumulativeReturnInByKey.get(g.key) ?? 0)
+    const latest = latestByMaterialMap.get(`${g.materialTypeId}|${g.materialSizeId ?? ''}`)
+    if (latest) {
+      g.rate = latest.rate
+      g.purchaseDate = latest.date
+    }
   }
 
   let rows = Array.from(groups.values()).filter(
@@ -318,8 +375,9 @@ export default async function VendorMovementsPage({
       directSales: acc.directSales + g.directSales,
       returns: acc.returns + g.returns,
       balance: acc.balance + g.balance,
+      valuation: acc.valuation + (g.rate ? g.balance * g.rate : 0),
     }),
-    { jobWorkOut: 0, directSales: 0, returns: 0, balance: 0 }
+    { jobWorkOut: 0, directSales: 0, returns: 0, balance: 0, valuation: 0 }
   )
 
   const sortHref = (column: string) => {
@@ -348,6 +406,8 @@ export default async function VendorMovementsPage({
     directSales: g.directSales,
     returns: g.returns,
     balance: g.balance,
+    rate: g.rate,
+    purchaseDate: g.purchaseDate,
     transactions: g.transactions,
   }))
 
@@ -361,6 +421,9 @@ export default async function VendorMovementsPage({
     'Direct Sales': r.directSales,
     'Returns': r.returns,
     'Balance': r.balance,
+    'Purchase Date': r.purchaseDate || '',
+    'Rate': r.rate || '',
+    'Valuation (₹)': r.rate ? r.balance * r.rate : '',
   }))
 
   return (
@@ -425,7 +488,7 @@ export default async function VendorMovementsPage({
       </form>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="rounded-xl border bg-purple-50 p-4">
           <p className="text-xs text-gray-500">Job Work Out</p>
           <p className="text-xl font-bold text-purple-800">{totals.jobWorkOut.toFixed(3)}</p>
@@ -441,6 +504,10 @@ export default async function VendorMovementsPage({
         <div className="rounded-xl border bg-orange-50 p-4">
           <p className="text-xs text-gray-500">Balance at Vendors</p>
           <p className="text-xl font-bold text-orange-800">{totals.balance.toFixed(3)}</p>
+        </div>
+        <div className="rounded-xl border bg-amber-50 p-4">
+          <p className="text-xs text-gray-500">Valuation at Vendors</p>
+          <p className="text-xl font-bold text-amber-800">{fmtC(totals.valuation)}</p>
         </div>
       </div>
 
