@@ -19,6 +19,8 @@ import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
+const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   purchase: { label: 'Purchase', color: 'bg-green-100 text-green-800' },
   transfer_in: { label: 'Transfer In', color: 'bg-blue-100 text-blue-800' },
@@ -139,18 +141,34 @@ export default async function MovementsReportPage({
     .filter(m => ['transfer_out', 'dispatch', 'job_work_out'].includes(m.entry_type))
     .reduce((s, m) => s + Number(m.quantity || 0), 0)
 
+  // Rate for each movement comes from the exact purchase line it's tied to
+  // (m.purchase_line_id), same as Job Work Report and Vendor Movements — not
+  // an average. Value keeps the ledger quantity's sign (positive = in,
+  // negative = out) rather than hiding or flipping negative movements.
   const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m: any) => m.purchase_line_id))
-  const exportRows = movements.map((m: any) => ({
-    'Transaction Date': formatDate(m.entry_date),
-    'Type': (entryTypeConfig[m.entry_type] ?? { label: m.entry_type }).label,
-    'Company': m.companies?.name ?? '',
-    'Warehouse': m.warehouses?.name ?? '',
-    'Material': m.material_types?.description ?? '',
-    'Size': m.material_sizes?.size_label ?? m.size_label ?? '',
-    'Qty (T)': Number(m.quantity),
-    'Rate': m.purchase_line_id ? movementRateMap.get(m.purchase_line_id) ?? '' : '',
-    'Reference': m.reference_id ?? '',
-  }))
+  const rateFor = (m: any): number | null => (m.purchase_line_id ? movementRateMap.get(m.purchase_line_id) ?? null : null)
+  const valueFor = (m: any): number | null => {
+    const rate = rateFor(m)
+    return rate != null ? Number(m.quantity) * rate : null
+  }
+  const totalValue = movements.reduce((s, m) => s + (valueFor(m) ?? 0), 0)
+
+  const exportRows = movements.map((m: any) => {
+    const rate = rateFor(m)
+    const value = valueFor(m)
+    return {
+      'Transaction Date': formatDate(m.entry_date),
+      'Type': (entryTypeConfig[m.entry_type] ?? { label: m.entry_type }).label,
+      'Company': m.companies?.name ?? '',
+      'Warehouse': m.warehouses?.name ?? '',
+      'Material': m.material_types?.description ?? '',
+      'Size': m.material_sizes?.size_label ?? m.size_label ?? '',
+      'Qty (T)': Number(m.quantity),
+      'Rate': rate ?? '',
+      'Value (₹)': value ?? '',
+      'Reference': m.reference_id ?? '',
+    }
+  })
 
   return (
     <div className="space-y-6">
@@ -249,7 +267,7 @@ export default async function MovementsReportPage({
       </form>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border bg-gray-50 p-4">
           <p className="text-xs text-gray-500">Total Entries</p>
           <p className="text-xl font-bold text-gray-800">{movements.length}</p>
@@ -261,6 +279,10 @@ export default async function MovementsReportPage({
         <div className="rounded-xl border bg-red-50 p-4">
           <p className="text-xs text-gray-500">Total Out</p>
           <p className="text-xl font-bold text-red-700">-{totalOut.toFixed(3)} T</p>
+        </div>
+        <div className="rounded-xl border bg-teal-50 p-4">
+          <p className="text-xs text-gray-500">Net Value</p>
+          <p className={`text-xl font-bold ${totalValue < 0 ? 'text-red-700' : 'text-teal-800'}`}>{fmtC(totalValue)}</p>
         </div>
       </div>
 
@@ -284,6 +306,8 @@ export default async function MovementsReportPage({
                   <th className="px-4 py-3 text-left">Material</th>
                   <th className="px-4 py-3 text-left">Size</th>
                   <th className="px-4 py-3 text-right">Qty (T)</th>
+                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Rate</th>
+                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Value</th>
                   <th className="px-4 py-3 text-left">Reference</th>
                 </tr>
               </thead>
@@ -291,6 +315,8 @@ export default async function MovementsReportPage({
                 {movements.map((m: any) => {
                   const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800' }
                   const isIn = ['purchase', 'transfer_in', 'job_work_return'].includes(m.entry_type)
+                  const rate = rateFor(m)
+                  const value = valueFor(m)
                   return (
                     <tr key={m.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-600">{formatDate(m.entry_date)}</td>
@@ -306,6 +332,10 @@ export default async function MovementsReportPage({
                       <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-700' : 'text-red-600'}`}>
                         {isIn ? '+' : '-'}{Math.abs(Number(m.quantity)).toFixed(3)}
                       </td>
+                      <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate != null ? fmtC(rate) : '—'}</td>
+                      <td className={`px-4 py-3 text-right font-medium bg-teal-50/40 ${value != null && value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
+                        {value != null ? fmtC(value) : '—'}
+                      </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{m.reference_id ?? '—'}</td>
                     </tr>
                   )
@@ -317,6 +347,8 @@ export default async function MovementsReportPage({
                   <td className={`px-4 py-3 text-right ${totalIn - totalOut >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                     {totalIn - totalOut >= 0 ? '+' : ''}{(totalIn - totalOut).toFixed(3)}
                   </td>
+                  <td className="px-4 py-3 text-right text-gray-400">—</td>
+                  <td className={`px-4 py-3 text-right ${totalValue < 0 ? 'text-red-600' : 'text-teal-800'}`}>{fmtC(totalValue)}</td>
                   <td />
                 </tr>
               </tfoot>
