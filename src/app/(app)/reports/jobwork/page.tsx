@@ -2,10 +2,13 @@ export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+
+const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -41,6 +44,13 @@ export default async function JobWorkReportPage({
   const orders: any[] = result.job_work_orders ?? []
   const companies: any[] = compResult.companies ?? []
 
+  // Rate per line = the billed rate of the exact purchase that material was
+  // sourced from (job_work_items.purchase_line_id), not an average — each
+  // job work transaction is valued against its own originating purchase.
+  const lineIds = orders.flatMap((o: any) => (o.job_work_items ?? []).map((i: any) => i.purchase_line_id))
+  const rateMap = await fetchPurchaseLineRateMap(lineIds)
+  const rateFor = (item: any): number => (item.purchase_line_id ? rateMap.get(item.purchase_line_id) ?? 0 : 0)
+
   const totalSent = orders.reduce((s, o) => {
     return s + (o.job_work_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity_sent || 0), 0)
   }, 0)
@@ -48,6 +58,15 @@ export default async function JobWorkReportPage({
     return s + (o.job_work_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity_received || 0), 0)
   }, 0)
   const totalPending = totalSent - totalReceived
+  const totalSentValue = orders.reduce((s, o) => {
+    return s + (o.job_work_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity_sent || 0) * rateFor(i), 0)
+  }, 0)
+  const totalPendingValue = orders.reduce((s, o) => {
+    return s + (o.job_work_items ?? []).reduce((si: number, i: any) => {
+      const pending = Number(i.quantity_sent || 0) - Number(i.quantity_received || 0) - Number(i.quantity_transferred_out || 0)
+      return si + pending * rateFor(i)
+    }, 0)
+  }, 0)
 
   const exportRows = orders.flatMap((o: any) => {
     const items = o.job_work_items ?? []
@@ -60,11 +79,13 @@ export default async function JobWorkReportPage({
     }
     const status = o.status?.replace(/_/g, ' ') ?? ''
     if (items.length === 0) {
-      return [{ ...base, 'Material': '', 'Size': '', 'Sent (T)': '', 'Received (T)': '', 'Pending (T)': '', 'Rate': '', 'Status': status }]
+      return [{ ...base, 'Material': '', 'Size': '', 'Sent (T)': '', 'Received (T)': '', 'Pending (T)': '', 'Rate': '', 'Sent Value (₹)': '', 'Pending Value (₹)': '', 'Status': status }]
     }
     return items.map((item: any) => {
       const sent = Number(item.quantity_sent || 0)
       const received = Number(item.quantity_received || 0)
+      const pending = sent - received - Number(item.quantity_transferred_out || 0)
+      const rate = rateFor(item)
       return {
         ...base,
         'Material': item.material_types?.description || '',
@@ -72,7 +93,9 @@ export default async function JobWorkReportPage({
         'Sent (T)': sent,
         'Received (T)': received,
         'Pending (T)': sent - received,
-        'Rate': '',
+        'Rate': rate || '',
+        'Sent Value (₹)': rate ? sent * rate : '',
+        'Pending Value (₹)': rate ? pending * rate : '',
         'Status': status,
       }
     })
@@ -133,7 +156,7 @@ export default async function JobWorkReportPage({
       </form>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <div className="rounded-xl border bg-purple-50 p-4">
           <p className="text-xs text-gray-500">Total Sent</p>
           <p className="text-xl font-bold text-purple-800">{totalSent.toFixed(3)} T</p>
@@ -145,6 +168,14 @@ export default async function JobWorkReportPage({
         <div className="rounded-xl border bg-yellow-50 p-4">
           <p className="text-xs text-gray-500">Pending</p>
           <p className="text-xl font-bold text-yellow-800">{totalPending.toFixed(3)} T</p>
+        </div>
+        <div className="rounded-xl border bg-teal-50 p-4">
+          <p className="text-xs text-gray-500">Sent Value</p>
+          <p className="text-xl font-bold text-teal-800">{fmtC(totalSentValue)}</p>
+        </div>
+        <div className="rounded-xl border bg-amber-50 p-4">
+          <p className="text-xs text-gray-500">Pending Value</p>
+          <p className="text-xl font-bold text-amber-800">{fmtC(totalPendingValue)}</p>
         </div>
       </div>
 
@@ -171,6 +202,9 @@ export default async function JobWorkReportPage({
                   <th className="px-4 py-3 text-right">Sent (T)</th>
                   <th className="px-4 py-3 text-right">Received (T)</th>
                   <th className="px-4 py-3 text-right">Pending (T)</th>
+                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Rate</th>
+                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Sent Value</th>
+                  <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">Pending Value</th>
                   <th className="px-4 py-3 text-left">Status</th>
                 </tr>
               </thead>
@@ -190,17 +224,26 @@ export default async function JobWorkReportPage({
                         </>
                       )}
                       {item ? (
-                        <>
-                          <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
-                          <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                          <td className="px-4 py-3 text-right">{Number(item.quantity_sent || 0).toFixed(3)}</td>
-                          <td className="px-4 py-3 text-right text-green-700">{Number(item.quantity_received || 0).toFixed(3)}</td>
-                          <td className="px-4 py-3 text-right text-yellow-700">
-                            {(Number(item.quantity_sent || 0) - Number(item.quantity_received || 0) - Number(item.quantity_transferred_out || 0)).toFixed(3)}
-                          </td>
-                        </>
+                        (() => {
+                          const sent = Number(item.quantity_sent || 0)
+                          const received = Number(item.quantity_received || 0)
+                          const pending = sent - received - Number(item.quantity_transferred_out || 0)
+                          const rate = rateFor(item)
+                          return (
+                            <>
+                              <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
+                              <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
+                              <td className="px-4 py-3 text-right">{sent.toFixed(3)}</td>
+                              <td className="px-4 py-3 text-right text-green-700">{received.toFixed(3)}</td>
+                              <td className="px-4 py-3 text-right text-yellow-700">{pending.toFixed(3)}</td>
+                              <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate ? fmtC(rate) : '—'}</td>
+                              <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate ? fmtC(sent * rate) : '—'}</td>
+                              <td className="px-4 py-3 text-right text-amber-700 bg-amber-50/40">{rate ? fmtC(pending * rate) : '—'}</td>
+                            </>
+                          )
+                        })()
                       ) : (
-                        <td className="px-4 py-3 text-gray-400" colSpan={5}>No items</td>
+                        <td className="px-4 py-3 text-gray-400" colSpan={8}>No items</td>
                       )}
                       {idx === 0 && (
                         <td className="px-4 py-3" rowSpan={rows.length}>
@@ -219,6 +262,9 @@ export default async function JobWorkReportPage({
                   <td className="px-4 py-3 text-right">{totalSent.toFixed(3)}</td>
                   <td className="px-4 py-3 text-right text-green-700">{totalReceived.toFixed(3)}</td>
                   <td className="px-4 py-3 text-right text-yellow-700">{totalPending.toFixed(3)}</td>
+                  <td className="px-4 py-3 text-right text-gray-400">—</td>
+                  <td className="px-4 py-3 text-right text-teal-800">{fmtC(totalSentValue)}</td>
+                  <td className="px-4 py-3 text-right text-amber-800">{fmtC(totalPendingValue)}</td>
                   <td />
                 </tr>
               </tfoot>

@@ -1655,7 +1655,7 @@ export const JOB_WORK_REPORT_QUERY = `
       warehouses { name }
       suppliers { name }
       job_work_items {
-        quantity_sent quantity_received quantity_transferred_out size_label
+        quantity_sent quantity_received quantity_transferred_out size_label purchase_line_id
         material_types { description unit }
         material_sizes { size_label }
       }
