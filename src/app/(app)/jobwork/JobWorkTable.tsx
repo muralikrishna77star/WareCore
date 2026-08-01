@@ -25,6 +25,7 @@ type Column = {
 
 const columns: Column[] = [
   { key: 'dispatch_date', label: 'Dispatch Date', filterValue: (o) => formatDate(o.dispatch_date) },
+  { key: 'reference', label: 'Reference', filterValue: (o) => o.reference_number || '' },
   { key: 'company', label: 'Company', filterValue: (o) => o.companies?.code || '' },
   { key: 'vendor', label: 'Vendor', filterValue: (o) => o.suppliers?.name || '' },
   {
@@ -134,6 +135,7 @@ export default function JobWorkTable({
     const items = o.job_work_items ?? []
     return {
       'Transaction Date': formatDate(o.dispatch_date),
+      'Reference': o.reference_number || '',
       'Company': o.companies?.code || '',
       'Vendor': o.suppliers?.name || '',
       'Items': items.length,
@@ -183,6 +185,15 @@ export default function JobWorkTable({
                 className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
               />
             </div>
+          </th>
+          <th className="px-6 py-2 align-top">
+            <input
+              type="text"
+              value={filters.reference ?? ''}
+              onChange={(e) => setFilters((f) => ({ ...f, reference: e.target.value }))}
+              placeholder="Search..."
+              className="w-full rounded border border-gray-200 px-2 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
+            />
           </th>
           <th className="px-6 py-2 align-top">
             <input
@@ -283,6 +294,13 @@ export default function JobWorkTable({
           return (
             <tr key={o.id} className="hover:bg-gray-50">
               <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
+              <td className="px-6 py-3 font-mono text-xs whitespace-nowrap">
+                {o.reference_number ? (
+                  <ReferenceLink type="job_work" id={o.id} className="text-blue-600 hover:underline font-mono text-xs">
+                    {o.reference_number}
+                  </ReferenceLink>
+                ) : '—'}
+              </td>
               <td className="px-6 py-3">
                 <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
                   {o.companies?.code}
