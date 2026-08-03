@@ -1,5 +1,7 @@
 export const dynamic = 'force-dynamic'
 
+import { cookies } from 'next/headers'
+import { verifySession } from '@/lib/auth/session'
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   STOCK_STATEMENT_QUERY,
@@ -16,7 +18,8 @@ import {
 } from '@/lib/hasura/queries'
 import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { StockStatementExportButton } from './StockStatementExportButton'
+import type { StockStatementExportItem } from '@/lib/exportStockStatementExcel'
 import StockStatementTable, { type StatementRow } from './StockStatementTable'
 import Link from 'next/link'
 
@@ -96,6 +99,10 @@ export default async function StockStatementPage({
 }) {
   const params = await searchParams
 
+  const cookieStore = await cookies()
+  const sessionToken = cookieStore.get('wc_session')?.value
+  const session = sessionToken ? verifySession(sessionToken) : null
+
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
   const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
@@ -126,8 +133,10 @@ export default async function StockStatementPage({
   // summary cells can link to that item's detailed Item Ledger entries.
   const itemRows = (itemResult.item_master ?? []) as { id: string; item_code: string; item_name: string; material_type_id: string; material_size_id: string | null; size_label?: string | null; material_sizes?: { size_label: string } | null }[]
   const itemIdByMaterial = new Map<string, string>()
+  const itemCodeByMaterial = new Map<string, string>()
   for (const it of itemRows) {
     itemIdByMaterial.set(`${it.material_type_id}|${it.material_size_id ?? ''}`, it.id)
+    itemCodeByMaterial.set(`${it.material_type_id}|${it.material_size_id ?? ''}`, it.item_code)
   }
   const itemOptions: ItemOption[] = itemRows.map((i) => {
     const size = i.material_sizes?.size_label || i.size_label
@@ -398,64 +407,30 @@ export default async function StockStatementPage({
     return `/reports/item-ledger?${qs.toString()}`
   }
 
-  const emptyStatColumns = {
-    'Opening (Warehouse)': '', 'Opening (Vendor)': '', 'Purchase In': '', 'Other In': '',
-    'Dispatch': '', 'Job Work Out': '', 'Transfer Out': '', 'Other Out': '',
-    'Transfer In': '', 'JW Return': '',
-    'Stock at Warehouse (To Date)': '', 'Stock at Vendor (To Date)': '', 'Total Available Stock': '',
-    'Avg Rate': '', 'Value (₹)': '',
-  }
-
-  // One summary row per item, immediately followed by its Warehouse and
-  // Vendor breakdown rows — same grouping as the expandable UI, flattened
-  // for Excel since a worksheet can't nest/collapse rows.
-  const exportRows = sorted.flatMap((item) => {
-    const warehouseRows = breakdownArray(item.warehouseBreakdown)
-    const vendorRows = breakdownArray(item.vendorBreakdown)
-    return [
-      {
-        'As Of': toDate,
-        'Item Name': item.item_name,
-        'Unit': item.unit,
-        'Opening (Warehouse)': item.openingWarehouse,
-        'Opening (Vendor)': item.openingVendor,
-        'Purchase In': item.purchase_in,
-        'Other In': item.other_in,
-        'Dispatch': item.dispatch_out,
-        'Job Work Out': item.jw_out,
-        'Transfer Out': item.transfer_out,
-        'Other Out': item.other_out,
-        'Transfer In': item.transfer_in,
-        'JW Return': item.jw_return,
-        'Stock at Warehouse (To Date)': item.closingWarehouse,
-        'Stock at Vendor (To Date)': item.closingVendor,
-        'Total Available Stock': item.closingWarehouse + item.closingVendor,
-        'Avg Rate': item.rate || '',
-        'Value (₹)': item.rate ? itemValue(item) : '',
-        'Breakdown Type': '',
-        'Breakdown Name': '',
-        'Breakdown Qty': '',
-      },
-      ...warehouseRows.map((w) => ({
-        'As Of': toDate,
-        'Item Name': item.item_name,
-        'Unit': item.unit,
-        ...emptyStatColumns,
-        'Breakdown Type': 'Warehouse',
-        'Breakdown Name': w.name,
-        'Breakdown Qty': w.qty,
-      })),
-      ...vendorRows.map((v) => ({
-        'As Of': toDate,
-        'Item Name': item.item_name,
-        'Unit': item.unit,
-        ...emptyStatColumns,
-        'Breakdown Type': 'Vendor',
-        'Breakdown Name': v.name,
-        'Breakdown Qty': v.qty,
-      })),
-    ]
-  })
+  // Excel export data — one row per item, exactly mirroring the on-screen
+  // table (same numbers, same source, no separate recalculation). See
+  // StockStatementExportButton / exportStockStatementExcel.
+  const exportItems: StockStatementExportItem[] = sorted.map((item) => ({
+    itemCode: itemCodeByMaterial.get(`${item.material_type_id}|${item.material_size_id ?? ''}`) ?? '—',
+    itemName: item.item_name,
+    size: item.size,
+    unit: item.unit,
+    openingWarehouse: item.openingWarehouse,
+    openingVendor: item.openingVendor,
+    purchaseIn: item.purchase_in,
+    otherIn: item.other_in,
+    transferIn: item.transfer_in,
+    dispatch: item.dispatch_out,
+    jobWorkOut: item.jw_out,
+    transferOut: item.transfer_out,
+    otherOut: item.other_out,
+    jwReturn: item.jw_return,
+    stockAtWarehouse: item.closingWarehouse,
+    stockAtVendor: item.closingVendor,
+    totalAvailable: item.closingWarehouse + item.closingVendor,
+    rate: item.rate,
+    value: itemValue(item),
+  }))
 
   const totals = {
     openingWarehouse: sorted.reduce((s, i) => s + i.openingWarehouse, 0),
@@ -505,6 +480,19 @@ export default async function StockStatementPage({
     vendorBreakdown: breakdownArray(item.vendorBreakdown),
   }))
 
+  const selectedCompanyName = params.company ? companies.find((c) => c.id === params.company)?.name : undefined
+  const selectedWarehouseName = params.warehouse ? warehouses.find((w) => w.id === params.warehouse)?.name : undefined
+  const selectedVendorName = params.vendor ? suppliers.find((s: any) => s.id === params.vendor)?.name : undefined
+  const exportMeta = {
+    companyName: selectedCompanyName ?? 'All Companies',
+    warehouseName: selectedWarehouseName ?? 'All Warehouses',
+    itemLabel: selectedItem?.label ?? 'All Items',
+    vendorLabel: selectedVendorName ?? 'All Vendors',
+    fromDate,
+    toDate,
+    generatedBy: session?.fullName ?? '—',
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -516,9 +504,7 @@ export default async function StockStatementPage({
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {sorted.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`Stock_Statement_${fromDate}_to_${toDate}`} sheetName="Stock Statement" />
-          )}
+          <StockStatementExportButton items={exportItems} totals={totals} meta={exportMeta} />
           <Link href="/reports/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
             Reconcile Stock
           </Link>
