@@ -32,6 +32,7 @@ export const SCREEN_GROUPS: ScreenGroup[] = [
       { code: 'reports_billing',   label: 'Billing Report',     path: '/reports/billing' },
       { code: 'reports_dispatch',  label: 'Dispatch Report',    path: '/reports/dispatch' },
       { code: 'reports_stock',     label: 'Stock Statement',    path: '/reports/stock-statement' },
+      { code: 'reports_daywise_stock', label: 'Daywise Stock Statement', path: '/reports/daywise-stock-statement' },
       { code: 'reports_movements', label: 'Movements Report',   path: '/reports/movements' },
       { code: 'reports_jobwork',   label: 'Job Work Report',    path: '/reports/jobwork' },
       { code: 'reports_transfers', label: 'Transfers Report',   path: '/reports/transfers' },

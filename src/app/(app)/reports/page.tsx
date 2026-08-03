@@ -49,6 +49,16 @@ export default async function ReportsPage() {
           </div>
         </Link>
         <Link
+          href="/reports/daywise-stock-statement"
+          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-blue-300 hover:shadow-sm transition-all group"
+        >
+          <div className="text-3xl">📅</div>
+          <div>
+            <p className="font-semibold text-gray-900 group-hover:text-blue-700">Daywise Stock Statement</p>
+            <p className="text-sm text-gray-500 mt-0.5">Day-by-day summary with every transaction listed underneath</p>
+          </div>
+        </Link>
+        <Link
           href="/reports/billing"
           className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-green-300 hover:shadow-sm transition-all group"
         >
