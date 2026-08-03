@@ -192,6 +192,8 @@ export default async function DaywiseStockStatementPage({
     const openingVendor = vendorRunning
     let purchasesRaw = 0
     let salesRaw = 0
+    let transferIn = 0
+    let transferOutRaw = 0
     let jobWorkOutRaw = 0
     let jobReturns = 0
     let value = 0
@@ -209,6 +211,8 @@ export default async function DaywiseStockStatementPage({
       if (VENDOR_MOVEMENT_TYPES.includes(m.entry_type)) vendorRunning -= rawQty
       if (m.entry_type === 'PURCHASE_IN' || m.entry_type === 'PURCHASE_CANCEL') purchasesRaw += rawQty
       if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL') salesRaw += rawQty
+      if (m.entry_type === 'TRANSFER_IN') transferIn += rawQty
+      if (m.entry_type === 'TRANSFER_OUT') transferOutRaw += rawQty
       if (m.entry_type === 'JOB_WORK_OUT') jobWorkOutRaw += rawQty
       if (m.entry_type === 'JOB_WORK_RETURN_IN' || m.entry_type === 'VENDOR_RETURN_IN') jobReturns += rawQty
       value += txnValue ?? 0
@@ -236,6 +240,8 @@ export default async function DaywiseStockStatementPage({
       openingVendor,
       purchases: purchasesRaw,
       sales: -salesRaw,
+      transferIn,
+      transferOut: -transferOutRaw,
       jobWorkOut: -jobWorkOutRaw,
       jobReturns,
       closingWarehouse: warehouseRunning,
@@ -251,6 +257,8 @@ export default async function DaywiseStockStatementPage({
     openingVendor: openingVendorBalance,
     purchases: groups.reduce((s, g) => s + g.purchases, 0),
     sales: groups.reduce((s, g) => s + g.sales, 0),
+    transferIn: groups.reduce((s, g) => s + g.transferIn, 0),
+    transferOut: groups.reduce((s, g) => s + g.transferOut, 0),
     jobWorkOut: groups.reduce((s, g) => s + g.jobWorkOut, 0),
     jobReturns: groups.reduce((s, g) => s + g.jobReturns, 0),
     closingWarehouse: warehouseRunning,
@@ -266,6 +274,8 @@ export default async function DaywiseStockStatementPage({
       'Opening (Vendor)': fmtQ(day.openingVendor),
       'Purchases': fmtQ(day.purchases),
       'Sales': fmtQ(day.sales),
+      'Transfer In': fmtQ(day.transferIn),
+      'Transfer Out': fmtQ(day.transferOut),
       'Job Work Out': fmtQ(day.jobWorkOut),
       'Job Returns': fmtQ(day.jobReturns),
       'Closing (Warehouse)': fmtQ(day.closingWarehouse),
@@ -276,7 +286,7 @@ export default async function DaywiseStockStatementPage({
     ...day.transactions.map((t) => ({
       'Date': formatDate(day.date),
       'Row': '',
-      'Opening (Warehouse)': '', 'Opening (Vendor)': '', 'Purchases': '', 'Sales': '', 'Job Work Out': '', 'Job Returns': '',
+      'Opening (Warehouse)': '', 'Opening (Vendor)': '', 'Purchases': '', 'Sales': '', 'Transfer In': '', 'Transfer Out': '', 'Job Work Out': '', 'Job Returns': '',
       'Closing (Warehouse)': '', 'Closing (Vendor)': '',
       'Value (₹)': t.value ?? '',
       'Type': t.typeLabel,
@@ -390,6 +400,14 @@ export default async function DaywiseStockStatementPage({
         <div className="rounded-xl border bg-red-50 p-4">
           <p className="text-xs text-gray-500">Sales</p>
           <p className="text-xl font-bold text-red-700">-{fmtQ(totals.sales)} T</p>
+        </div>
+        <div className="rounded-xl border bg-blue-50 p-4">
+          <p className="text-xs text-gray-500">Transfer In</p>
+          <p className="text-xl font-bold text-blue-700">+{fmtQ(totals.transferIn)} T</p>
+        </div>
+        <div className="rounded-xl border bg-orange-50 p-4">
+          <p className="text-xs text-gray-500">Transfer Out</p>
+          <p className="text-xl font-bold text-orange-700">-{fmtQ(totals.transferOut)} T</p>
         </div>
         <div className="rounded-xl border bg-gray-50 p-4">
           <p className="text-xs text-gray-500">Closing Stock</p>

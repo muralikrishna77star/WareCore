@@ -25,6 +25,8 @@ export type DayGroup = {
   openingVendor: number
   purchases: number
   sales: number
+  transferIn: number
+  transferOut: number
   jobWorkOut: number
   jobReturns: number
   closingWarehouse: number
@@ -91,6 +93,8 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
                   <Stat label="Opening (Vendor)" value={fmtQ(day.openingVendor)} className="text-purple-700" />
                   <Stat label="Purchases" value={`+${fmtQ(day.purchases)}`} className="text-green-700" />
                   <Stat label="Sales" value={`-${fmtQ(day.sales)}`} className="text-red-600" />
+                  <Stat label="Transfer In" value={`+${fmtQ(day.transferIn)}`} className="text-blue-700" />
+                  <Stat label="Transfer Out" value={`-${fmtQ(day.transferOut)}`} className="text-orange-700" />
                   <Stat label="Job Work Out" value={`-${fmtQ(day.jobWorkOut)}`} className="text-purple-700" />
                   <Stat label="Job Returns" value={`+${fmtQ(day.jobReturns)}`} className="text-teal-700" />
                   <Stat label="Closing (Wh)" value={fmtQ(day.closingWarehouse)} className="text-gray-900" />
