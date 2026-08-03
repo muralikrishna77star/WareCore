@@ -20,6 +20,7 @@ import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './DaywiseStockStatementTable'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
 
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -45,11 +46,6 @@ const entryTypeConfig: Record<string, { label: string; color: string; isIn: bool
   ADJUSTMENT_IN:         { label: 'Adjustment In',    color: 'bg-gray-100 text-gray-800',   isIn: true },
   ADJUSTMENT_OUT:        { label: 'Adjustment Out',   color: 'bg-gray-100 text-gray-800',   isIn: false },
 }
-
-// Entry types that move stock to/from a vendor under job work — used to
-// derive the running "at Vendor" balance alongside the warehouse balance.
-// Same list as the Item Stock Ledger report's VENDOR_MOVEMENT_TYPES.
-const VENDOR_MOVEMENT_TYPES = ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL', 'JOB_WORK_TRANSFER_OUT', 'JOB_WORK_TRANSFER_IN']
 
 type ItemOption = ComboOption & {
   material_type_id: string

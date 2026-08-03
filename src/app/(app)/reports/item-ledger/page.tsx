@@ -19,6 +19,7 @@ import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
 // /api/stock/ledger-entries.
@@ -33,13 +34,6 @@ const REFERENCE_TABLE_BY_TYPE: Record<string, string> = {
   transfer: 'transfers',
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-// Entry types that move stock to/from a vendor under job work — used to
-// derive a running "Balance at Vendor" column alongside the main balance.
-// JOB_WORK_OUTPUT_IN is deliberately excluded: it posts against the output
-// item's own material_type_id (finished good), never the raw material sent
-// out, so it never contributes to this item's vendor-held quantity.
-const VENDOR_MOVEMENT_TYPES = ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL', 'JOB_WORK_TRANSFER_OUT', 'JOB_WORK_TRANSFER_IN']
 
 // A reference missing from the live table isn't necessarily orphaned — a
 // cancelled-and-purged order moves to its archive table (original_*_id) and

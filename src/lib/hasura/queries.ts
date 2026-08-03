@@ -1543,24 +1543,26 @@ export const REPORTS_QUERY = `
 
 // ─── Stock Statement ─────────────────────────────────────────────────────────
 
+// Opening and period share the same field set — both are needed to compute
+// Warehouse/Vendor stock "as on To Date" (opening balance + period
+// movements), not a separate all-time "live" query. See stock-statement's
+// closingWarehouse/closingVendor calc: a historical report must be
+// reproducible for any past To Date, so nothing here can depend on "now".
 export const STOCK_STATEMENT_QUERY = `
   query GetStockStatement(
     $opening_where: stock_ledger_bool_exp = {},
-    $period_where: stock_ledger_bool_exp = {},
-    $current_where: stock_ledger_bool_exp = {}
+    $period_where: stock_ledger_bool_exp = {}
   ) {
     opening: stock_ledger(where: $opening_where, limit: 5000) {
-      quantity material_type_id material_size_id size_label
+      entry_type quantity material_type_id material_size_id size_label warehouse_id
+      reference_type reference_id
       material_types { description unit }
       material_sizes { size_label }
+      warehouses { name }
     }
     period: stock_ledger(where: $period_where, limit: 5000) {
-      entry_type quantity material_type_id material_size_id size_label
-      material_types { description unit }
-      material_sizes { size_label }
-    }
-    current: stock_ledger(where: $current_where, limit: 5000) {
-      quantity material_type_id material_size_id size_label warehouse_id
+      entry_type quantity material_type_id material_size_id size_label warehouse_id
+      reference_type reference_id
       material_types { description unit }
       material_sizes { size_label }
       warehouses { name }

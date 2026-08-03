@@ -11,16 +11,17 @@ import {
   ACTIVE_SUPPLIERS_QUERY,
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
-  ITEM_STOCK_AT_VENDORS_QUERY,
+  JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
   AVERAGE_PURCHASE_RATES_QUERY,
 } from '@/lib/hasura/queries'
+import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import StockStatementTable, { type StatementRow } from './StockStatementTable'
 import Link from 'next/link'
 
 type LedgerRow = {
-  entry_type?: string
+  entry_type: string
   quantity: number | string
   material_type_id: string
   material_size_id?: string | null
@@ -29,6 +30,8 @@ type LedgerRow = {
   material_sizes?: { size_label: string } | null
   warehouse_id?: string
   warehouses?: { name: string } | null
+  reference_type?: string | null
+  reference_id?: string | null
 }
 
 type StockItem = {
@@ -38,16 +41,18 @@ type StockItem = {
   item_name: string
   material_type_id: string
   material_size_id: string | null
-  opening: number
+  openingWarehouse: number
+  openingVendor: number
   purchase_in: number
   transfer_in: number
   transfer_out: number
   dispatch_out: number
   jw_out: number
   jw_return: number
-  adjustment: number
-  current_stock: number
-  at_vendor: number
+  other_in: number
+  other_out: number
+  closingWarehouse: number
+  closingVendor: number
   rate: number
   warehouseBreakdown: Map<string, number>
   vendorBreakdown: Map<string, number>
@@ -56,6 +61,23 @@ type StockItem = {
 type ItemOption = ComboOption & {
   material_type_id: string
   material_size_id: string | null
+}
+
+// Named warehouse-column buckets, mirrored from the Daywise Stock
+// Statement's entry_type classification. Anything not listed here still
+// affects the true closing balance (accumulated unconditionally below) —
+// it just falls into the catch-all Other In/Out columns instead of a
+// named one, so no transaction type is ever silently dropped.
+const WAREHOUSE_BUCKET: Record<string, 'purchase_in' | 'transfer_in' | 'transfer_out' | 'dispatch_out' | 'jw_out' | 'jw_return'> = {
+  PURCHASE_IN: 'purchase_in',
+  PURCHASE_CANCEL: 'purchase_in',
+  TRANSFER_IN: 'transfer_in',
+  TRANSFER_OUT: 'transfer_out',
+  SALE_OUT: 'dispatch_out',
+  SALE_CANCEL: 'dispatch_out',
+  JOB_WORK_OUT: 'jw_out',
+  JOB_WORK_RETURN_IN: 'jw_return',
+  VENDOR_RETURN_IN: 'jw_return',
 }
 
 export default async function StockStatementPage({
@@ -95,7 +117,6 @@ export default async function StockStatementPage({
     : allWarehouses
   const suppliers: any[] = supResult.suppliers ?? []
   const materialTypes: any[] = matTypeResult.material_types ?? []
-  const materialTypeById = new Map(materialTypes.map((mt: any) => [mt.id, mt]))
   const allSizes: any[] = matSizeResult.material_sizes ?? []
   const sizes = params.material_type
     ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
@@ -154,31 +175,14 @@ export default async function StockStatementPage({
     }
   }
 
+  // Opening = balance immediately before From Date. Period = only
+  // transactions dated within [From Date, To Date] inclusive — both are
+  // needed to compute Warehouse/Vendor stock "as on To Date"; there is no
+  // separate "live" query, so the report is fully reproducible for any past
+  // date range regardless of what has happened since.
   const openingWhere = { _and: [...baseConditions, { entry_date: { _lt: fromDate } }] }
   const periodWhere = {
     _and: [...baseConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
-  }
-  // current_where: all entries up to today (no date ceiling) → gives live stock
-  const currentWhere = baseConditions.length > 0 ? { _and: baseConditions } : {}
-
-  // Stock still sitting at a vendor for job work isn't in stock_ledger at all
-  // (it only records the JOB_WORK_OUT/RETURN legs), so it has to be pulled
-  // separately from v_stock_at_vendors and merged in below.
-  const vendorWhere: Record<string, unknown> = {}
-  if (params.company) vendorWhere.company_id = { _eq: params.company }
-  if (params.vendor) vendorWhere.vendor_id = { _eq: params.vendor }
-  if (selectedItem) {
-    vendorWhere.material_type_id = { _eq: selectedItem.material_type_id }
-    if (selectedItem.material_size_id) {
-      const label = allSizes.find((s: any) => s.id === selectedItem.material_size_id)?.size_label
-      if (label) vendorWhere.size_label = { _eq: label }
-    }
-  } else {
-    if (params.material_type) vendorWhere.material_type_id = { _eq: params.material_type }
-    if (params.size) {
-      const label = allSizes.find((s: any) => s.id === params.size)?.size_label
-      if (label) vendorWhere.size_label = { _eq: label }
-    }
   }
 
   // Rate for valuation: quantity-weighted average of every billed rate for
@@ -203,19 +207,34 @@ export default async function StockStatementPage({
   }
   const rateWhere = { _and: rateConditions }
 
-  const [result, vendorResult, rateResult] = noResults
-    ? [{ opening: [], period: [], current: [] }, { v_stock_at_vendors: [] }, { purchase_bill_items: [] }]
+  const [result, rateResult] = noResults
+    ? [{ opening: [], period: [] }, { purchase_bill_items: [] }]
     : await Promise.all([
-        hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere, current_where: currentWhere }),
-        hasuraQuery(ITEM_STOCK_AT_VENDORS_QUERY, { where: vendorWhere }),
+        hasuraQuery(STOCK_STATEMENT_QUERY, { opening_where: openingWhere, period_where: periodWhere }),
         hasuraQuery(AVERAGE_PURCHASE_RATES_QUERY, { where: rateWhere }),
       ])
 
   const openingRows: LedgerRow[] = result.opening ?? []
   const periodRows: LedgerRow[] = result.period ?? []
-  const currentRows: LedgerRow[] = result.current ?? []
-  const vendorRows: { vendor_name: string; material_type_id: string; size_label: string | null; pending_quantity: number | string }[] =
-    vendorResult.v_stock_at_vendors ?? []
+
+  // Vendor names for the "Stock by Vendor" breakdown — job-work movements
+  // reference a job_work_orders.id, which carries the vendor. Batched once
+  // per distinct order id (same technique as the Item Stock Ledger report),
+  // covering both opening and period rows since either can contribute to
+  // the vendor balance as on To Date.
+  const jobWorkOrderIds = Array.from(
+    new Set(
+      [...openingRows, ...periodRows]
+        .filter((r) => VENDOR_MOVEMENT_TYPES.includes(r.entry_type) && r.reference_type === 'job_work' && r.reference_id)
+        .map((r) => r.reference_id as string)
+    )
+  )
+  let vendorNameByJobWorkOrderId = new Map<string, string>()
+  if (jobWorkOrderIds.length > 0) {
+    const vendorLookupResult = await hasuraQuery(JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY, { ids: jobWorkOrderIds })
+    const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
+    vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? 'Unknown Vendor']))
+  }
 
   // Weighted average = total billed amount / total quantity across every
   // matching purchase line, per material_type_id|material_size_id key.
@@ -261,16 +280,18 @@ export default async function StockStatementPage({
         item_name: size ? `${material} — ${size}` : material,
         material_type_id: row.material_type_id,
         material_size_id: row.material_size_id ?? null,
-        opening: 0,
+        openingWarehouse: 0,
+        openingVendor: 0,
         purchase_in: 0,
         transfer_in: 0,
         transfer_out: 0,
         dispatch_out: 0,
         jw_out: 0,
         jw_return: 0,
-        adjustment: 0,
-        current_stock: 0,
-        at_vendor: 0,
+        other_in: 0,
+        other_out: 0,
+        closingWarehouse: 0,
+        closingVendor: 0,
         rate: 0,
         warehouseBreakdown: new Map(),
         vendorBreakdown: new Map(),
@@ -279,71 +300,66 @@ export default async function StockStatementPage({
     return items[key]
   }
 
+  // Vendor name attribution for a job-work-referenced row, keyed the same
+  // way item-ledger resolves it — only meaningful for VENDOR_MOVEMENT_TYPES.
+  const vendorNameFor = (row: LedgerRow): string =>
+    row.reference_type === 'job_work' && row.reference_id
+      ? vendorNameByJobWorkOrderId.get(row.reference_id) ?? 'Unknown Vendor'
+      : 'Unknown Vendor'
+
+  // Opening balance: unconditional sum of everything before From Date (true
+  // running balance regardless of type), plus the same for the Vendor side
+  // restricted to job-work movement types — same convention as the Item
+  // Stock Ledger and Daywise Stock Statement reports.
   for (const row of openingRows) {
-    ensureItem(row).opening += Number(row.quantity)
+    const item = ensureItem(row)
+    const qty = Number(row.quantity)
+    item.openingWarehouse += qty
+    const whName = row.warehouses?.name ?? 'Unknown Warehouse'
+    item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
+    if (VENDOR_MOVEMENT_TYPES.includes(row.entry_type)) {
+      item.openingVendor -= qty
+      const vendorName = vendorNameFor(row)
+      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) - qty)
+    }
   }
 
+  // Period movements: bucketed into named columns for display, but the
+  // closing balance itself is accumulated unconditionally below so no
+  // transaction type — however it's classified for display — can ever be
+  // silently dropped from the total.
   for (const row of periodRows) {
     const item = ensureItem(row)
     const qty = Number(row.quantity)
-    switch (row.entry_type) {
-      case 'PURCHASE_IN':        item.purchase_in  += qty; break
-      case 'PURCHASE_CANCEL':    item.purchase_in  += qty; break  // qty is negative — reduces purchase_in
-      case 'TRANSFER_IN':        item.transfer_in  += qty; break
-      case 'TRANSFER_OUT':       item.transfer_out += Math.abs(qty); break
-      case 'SALE_OUT':           item.dispatch_out += Math.abs(qty); break
-      case 'SALE_CANCEL':        item.dispatch_out -= qty; break  // qty is positive (reversal) — nets out the original SALE_OUT
-      case 'JOB_WORK_OUT':       item.jw_out       += Math.abs(qty); break
-      case 'JOB_WORK_RETURN_IN':
-      case 'VENDOR_RETURN_IN':   item.jw_return    += qty; break
-      case 'ADJUSTMENT_IN':      item.adjustment   += qty; break
-      case 'ADJUSTMENT_OUT':     item.adjustment   -= Math.abs(qty); break
-    }
-  }
 
-  // Current stock = net of ALL stock_ledger entries (no date filter)
-  for (const row of currentRows) {
-    // ensureItem creates the entry if it doesn't exist yet (items with no period activity)
-    const item = ensureItem(row)
-    // We accumulate sum then assign at end — reset first pass handled by current_stock: 0 init
-    item.current_stock += Number(row.quantity)
+    const bucket = WAREHOUSE_BUCKET[row.entry_type]
+    if (bucket === 'purchase_in') item.purchase_in += qty
+    else if (bucket === 'transfer_in') item.transfer_in += qty
+    else if (bucket === 'transfer_out') item.transfer_out += Math.abs(qty)
+    else if (bucket === 'dispatch_out') {
+      if (row.entry_type === 'SALE_OUT') item.dispatch_out += Math.abs(qty)
+      else item.dispatch_out -= qty // SALE_CANCEL: qty is positive — nets out the original SALE_OUT
+    } else if (bucket === 'jw_out') item.jw_out += Math.abs(qty)
+    else if (bucket === 'jw_return') item.jw_return += qty
+    else if (row.entry_type === 'ADJUSTMENT_IN' || qty > 0) item.other_in += qty
+    else item.other_out += Math.abs(qty)
+
+    item.closingWarehouse += qty
     const whName = row.warehouses?.name ?? 'Unknown Warehouse'
-    item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + Number(row.quantity))
+    item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
+
+    if (VENDOR_MOVEMENT_TYPES.includes(row.entry_type)) {
+      item.closingVendor -= qty
+      const vendorName = vendorNameFor(row)
+      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) - qty)
+    }
   }
 
-  // Stock at vendor (open job work) doesn't touch stock_ledger, so it's merged
-  // in by material + size rather than through ensureItem/getKey.
-  for (const row of vendorRows) {
-    const mt = materialTypeById.get(row.material_type_id) as { description?: string; unit?: string } | undefined
-    const material = mt?.description ?? '?'
-    const size = row.size_label ?? ''
-    const key = `${material}||${size || '—'}`
-    if (!items[key]) {
-      items[key] = {
-        material,
-        unit: mt?.unit ?? 'tons',
-        size,
-        item_name: size ? `${material} — ${size}` : material,
-        material_type_id: row.material_type_id,
-        material_size_id: null,
-        opening: 0,
-        purchase_in: 0,
-        transfer_in: 0,
-        transfer_out: 0,
-        dispatch_out: 0,
-        jw_out: 0,
-        jw_return: 0,
-        adjustment: 0,
-        current_stock: 0,
-        at_vendor: 0,
-        rate: 0,
-        warehouseBreakdown: new Map(),
-        vendorBreakdown: new Map(),
-      }
-    }
-    items[key].at_vendor += Number(row.pending_quantity)
-    const vendorName = row.vendor_name ?? 'Unknown Vendor'
-    items[key].vendorBreakdown.set(vendorName, (items[key].vendorBreakdown.get(vendorName) ?? 0) + Number(row.pending_quantity))
+  // closingWarehouse/closingVendor were accumulated as deltas above — fold
+  // in the opening balances now that every row has been processed.
+  for (const item of Object.values(items)) {
+    item.closingWarehouse += item.openingWarehouse
+    item.closingVendor += item.openingVendor
   }
 
   const sorted = Object.values(items).sort(
@@ -356,21 +372,11 @@ export default async function StockStatementPage({
     item.rate = rateMap.get(`${item.material_type_id}|${item.material_size_id ?? ''}`) ?? 0
   }
 
-  const closing = (item: StockItem) =>
-    item.opening +
-    item.purchase_in +
-    item.transfer_in +
-    item.jw_return +
-    item.adjustment -
-    item.transfer_out -
-    item.dispatch_out -
-    item.jw_out
-
-  // Valuation = Closing Stock × weighted average purchase rate.
-  const itemValue = (item: StockItem) => closing(item) * item.rate
+  // Valuation = Stock at Warehouse × weighted average purchase rate.
+  const itemValue = (item: StockItem) => item.closingWarehouse * item.rate
   const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
-  // Live Stock split by warehouse and At Vendor split by vendor — dropped
+  // Stock split by warehouse and by vendor, both "as on To Date" — dropped
   // to a sorted array (zero/near-zero entries excluded) for both the
   // expandable UI row and the Excel export beneath it.
   const breakdownArray = (map: Map<string, number>) =>
@@ -393,8 +399,10 @@ export default async function StockStatementPage({
   }
 
   const emptyStatColumns = {
-    'Opening': '', 'Purchase In': '', 'Job Work Out': '', 'Transfer In': '', 'JW Return': '',
-    'Dispatch': '', 'Transfer Out': '', 'Closing': '', 'At Vendor': '', 'Live Stock': '',
+    'Opening (Warehouse)': '', 'Opening (Vendor)': '', 'Purchase In': '', 'Other In': '',
+    'Dispatch': '', 'Job Work Out': '', 'Transfer Out': '', 'Other Out': '',
+    'Transfer In': '', 'JW Return': '',
+    'Stock at Warehouse (To Date)': '', 'Stock at Vendor (To Date)': '', 'Total Available Stock': '',
     'Avg Rate': '', 'Value (₹)': '',
   }
 
@@ -409,16 +417,19 @@ export default async function StockStatementPage({
         'As Of': toDate,
         'Item Name': item.item_name,
         'Unit': item.unit,
-        'Opening': item.opening,
+        'Opening (Warehouse)': item.openingWarehouse,
+        'Opening (Vendor)': item.openingVendor,
         'Purchase In': item.purchase_in,
+        'Other In': item.other_in,
+        'Dispatch': item.dispatch_out,
         'Job Work Out': item.jw_out,
+        'Transfer Out': item.transfer_out,
+        'Other Out': item.other_out,
         'Transfer In': item.transfer_in,
         'JW Return': item.jw_return,
-        'Dispatch': item.dispatch_out,
-        'Transfer Out': item.transfer_out,
-        'Closing': closing(item),
-        'At Vendor': item.at_vendor,
-        'Live Stock': item.current_stock,
+        'Stock at Warehouse (To Date)': item.closingWarehouse,
+        'Stock at Vendor (To Date)': item.closingVendor,
+        'Total Available Stock': item.closingWarehouse + item.closingVendor,
         'Avg Rate': item.rate || '',
         'Value (₹)': item.rate ? itemValue(item) : '',
         'Breakdown Type': '',
@@ -447,26 +458,29 @@ export default async function StockStatementPage({
   })
 
   const totals = {
-    opening:       sorted.reduce((s, i) => s + i.opening, 0),
-    purchase_in:   sorted.reduce((s, i) => s + i.purchase_in, 0),
-    transfer_in:   sorted.reduce((s, i) => s + i.transfer_in, 0),
-    jw_return:     sorted.reduce((s, i) => s + i.jw_return, 0),
-    transfer_out:  sorted.reduce((s, i) => s + i.transfer_out, 0),
-    dispatch_out:  sorted.reduce((s, i) => s + i.dispatch_out, 0),
-    jw_out:        sorted.reduce((s, i) => s + i.jw_out, 0),
-    closing:       sorted.reduce((s, i) => s + closing(i), 0),
-    at_vendor:     sorted.reduce((s, i) => s + i.at_vendor, 0),
-    current_stock: sorted.reduce((s, i) => s + i.current_stock, 0),
-    value:         sorted.reduce((s, i) => s + itemValue(i), 0),
+    openingWarehouse: sorted.reduce((s, i) => s + i.openingWarehouse, 0),
+    openingVendor:    sorted.reduce((s, i) => s + i.openingVendor, 0),
+    purchase_in:      sorted.reduce((s, i) => s + i.purchase_in, 0),
+    transfer_in:      sorted.reduce((s, i) => s + i.transfer_in, 0),
+    jw_return:        sorted.reduce((s, i) => s + i.jw_return, 0),
+    other_in:         sorted.reduce((s, i) => s + i.other_in, 0),
+    transfer_out:     sorted.reduce((s, i) => s + i.transfer_out, 0),
+    dispatch_out:     sorted.reduce((s, i) => s + i.dispatch_out, 0),
+    jw_out:           sorted.reduce((s, i) => s + i.jw_out, 0),
+    other_out:        sorted.reduce((s, i) => s + i.other_out, 0),
+    warehouse:        sorted.reduce((s, i) => s + i.closingWarehouse, 0),
+    vendor:           sorted.reduce((s, i) => s + i.closingVendor, 0),
+    value:            sorted.reduce((s, i) => s + itemValue(i), 0),
   }
+  const totalCombined = totals.warehouse + totals.vendor
 
-  const liveDate = new Date().toISOString().split('T')[0]
   const tableRows: StatementRow[] = sorted.map((item) => ({
     key: `${item.material_type_id}|${item.material_size_id ?? ''}`,
     itemName: item.item_name,
     unit: item.unit,
-    opening: item.opening,
-    openingHref: ledgerLink(item, { from: '2000-01-01', to: fromDate }),
+    openingWarehouse: item.openingWarehouse,
+    openingWarehouseHref: ledgerLink(item, { from: '2000-01-01', to: fromDate }),
+    openingVendor: item.openingVendor,
     purchaseIn: item.purchase_in,
     purchaseInHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['PURCHASE_IN'] }),
     jwOut: item.jw_out,
@@ -479,11 +493,12 @@ export default async function StockStatementPage({
     dispatchHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['SALE_OUT'] }),
     transferOut: item.transfer_out,
     transferOutHref: ledgerLink(item, { from: fromDate, to: toDate, types: ['TRANSFER_OUT'] }),
-    closing: closing(item),
-    closingHref: ledgerLink(item, { from: fromDate, to: toDate }),
-    atVendor: item.at_vendor,
-    liveStock: item.current_stock,
-    liveHref: ledgerLink(item, { from: '2000-01-01', to: liveDate }),
+    otherIn: item.other_in,
+    otherOut: item.other_out,
+    stockAtWarehouse: item.closingWarehouse,
+    stockAtWarehouseHref: ledgerLink(item, { from: '2000-01-01', to: toDate }),
+    stockAtVendor: item.closingVendor,
+    totalAvailable: item.closingWarehouse + item.closingVendor,
     rate: item.rate,
     value: itemValue(item),
     warehouseBreakdown: breakdownArray(item.warehouseBreakdown),
@@ -497,7 +512,7 @@ export default async function StockStatementPage({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Stock Statement</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Opening stock, all movements, and closing stock by item
+            Opening stock, all movements, and closing stock by item — as on the selected To Date
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -631,24 +646,29 @@ export default async function StockStatementPage({
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-400 inline-block" /> Opening Stock</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-400 inline-block" /> Stock In</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> Stock Out</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-700 inline-block" /> Closing Stock</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> At Vendor (open job work)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-purple-500 inline-block" /> Live Stock (all-time)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-teal-500 inline-block" /> Avg Rate &amp; Value (weighted average purchase rate × Closing)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-700 inline-block" /> Stock at Warehouse (as on To Date)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> Stock at Vendor (as on To Date, open job work)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-indigo-500 inline-block" /> Total Available Stock (Warehouse + Vendor)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-teal-500 inline-block" /> Avg Rate &amp; Value (weighted average purchase rate × Stock at Warehouse)</span>
       </div>
 
       {/* Table */}
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-6 py-4 border-b flex items-center justify-between">
+        <div className="px-6 py-4 border-b flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-semibold text-gray-900">
             {fromDate} &rarr; {toDate}
           </h2>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             {sorted.length > 0 && (
               <span className="text-xs text-gray-400">Click a row for warehouse &amp; vendor breakdown</span>
             )}
             {sorted.length > 0 && (
-              <span className="text-sm font-semibold text-teal-800">Total Value: {fmtC(totals.value)}</span>
+              <>
+                <span className="text-sm font-semibold text-gray-800">Total Warehouse: {totals.warehouse.toFixed(3)}</span>
+                <span className="text-sm font-semibold text-amber-700">Total Vendor: {totals.vendor.toFixed(3)}</span>
+                <span className="text-sm font-semibold text-indigo-700">Combined: {totalCombined.toFixed(3)}</span>
+                <span className="text-sm font-semibold text-teal-800">Total Value: {fmtC(totals.value)}</span>
+              </>
             )}
             <span className="text-sm text-gray-500">{sorted.length} item{sorted.length !== 1 ? 's' : ''}</span>
           </div>
