@@ -21,15 +21,29 @@ export type Transaction = {
 export type DayGroup = {
   date: string
   count: number
-  totalIn: number
-  totalOut: number
-  net: number
+  openingWarehouse: number
+  openingVendor: number
+  purchases: number
+  sales: number
+  jobWorkOut: number
+  jobReturns: number
+  closingWarehouse: number
+  closingVendor: number
   value: number
   transactions: Transaction[]
 }
 
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+
+function Stat({ label, value, className }: { label: string; value: string; className: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="text-gray-400">{label}:</span>
+      <span className={`font-semibold ${className}`}>{value}</span>
+    </span>
+  )
+}
 
 export default function DaywiseStockStatementTable({ groups }: { groups: DayGroup[] }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -62,20 +76,25 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
               <button
                 type="button"
                 onClick={() => toggle(day.date)}
-                className="w-full flex items-center justify-between gap-4 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                className="w-full flex flex-col gap-1.5 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
               >
-                <div className="flex items-center gap-3">
-                  <span className={`inline-block transition-transform text-gray-400 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
-                  <span className="font-semibold text-gray-900">{formatDate(day.date)}</span>
-                  <span className="text-xs text-gray-500">{day.count} transaction{day.count !== 1 ? 's' : ''}</span>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-block transition-transform text-gray-400 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                    <span className="font-semibold text-gray-900">{formatDate(day.date)}</span>
+                    <span className="text-xs text-gray-500">{day.count} transaction{day.count !== 1 ? 's' : ''}</span>
+                  </div>
+                  <span className="font-semibold text-teal-800 text-sm">{fmtC(day.value)}</span>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-green-700 font-medium">In: +{fmtQ(day.totalIn)}</span>
-                  <span className="text-red-600 font-medium">Out: -{fmtQ(day.totalOut)}</span>
-                  <span className={`font-semibold ${day.net < 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                    Net: {day.net >= 0 ? '+' : ''}{fmtQ(day.net)}
-                  </span>
-                  <span className="font-semibold text-teal-800">{fmtC(day.value)}</span>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs pl-6">
+                  <Stat label="Opening (Wh)" value={fmtQ(day.openingWarehouse)} className="text-blue-800" />
+                  <Stat label="Opening (Vendor)" value={fmtQ(day.openingVendor)} className="text-purple-700" />
+                  <Stat label="Purchases" value={`+${fmtQ(day.purchases)}`} className="text-green-700" />
+                  <Stat label="Sales" value={`-${fmtQ(day.sales)}`} className="text-red-600" />
+                  <Stat label="Job Work Out" value={`-${fmtQ(day.jobWorkOut)}`} className="text-purple-700" />
+                  <Stat label="Job Returns" value={`+${fmtQ(day.jobReturns)}`} className="text-teal-700" />
+                  <Stat label="Closing (Wh)" value={fmtQ(day.closingWarehouse)} className="text-gray-900" />
+                  <Stat label="Closing (Vendor)" value={fmtQ(day.closingVendor)} className="text-purple-700" />
                 </div>
               </button>
 

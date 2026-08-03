@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
   MOVEMENTS_REPORT_QUERY,
+  STOCK_LEDGER_OPENING_BALANCE_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_SUPPLIERS_QUERY,
@@ -20,6 +21,7 @@ import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './D
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 
+const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
 // entry_type direction + display, mirrored from the Stock Statement's
@@ -27,18 +29,27 @@ const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDig
 // ledger doesn't reliably sign every type the same way (e.g. ADJUSTMENT_OUT),
 // so direction is looked up by type rather than trusted from raw quantity sign.
 const entryTypeConfig: Record<string, { label: string; color: string; isIn: boolean }> = {
-  PURCHASE_IN:         { label: 'Purchase In',      color: 'bg-green-100 text-green-800', isIn: true },
-  PURCHASE_CANCEL:      { label: 'Purchase Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: false },
-  TRANSFER_IN:          { label: 'Transfer In',      color: 'bg-blue-100 text-blue-800',   isIn: true },
-  TRANSFER_OUT:         { label: 'Transfer Out',     color: 'bg-orange-100 text-orange-800', isIn: false },
-  SALE_OUT:             { label: 'Dispatch',         color: 'bg-red-100 text-red-800',     isIn: false },
-  SALE_CANCEL:          { label: 'Dispatch Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
-  JOB_WORK_OUT:         { label: 'Job Work Out',     color: 'bg-purple-100 text-purple-800', isIn: false },
-  JOB_WORK_RETURN_IN:   { label: 'Job Work Return',  color: 'bg-teal-100 text-teal-800',   isIn: true },
-  VENDOR_RETURN_IN:     { label: 'Vendor Return',    color: 'bg-teal-100 text-teal-800',   isIn: true },
-  ADJUSTMENT_IN:        { label: 'Adjustment In',    color: 'bg-gray-100 text-gray-800',   isIn: true },
-  ADJUSTMENT_OUT:       { label: 'Adjustment Out',   color: 'bg-gray-100 text-gray-800',   isIn: false },
+  PURCHASE_IN:          { label: 'Purchase In',      color: 'bg-green-100 text-green-800', isIn: true },
+  PURCHASE_CANCEL:       { label: 'Purchase Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: false },
+  TRANSFER_IN:           { label: 'Transfer In',      color: 'bg-blue-100 text-blue-800',   isIn: true },
+  TRANSFER_OUT:          { label: 'Transfer Out',     color: 'bg-orange-100 text-orange-800', isIn: false },
+  SALE_OUT:              { label: 'Dispatch',         color: 'bg-red-100 text-red-800',     isIn: false },
+  SALE_CANCEL:           { label: 'Dispatch Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
+  JOB_WORK_OUT:          { label: 'Job Work Out',     color: 'bg-purple-100 text-purple-800', isIn: false },
+  JOB_WORK_RETURN_IN:    { label: 'Job Work Return',  color: 'bg-teal-100 text-teal-800',   isIn: true },
+  JOB_WORK_CANCEL:       { label: 'Job Work Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
+  JOB_WORK_OUTPUT_IN:    { label: 'Job Work Output',  color: 'bg-teal-100 text-teal-800',   isIn: true },
+  JOB_WORK_TRANSFER_OUT: { label: 'JW Transfer Out',  color: 'bg-purple-100 text-purple-800', isIn: false },
+  JOB_WORK_TRANSFER_IN:  { label: 'JW Transfer In',   color: 'bg-purple-100 text-purple-800', isIn: true },
+  VENDOR_RETURN_IN:      { label: 'Vendor Return',    color: 'bg-teal-100 text-teal-800',   isIn: true },
+  ADJUSTMENT_IN:         { label: 'Adjustment In',    color: 'bg-gray-100 text-gray-800',   isIn: true },
+  ADJUSTMENT_OUT:        { label: 'Adjustment Out',   color: 'bg-gray-100 text-gray-800',   isIn: false },
 }
+
+// Entry types that move stock to/from a vendor under job work — used to
+// derive the running "at Vendor" balance alongside the warehouse balance.
+// Same list as the Item Stock Ledger report's VENDOR_MOVEMENT_TYPES.
+const VENDOR_MOVEMENT_TYPES = ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL', 'JOB_WORK_TRANSFER_OUT', 'JOB_WORK_TRANSFER_IN']
 
 type ItemOption = ComboOption & {
   material_type_id: string
@@ -99,20 +110,20 @@ export default async function DaywiseStockStatementPage({
   })
   const selectedItem = params.item ? itemOptions.find((i) => i.id === params.item) : undefined
 
-  const conditions: Record<string, unknown>[] = [
-    { entry_date: { _gte: fromDate } },
-    { entry_date: { _lte: toDate } },
-  ]
-  if (params.company) conditions.push({ company_id: { _eq: params.company } })
-  if (params.warehouse) conditions.push({ warehouse_id: { _eq: params.warehouse } })
+  // Scope filters shared by the opening-balance lookups and the in-range
+  // movements query — kept separate from the date-range conditions so the
+  // same scope can be reused with an "entry_date < fromDate" cutoff.
+  const scopeConditions: Record<string, unknown>[] = []
+  if (params.company) scopeConditions.push({ company_id: { _eq: params.company } })
+  if (params.warehouse) scopeConditions.push({ warehouse_id: { _eq: params.warehouse } })
   if (selectedItem) {
-    conditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
+    scopeConditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
     if (selectedItem.material_size_id) {
-      conditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
+      scopeConditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
     }
   } else {
-    if (params.material_type) conditions.push({ material_type_id: { _eq: params.material_type } })
-    if (params.size) conditions.push({ material_size_id: { _eq: params.size } })
+    if (params.material_type) scopeConditions.push({ material_type_id: { _eq: params.material_type } })
+    if (params.size) scopeConditions.push({ material_size_id: { _eq: params.size } })
   }
 
   // Vendor isn't stored on stock_ledger directly — resolve it to the set of
@@ -131,100 +142,150 @@ export default async function DaywiseStockStatementPage({
     if (refIds.length === 0) {
       noResults = true
     } else {
-      conditions.push({ reference_id: { _in: refIds } })
+      scopeConditions.push({ reference_id: { _in: refIds } })
     }
   }
 
-  const result = noResults
-    ? { stock_ledger: [] }
-    : await hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: { _and: conditions } })
+  const periodWhere = {
+    _and: [...scopeConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
+  }
+  const openingWarehouseWhere = { _and: [...scopeConditions, { entry_date: { _lt: fromDate } }] }
+  const openingVendorWhere = {
+    _and: [...scopeConditions, { entry_date: { _lt: fromDate } }, { entry_type: { _in: VENDOR_MOVEMENT_TYPES } }],
+  }
+
+  const [result, openingWhResult, openingVendorResult] = noResults
+    ? [{ stock_ledger: [] }, { stock_ledger_aggregate: { aggregate: { sum: { quantity: 0 } } } }, { stock_ledger_aggregate: { aggregate: { sum: { quantity: 0 } } } }]
+    : await Promise.all([
+        hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: periodWhere }),
+        hasuraQuery(STOCK_LEDGER_OPENING_BALANCE_QUERY, { where: openingWarehouseWhere }),
+        hasuraQuery(STOCK_LEDGER_OPENING_BALANCE_QUERY, { where: openingVendorWhere }),
+      ])
 
   // Query already orders by entry_date asc, created_at asc — grouping below
   // preserves that order within and across days.
   const movements: any[] = result.stock_ledger ?? []
+  const openingWarehouseBalance = Number(openingWhResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
+  // Vendor balance rises when warehouse-side quantity falls (JOB_WORK_OUT is
+  // negative), so it's accumulated as the negation — same convention as the
+  // Item Stock Ledger report's vendorOpeningBalance.
+  const openingVendorBalance = -Number(openingVendorResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
 
   const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m: any) => m.purchase_line_id))
 
-  const dayMap = new Map<string, DayGroup>()
+  // Bucket movements by day first (preserving within-day order), then walk
+  // the days in order maintaining running Warehouse/Vendor balances — so
+  // each day's Opening is the prior day's Closing.
+  const byDay = new Map<string, any[]>()
   for (const m of movements) {
-    const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
-    const qty = Math.abs(Number(m.quantity))
-    const rate = m.purchase_line_id ? movementRateMap.get(m.purchase_line_id) ?? null : null
-    const value = rate != null ? qty * rate * (cfg.isIn ? 1 : -1) : null
-    const material = m.material_types?.description ?? '?'
-    const size = m.material_sizes?.size_label ?? m.size_label ?? ''
-    const itemName = size ? `${material} — ${size}` : material
-
-    const day = dayMap.get(m.entry_date) ?? {
-      date: m.entry_date,
-      count: 0,
-      totalIn: 0,
-      totalOut: 0,
-      net: 0,
-      value: 0,
-      transactions: [] as Transaction[],
-    }
-    day.count += 1
-    if (cfg.isIn) day.totalIn += qty
-    else day.totalOut += qty
-    day.net = day.totalIn - day.totalOut
-    day.value += value ?? 0
-    day.transactions.push({
-      id: m.id,
-      typeLabel: cfg.label,
-      typeColor: cfg.color,
-      itemName,
-      unit: m.material_types?.unit ?? 'tons',
-      company: m.companies?.name ?? '',
-      warehouse: m.warehouses?.name ?? '',
-      qty,
-      isIn: cfg.isIn,
-      rate,
-      value,
-      reference: m.reference_number ?? '',
-    })
-    dayMap.set(m.entry_date, day)
+    const list = byDay.get(m.entry_date) ?? []
+    list.push(m)
+    byDay.set(m.entry_date, list)
   }
+  const sortedDates = Array.from(byDay.keys()).sort()
 
-  const groups: DayGroup[] = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date))
+  let warehouseRunning = openingWarehouseBalance
+  let vendorRunning = openingVendorBalance
+  const groups: DayGroup[] = sortedDates.map((date) => {
+    const dayMovements = byDay.get(date)!
+    const openingWarehouse = warehouseRunning
+    const openingVendor = vendorRunning
+    let purchasesRaw = 0
+    let salesRaw = 0
+    let jobWorkOutRaw = 0
+    let jobReturns = 0
+    let value = 0
+    const transactions: Transaction[] = dayMovements.map((m) => {
+      const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
+      const rawQty = Number(m.quantity)
+      const qty = Math.abs(rawQty)
+      const rate = m.purchase_line_id ? movementRateMap.get(m.purchase_line_id) ?? null : null
+      const txnValue = rate != null ? qty * rate * (cfg.isIn ? 1 : -1) : null
+      const material = m.material_types?.description ?? '?'
+      const size = m.material_sizes?.size_label ?? m.size_label ?? ''
+      const itemName = size ? `${material} — ${size}` : material
+
+      warehouseRunning += rawQty
+      if (VENDOR_MOVEMENT_TYPES.includes(m.entry_type)) vendorRunning -= rawQty
+      if (m.entry_type === 'PURCHASE_IN' || m.entry_type === 'PURCHASE_CANCEL') purchasesRaw += rawQty
+      if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL') salesRaw += rawQty
+      if (m.entry_type === 'JOB_WORK_OUT') jobWorkOutRaw += rawQty
+      if (m.entry_type === 'JOB_WORK_RETURN_IN' || m.entry_type === 'VENDOR_RETURN_IN') jobReturns += rawQty
+      value += txnValue ?? 0
+
+      return {
+        id: m.id,
+        typeLabel: cfg.label,
+        typeColor: cfg.color,
+        itemName,
+        unit: m.material_types?.unit ?? 'tons',
+        company: m.companies?.name ?? '',
+        warehouse: m.warehouses?.name ?? '',
+        qty,
+        isIn: cfg.isIn,
+        rate,
+        value: txnValue,
+        reference: m.reference_number ?? '',
+      }
+    })
+
+    return {
+      date,
+      count: dayMovements.length,
+      openingWarehouse,
+      openingVendor,
+      purchases: purchasesRaw,
+      sales: -salesRaw,
+      jobWorkOut: -jobWorkOutRaw,
+      jobReturns,
+      closingWarehouse: warehouseRunning,
+      closingVendor: vendorRunning,
+      value,
+      transactions,
+    }
+  })
 
   const totals = {
     entries: movements.length,
-    totalIn: groups.reduce((s, g) => s + g.totalIn, 0),
-    totalOut: groups.reduce((s, g) => s + g.totalOut, 0),
+    openingWarehouse: openingWarehouseBalance,
+    openingVendor: openingVendorBalance,
+    purchases: groups.reduce((s, g) => s + g.purchases, 0),
+    sales: groups.reduce((s, g) => s + g.sales, 0),
+    jobWorkOut: groups.reduce((s, g) => s + g.jobWorkOut, 0),
+    jobReturns: groups.reduce((s, g) => s + g.jobReturns, 0),
+    closingWarehouse: warehouseRunning,
+    closingVendor: vendorRunning,
     value: groups.reduce((s, g) => s + g.value, 0),
   }
 
   const exportRows = groups.flatMap((day) => [
     {
       'Date': formatDate(day.date),
-      'Type': '',
-      'Item Name': '',
-      'Company': '',
-      'Warehouse': '',
-      'Qty': '',
-      'Rate': '',
-      'Value (₹)': '',
-      'Reference': '',
       'Row': `Day Summary — ${day.count} txn(s)`,
-      'In': day.totalIn,
-      'Out': day.totalOut,
-      'Net': day.net,
+      'Opening (Warehouse)': fmtQ(day.openingWarehouse),
+      'Opening (Vendor)': fmtQ(day.openingVendor),
+      'Purchases': fmtQ(day.purchases),
+      'Sales': fmtQ(day.sales),
+      'Job Work Out': fmtQ(day.jobWorkOut),
+      'Job Returns': fmtQ(day.jobReturns),
+      'Closing (Warehouse)': fmtQ(day.closingWarehouse),
+      'Closing (Vendor)': fmtQ(day.closingVendor),
+      'Value (₹)': day.value,
+      'Type': '', 'Item Name': '', 'Company': '', 'Warehouse': '', 'Qty': '', 'Rate': '', 'Reference': '',
     },
     ...day.transactions.map((t) => ({
       'Date': formatDate(day.date),
+      'Row': '',
+      'Opening (Warehouse)': '', 'Opening (Vendor)': '', 'Purchases': '', 'Sales': '', 'Job Work Out': '', 'Job Returns': '',
+      'Closing (Warehouse)': '', 'Closing (Vendor)': '',
+      'Value (₹)': t.value ?? '',
       'Type': t.typeLabel,
       'Item Name': t.itemName,
       'Company': t.company,
       'Warehouse': t.warehouse,
       'Qty': t.isIn ? t.qty : -t.qty,
       'Rate': t.rate ?? '',
-      'Value (₹)': t.value ?? '',
       'Reference': t.reference,
-      'Row': '',
-      'In': '',
-      'Out': '',
-      'Net': '',
     })),
   ])
 
@@ -317,17 +378,35 @@ export default async function DaywiseStockStatementPage({
 
       {/* Summary */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-xl border bg-blue-50 p-4">
+          <p className="text-xs text-gray-500">Opening Stock</p>
+          <p className="text-lg font-bold text-blue-800">{fmtQ(totals.openingWarehouse)} T <span className="text-xs font-normal text-gray-500">Wh</span></p>
+          <p className="text-sm font-semibold text-purple-700">{fmtQ(totals.openingVendor)} T <span className="text-xs font-normal text-gray-500">Vendor</span></p>
+        </div>
+        <div className="rounded-xl border bg-green-50 p-4">
+          <p className="text-xs text-gray-500">Purchases</p>
+          <p className="text-xl font-bold text-green-700">+{fmtQ(totals.purchases)} T</p>
+        </div>
+        <div className="rounded-xl border bg-red-50 p-4">
+          <p className="text-xs text-gray-500">Sales</p>
+          <p className="text-xl font-bold text-red-700">-{fmtQ(totals.sales)} T</p>
+        </div>
+        <div className="rounded-xl border bg-gray-50 p-4">
+          <p className="text-xs text-gray-500">Closing Stock</p>
+          <p className="text-lg font-bold text-gray-900">{fmtQ(totals.closingWarehouse)} T <span className="text-xs font-normal text-gray-500">Wh</span></p>
+          <p className="text-sm font-semibold text-purple-700">{fmtQ(totals.closingVendor)} T <span className="text-xs font-normal text-gray-500">Vendor</span></p>
+        </div>
+        <div className="rounded-xl border bg-purple-50 p-4">
+          <p className="text-xs text-gray-500">Job Work Out</p>
+          <p className="text-xl font-bold text-purple-800">-{fmtQ(totals.jobWorkOut)} T</p>
+        </div>
+        <div className="rounded-xl border bg-teal-50 p-4">
+          <p className="text-xs text-gray-500">Job Returns</p>
+          <p className="text-xl font-bold text-teal-800">+{fmtQ(totals.jobReturns)} T</p>
+        </div>
         <div className="rounded-xl border bg-gray-50 p-4">
           <p className="text-xs text-gray-500">Days with Activity</p>
           <p className="text-xl font-bold text-gray-800">{groups.length}</p>
-        </div>
-        <div className="rounded-xl border bg-green-50 p-4">
-          <p className="text-xs text-gray-500">Total In</p>
-          <p className="text-xl font-bold text-green-700">+{totals.totalIn.toFixed(3)} T</p>
-        </div>
-        <div className="rounded-xl border bg-red-50 p-4">
-          <p className="text-xs text-gray-500">Total Out</p>
-          <p className="text-xl font-bold text-red-700">-{totals.totalOut.toFixed(3)} T</p>
         </div>
         <div className="rounded-xl border bg-teal-50 p-4">
           <p className="text-xs text-gray-500">Net Value</p>
