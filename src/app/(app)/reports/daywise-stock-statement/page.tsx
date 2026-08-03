@@ -386,50 +386,22 @@ export default async function DaywiseStockStatementPage({
         </div>
       </form>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border bg-blue-50 p-4">
-          <p className="text-xs text-gray-500">Opening Stock</p>
-          <p className="text-lg font-bold text-blue-800">{fmtQ(totals.openingWarehouse)} T <span className="text-xs font-normal text-gray-500">Wh</span></p>
-          <p className="text-sm font-semibold text-purple-700">{fmtQ(totals.openingVendor)} T <span className="text-xs font-normal text-gray-500">Vendor</span></p>
-        </div>
-        <div className="rounded-xl border bg-green-50 p-4">
-          <p className="text-xs text-gray-500">Purchases</p>
-          <p className="text-xl font-bold text-green-700">+{fmtQ(totals.purchases)} T</p>
-        </div>
-        <div className="rounded-xl border bg-red-50 p-4">
-          <p className="text-xs text-gray-500">Sales</p>
-          <p className="text-xl font-bold text-red-700">-{fmtQ(totals.sales)} T</p>
-        </div>
-        <div className="rounded-xl border bg-blue-50 p-4">
-          <p className="text-xs text-gray-500">Transfer In</p>
-          <p className="text-xl font-bold text-blue-700">+{fmtQ(totals.transferIn)} T</p>
-        </div>
-        <div className="rounded-xl border bg-orange-50 p-4">
-          <p className="text-xs text-gray-500">Transfer Out</p>
-          <p className="text-xl font-bold text-orange-700">-{fmtQ(totals.transferOut)} T</p>
-        </div>
-        <div className="rounded-xl border bg-gray-50 p-4">
-          <p className="text-xs text-gray-500">Closing Stock</p>
-          <p className="text-lg font-bold text-gray-900">{fmtQ(totals.closingWarehouse)} T <span className="text-xs font-normal text-gray-500">Wh</span></p>
-          <p className="text-sm font-semibold text-purple-700">{fmtQ(totals.closingVendor)} T <span className="text-xs font-normal text-gray-500">Vendor</span></p>
-        </div>
-        <div className="rounded-xl border bg-purple-50 p-4">
-          <p className="text-xs text-gray-500">Job Work Out</p>
-          <p className="text-xl font-bold text-purple-800">-{fmtQ(totals.jobWorkOut)} T</p>
-        </div>
-        <div className="rounded-xl border bg-teal-50 p-4">
-          <p className="text-xs text-gray-500">Job Returns</p>
-          <p className="text-xl font-bold text-teal-800">+{fmtQ(totals.jobReturns)} T</p>
-        </div>
-        <div className="rounded-xl border bg-gray-50 p-4">
-          <p className="text-xs text-gray-500">Days with Activity</p>
-          <p className="text-xl font-bold text-gray-800">{groups.length}</p>
-        </div>
-        <div className="rounded-xl border bg-teal-50 p-4">
-          <p className="text-xs text-gray-500">Net Value</p>
-          <p className={`text-xl font-bold ${totals.value < 0 ? 'text-red-700' : 'text-teal-800'}`}>{fmtC(totals.value)}</p>
-        </div>
+      {/* Summary — one compact row instead of a card dashboard */}
+      <div className="flex items-center gap-x-3 gap-y-1 overflow-x-auto whitespace-nowrap rounded-lg border bg-gray-50 px-3 py-1.5 text-[11px]">
+        <span className="text-gray-400">Days <b className="text-gray-800 font-semibold">{groups.length}</b></span>
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400">Opening <b className="text-blue-800 font-semibold">{fmtQ(totals.openingWarehouse)}</b> Wh / <b className="text-purple-700 font-semibold">{fmtQ(totals.openingVendor)}</b> Vd</span>
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400">Purchases <b className="text-green-700 font-semibold">+{fmtQ(totals.purchases)}</b></span>
+        <span className="text-gray-400">Sales <b className="text-red-600 font-semibold">-{fmtQ(totals.sales)}</b></span>
+        <span className="text-gray-400">Transfer In <b className="text-blue-700 font-semibold">+{fmtQ(totals.transferIn)}</b></span>
+        <span className="text-gray-400">Transfer Out <b className="text-orange-700 font-semibold">-{fmtQ(totals.transferOut)}</b></span>
+        <span className="text-gray-400">JW Out <b className="text-purple-700 font-semibold">-{fmtQ(totals.jobWorkOut)}</b></span>
+        <span className="text-gray-400">JW Return <b className="text-teal-700 font-semibold">+{fmtQ(totals.jobReturns)}</b></span>
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400">Closing <b className="text-gray-900 font-semibold">{fmtQ(totals.closingWarehouse)}</b> Wh / <b className="text-purple-800 font-semibold">{fmtQ(totals.closingVendor)}</b> Vd</span>
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400">Value <b className={`font-semibold ${totals.value < 0 ? 'text-red-700' : 'text-teal-800'}`}>{fmtC(totals.value)}</b></span>
       </div>
 
       {/* Table */}

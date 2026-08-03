@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { formatDate } from '@/lib/utils'
 
 export type Transaction = {
@@ -38,20 +38,13 @@ export type DayGroup = {
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
-function Stat({ label, value, className }: { label: string; value: string; className: string }) {
-  return (
-    <span className="flex items-center gap-1">
-      <span className="text-gray-400">{label}:</span>
-      <span className={`font-semibold ${className}`}>{value}</span>
-    </span>
-  )
-}
+const DETAIL_COLSPAN = 14
 
 export default function DaywiseStockStatementTable({ groups }: { groups: DayGroup[] }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const toggle = (date: string) => {
-    setCollapsed((prev) => {
+    setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(date)) next.delete(date)
       else next.add(date)
@@ -61,89 +54,104 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
 
   return (
     <div>
-      <div className="px-4 py-2 border-b bg-gray-50 flex justify-end gap-3 text-xs print:hidden">
-        <button type="button" onClick={() => setCollapsed(new Set())} className="text-blue-600 hover:underline">
+      <div className="px-3 py-1.5 border-b bg-gray-50 flex justify-end gap-3 text-xs print:hidden">
+        <button type="button" onClick={() => setExpanded(new Set(groups.map((g) => g.date)))} className="text-blue-600 hover:underline">
           Expand All
         </button>
-        <button type="button" onClick={() => setCollapsed(new Set(groups.map((g) => g.date)))} className="text-blue-600 hover:underline">
+        <button type="button" onClick={() => setExpanded(new Set())} className="text-blue-600 hover:underline">
           Collapse All
         </button>
       </div>
 
-      <div className="divide-y divide-gray-200">
-        {groups.map((day) => {
-          const isOpen = !collapsed.has(day.date)
-          return (
-            <div key={day.date}>
-              <button
-                type="button"
-                onClick={() => toggle(day.date)}
-                className="w-full flex flex-col gap-1.5 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-block transition-transform text-gray-400 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
-                    <span className="font-semibold text-gray-900">{formatDate(day.date)}</span>
-                    <span className="text-xs text-gray-500">{day.count} transaction{day.count !== 1 ? 's' : ''}</span>
-                  </div>
-                  <span className="font-semibold text-teal-800 text-sm">{fmtC(day.value)}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs pl-6">
-                  <Stat label="Opening (Wh)" value={fmtQ(day.openingWarehouse)} className="text-blue-800" />
-                  <Stat label="Opening (Vendor)" value={fmtQ(day.openingVendor)} className="text-purple-700" />
-                  <Stat label="Purchases" value={`+${fmtQ(day.purchases)}`} className="text-green-700" />
-                  <Stat label="Sales" value={`-${fmtQ(day.sales)}`} className="text-red-600" />
-                  <Stat label="Transfer In" value={`+${fmtQ(day.transferIn)}`} className="text-blue-700" />
-                  <Stat label="Transfer Out" value={`-${fmtQ(day.transferOut)}`} className="text-orange-700" />
-                  <Stat label="Job Work Out" value={`-${fmtQ(day.jobWorkOut)}`} className="text-purple-700" />
-                  <Stat label="Job Returns" value={`+${fmtQ(day.jobReturns)}`} className="text-teal-700" />
-                  <Stat label="Closing (Wh)" value={fmtQ(day.closingWarehouse)} className="text-gray-900" />
-                  <Stat label="Closing (Vendor)" value={fmtQ(day.closingVendor)} className="text-purple-700" />
-                </div>
-              </button>
-
-              {isOpen && (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-white text-xs uppercase text-gray-500">
-                      <th className="px-4 py-2 text-left">Type</th>
-                      <th className="px-4 py-2 text-left">Item Name</th>
-                      <th className="px-4 py-2 text-left">Company</th>
-                      <th className="px-4 py-2 text-left">Warehouse</th>
-                      <th className="px-4 py-2 text-right">Qty</th>
-                      <th className="px-4 py-2 text-right text-teal-700 bg-teal-50">Rate</th>
-                      <th className="px-4 py-2 text-right text-teal-700 bg-teal-50">Value</th>
-                      <th className="px-4 py-2 text-left">Reference</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {day.transactions.map((t) => (
-                      <tr key={t.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${t.typeColor}`}>
-                            {t.typeLabel}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 font-medium text-gray-900">{t.itemName}</td>
-                        <td className="px-4 py-2.5 text-gray-600">{t.company}</td>
-                        <td className="px-4 py-2.5 text-gray-500">{t.warehouse}</td>
-                        <td className={`px-4 py-2.5 text-right font-medium ${t.isIn ? 'text-green-700' : 'text-red-600'}`}>
-                          {t.isIn ? '+' : '-'}{fmtQ(Math.abs(t.qty))}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-teal-700 bg-teal-50/40">{t.rate != null ? fmtC(t.rate) : '—'}</td>
-                        <td className={`px-4 py-2.5 text-right font-medium bg-teal-50/40 ${t.value != null && t.value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
-                          {t.value != null ? fmtC(t.value) : '—'}
-                        </td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">{t.reference || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      <table className="w-full text-xs whitespace-nowrap">
+        <thead className="sticky top-0 z-10">
+          <tr className="border-b text-[11px] font-semibold uppercase">
+            <th className="px-1 py-2 w-6 bg-white" />
+            <th className="px-2 py-2 text-left text-gray-600 bg-white">Date</th>
+            <th className="px-2 py-2 text-right text-gray-400 bg-white">Txns</th>
+            <th className="px-2 py-2 text-right text-blue-700 bg-blue-50">Opening Wh</th>
+            <th className="px-2 py-2 text-right text-purple-700 bg-purple-50">Opening Vd</th>
+            <th className="px-2 py-2 text-right text-green-700 bg-green-50">Purchases</th>
+            <th className="px-2 py-2 text-right text-red-700 bg-red-50">Sales</th>
+            <th className="px-2 py-2 text-right text-blue-700 bg-blue-50">Transfer In</th>
+            <th className="px-2 py-2 text-right text-orange-700 bg-orange-50">Transfer Out</th>
+            <th className="px-2 py-2 text-right text-purple-700 bg-purple-50">JW Out</th>
+            <th className="px-2 py-2 text-right text-teal-700 bg-teal-50">JW Return</th>
+            <th className="px-2 py-2 text-right text-gray-800 bg-gray-100">Closing Wh</th>
+            <th className="px-2 py-2 text-right text-purple-800 bg-purple-50">Closing Vd</th>
+            <th className="px-2 py-2 text-right text-teal-700 bg-teal-50">Value</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {groups.map((day) => {
+            const isOpen = expanded.has(day.date)
+            return (
+              <Fragment key={day.date}>
+                <tr onClick={() => toggle(day.date)} className="hover:bg-gray-50 transition-colors cursor-pointer bg-gray-50/40">
+                  <td className="px-1 py-1.5 text-center text-gray-400">
+                    <span className={`inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                  </td>
+                  <td className="px-2 py-1.5 font-medium text-gray-900">{formatDate(day.date)}</td>
+                  <td className="px-2 py-1.5 text-right text-gray-400">{day.count}</td>
+                  <td className="px-2 py-1.5 text-right text-blue-800 bg-blue-50/40">{fmtQ(day.openingWarehouse)}</td>
+                  <td className="px-2 py-1.5 text-right text-purple-700 bg-purple-50/40">{fmtQ(day.openingVendor)}</td>
+                  <td className="px-2 py-1.5 text-right text-green-700 bg-green-50/40">+{fmtQ(day.purchases)}</td>
+                  <td className="px-2 py-1.5 text-right text-red-600 bg-red-50/40">-{fmtQ(day.sales)}</td>
+                  <td className="px-2 py-1.5 text-right text-blue-700 bg-blue-50/40">+{fmtQ(day.transferIn)}</td>
+                  <td className="px-2 py-1.5 text-right text-orange-700 bg-orange-50/40">-{fmtQ(day.transferOut)}</td>
+                  <td className="px-2 py-1.5 text-right text-purple-700 bg-purple-50/40">-{fmtQ(day.jobWorkOut)}</td>
+                  <td className="px-2 py-1.5 text-right text-teal-700 bg-teal-50/40">+{fmtQ(day.jobReturns)}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold text-gray-900 bg-gray-100/60">{fmtQ(day.closingWarehouse)}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold text-purple-800 bg-purple-50/60">{fmtQ(day.closingVendor)}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold text-teal-800 bg-teal-50/60">{fmtC(day.value)}</td>
+                </tr>
+                {isOpen && (
+                  <tr className="bg-gray-50/60">
+                    <td colSpan={DETAIL_COLSPAN} className="p-0">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-y bg-white text-[11px] uppercase text-gray-500">
+                            <th className="px-2 py-1.5 text-left">Type</th>
+                            <th className="px-2 py-1.5 text-left">Item Name</th>
+                            <th className="px-2 py-1.5 text-left">Company</th>
+                            <th className="px-2 py-1.5 text-left">Warehouse</th>
+                            <th className="px-2 py-1.5 text-right">Qty</th>
+                            <th className="px-2 py-1.5 text-right text-teal-700 bg-teal-50">Rate</th>
+                            <th className="px-2 py-1.5 text-right text-teal-700 bg-teal-50">Value</th>
+                            <th className="px-2 py-1.5 text-left">Reference</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {day.transactions.map((t) => (
+                            <tr key={t.id} className="hover:bg-gray-100/60">
+                              <td className="px-2 py-1.5">
+                                <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[11px] font-medium ${t.typeColor}`}>
+                                  {t.typeLabel}
+                                </span>
+                              </td>
+                              <td className="px-2 py-1.5 font-medium text-gray-900">{t.itemName}</td>
+                              <td className="px-2 py-1.5 text-gray-600">{t.company}</td>
+                              <td className="px-2 py-1.5 text-gray-500">{t.warehouse}</td>
+                              <td className={`px-2 py-1.5 text-right font-medium ${t.isIn ? 'text-green-700' : 'text-red-600'}`}>
+                                {t.isIn ? '+' : '-'}{fmtQ(Math.abs(t.qty))}
+                              </td>
+                              <td className="px-2 py-1.5 text-right text-teal-700 bg-teal-50/40">{t.rate != null ? fmtC(t.rate) : '—'}</td>
+                              <td className={`px-2 py-1.5 text-right font-medium bg-teal-50/40 ${t.value != null && t.value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
+                                {t.value != null ? fmtC(t.value) : '—'}
+                              </td>
+                              <td className="px-2 py-1.5 text-gray-500 text-[11px]">{t.reference || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
