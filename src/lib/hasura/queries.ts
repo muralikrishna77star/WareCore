@@ -1553,19 +1553,25 @@ export const STOCK_STATEMENT_QUERY = `
     $opening_where: stock_ledger_bool_exp = {},
     $period_where: stock_ledger_bool_exp = {}
   ) {
-    opening: stock_ledger(where: $opening_where, limit: 5000) {
-      entry_type quantity material_type_id material_size_id size_label warehouse_id
-      reference_type reference_id
+    opening: stock_ledger(where: $opening_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
+      id entry_type quantity entry_date created_at
+      material_type_id material_size_id size_label warehouse_id company_id
+      reference_type reference_id reference_number notes
+      purchase_line_id sub_purchase_line_id created_by
       material_types { description unit }
       material_sizes { size_label }
       warehouses { name }
+      companies { name }
     }
-    period: stock_ledger(where: $period_where, limit: 5000) {
-      entry_type quantity material_type_id material_size_id size_label warehouse_id
-      reference_type reference_id
+    period: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
+      id entry_type quantity entry_date created_at
+      material_type_id material_size_id size_label warehouse_id company_id
+      reference_type reference_id reference_number notes
+      purchase_line_id sub_purchase_line_id created_by
       material_types { description unit }
       material_sizes { size_label }
       warehouses { name }
+      companies { name }
     }
   }
 `
@@ -1731,6 +1737,31 @@ export const JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY = `
     job_work_orders(where: {id: {_in: $ids}}) {
       id
       suppliers { name }
+    }
+  }
+`
+
+// Looks up the customer for a batch of dispatch_orders ids — used by the
+// Stock Statement's Transaction Details extract to show which customer a
+// SALE_OUT/SALE_CANCEL row belongs to.
+export const DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY = `
+  query GetDispatchOrdersCustomerLookup($ids: [uuid!]!) {
+    dispatch_orders(where: {id: {_in: $ids}}) {
+      id
+      customers { name }
+    }
+  }
+`
+
+// Looks up the from/to warehouse for a batch of transfers ids — used by the
+// Stock Statement's Transaction Details extract to show Source/Destination
+// Warehouse on TRANSFER_OUT/TRANSFER_IN rows.
+export const TRANSFERS_WAREHOUSE_LOOKUP_QUERY = `
+  query GetTransfersWarehouseLookup($ids: [uuid!]!) {
+    transfers(where: {id: {_in: $ids}}) {
+      id
+      warehouses_from { name }
+      warehouses_to { name }
     }
   }
 `

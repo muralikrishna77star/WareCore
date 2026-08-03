@@ -14,18 +14,26 @@ import {
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
+  DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY,
+  TRANSFERS_WAREHOUSE_LOOKUP_QUERY,
   AVERAGE_PURCHASE_RATES_QUERY,
+  USER_PROFILES_QUERY,
 } from '@/lib/hasura/queries'
 import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { StockStatementExportButton } from './StockStatementExportButton'
-import type { StockStatementExportItem } from '@/lib/exportStockStatementExcel'
-import StockStatementTable, { type StatementRow } from './StockStatementTable'
+import type { StockStatementExportItem, TransactionDetailRow } from '@/lib/exportStockStatementExcel'
+import { type StatementRow } from './StockStatementTable'
+import StockStatementTabs from './StockStatementTabs'
 import Link from 'next/link'
 
 type LedgerRow = {
+  id: string
   entry_type: string
   quantity: number | string
+  entry_date: string
+  created_at: string
   material_type_id: string
   material_size_id?: string | null
   size_label?: string | null
@@ -33,8 +41,46 @@ type LedgerRow = {
   material_sizes?: { size_label: string } | null
   warehouse_id?: string
   warehouses?: { name: string } | null
+  company_id?: string
+  companies?: { name: string } | null
   reference_type?: string | null
   reference_id?: string | null
+  reference_number?: string | null
+  notes?: string | null
+  purchase_line_id?: string | null
+  sub_purchase_line_id?: string | null
+  created_by?: string | null
+}
+
+// entry_type → human label + INWARD/OUTWARD/TRANSFER/ADJUSTMENT classification
+// for the Transaction Details extract. Job Work Out/Return are classified by
+// their warehouse-side effect (matches the worked example in the product
+// spec), not as TRANSFER — TRANSFER is reserved for warehouse-to-warehouse
+// TRANSFER_IN/OUT. Anything not listed falls back to sign-based IN/OUT so no
+// type is ever left unclassified.
+const ENTRY_TYPE_INFO: Record<string, { label: string; movement: 'INWARD' | 'OUTWARD' | 'TRANSFER' | 'ADJUSTMENT' }> = {
+  PURCHASE_IN: { label: 'Purchase Receipt', movement: 'INWARD' },
+  PURCHASE_CANCEL: { label: 'Purchase Return', movement: 'OUTWARD' },
+  TRANSFER_IN: { label: 'Stock Transfer In', movement: 'TRANSFER' },
+  TRANSFER_OUT: { label: 'Stock Transfer Out', movement: 'TRANSFER' },
+  SALE_OUT: { label: 'Sales Dispatch', movement: 'OUTWARD' },
+  SALE_CANCEL: { label: 'Sales Return', movement: 'INWARD' },
+  JOB_WORK_OUT: { label: 'Job Work Out', movement: 'OUTWARD' },
+  JOB_WORK_RETURN_IN: { label: 'Job Work Return', movement: 'INWARD' },
+  VENDOR_RETURN_IN: { label: 'Vendor Return', movement: 'INWARD' },
+  ADJUSTMENT_IN: { label: 'Warehouse Inward Adjustment', movement: 'ADJUSTMENT' },
+  ADJUSTMENT_OUT: { label: 'Warehouse Outward Adjustment', movement: 'ADJUSTMENT' },
+  JOB_WORK_CANCEL: { label: 'Job Work Cancelled', movement: 'ADJUSTMENT' },
+  JOB_WORK_OUTPUT_IN: { label: 'Job Work Output Received', movement: 'INWARD' },
+  JOB_WORK_TRANSFER_OUT: { label: 'Job Work Transfer Out (Vendor to Vendor)', movement: 'TRANSFER' },
+  JOB_WORK_TRANSFER_IN: { label: 'Job Work Transfer In (Vendor to Vendor)', movement: 'TRANSFER' },
+}
+
+const SOURCE_MODULE_LABEL: Record<string, string> = {
+  purchase_bill: 'Purchase Bills',
+  dispatch: 'Dispatch Orders',
+  job_work: 'Job Work Orders',
+  transfer: 'Transfers',
 }
 
 type StockItem = {
@@ -108,14 +154,18 @@ export default async function StockStatementPage({
   const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
   const toDate = params.to || today.toISOString().split('T')[0]
 
-  const [compResult, whResult, itemResult, matTypeResult, matSizeResult, supResult] = await Promise.all([
+  const [compResult, whResult, itemResult, matTypeResult, matSizeResult, supResult, userResult] = await Promise.all([
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
     hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
     hasuraQuery(ACTIVE_MATERIAL_TYPES_QUERY),
     hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
     hasuraQuery(ACTIVE_SUPPLIERS_QUERY),
+    hasuraQuery(USER_PROFILES_QUERY),
   ])
+  const userNameById = new Map<string, string>(
+    ((userResult.user_profiles ?? []) as { id: string; full_name: string }[]).map((u) => [u.id, u.full_name])
+  )
 
   const companies: { id: string; name: string }[] = compResult.companies ?? []
   const allWarehouses: { id: string; name: string; company_id: string }[] = whResult.warehouses ?? []
@@ -244,6 +294,43 @@ export default async function StockStatementPage({
     const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? 'Unknown Vendor']))
   }
+
+  // Customer names for the Transaction Details extract — SALE_OUT/SALE_CANCEL
+  // reference a dispatch_orders.id, which carries the customer.
+  const dispatchIds = Array.from(
+    new Set(
+      [...openingRows, ...periodRows]
+        .filter((r) => r.reference_type === 'dispatch' && r.reference_id)
+        .map((r) => r.reference_id as string)
+    )
+  )
+  let customerNameByDispatchId = new Map<string, string>()
+  if (dispatchIds.length > 0) {
+    const custResult = await hasuraQuery(DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY, { ids: dispatchIds })
+    const rows: { id: string; customers?: { name: string } | null }[] = custResult.dispatch_orders ?? []
+    customerNameByDispatchId = new Map(rows.map((r) => [r.id, r.customers?.name ?? '']))
+  }
+
+  // Source/Destination Warehouse for the Transaction Details extract —
+  // TRANSFER_IN/OUT reference a transfers.id, which carries both warehouses.
+  const transferIds = Array.from(
+    new Set(
+      [...openingRows, ...periodRows]
+        .filter((r) => r.reference_type === 'transfer' && r.reference_id)
+        .map((r) => r.reference_id as string)
+    )
+  )
+  let transferWarehousesById = new Map<string, { from: string; to: string }>()
+  if (transferIds.length > 0) {
+    const transferResult = await hasuraQuery(TRANSFERS_WAREHOUSE_LOOKUP_QUERY, { ids: transferIds })
+    const rows: { id: string; warehouses_from?: { name: string } | null; warehouses_to?: { name: string } | null }[] = transferResult.transfers ?? []
+    transferWarehousesById = new Map(rows.map((r) => [r.id, { from: r.warehouses_from?.name ?? '', to: r.warehouses_to?.name ?? '' }]))
+  }
+
+  // Per-transaction rate (the actual billed rate for that specific purchase
+  // line, not the item's weighted average) for the Transaction Details
+  // extract — same helper used by Movements Report / Daywise Stock Statement.
+  const transactionRateMap = await fetchPurchaseLineRateMap(periodRows.map((r) => r.purchase_line_id))
 
   // Weighted average = total billed amount / total quantity across every
   // matching purchase line, per material_type_id|material_size_id key.
@@ -385,6 +472,141 @@ export default async function StockStatementPage({
   const itemValue = (item: StockItem) => item.closingWarehouse * item.rate
   const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
+  // ── Transaction Details extract ─────────────────────────────────────────
+  // Built from the exact same periodRows already used for the Summary above
+  // — one OPENING BALANCE row per item, then every period transaction in
+  // chronological order (the query is already sorted entry_date, created_at)
+  // with a running Warehouse/Vendor balance. This is the same authoritative
+  // source as the Summary, not a separate calculation, so the final running
+  // balance is guaranteed to equal the Summary's Stock at Warehouse/Vendor —
+  // verified explicitly below rather than assumed.
+  const periodRowsByKey: Record<string, LedgerRow[]> = {}
+  for (const row of periodRows) {
+    const key = getKey(row)
+    ;(periodRowsByKey[key] ??= []).push(row)
+  }
+
+  const transactions: TransactionDetailRow[] = []
+  let allReconciled = true
+
+  for (const item of sorted) {
+    const itemKey = `${item.material_type_id}|${item.material_size_id ?? ''}`
+    const displayKey = `${item.material}||${item.size || '—'}`
+    const itemCode = itemCodeByMaterial.get(itemKey) ?? '—'
+
+    transactions.push({
+      isOpeningRow: true,
+      itemKey,
+      date: fromDate,
+      typeLabel: 'OPENING BALANCE',
+      stockMovement: '',
+      documentNumber: '',
+      companyName: '',
+      warehouseName: '',
+      sourceWarehouseName: '',
+      destinationWarehouseName: '',
+      vendorName: '',
+      customerName: '',
+      itemCode,
+      itemName: item.item_name,
+      size: item.size,
+      unit: item.unit,
+      inwardQty: 0,
+      outwardQty: 0,
+      warehouseChange: 0,
+      vendorChange: 0,
+      warehouseBalance: item.openingWarehouse,
+      vendorBalance: item.openingVendor,
+      rate: null,
+      value: null,
+      remarks: 'Opening balance as of the selected From Date — not a period transaction',
+      status: 'Posted',
+      createdBy: '',
+      sourceModule: '',
+      sourceRecordId: '',
+      ledgerId: '',
+    })
+
+    let runningWarehouse = item.openingWarehouse
+    let runningVendor = item.openingVendor
+
+    for (const row of periodRowsByKey[displayKey] ?? []) {
+      const rawQty = Number(row.quantity)
+      const info = ENTRY_TYPE_INFO[row.entry_type] ?? { label: row.entry_type, movement: rawQty >= 0 ? 'INWARD' as const : 'OUTWARD' as const }
+      const isVendorMovement = VENDOR_MOVEMENT_TYPES.includes(row.entry_type)
+      const warehouseChange = rawQty
+      const vendorChange = isVendorMovement ? -rawQty : 0
+      runningWarehouse += warehouseChange
+      runningVendor += vendorChange
+
+      const isTransferOut = row.entry_type === 'TRANSFER_OUT'
+      const isTransferIn = row.entry_type === 'TRANSFER_IN'
+      const transferPair = row.reference_id ? transferWarehousesById.get(row.reference_id) : undefined
+      const warehouseName = row.warehouses?.name ?? ''
+
+      const rate = row.purchase_line_id ? transactionRateMap.get(row.purchase_line_id) ?? null : null
+
+      transactions.push({
+        isOpeningRow: false,
+        itemKey,
+        date: row.entry_date,
+        typeLabel: info.label,
+        stockMovement: info.movement,
+        documentNumber: row.reference_number ?? '',
+        companyName: row.companies?.name ?? '',
+        warehouseName,
+        sourceWarehouseName: isTransferOut ? warehouseName : isTransferIn ? (transferPair?.from ?? '') : '',
+        destinationWarehouseName: isTransferIn ? warehouseName : isTransferOut ? (transferPair?.to ?? '') : '',
+        vendorName: isVendorMovement && row.reference_type === 'job_work' && row.reference_id
+          ? vendorNameByJobWorkOrderId.get(row.reference_id) ?? 'Unknown Vendor'
+          : '',
+        customerName: row.reference_type === 'dispatch' && row.reference_id
+          ? customerNameByDispatchId.get(row.reference_id) ?? ''
+          : '',
+        itemCode,
+        itemName: item.item_name,
+        size: item.size,
+        unit: item.unit,
+        inwardQty: rawQty > 0 ? rawQty : 0,
+        outwardQty: rawQty < 0 ? -rawQty : 0,
+        warehouseChange,
+        vendorChange,
+        warehouseBalance: runningWarehouse,
+        vendorBalance: runningVendor,
+        rate,
+        value: rate != null ? rawQty * rate : null,
+        remarks: row.notes ?? '',
+        status: 'Posted',
+        createdBy: row.created_by ? userNameById.get(row.created_by) ?? 'Unknown User' : '',
+        sourceModule: SOURCE_MODULE_LABEL[row.reference_type ?? ''] ?? (row.reference_type ?? ''),
+        sourceRecordId: row.reference_id ?? '',
+        ledgerId: row.id,
+      })
+    }
+
+    // Reconciliation: the running balance walked above must land exactly on
+    // the Summary's own closingWarehouse/closingVendor for this item — both
+    // come from the same rows, so a mismatch would mean a real bug, not an
+    // expected edge case.
+    if (Math.abs(runningWarehouse - item.closingWarehouse) > 0.001) allReconciled = false
+    if (Math.abs(runningVendor - item.closingVendor) > 0.001) allReconciled = false
+  }
+
+  const reconciliation = {
+    reconciled: allReconciled,
+    warehouseOpening: sorted.reduce((s, i) => s + i.openingWarehouse, 0),
+    warehouseNetMovement: sorted.reduce((s, i) => s + (i.closingWarehouse - i.openingWarehouse), 0),
+    warehouseClosing: sorted.reduce((s, i) => s + i.closingWarehouse, 0),
+    vendorOpening: sorted.reduce((s, i) => s + i.openingVendor, 0),
+    vendorNetMovement: sorted.reduce((s, i) => s + (i.closingVendor - i.openingVendor), 0),
+    vendorClosing: sorted.reduce((s, i) => s + i.closingVendor, 0),
+  }
+  if (!reconciliation.reconciled) {
+    console.error('[StockStatement] Reconciliation mismatch between Summary and Transaction Details', {
+      fromDate, toDate, params,
+    })
+  }
+
   // Stock split by warehouse and by vendor, both "as on To Date" — dropped
   // to a sorted array (zero/near-zero entries excluded) for both the
   // expandable UI row and the Excel export beneath it.
@@ -504,7 +726,13 @@ export default async function StockStatementPage({
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <StockStatementExportButton items={exportItems} totals={totals} meta={exportMeta} />
+          <StockStatementExportButton
+            items={exportItems}
+            totals={totals}
+            meta={exportMeta}
+            transactions={transactions}
+            reconciliation={reconciliation}
+          />
           <Link href="/reports/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
             Reconcile Stock
           </Link>
@@ -668,7 +896,12 @@ export default async function StockStatementPage({
               <p className="text-gray-400 text-xs mt-1">Try adjusting the date range or company filter.</p>
             </div>
           ) : (
-            <StockStatementTable rows={tableRows} totals={totals} />
+            <StockStatementTabs
+              tableRows={tableRows}
+              totals={totals}
+              transactions={transactions}
+              reconciled={reconciliation.reconciled}
+            />
           )}
         </div>
       </div>

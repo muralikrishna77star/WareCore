@@ -7,16 +7,22 @@ import {
   type StockStatementExportItem,
   type StockStatementExportTotals,
   type StockStatementExportMeta,
+  type TransactionDetailRow,
+  type StockStatementReconciliation,
 } from '@/lib/exportStockStatementExcel'
 
 export function StockStatementExportButton({
   items,
   totals,
   meta,
+  transactions,
+  reconciliation,
 }: {
   items: StockStatementExportItem[]
   totals: StockStatementExportTotals
   meta: StockStatementExportMeta
+  transactions: TransactionDetailRow[]
+  reconciliation: StockStatementReconciliation
 }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const runningRef = useRef(false)
@@ -26,7 +32,7 @@ export function StockStatementExportButton({
     runningRef.current = true
     setStatus('loading')
     try {
-      await exportStockStatementExcel(items, totals, meta)
+      await exportStockStatementExcel(items, totals, meta, transactions, reconciliation)
       setStatus('success')
     } catch (err) {
       console.error('[StockStatementExport]', err)

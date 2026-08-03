@@ -97,9 +97,11 @@ function BreakdownTable({ title, unit, rows }: { title: string; unit: string; ro
 export default function StockStatementTable({
   rows,
   totals,
+  onViewTransactions,
 }: {
   rows: StatementRow[]
   totals: StatementTotals
+  onViewTransactions?: (key: string, label: string) => void
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -189,6 +191,15 @@ export default function StockStatementTable({
               {isOpen && (
                 <tr key={`${item.key}-detail`} className="bg-gray-50/60">
                   <td colSpan={18} className="px-4 py-3">
+                    {onViewTransactions && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onViewTransactions(item.key, item.itemName) }}
+                        className="mb-3 text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        View Transactions for this item →
+                      </button>
+                    )}
                     {item.warehouseBreakdown.length === 0 && item.vendorBreakdown.length === 0 ? (
                       <p className="text-xs text-gray-400 px-2">No stock at any warehouse or vendor as on the To Date.</p>
                     ) : (
