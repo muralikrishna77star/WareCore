@@ -1422,10 +1422,32 @@ export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
 export const VENDOR_JOB_WORK_LEDGER_QUERY = `
   query GetVendorJobWorkLedger($where: stock_ledger_bool_exp = {}) {
     stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}]) {
-      id entry_type quantity entry_date created_at reference_id reference_number notes company_id material_type_id material_size_id purchase_line_id
+      id entry_type quantity entry_date created_at reference_id reference_number notes company_id material_type_id material_size_id purchase_line_id sub_purchase_line_id
       companies { id name code }
       material_types { description unit }
       material_sizes { size_label }
+    }
+  }
+`
+
+// Job Work Transfer audit trail (migration 056) — used by Vendor Movements
+// purely to resolve the counterparty vendor for a JOB_WORK_TRANSFER_OUT/IN
+// ledger row (the ledger itself only carries one side of the movement).
+// The table is small (an audit log, not a transactional table), so it's
+// fetched unfiltered and matched in memory by order + line + quantity.
+export const VENDOR_JOB_WORK_TRANSFERS_QUERY = `
+  query GetVendorJobWorkTransfers {
+    job_work_transfers {
+      transfer_number
+      from_job_work_order_id
+      to_job_work_order_id
+      from_vendor { name }
+      to_vendor { name }
+      job_work_transfer_items {
+        purchase_line_id
+        sub_purchase_line_id
+        quantity_transferred
+      }
     }
   }
 `

@@ -4,6 +4,7 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import {
   VENDOR_JOB_WORK_LEDGER_QUERY,
   VENDOR_JOB_WORK_ITEM_BALANCES_QUERY,
+  VENDOR_JOB_WORK_TRANSFERS_QUERY,
   JOB_WORK_ORDERS_VENDOR_INFO_QUERY,
   DISPATCH_ORDERS_VENDOR_INFO_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
@@ -116,7 +117,7 @@ export default async function VendorMovementsPage({
   }
   const rateWhere = { _and: rateConditions }
 
-  const [periodJobWorkResult, cumulativeJobWorkResult, periodSaleResult, jobWorkItemBalanceResult, purchaseRatesResult] = await Promise.all([
+  const [periodJobWorkResult, cumulativeJobWorkResult, periodSaleResult, periodTransfersResult, jobWorkItemBalanceResult, purchaseRatesResult, transferAuditResult] = await Promise.all([
     hasuraQuery(VENDOR_JOB_WORK_LEDGER_QUERY, {
       where: {
         _and: [
@@ -149,6 +150,17 @@ export default async function VendorMovementsPage({
         ],
       },
     }),
+    hasuraQuery(VENDOR_JOB_WORK_LEDGER_QUERY, {
+      where: {
+        _and: [
+          ...baseConditions,
+          { entry_type: { _in: ['JOB_WORK_TRANSFER_OUT', 'JOB_WORK_TRANSFER_IN'] } },
+          { reference_type: { _eq: 'job_work' } },
+          { entry_date: { _gte: fromDate } },
+          { entry_date: { _lte: toDate } },
+        ],
+      },
+    }),
     hasuraQuery(VENDOR_JOB_WORK_ITEM_BALANCES_QUERY, {
       where: {
         _and: [
@@ -159,12 +171,43 @@ export default async function VendorMovementsPage({
       },
     }),
     hasuraQuery(VENDOR_MOVEMENT_PURCHASE_RATES_QUERY, { where: rateWhere }),
+    hasuraQuery(VENDOR_JOB_WORK_TRANSFERS_QUERY),
   ])
 
   const periodJobWork: any[] = periodJobWorkResult.stock_ledger ?? []
   const cumulativeJobWork: any[] = cumulativeJobWorkResult.stock_ledger ?? []
   const periodSales: any[] = periodSaleResult.stock_ledger ?? []
+  const periodTransfers: any[] = periodTransfersResult.stock_ledger ?? []
   const jobWorkItemBalances: any[] = jobWorkItemBalanceResult.job_work_items ?? []
+
+  // Counterparty vendor lookup for a JOB_WORK_TRANSFER_OUT/IN ledger row —
+  // the ledger row only carries one side of the movement (the order it's
+  // posted against), so the other vendor's name comes from the transfer
+  // audit trail (job_work_transfers/job_work_transfer_items), matched by
+  // order + line + quantity. Table is tiny, so an exact-quantity match is
+  // reliable enough for a display-only label (dates/quantities shown to
+  // the user always come from the ledger row itself, never from here).
+  const transferOutCounterparty = new Map<string, { vendorName: string; transferNumber: string }>()
+  const transferInCounterparty = new Map<string, { vendorName: string; transferNumber: string }>()
+  for (const t of (transferAuditResult.job_work_transfers ?? []) as any[]) {
+    for (const item of t.job_work_transfer_items ?? []) {
+      const lineId = item.sub_purchase_line_id || item.purchase_line_id
+      if (!lineId) continue
+      const qtyKey = Number(item.quantity_transferred).toFixed(3)
+      if (t.from_job_work_order_id) {
+        transferOutCounterparty.set(`${t.from_job_work_order_id}|${lineId}|${qtyKey}`, {
+          vendorName: t.to_vendor?.name || '—',
+          transferNumber: t.transfer_number,
+        })
+      }
+      if (t.to_job_work_order_id) {
+        transferInCounterparty.set(`${t.to_job_work_order_id}|${lineId}|${qtyKey}`, {
+          vendorName: t.from_vendor?.name || '—',
+          transferNumber: t.transfer_number,
+        })
+      }
+    }
+  }
 
   // Newest-first order: first hit per purchase_line_id is that exact line;
   // first hit per material_type_id|material_size_id is the latest purchase.
@@ -204,7 +247,7 @@ export default async function VendorMovementsPage({
   // Collect every job work order id we need vendor info for: those directly
   // referenced by job-work ledger entries, plus those backing vendor-direct sales.
   const jobWorkOrderIds = new Set<string>()
-  for (const m of [...periodJobWork, ...cumulativeJobWork]) {
+  for (const m of [...periodJobWork, ...cumulativeJobWork, ...periodTransfers]) {
     if (m.reference_id) jobWorkOrderIds.add(m.reference_id)
   }
   for (const info of dispatchInfoById.values()) {
@@ -281,6 +324,36 @@ export default async function VendorMovementsPage({
         type: isVirtual ? 'Return (paired with direct sale)' : 'Return',
         quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
         purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
+      })
+    }
+  }
+
+  // Vendor-to-vendor transfers: shown on *both* sides — a Transfer Out row
+  // under the source vendor and a Transfer In row under the destination
+  // vendor — so a transfer is visible wherever the material is being
+  // tracked, not just baked silently into the Balance column.
+  for (const m of periodTransfers) {
+    const info = jwoInfoById.get(m.reference_id)
+    if (!info) continue
+    if (vendorFilter && info.vendor_id !== vendorFilter) continue
+    const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
+    const lineId = m.sub_purchase_line_id || m.purchase_line_id
+    const qtyKey = Math.abs(Number(m.quantity)).toFixed(3)
+    if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
+      const counterparty = lineId ? transferOutCounterparty.get(`${m.reference_id}|${lineId}|${qtyKey}`) : undefined
+      g.transactions.push({
+        id: m.id, date: m.entry_date, type: 'Transfer Out',
+        quantity: Number(m.quantity), reference_number: m.reference_number,
+        notes: counterparty ? `Transferred to ${counterparty.vendorName} (${counterparty.transferNumber})` : m.notes,
+        purchaseDate: null, rate: null,
+      })
+    } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
+      const counterparty = lineId ? transferInCounterparty.get(`${m.reference_id}|${lineId}|${qtyKey}`) : undefined
+      g.transactions.push({
+        id: m.id, date: m.entry_date, type: 'Transfer In',
+        quantity: Number(m.quantity), reference_number: m.reference_number,
+        notes: counterparty ? `Transferred from ${counterparty.vendorName} (${counterparty.transferNumber})` : m.notes,
+        purchaseDate: null, rate: null,
       })
     }
   }
@@ -365,7 +438,7 @@ export default async function VendorMovementsPage({
   }
 
   let rows = Array.from(groups.values()).filter(
-    (g) => g.jobWorkOut > 0 || g.directSales > 0 || g.returns > 0 || Math.abs(g.balance) > 0.0005
+    (g) => g.jobWorkOut > 0 || g.directSales > 0 || g.returns > 0 || Math.abs(g.balance) > 0.0005 || g.transactions.length > 0
   )
   for (const g of rows) {
     g.transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))

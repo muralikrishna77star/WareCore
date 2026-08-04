@@ -5,7 +5,7 @@ import { Fragment, useState } from 'react'
 export type Transaction = {
   id: string
   date: string
-  type: 'Job Work Out' | 'Direct Sale' | 'Return' | 'Return (paired with direct sale)'
+  type: 'Job Work Out' | 'Direct Sale' | 'Return' | 'Return (paired with direct sale)' | 'Transfer Out' | 'Transfer In'
   quantity: number
   reference_number: string | null
   notes: string | null
@@ -36,6 +36,8 @@ const typeColors: Record<Transaction['type'], string> = {
   'Direct Sale': 'bg-red-100 text-red-800',
   Return: 'bg-teal-100 text-teal-800',
   'Return (paired with direct sale)': 'bg-gray-100 text-gray-600',
+  'Transfer Out': 'bg-orange-100 text-orange-800',
+  'Transfer In': 'bg-indigo-100 text-indigo-800',
 }
 
 function formatDate(d: string) {
