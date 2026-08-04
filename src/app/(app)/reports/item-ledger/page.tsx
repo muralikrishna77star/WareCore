@@ -8,6 +8,7 @@ import {
   ITEM_STOCK_LEDGER_QUERY,
   ITEM_STOCK_AT_VENDORS_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
+  VENDOR_JOB_WORK_TRANSFERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
@@ -211,6 +212,32 @@ export default async function ItemStockLedgerPage({
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? '']))
   }
 
+  // Counterparty vendor for a JOB_WORK_TRANSFER_OUT/IN row — the row's own
+  // reference_id only carries one side of the vendor-to-vendor transfer (the
+  // order it's posted against), so the other vendor's name comes from the
+  // transfer audit trail (job_work_transfers/job_work_transfer_items),
+  // matched by order + line + quantity, same approach as Vendorwise Stock
+  // Movement's Transfer Out/In display.
+  const hasTransferEntries = entries.some((e) => e.entry_type === 'JOB_WORK_TRANSFER_OUT' || e.entry_type === 'JOB_WORK_TRANSFER_IN')
+  const transferOutCounterparty = new Map<string, string>()
+  const transferInCounterparty = new Map<string, string>()
+  if (hasTransferEntries) {
+    const transferAuditResult = await hasuraQuery(VENDOR_JOB_WORK_TRANSFERS_QUERY)
+    for (const t of (transferAuditResult.job_work_transfers ?? []) as any[]) {
+      for (const item of t.job_work_transfer_items ?? []) {
+        const lineId = item.sub_purchase_line_id || item.purchase_line_id
+        if (!lineId) continue
+        const qtyKey = Number(item.quantity_transferred).toFixed(3)
+        if (t.from_job_work_order_id) {
+          transferOutCounterparty.set(`${t.from_job_work_order_id}|${lineId}|${qtyKey}`, t.to_vendor?.name || '—')
+        }
+        if (t.to_job_work_order_id) {
+          transferInCounterparty.set(`${t.to_job_work_order_id}|${lineId}|${qtyKey}`, t.from_vendor?.name || '—')
+        }
+      }
+    }
+  }
+
   // Rows sharing the same reference + line ID + entry type are flagged for
   // review — usually leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs
   // from repeated edits. entry_type must match too: a job work line's
@@ -232,13 +259,30 @@ export default async function ItemStockLedgerPage({
     if (VENDOR_MOVEMENT_TYPES.includes(e.entry_type)) vendorRunning -= Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
+    const ownVendorName = e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null
+
+    // Transfers show both sides ("Source → Destination"): the row's own
+    // vendor already tells us which end it's posted at, and the audit-trail
+    // lookup fills in the counterparty on the other end.
+    let vendorName = ownVendorName
+    if (lineId && e.reference_id) {
+      const qtyKey = Math.abs(Number(e.quantity)).toFixed(3)
+      if (e.entry_type === 'JOB_WORK_TRANSFER_OUT') {
+        const counterparty = transferOutCounterparty.get(`${e.reference_id}|${lineId}|${qtyKey}`)
+        if (counterparty) vendorName = `${ownVendorName || '—'} → ${counterparty}`
+      } else if (e.entry_type === 'JOB_WORK_TRANSFER_IN') {
+        const counterparty = transferInCounterparty.get(`${e.reference_id}|${lineId}|${qtyKey}`)
+        if (counterparty) vendorName = `${counterparty} → ${ownVendorName || '—'}`
+      }
+    }
+
     return {
       ...e,
       balance: running,
       vendorBalance: vendorRunning,
       orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
-      vendorName: e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null,
+      vendorName,
     }
   })
   const closingBalance = running
