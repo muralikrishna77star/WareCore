@@ -11,6 +11,7 @@ export type Transaction = {
   notes: string | null
   purchaseDate: string | null
   rate: number | null
+  counterpartyVendor?: string | null
 }
 
 export type GroupRow = {

@@ -43,6 +43,10 @@ type GroupRow = {
   rate: number | null
   purchaseDate: string | null
   transactions: Transaction[]
+  transferOutQty: number
+  transferOutTo: string[]
+  transferInQty: number
+  transferInFrom: string[]
 }
 
 export default async function VendorMovementsPage({
@@ -293,6 +297,10 @@ export default async function VendorMovementsPage({
         rate: null,
         purchaseDate: null,
         transactions: [],
+        transferOutQty: 0,
+        transferOutTo: [],
+        transferInQty: 0,
+        transferInFrom: [],
       }
       groups.set(key, g)
     }
@@ -346,7 +354,10 @@ export default async function VendorMovementsPage({
         quantity: Number(m.quantity), reference_number: m.reference_number,
         notes: counterparty ? `Transferred to ${counterparty.vendorName} (${counterparty.transferNumber})` : m.notes,
         purchaseDate: null, rate: null,
+        counterpartyVendor: counterparty?.vendorName ?? null,
       })
+      g.transferOutQty += Math.abs(Number(m.quantity))
+      if (counterparty && !g.transferOutTo.includes(counterparty.vendorName)) g.transferOutTo.push(counterparty.vendorName)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
       const counterparty = lineId ? transferInCounterparty.get(`${m.reference_id}|${lineId}|${qtyKey}`) : undefined
       g.transactions.push({
@@ -354,7 +365,10 @@ export default async function VendorMovementsPage({
         quantity: Number(m.quantity), reference_number: m.reference_number,
         notes: counterparty ? `Transferred from ${counterparty.vendorName} (${counterparty.transferNumber})` : m.notes,
         purchaseDate: null, rate: null,
+        counterpartyVendor: counterparty?.vendorName ?? null,
       })
+      g.transferInQty += Math.abs(Number(m.quantity))
+      if (counterparty && !g.transferInFrom.includes(counterparty.vendorName)) g.transferInFrom.push(counterparty.vendorName)
     }
   }
 
@@ -506,19 +520,23 @@ export default async function VendorMovementsPage({
     transactions: g.transactions,
   }))
 
-  const exportRows = tableRows.map((r) => ({
+  const exportRows = rows.map((g) => ({
     'As Of': toDate,
-    'Vendor': r.vendorName,
-    'Company': r.companyName,
-    'Item': r.itemLabel,
-    'Size': r.sizeLabel || '',
-    'Job Work Out': r.jobWorkOut,
-    'Direct Sales': r.directSales,
-    'Returns': r.returns,
-    'Balance': r.balance,
-    'Purchase Date': r.purchaseDate || '',
-    'Rate': r.rate || '',
-    'Valuation (₹)': r.rate ? r.balance * r.rate : '',
+    'Vendor': g.vendorName,
+    'Company': g.companyName,
+    'Item': itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
+    'Size': g.sizeLabel || '',
+    'Job Work Out': g.jobWorkOut,
+    'Direct Sales': g.directSales,
+    'Returns': g.returns,
+    'Transferred Out': g.transferOutQty || '',
+    'Transferred Out To': g.transferOutTo.join('; '),
+    'Transferred In': g.transferInQty || '',
+    'Transferred In From': g.transferInFrom.join('; '),
+    'Balance': g.balance,
+    'Purchase Date': g.purchaseDate || '',
+    'Rate': g.rate || '',
+    'Valuation (₹)': g.rate ? g.balance * g.rate : '',
   }))
 
   return (
