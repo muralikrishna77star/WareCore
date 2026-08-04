@@ -132,7 +132,7 @@ export default async function VendorMovementsPage({
       where: {
         _and: [
           ...baseConditions,
-          { entry_type: { _in: ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN'] } },
+          { entry_type: { _in: ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_TRANSFER_OUT'] } },
           { reference_type: { _eq: 'job_work' } },
           { entry_date: { _lte: toDate } },
         ],
@@ -313,13 +313,30 @@ export default async function VendorMovementsPage({
 
   // Cumulative-to-date balance (as of the To date), independent of the From date.
   // quantity_sent is used for the outbound side because historic/imported job
-  // work lines can exist without their matching JOB_WORK_OUT ledger entry.
+  // work lines can exist without their matching JOB_WORK_OUT ledger entry —
+  // this also picks up transfer-destination lines (is_transfer_line = true),
+  // whose own quantity_sent/order carry the *new* vendor and its own dated
+  // dispatch_date, so incoming transfers land under the receiving vendor
+  // automatically. ensureGroup() is called directly here (not just from the
+  // ledger loops below) so a vendor+material combo whose only job-work
+  // activity is a transfer still gets a row instead of being silently
+  // dropped.
+  //
+  // The same material sent out is still sitting in quantity_sent at the
+  // *source* vendor too, so JOB_WORK_TRANSFER_OUT is subtracted from the
+  // source vendor's key below (mirroring JOB_WORK_RETURN_IN) — using the
+  // dated ledger entries, not job_work_items.quantity_transferred_out
+  // directly, since that column has no date of its own and would ignore
+  // the To date cutoff (subtracting transfers that haven't happened yet
+  // as of the report's as-of date).
   const cumulativeOutByKey = new Map<string, number>()
   const cumulativeReturnInByKey = new Map<string, number>()
+  const cumulativeTransferOutByKey = new Map<string, number>()
   for (const item of jobWorkItemBalances) {
     const order = item.job_work_orders
     if (!order?.vendor_id) continue
     if (vendorFilter && order.vendor_id !== vendorFilter) continue
+    ensureGroup(order.vendor_id, order.suppliers?.name || '—', order.companies?.name || '—', item)
     const key = groupKey(order.vendor_id, item.material_type_id, item.material_size_id ?? null)
     cumulativeOutByKey.set(key, (cumulativeOutByKey.get(key) ?? 0) + Number(item.quantity_sent ?? 0))
   }
@@ -331,10 +348,15 @@ export default async function VendorMovementsPage({
     const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
     if (m.entry_type === 'JOB_WORK_RETURN_IN') {
       cumulativeReturnInByKey.set(key, (cumulativeReturnInByKey.get(key) ?? 0) + Number(m.quantity))
+    } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
+      cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) + Math.abs(Number(m.quantity)))
     }
   }
   for (const g of groups.values()) {
-    g.balance = (cumulativeOutByKey.get(g.key) ?? 0) - (cumulativeReturnInByKey.get(g.key) ?? 0)
+    g.balance =
+      (cumulativeOutByKey.get(g.key) ?? 0) -
+      (cumulativeReturnInByKey.get(g.key) ?? 0) -
+      (cumulativeTransferOutByKey.get(g.key) ?? 0)
     const latest = latestByMaterialMap.get(`${g.materialTypeId}|${g.materialSizeId ?? ''}`)
     if (latest) {
       g.rate = latest.rate

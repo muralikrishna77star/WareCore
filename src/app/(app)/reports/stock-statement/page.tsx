@@ -403,6 +403,17 @@ export default async function StockStatementPage({
       ? vendorNameByJobWorkOrderId.get(row.reference_id) ?? 'Unknown Vendor'
       : 'Unknown Vendor'
 
+  // Vendor-side delta for a VENDOR_MOVEMENT_TYPES row. JOB_WORK_OUT/RETURN_IN/
+  // CANCEL are posted with the *warehouse's* sign (negative when material
+  // leaves the warehouse for a vendor), so the vendor side is the inverse
+  // (-qty). JOB_WORK_TRANSFER_OUT/IN are different: both legs share the
+  // source order's warehouse_id purely so they net to zero on warehouse
+  // stock, but each is posted on the vendor whose stock is actually moving
+  // — TRANSFER_OUT (negative) on the losing vendor, TRANSFER_IN (positive)
+  // on the gaining vendor — so the vendor side is qty as-is, not inverted.
+  const vendorDeltaFor = (row: LedgerRow, qty: number): number =>
+    row.entry_type === 'JOB_WORK_TRANSFER_OUT' || row.entry_type === 'JOB_WORK_TRANSFER_IN' ? qty : -qty
+
   // Opening balance: unconditional sum of everything before From Date (true
   // running balance regardless of type), plus the same for the Vendor side
   // restricted to job-work movement types — same convention as the Item
@@ -414,9 +425,10 @@ export default async function StockStatementPage({
     const whName = row.warehouses?.name ?? 'Unknown Warehouse'
     item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
     if (VENDOR_MOVEMENT_TYPES.includes(row.entry_type)) {
-      item.openingVendor -= qty
+      const vendorDelta = vendorDeltaFor(row, qty)
+      item.openingVendor += vendorDelta
       const vendorName = vendorNameFor(row)
-      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) - qty)
+      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) + vendorDelta)
     }
   }
 
@@ -445,9 +457,10 @@ export default async function StockStatementPage({
     item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
 
     if (VENDOR_MOVEMENT_TYPES.includes(row.entry_type)) {
-      item.closingVendor -= qty
+      const vendorDelta = vendorDeltaFor(row, qty)
+      item.closingVendor += vendorDelta
       const vendorName = vendorNameFor(row)
-      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) - qty)
+      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) + vendorDelta)
     }
   }
 
@@ -535,7 +548,7 @@ export default async function StockStatementPage({
       const info = ENTRY_TYPE_INFO[row.entry_type] ?? { label: row.entry_type, movement: rawQty >= 0 ? 'INWARD' as const : 'OUTWARD' as const }
       const isVendorMovement = VENDOR_MOVEMENT_TYPES.includes(row.entry_type)
       const warehouseChange = rawQty
-      const vendorChange = isVendorMovement ? -rawQty : 0
+      const vendorChange = isVendorMovement ? vendorDeltaFor(row, rawQty) : 0
       runningWarehouse += warehouseChange
       runningVendor += vendorChange
 

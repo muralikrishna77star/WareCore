@@ -1459,6 +1459,9 @@ export const VENDOR_JOB_WORK_ITEM_BALANCES_QUERY = `
       quantity_sent
       material_type_id
       material_size_id
+      size_label
+      material_types { description unit }
+      material_sizes { size_label }
       job_work_orders {
         vendor_id
         dispatch_date
