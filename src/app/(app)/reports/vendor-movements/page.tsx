@@ -14,10 +14,11 @@ import {
   VENDOR_MOVEMENT_PURCHASE_RATES_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -520,24 +521,87 @@ export default async function VendorMovementsPage({
     transactions: g.transactions,
   }))
 
-  const exportRows = rows.map((g) => ({
-    'As Of': toDate,
-    'Vendor': g.vendorName,
-    'Company': g.companyName,
-    'Item': itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
-    'Size': g.sizeLabel || '',
-    'Job Work Out': g.jobWorkOut,
-    'Direct Sales': g.directSales,
-    'Returns': g.returns,
-    'Transferred Out': g.transferOutQty || '',
-    'Transferred Out To': g.transferOutTo.join('; '),
-    'Transferred In': g.transferInQty || '',
-    'Transferred In From': g.transferInFrom.join('; '),
-    'Balance': g.balance,
-    'Purchase Date': g.purchaseDate || '',
-    'Rate': g.rate || '',
-    'Valuation (₹)': g.rate ? g.balance * g.rate : '',
-  }))
+  const exportMeta = {
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
+    fromDate,
+    toDate,
+    filterLine: [
+      `Vendor: ${suppliers.find((s) => s.id === params.vendor)?.name || 'All Vendors'}`,
+      `Item: ${selectedItem?.label || 'All Items'}`,
+    ].join('   |   '),
+    generatedBy: '',
+  }
+  const summarySheet: ProfessionalSheetSpec = {
+    sheetName: 'Vendor Movements',
+    title: 'Vendorwise Stock Movement — Summary',
+    emptyMessage: 'No vendor movements found for the selected period.',
+    columns: [
+      { header: 'Vendor', key: 'vendor', width: 22, align: 'left' },
+      { header: 'Company', key: 'company', width: 18, align: 'left' },
+      { header: 'Item', key: 'item', width: 26, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Job Work Out', key: 'jobWorkOut', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Direct Sales', key: 'directSales', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Returns', key: 'returns', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Transferred Out', key: 'transferOutQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Transferred Out To', key: 'transferOutTo', width: 24, align: 'left' },
+      { header: 'Transferred In', key: 'transferInQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Transferred In From', key: 'transferInFrom', width: 24, align: 'left' },
+      { header: `Balance as on ${toDate}`, key: 'balance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
+      { header: 'Purchase Date', key: 'purchaseDate', width: 16, align: 'center', isDate: true },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Valuation (₹)', key: 'valuation', width: 18, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+    ],
+    rows: rows.map((g) => ({
+      vendor: g.vendorName,
+      company: g.companyName,
+      item: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
+      size: g.sizeLabel || '',
+      jobWorkOut: g.jobWorkOut,
+      directSales: g.directSales,
+      returns: g.returns,
+      transferOutQty: g.transferOutQty || null,
+      transferOutTo: g.transferOutTo.join('; '),
+      transferInQty: g.transferInQty || null,
+      transferInFrom: g.transferInFrom.join('; '),
+      balance: g.balance,
+      purchaseDate: g.purchaseDate || null,
+      rate: g.rate || null,
+      valuation: g.rate ? g.balance * g.rate : null,
+    })),
+  }
+  const transactionDetailsSheet: ProfessionalSheetSpec = {
+    sheetName: 'Transaction Details',
+    title: 'Vendorwise Stock Movement — Transaction Details',
+    emptyMessage: 'No vendor transactions found for the selected period.',
+    columns: [
+      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Vendor', key: 'vendor', width: 22, align: 'left' },
+      { header: 'Company', key: 'company', width: 18, align: 'left' },
+      { header: 'Item', key: 'item', width: 26, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Transaction Type', key: 'type', width: 22, align: 'left' },
+      { header: 'Quantity', key: 'quantity', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Reference', key: 'reference', width: 18, align: 'left' },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Notes', key: 'notes', width: 30, align: 'left' },
+    ],
+    rows: rows.flatMap((g) =>
+      g.transactions.map((t) => ({
+        date: t.date,
+        vendor: g.vendorName,
+        company: g.companyName,
+        item: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
+        size: g.sizeLabel || '',
+        type: t.type,
+        quantity: t.quantity,
+        reference: t.reference_number || '',
+        rate: t.rate ?? null,
+        notes: t.notes || '',
+      }))
+    ).map((row, idx) => ({ sno: idx + 1, ...row })),
+  }
 
   return (
     <div className="space-y-6">
@@ -548,7 +612,13 @@ export default async function VendorMovementsPage({
         </div>
         <div className="flex items-center gap-2">
           {tableRows.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`vendor-movements-${fromDate}-to-${toDate}`} sheetName="Vendor Movements" />
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[summarySheet, transactionDetailsSheet]}
+              filenameBase="Vendor_Movements"
+              successMessage="Vendor Movements exported successfully."
+              errorMessage="Unable to export Vendor Movements. Please try again."
+            />
           )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>

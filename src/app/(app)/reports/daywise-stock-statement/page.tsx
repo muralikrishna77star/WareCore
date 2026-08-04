@@ -15,12 +15,33 @@ import {
 } from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './DaywiseStockStatementTable'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+
+// Stock Movement classification for the Transaction Details export — same
+// four buckets used elsewhere in the app (INWARD/OUTWARD/TRANSFER/ADJUSTMENT).
+const STOCK_MOVEMENT_BY_TYPE: Record<string, 'INWARD' | 'OUTWARD' | 'TRANSFER' | 'ADJUSTMENT'> = {
+  PURCHASE_IN: 'INWARD',
+  PURCHASE_CANCEL: 'OUTWARD',
+  SALE_OUT: 'OUTWARD',
+  SALE_CANCEL: 'INWARD',
+  JOB_WORK_OUT: 'OUTWARD',
+  JOB_WORK_RETURN_IN: 'INWARD',
+  JOB_WORK_CANCEL: 'INWARD',
+  JOB_WORK_OUTPUT_IN: 'INWARD',
+  JOB_WORK_TRANSFER_OUT: 'TRANSFER',
+  JOB_WORK_TRANSFER_IN: 'TRANSFER',
+  VENDOR_RETURN_IN: 'INWARD',
+  TRANSFER_IN: 'TRANSFER',
+  TRANSFER_OUT: 'TRANSFER',
+  ADJUSTMENT_IN: 'ADJUSTMENT',
+  ADJUSTMENT_OUT: 'ADJUSTMENT',
+}
 
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -180,6 +201,13 @@ export default async function DaywiseStockStatementPage({
   }
   const sortedDates = Array.from(byDay.keys()).sort()
 
+  // Built alongside `groups` purely for the Transaction Details export sheet
+  // — every transaction with its post-transaction running balance, using the
+  // exact same warehouseRunning/vendorRunning sequence the on-screen
+  // per-day Opening/Closing figures are derived from, so the export always
+  // agrees with the screen.
+  const transactionDetailRows: Record<string, unknown>[] = []
+
   let warehouseRunning = openingWarehouseBalance
   let vendorRunning = openingVendorBalance
   const groups: DayGroup[] = sortedDates.map((date) => {
@@ -212,6 +240,27 @@ export default async function DaywiseStockStatementPage({
       if (m.entry_type === 'JOB_WORK_OUT') jobWorkOutRaw += rawQty
       if (m.entry_type === 'JOB_WORK_RETURN_IN' || m.entry_type === 'VENDOR_RETURN_IN') jobReturns += rawQty
       value += txnValue ?? 0
+
+      const isVendorMovement = VENDOR_MOVEMENT_TYPES.includes(m.entry_type)
+      transactionDetailRows.push({
+        date,
+        typeLabel: cfg.label,
+        stockMovement: STOCK_MOVEMENT_BY_TYPE[m.entry_type] ?? (cfg.isIn ? 'INWARD' : 'OUTWARD'),
+        documentNumber: m.reference_number ?? '',
+        company: m.companies?.name ?? '',
+        warehouse: m.warehouses?.name ?? '',
+        itemName,
+        unit: m.material_types?.unit ?? 'tons',
+        inwardQty: rawQty > 0 ? rawQty : null,
+        outwardQty: rawQty < 0 ? Math.abs(rawQty) : null,
+        warehouseChange: rawQty,
+        vendorChange: isVendorMovement ? -rawQty : 0,
+        warehouseBalance: warehouseRunning,
+        vendorBalance: vendorRunning,
+        rate: rate ?? null,
+        value: txnValue ?? null,
+        remarks: m.notes ?? '',
+      })
 
       return {
         id: m.id,
@@ -262,38 +311,82 @@ export default async function DaywiseStockStatementPage({
     value: groups.reduce((s, g) => s + g.value, 0),
   }
 
-  const exportRows = groups.flatMap((day) => [
-    {
-      'Date': formatDate(day.date),
-      'Row': `Day Summary — ${day.count} txn(s)`,
-      'Opening (Warehouse)': fmtQ(day.openingWarehouse),
-      'Opening (Vendor)': fmtQ(day.openingVendor),
-      'Purchases': fmtQ(day.purchases),
-      'Sales': fmtQ(day.sales),
-      'Transfer In': fmtQ(day.transferIn),
-      'Transfer Out': fmtQ(day.transferOut),
-      'Job Work Out': fmtQ(day.jobWorkOut),
-      'Job Returns': fmtQ(day.jobReturns),
-      'Closing (Warehouse)': fmtQ(day.closingWarehouse),
-      'Closing (Vendor)': fmtQ(day.closingVendor),
-      'Value (₹)': day.value,
-      'Type': '', 'Item Name': '', 'Company': '', 'Warehouse': '', 'Qty': '', 'Rate': '', 'Reference': '',
-    },
-    ...day.transactions.map((t) => ({
-      'Date': formatDate(day.date),
-      'Row': '',
-      'Opening (Warehouse)': '', 'Opening (Vendor)': '', 'Purchases': '', 'Sales': '', 'Transfer In': '', 'Transfer Out': '', 'Job Work Out': '', 'Job Returns': '',
-      'Closing (Warehouse)': '', 'Closing (Vendor)': '',
-      'Value (₹)': t.value ?? '',
-      'Type': t.typeLabel,
-      'Item Name': t.itemName,
-      'Company': t.company,
-      'Warehouse': t.warehouse,
-      'Qty': t.isIn ? t.qty : -t.qty,
-      'Rate': t.rate ?? '',
-      'Reference': t.reference,
+  // Professional 2-sheet export: Daywise Summary (one row per day, same
+  // figures as the on-screen compact summary bar) + Transaction Details
+  // (every transaction, chronological, with a continuous running balance —
+  // built alongside the day loop above from the exact same running totals).
+  const exportMeta = {
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
+    fromDate,
+    toDate,
+    filterLine: [
+      `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+      `Item: ${selectedItem?.label || 'All Items'}`,
+      `Supplier: ${suppliers.find((s) => s.id === params.vendor)?.name || 'All Suppliers'}`,
+    ].join('   |   '),
+    generatedBy: '',
+  }
+  const summarySheet: ProfessionalSheetSpec = {
+    sheetName: 'Daywise Summary',
+    title: 'Daywise Stock Statement — Summary',
+    emptyMessage: 'No stock movements found for the selected period.',
+    columns: [
+      { header: 'Date', key: 'date', width: 14, align: 'center', isDate: true },
+      { header: 'Transactions', key: 'count', width: 12, align: 'center' },
+      { header: 'Opening (Warehouse)', key: 'openingWarehouse', width: 18, align: 'right', numFmt: QTY_FMT },
+      { header: 'Opening (Vendor)', key: 'openingVendor', width: 16, align: 'right', numFmt: QTY_FMT },
+      { header: 'Purchases', key: 'purchases', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Sales', key: 'sales', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Transfer In', key: 'transferIn', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Transfer Out', key: 'transferOut', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Job Work Out', key: 'jobWorkOut', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Job Returns', key: 'jobReturns', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Closing (Warehouse)', key: 'closingWarehouse', width: 18, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Closing (Vendor)', key: 'closingVendor', width: 16, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+    ],
+    rows: groups.map((day) => ({
+      date: day.date,
+      count: day.count,
+      openingWarehouse: day.openingWarehouse,
+      openingVendor: day.openingVendor,
+      purchases: day.purchases,
+      sales: day.sales,
+      transferIn: day.transferIn,
+      transferOut: day.transferOut,
+      jobWorkOut: day.jobWorkOut,
+      jobReturns: day.jobReturns,
+      closingWarehouse: day.closingWarehouse,
+      closingVendor: day.closingVendor,
+      value: day.value,
     })),
-  ])
+  }
+  const transactionDetailsSheet: ProfessionalSheetSpec = {
+    sheetName: 'Transaction Details',
+    title: 'Daywise Stock Statement — Transaction Details',
+    emptyMessage: 'No stock movements found for the selected period.',
+    columns: [
+      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Transaction Type', key: 'typeLabel', width: 20, align: 'left' },
+      { header: 'Stock Movement', key: 'stockMovement', width: 14, align: 'center' },
+      { header: 'Document Number', key: 'documentNumber', width: 18, align: 'left' },
+      { header: 'Company', key: 'company', width: 16, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Item Name', key: 'itemName', width: 28, align: 'left' },
+      { header: 'Unit', key: 'unit', width: 10, align: 'center' },
+      { header: 'Inward Quantity', key: 'inwardQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Outward Quantity', key: 'outwardQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Warehouse Quantity Change', key: 'warehouseChange', width: 22, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Vendor Quantity Change', key: 'vendorChange', width: 20, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Warehouse Running Balance', key: 'warehouseBalance', width: 22, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Vendor Running Balance', key: 'vendorBalance', width: 20, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Transaction Value (₹)', key: 'value', width: 18, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+      { header: 'Remarks', key: 'remarks', width: 22, align: 'left' },
+    ],
+    rows: transactionDetailRows.map((row, idx) => ({ sno: idx + 1, ...row })),
+  }
 
   return (
     <div className="space-y-6">
@@ -304,7 +397,13 @@ export default async function DaywiseStockStatementPage({
         </div>
         <div className="flex items-center gap-2">
           {groups.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`Daywise_Stock_Statement_${fromDate}_to_${toDate}`} sheetName="Daywise Stock Statement" />
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[summarySheet, transactionDetailsSheet]}
+              filenameBase="Daywise_Stock_Statement"
+              successMessage="Daywise Stock Statement exported successfully."
+              errorMessage="Unable to export the Daywise Stock Statement. Please try again."
+            />
           )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>

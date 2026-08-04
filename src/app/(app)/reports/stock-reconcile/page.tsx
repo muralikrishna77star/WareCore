@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 type TotalRow = {
   category: string
@@ -255,18 +256,31 @@ export default function StockReconcilePage() {
         {totals && (
           <div className="border-t pt-4 space-y-2">
             <div className="flex justify-end">
-              <ExportExcelButton
-                rows={totals.map((row) => ({
-                  'As Of': to,
-                  'Category': categoryLabels[row.category] || row.category,
-                  'Source Total': row.sourceQty,
-                  'Ledger Total': row.ledgerQty,
-                  'Diff': row.diff,
-                  'Status': row.matches ? 'Match' : cancellationCategories.has(row.category) ? 'Info' : 'Mismatch',
-                }))}
-                filename={`stock-reconcile-totals-${from}-to-${to}`}
-                sheetName="Totals"
+              <ProfessionalExportButton
+                meta={{ companyName: 'All Companies', fromDate: from, toDate: to, filterLine: `Year: ${year === 'all' ? 'All Time' : year}`, generatedBy: '' }}
+                sheets={[{
+                  sheetName: 'Totals',
+                  title: 'Stock Reconciliation — Totals',
+                  emptyMessage: 'No totals to display.',
+                  columns: [
+                    { header: 'Category', key: 'category', width: 24, align: 'left' },
+                    { header: 'Source Total', key: 'sourceQty', width: 16, align: 'right', numFmt: QTY_FMT },
+                    { header: 'Ledger Total', key: 'ledgerQty', width: 16, align: 'right', numFmt: QTY_FMT },
+                    { header: 'Diff', key: 'diff', width: 14, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+                    { header: 'Status', key: 'status', width: 14, align: 'center' },
+                  ],
+                  rows: totals.map((row) => ({
+                    category: categoryLabels[row.category] || row.category,
+                    sourceQty: row.sourceQty,
+                    ledgerQty: row.ledgerQty,
+                    diff: row.diff,
+                    status: row.matches ? 'Match' : cancellationCategories.has(row.category) ? 'Info' : 'Mismatch',
+                  })),
+                } satisfies ProfessionalSheetSpec]}
+                filenameBase="Stock_Reconcile_Totals"
                 label="Export"
+                successMessage="Totals exported successfully."
+                errorMessage="Unable to export. Please try again."
               />
             </div>
             <div className="overflow-auto rounded-lg border">
@@ -373,18 +387,35 @@ export default function StockReconcilePage() {
                 Stale Records {staleRecords.length > 0 && <span className="text-red-600">({staleRecords.length})</span>}
               </h3>
               {staleRecords.length > 0 && (
-                <ExportExcelButton
-                  rows={staleRecords.map((r) => ({
-                    'Transaction Date': r.entryDate,
-                    'Type': r.entryType,
-                    'Reference': r.referenceNumber || '',
-                    'Material': `${r.materialCode ?? ''}${r.sizeLabel ? ` (${r.sizeLabel})` : ''}`,
-                    'Qty': r.quantity,
-                    'Rate': r.rate ?? '',
-                  }))}
-                  filename={`stock-reconcile-stale-${from}-to-${to}`}
-                  sheetName="Stale Records"
+                <ProfessionalExportButton
+                  meta={{ companyName: 'All Companies', fromDate: from, toDate: to, filterLine: `Year: ${year === 'all' ? 'All Time' : year}`, generatedBy: '' }}
+                  sheets={[{
+                    sheetName: 'Stale Records',
+                    title: 'Stock Reconciliation — Stale Records',
+                    emptyMessage: 'No stale records found.',
+                    columns: [
+                      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+                      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+                      { header: 'Type', key: 'type', width: 18, align: 'left' },
+                      { header: 'Reference', key: 'reference', width: 18, align: 'left' },
+                      { header: 'Material', key: 'material', width: 24, align: 'left' },
+                      { header: 'Qty', key: 'qty', width: 12, align: 'right', numFmt: QTY_FMT },
+                      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+                    ],
+                    rows: staleRecords.map((r, idx) => ({
+                      sno: idx + 1,
+                      date: r.entryDate,
+                      type: r.entryType,
+                      reference: r.referenceNumber || '',
+                      material: `${r.materialCode ?? ''}${r.sizeLabel ? ` (${r.sizeLabel})` : ''}`,
+                      qty: r.quantity,
+                      rate: r.rate ?? null,
+                    })),
+                  } satisfies ProfessionalSheetSpec]}
+                  filenameBase="Stock_Reconcile_Stale_Records"
                   label="Export"
+                  successMessage="Stale records exported successfully."
+                  errorMessage="Unable to export. Please try again."
                 />
               )}
             </div>
@@ -431,19 +462,37 @@ export default function StockReconcilePage() {
                 Duplicate Ledger Rows {duplicateGroups.length > 0 && <span className="text-orange-600">({duplicateGroups.length})</span>}
               </h3>
               {duplicateGroups.length > 0 && (
-                <ExportExcelButton
-                  rows={duplicateGroups.map((g) => ({
-                    'Reference': g.referenceNumber || '',
-                    'Type': g.entryType,
-                    'Line': `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
-                    'Rows': g.rowCount,
-                    'Net Qty': g.netQty,
-                    'Rate': g.rate ?? '',
-                    'Transaction Date': g.latestEntryDate,
-                  }))}
-                  filename={`stock-reconcile-duplicates-${from}-to-${to}`}
-                  sheetName="Duplicates"
+                <ProfessionalExportButton
+                  meta={{ companyName: 'All Companies', fromDate: from, toDate: to, filterLine: `Year: ${year === 'all' ? 'All Time' : year}`, generatedBy: '' }}
+                  sheets={[{
+                    sheetName: 'Duplicates',
+                    title: 'Stock Reconciliation — Duplicate Ledger Rows',
+                    emptyMessage: 'No duplicate ledger rows found.',
+                    columns: [
+                      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+                      { header: 'Reference', key: 'reference', width: 18, align: 'left' },
+                      { header: 'Type', key: 'type', width: 18, align: 'left' },
+                      { header: 'Line', key: 'line', width: 20, align: 'left' },
+                      { header: 'Rows', key: 'rows', width: 10, align: 'right' },
+                      { header: 'Net Qty', key: 'netQty', width: 14, align: 'right', numFmt: QTY_FMT },
+                      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+                      { header: 'Latest Transaction Date', key: 'date', width: 18, align: 'center', isDate: true },
+                    ],
+                    rows: duplicateGroups.map((g, idx) => ({
+                      sno: idx + 1,
+                      reference: g.referenceNumber || '',
+                      type: g.entryType,
+                      line: `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
+                      rows: g.rowCount,
+                      netQty: g.netQty,
+                      rate: g.rate ?? null,
+                      date: g.latestEntryDate,
+                    })),
+                  } satisfies ProfessionalSheetSpec]}
+                  filenameBase="Stock_Reconcile_Duplicates"
                   label="Export"
+                  successMessage="Duplicate rows exported successfully."
+                  errorMessage="Unable to export. Please try again."
                 />
               )}
             </div>

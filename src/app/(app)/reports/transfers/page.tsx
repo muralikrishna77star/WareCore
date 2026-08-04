@@ -1,11 +1,18 @@
 export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
-import { TRANSFERS_REPORT_QUERY, ACTIVE_COMPANIES_QUERY } from '@/lib/hasura/queries'
+import { TRANSFERS_REPORT_QUERY, MOVEMENTS_REPORT_QUERY, ACTIVE_COMPANIES_QUERY } from '@/lib/hasura/queries'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+
+const LEDGER_TYPE_LABELS: Record<string, string> = {
+  TRANSFER_OUT: 'Transfer Out',
+  TRANSFER_IN: 'Transfer In',
+}
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -44,28 +51,103 @@ export default async function TransfersReportPage({
     return s + (t.transfer_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity || 0), 0)
   }, 0)
 
-  const exportRows = transfers.flatMap((t: any) => {
-    const items = t.transfer_items ?? []
-    const base = {
-      'Transaction Date': formatDate(t.transfer_date),
-      'From Company': t.companies_from?.name || '',
-      'From Warehouse': t.warehouses_from?.name || '',
-      'To Company': t.companies_to?.name || '',
-      'To Warehouse': t.warehouses_to?.name || '',
-    }
-    const status = t.status?.replace('_', ' ') ?? ''
-    if (items.length === 0) {
-      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Rate': '', 'Status': status }]
-    }
-    return items.map((item: any) => ({
-      ...base,
-      'Material': item.material_types?.description || '',
-      'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
-      'Qty (T)': Number(item.quantity),
-      'Rate': '',
-      'Status': status,
-    }))
-  })
+  // Ledger Detail: the actual TRANSFER_OUT/TRANSFER_IN stock_ledger rows
+  // these transfers produced — real transaction-level traceability. No
+  // running balance: mixed items/warehouses have no single meaningful one.
+  const transferIds = transfers.map((t: any) => t.id)
+  const ledgerResult = transferIds.length > 0
+    ? await hasuraQuery(MOVEMENTS_REPORT_QUERY, {
+        where: { _and: [{ reference_type: { _eq: 'transfer' } }, { reference_id: { _in: transferIds } }] },
+      })
+    : { stock_ledger: [] }
+  const ledgerRows: any[] = ledgerResult.stock_ledger ?? []
+  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m: any) => m.purchase_line_id))
+
+  const exportMeta = {
+    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    fromDate,
+    toDate,
+    filterLine: `Status: ${params.status ? params.status.replace('_', ' ') : 'All'}`,
+    generatedBy: '',
+  }
+  const summarySheet: ProfessionalSheetSpec = {
+    sheetName: 'Transfers',
+    title: 'Transfers Report',
+    emptyMessage: 'No transfers found for the selected period.',
+    columns: [
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'From Company', key: 'fromCompany', width: 16, align: 'left' },
+      { header: 'From Warehouse', key: 'fromWarehouse', width: 16, align: 'left' },
+      { header: 'To Company', key: 'toCompany', width: 16, align: 'left' },
+      { header: 'To Warehouse', key: 'toWarehouse', width: 16, align: 'left' },
+      { header: 'Material', key: 'material', width: 20, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Qty (T)', key: 'qty', width: 12, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Status', key: 'status', width: 14, align: 'center' },
+    ],
+    rows: transfers.flatMap((t: any) => {
+      const items = t.transfer_items ?? []
+      const base = {
+        date: t.transfer_date,
+        fromCompany: t.companies_from?.name || '',
+        fromWarehouse: t.warehouses_from?.name || '',
+        toCompany: t.companies_to?.name || '',
+        toWarehouse: t.warehouses_to?.name || '',
+      }
+      const status = t.status?.replace('_', ' ') ?? ''
+      if (items.length === 0) {
+        return [{ ...base, material: '', size: '', qty: null, status }]
+      }
+      return items.map((item: any) => ({
+        ...base,
+        material: item.material_types?.description || '',
+        size: item.material_sizes?.size_label ?? item.size_label ?? '',
+        qty: Number(item.quantity),
+        status,
+      }))
+    }),
+  }
+  const ledgerDetailSheet: ProfessionalSheetSpec = {
+    sheetName: 'Ledger Detail',
+    title: 'Transfers Report — Ledger Detail',
+    emptyMessage: 'No stock ledger entries found for the selected transfers.',
+    columns: [
+      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Transaction Type', key: 'type', width: 18, align: 'left' },
+      { header: 'Stock Movement', key: 'stockMovement', width: 14, align: 'center' },
+      { header: 'Document Number', key: 'documentNumber', width: 18, align: 'left' },
+      { header: 'Company', key: 'company', width: 16, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Material', key: 'material', width: 20, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Inward Quantity', key: 'inwardQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Outward Quantity', key: 'outwardQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+      { header: 'Remarks', key: 'remarks', width: 24, align: 'left' },
+    ],
+    rows: ledgerRows.map((m: any, idx: number) => {
+      const qty = Number(m.quantity)
+      const rate = m.purchase_line_id ? ledgerRateMap.get(m.purchase_line_id) ?? null : null
+      return {
+        sno: idx + 1,
+        date: m.entry_date,
+        type: LEDGER_TYPE_LABELS[m.entry_type] ?? m.entry_type,
+        stockMovement: 'TRANSFER',
+        documentNumber: m.reference_number || '',
+        company: m.companies?.name || '',
+        warehouse: m.warehouses?.name || '',
+        material: m.material_types?.description || '',
+        size: m.material_sizes?.size_label ?? m.size_label ?? '',
+        inwardQty: qty > 0 ? qty : null,
+        outwardQty: qty < 0 ? Math.abs(qty) : null,
+        rate,
+        value: rate != null ? Math.abs(qty) * rate : null,
+        remarks: m.notes || '',
+      }
+    }),
+  }
 
   return (
     <div className="space-y-6">
@@ -76,7 +158,13 @@ export default async function TransfersReportPage({
         </div>
         <div className="flex items-center gap-2">
           {transfers.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`transfers-report-${fromDate}-to-${toDate}`} sheetName="Transfers" />
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[summarySheet, ledgerDetailSheet]}
+              filenameBase="Transfers_Report"
+              successMessage="Transfers Report exported successfully."
+              errorMessage="Unable to export the Transfers Report. Please try again."
+            />
           )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>

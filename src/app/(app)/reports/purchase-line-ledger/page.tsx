@@ -4,10 +4,11 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_LINE_LEDGER_QUERY, ALL_PURCHASE_LINE_IDS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
@@ -134,25 +135,53 @@ export default async function PurchaseLineLedgerPage({
 
   const lineRateMap = lineId ? await fetchPurchaseLineRateMap([lineId]) : new Map<string, number>()
   const lineRate = lineId ? lineRateMap.get(lineId) ?? '' : ''
-  const exportRows = rows.map((row) => {
-    const qty = Number(row.quantity)
-    const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type }
-    const itemSize = row.material_sizes?.size_label || row.size_label
-    return {
-      'Transaction Date': formatDate(row.entry_date),
-      'Type': cfg.label,
-      'Item': `${itemLabelFor(row)}${itemSize ? ` (${itemSize})` : ''}`,
-      'Reference': row.reference_number || '',
-      'Linked Line ID': row.sub_purchase_line_id || '',
-      'Company': row.companies?.name || '',
-      'Warehouse': row.warehouses?.name || '',
-      'In': qty > 0 ? qty : '',
-      'Out': qty < 0 ? Math.abs(qty) : '',
-      'Rate': lineRate,
-      'Balance': row.balance,
-      'Notes': row.notes || '',
-    }
-  })
+  const exportMeta = {
+    companyName: 'All Companies',
+    fromDate: '',
+    toDate: '',
+    filterLine: `Purchase Line ID: ${lineId}`,
+    generatedBy: '',
+  }
+  const ledgerSheet: ProfessionalSheetSpec = {
+    sheetName: 'Line Ledger',
+    title: `Purchase Line Movements — ${lineId}`,
+    emptyMessage: `No stock ledger entries found for purchase line ${lineId}.`,
+    columns: [
+      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Type', key: 'type', width: 22, align: 'left' },
+      { header: 'Item', key: 'item', width: 28, align: 'left' },
+      { header: 'Reference', key: 'reference', width: 18, align: 'left' },
+      { header: 'Linked Line ID', key: 'linkedLineId', width: 16, align: 'left' },
+      { header: 'Company', key: 'company', width: 16, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Inward Quantity', key: 'in', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Outward Quantity', key: 'out', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Balance', key: 'balance', width: 14, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Notes', key: 'notes', width: 24, align: 'left' },
+    ],
+    rows: rows.map((row, idx) => {
+      const qty = Number(row.quantity)
+      const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type }
+      const itemSize = row.material_sizes?.size_label || row.size_label
+      return {
+        sno: idx + 1,
+        date: row.entry_date,
+        type: cfg.label,
+        item: `${itemLabelFor(row)}${itemSize ? ` (${itemSize})` : ''}`,
+        reference: row.reference_number || '',
+        linkedLineId: row.sub_purchase_line_id || '',
+        company: row.companies?.name || '',
+        warehouse: row.warehouses?.name || '',
+        in: qty > 0 ? qty : null,
+        out: qty < 0 ? Math.abs(qty) : null,
+        rate: lineRate || null,
+        balance: row.balance,
+        notes: row.notes || '',
+      }
+    }),
+  }
 
   return (
     <div className="space-y-6">
@@ -165,7 +194,13 @@ export default async function PurchaseLineLedgerPage({
         </div>
         <div className="flex items-center gap-2">
           {lineId && rows.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`purchase-line-ledger-${lineId}`} sheetName="Line Ledger" />
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[ledgerSheet]}
+              filenameBase={`Purchase_Line_Ledger_${lineId}`}
+              successMessage="Purchase Line Ledger exported successfully."
+              errorMessage="Unable to export the Purchase Line Ledger. Please try again."
+            />
           )}
           {lineId && <PrintButton />}
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>

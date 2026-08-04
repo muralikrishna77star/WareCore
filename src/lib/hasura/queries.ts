@@ -1648,7 +1648,7 @@ export const PURCHASE_CANCELLATION_BY_ID_QUERY = `
 
 export const BILLING_REPORT_QUERY = `
   query GetBillingReport($where: purchase_bills_bool_exp = {}) {
-    purchase_bills(where: $where, order_by: {bill_date: asc}, limit: 1000) {
+    purchase_bills(where: $where, order_by: {bill_date: asc}) {
       id bill_number bill_date total_quantity total_amount notes
       companies { name code }
       warehouses { name }
@@ -1666,7 +1666,7 @@ export const BILLING_REPORT_QUERY = `
 
 export const TRANSFERS_REPORT_QUERY = `
   query GetTransfersReport($where: transfers_bool_exp = {}) {
-    transfers(where: $where, order_by: {transfer_date: asc}, limit: 1000) {
+    transfers(where: $where, order_by: {transfer_date: asc}) {
       id transfer_date status notes
       companies_from { name code }
       companies_to { name code }
@@ -1685,7 +1685,7 @@ export const TRANSFERS_REPORT_QUERY = `
 
 export const DISPATCH_REPORT_QUERY = `
   query GetDispatchReport($where: dispatch_orders_bool_exp = {}) {
-    dispatch_orders(where: $where, order_by: {dispatch_date: asc}, limit: 1000) {
+    dispatch_orders(where: $where, order_by: {dispatch_date: asc}) {
       id dispatch_date vehicle_number driver_name invoice_number notes sale_ref_id
       companies { name code }
       warehouses { name }
@@ -1703,7 +1703,7 @@ export const DISPATCH_REPORT_QUERY = `
 
 export const JOB_WORK_REPORT_QUERY = `
   query GetJobWorkReport($where: job_work_orders_bool_exp = {}) {
-    job_work_orders(where: $where, order_by: {dispatch_date: asc}, limit: 1000) {
+    job_work_orders(where: $where, order_by: {dispatch_date: asc}) {
       id reference_number dispatch_date expected_return_date actual_return_date status notes
       companies { name code }
       warehouses { name }
@@ -1721,8 +1721,9 @@ export const JOB_WORK_REPORT_QUERY = `
 
 export const MOVEMENTS_REPORT_QUERY = `
   query GetMovementsReport($where: stock_ledger_bool_exp = {}) {
-    stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 2000) {
+    stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}]) {
       id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
+      material_type_id material_size_id warehouse_id
       companies { name code }
       warehouses { name }
       material_types { description unit }

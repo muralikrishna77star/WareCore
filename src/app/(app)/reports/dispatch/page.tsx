@@ -1,11 +1,18 @@
 export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
-import { DISPATCH_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
+import { DISPATCH_REPORT_QUERY, MOVEMENTS_REPORT_QUERY, ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
+import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+
+const LEDGER_TYPE_LABELS: Record<string, string> = {
+  SALE_OUT: 'Sale / Dispatch',
+  SALE_CANCEL: 'Sale Cancelled',
+}
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -53,30 +60,112 @@ export default async function DispatchReportPage({
     return s + (o.dispatch_items ?? []).reduce((si: number, i: any) => si + Number(i.amount || 0), 0)
   }, 0)
 
-  const exportRows = orders.flatMap((o: any) => {
-    const items = o.dispatch_items ?? []
-    const base = {
-      'Transaction Date': formatDate(o.dispatch_date),
-      'Invoice No.': o.invoice_number ?? '',
-      'Company': o.companies?.name || '',
-      'Warehouse': o.warehouses?.name || '',
-      'Customer': o.customers?.name || '',
-      'Vehicle': o.vehicle_number ?? '',
-    }
-    const status = o.status?.replace(/_/g, ' ') ?? ''
-    if (items.length === 0) {
-      return [{ ...base, 'Material': '', 'Size': '', 'Qty (T)': '', 'Rate': '', 'Amount (₹)': '', 'Status': status }]
-    }
-    return items.map((item: any) => ({
-      ...base,
-      'Material': item.material_types?.description || '',
-      'Size': item.material_sizes?.size_label ?? item.size_label ?? '',
-      'Qty (T)': Number(item.quantity),
-      'Rate': item.rate ? Number(item.rate) : '',
-      'Amount (₹)': item.amount ? Number(item.amount) : '',
-      'Status': status,
-    }))
-  })
+  // Ledger Detail: the actual SALE_OUT/SALE_CANCEL stock_ledger rows these
+  // dispatches produced — real transaction-level traceability. No running
+  // balance: mixed items/warehouses have no single meaningful one.
+  const orderIds = orders.map((o: any) => o.id)
+  const ledgerResult = orderIds.length > 0
+    ? await hasuraQuery(MOVEMENTS_REPORT_QUERY, {
+        where: { _and: [{ reference_type: { _eq: 'dispatch' } }, { reference_id: { _in: orderIds } }] },
+      })
+    : { stock_ledger: [] }
+  const ledgerRows: any[] = ledgerResult.stock_ledger ?? []
+  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m: any) => m.purchase_line_id))
+
+  const exportMeta = {
+    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    fromDate,
+    toDate,
+    filterLine: [
+      `Warehouse: ${warehouses.find((w: any) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+      `Status: ${params.status ? params.status.replace(/_/g, ' ') : 'All'}`,
+    ].join('   |   '),
+    generatedBy: '',
+  }
+  const summarySheet: ProfessionalSheetSpec = {
+    sheetName: 'Dispatch',
+    title: 'Dispatch Report',
+    emptyMessage: 'No dispatch orders found for the selected period.',
+    columns: [
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Invoice No.', key: 'invoiceNo', width: 16, align: 'left' },
+      { header: 'Company', key: 'company', width: 16, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Customer', key: 'customer', width: 20, align: 'left' },
+      { header: 'Vehicle', key: 'vehicle', width: 14, align: 'left' },
+      { header: 'Material', key: 'material', width: 20, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Qty (T)', key: 'qty', width: 12, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Amount (₹)', key: 'amount', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+      { header: 'Status', key: 'status', width: 14, align: 'center' },
+    ],
+    rows: orders.flatMap((o: any) => {
+      const items = o.dispatch_items ?? []
+      const base = {
+        date: o.dispatch_date,
+        invoiceNo: o.invoice_number ?? '',
+        company: o.companies?.name || '',
+        warehouse: o.warehouses?.name || '',
+        customer: o.customers?.name || '',
+        vehicle: o.vehicle_number ?? '',
+      }
+      const status = o.status?.replace(/_/g, ' ') ?? ''
+      if (items.length === 0) {
+        return [{ ...base, material: '', size: '', qty: null, rate: null, amount: null, status }]
+      }
+      return items.map((item: any) => ({
+        ...base,
+        material: item.material_types?.description || '',
+        size: item.material_sizes?.size_label ?? item.size_label ?? '',
+        qty: Number(item.quantity),
+        rate: item.rate ? Number(item.rate) : null,
+        amount: item.amount ? Number(item.amount) : null,
+        status,
+      }))
+    }),
+  }
+  const ledgerDetailSheet: ProfessionalSheetSpec = {
+    sheetName: 'Ledger Detail',
+    title: 'Dispatch Report — Ledger Detail',
+    emptyMessage: 'No stock ledger entries found for the selected dispatch orders.',
+    columns: [
+      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Transaction Type', key: 'type', width: 18, align: 'left' },
+      { header: 'Stock Movement', key: 'stockMovement', width: 14, align: 'center' },
+      { header: 'Document Number', key: 'documentNumber', width: 18, align: 'left' },
+      { header: 'Company', key: 'company', width: 16, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Material', key: 'material', width: 20, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Inward Quantity', key: 'inwardQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Outward Quantity', key: 'outwardQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+      { header: 'Remarks', key: 'remarks', width: 24, align: 'left' },
+    ],
+    rows: ledgerRows.map((m: any, idx: number) => {
+      const qty = Number(m.quantity)
+      const rate = m.purchase_line_id ? ledgerRateMap.get(m.purchase_line_id) ?? null : null
+      return {
+        sno: idx + 1,
+        date: m.entry_date,
+        type: LEDGER_TYPE_LABELS[m.entry_type] ?? m.entry_type,
+        stockMovement: m.entry_type === 'SALE_OUT' ? 'OUTWARD' : 'INWARD',
+        documentNumber: m.reference_number || '',
+        company: m.companies?.name || '',
+        warehouse: m.warehouses?.name || '',
+        material: m.material_types?.description || '',
+        size: m.material_sizes?.size_label ?? m.size_label ?? '',
+        inwardQty: qty > 0 ? qty : null,
+        outwardQty: qty < 0 ? Math.abs(qty) : null,
+        rate,
+        value: rate != null ? Math.abs(qty) * rate : null,
+        remarks: m.notes || '',
+      }
+    }),
+  }
 
   return (
     <div className="space-y-6">
@@ -87,7 +176,13 @@ export default async function DispatchReportPage({
         </div>
         <div className="flex items-center gap-2">
           {orders.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`dispatch-report-${fromDate}-to-${toDate}`} sheetName="Dispatch" />
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[summarySheet, ledgerDetailSheet]}
+              filenameBase="Dispatch_Report"
+              successMessage="Dispatch Report exported successfully."
+              errorMessage="Unable to export the Dispatch Report. Please try again."
+            />
           )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>

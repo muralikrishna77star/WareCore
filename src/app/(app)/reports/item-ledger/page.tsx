@@ -15,12 +15,13 @@ import {
   ACTIVE_MATERIAL_SIZES_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
 // /api/stock/ledger-entries.
@@ -394,29 +395,80 @@ export default async function ItemStockLedgerPage({
     ADJUSTMENT_OUT: 'Adjustment Out',
   }
   const ledgerRateMap = await fetchPurchaseLineRateMap(displayRows.map((row) => row.purchase_line_id))
-  const exportRows = displayRows.map((row) => {
-    const qty = Number(row.quantity)
-    const typeLabel = row.isVendorDirectSale
-      ? 'Vendor Direct Sale'
-      : ENTRY_TYPE_LABELS[row.entry_type ?? ''] ?? row.entry_type ?? ''
-    const referenceLabel = row.isVendorDirectSale
-      ? `${row.reference_number || ''}${row.jobWorkReferenceNumber ? ` (via ${row.jobWorkReferenceNumber})` : ''}`
-      : row.reference_number || ''
-    return {
-      'Transaction Date': formatDate(row.entry_date),
-      'Type': typeLabel,
-      'Reference': referenceLabel,
-      'Company': row.companies?.name || '',
-      'Warehouse': row.warehouses?.name || '',
-      'In': qty > 0 ? qty : '',
-      'Out': qty < 0 ? Math.abs(qty) : '',
-      'Rate': row.purchase_line_id ? ledgerRateMap.get(row.purchase_line_id) ?? '' : '',
-      'Balance': row.balance,
-      'Balance at Vendor': row.vendorBalance,
-      'Vendor': row.vendorName || '',
-      'Notes': row.notes || '',
-    }
-  })
+  const exportMeta = {
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
+    fromDate,
+    toDate,
+    filterLine: [
+      `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+      `Item: ${itemTitle || '—'}`,
+    ].join('   |   '),
+    generatedBy: session?.fullName || '',
+  }
+  const ledgerSheet: ProfessionalSheetSpec | null = selectedItem
+    ? {
+        sheetName: 'Item Ledger',
+        title: `Item Stock Ledger — ${itemTitle ?? ''}`,
+        emptyMessage: 'No movements for this item in the selected period.',
+        columns: [
+          { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+          { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+          { header: 'Type', key: 'type', width: 22, align: 'left' },
+          { header: 'Reference', key: 'reference', width: 20, align: 'left' },
+          { header: 'Company', key: 'company', width: 16, align: 'left' },
+          { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+          { header: 'Inward Quantity', key: 'in', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+          { header: 'Outward Quantity', key: 'out', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+          { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+          { header: 'Balance', key: 'balance', width: 16, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+          { header: 'Balance at Vendor', key: 'vendorBalance', width: 18, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+          { header: 'Vendor', key: 'vendor', width: 24, align: 'left' },
+          { header: 'Notes', key: 'notes', width: 24, align: 'left' },
+        ],
+        rows: [
+          {
+            sno: '',
+            date: fromDate,
+            type: 'OPENING BALANCE',
+            reference: '',
+            company: '',
+            warehouse: '',
+            in: null,
+            out: null,
+            rate: null,
+            balance: openingBalance,
+            vendorBalance: vendorOpeningBalance,
+            vendor: '',
+            notes: 'Opening balance as of the selected From Date',
+          },
+          ...displayRows.map((row, idx) => {
+            const qty = Number(row.quantity)
+            const typeLabel = row.isVendorDirectSale
+              ? 'Vendor Direct Sale'
+              : ENTRY_TYPE_LABELS[row.entry_type ?? ''] ?? row.entry_type ?? ''
+            const referenceLabel = row.isVendorDirectSale
+              ? `${row.reference_number || ''}${row.jobWorkReferenceNumber ? ` (via ${row.jobWorkReferenceNumber})` : ''}`
+              : row.reference_number || ''
+            return {
+              sno: idx + 1,
+              date: row.entry_date,
+              type: typeLabel,
+              reference: referenceLabel,
+              company: row.companies?.name || '',
+              warehouse: row.warehouses?.name || '',
+              in: qty > 0 ? qty : null,
+              out: qty < 0 ? Math.abs(qty) : null,
+              rate: row.purchase_line_id ? ledgerRateMap.get(row.purchase_line_id) ?? null : null,
+              balance: row.balance,
+              vendorBalance: row.vendorBalance,
+              vendor: row.vendorName || '',
+              notes: row.notes || '',
+            }
+          }),
+        ],
+        highlightRowIndexes: [0],
+      }
+    : null
 
   return (
     <div className="space-y-6">
@@ -428,8 +480,14 @@ export default async function ItemStockLedgerPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {selectedItem && displayRows.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`Item_Ledger_${selectedItem.item_code}_${fromDate}_to_${toDate}`} sheetName="Item Ledger" />
+          {selectedItem && ledgerSheet && (
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[ledgerSheet]}
+              filenameBase={`Item_Ledger_${selectedItem.item_code}`}
+              successMessage="Item Ledger exported successfully."
+              errorMessage="Unable to export the Item Ledger. Please try again."
+            />
           )}
           {selectedItem && <PrintButton />}
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>

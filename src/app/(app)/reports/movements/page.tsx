@@ -14,21 +14,37 @@ import {
 } from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
-import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
-const entryTypeConfig: Record<string, { label: string; color: string }> = {
-  purchase: { label: 'Purchase', color: 'bg-green-100 text-green-800' },
-  transfer_in: { label: 'Transfer In', color: 'bg-blue-100 text-blue-800' },
-  transfer_out: { label: 'Transfer Out', color: 'bg-orange-100 text-orange-800' },
-  dispatch: { label: 'Dispatch', color: 'bg-red-100 text-red-800' },
-  job_work_out: { label: 'Job Work Out', color: 'bg-purple-100 text-purple-800' },
-  job_work_return: { label: 'Job Work Return', color: 'bg-teal-100 text-teal-800' },
-  adjustment: { label: 'Adjustment', color: 'bg-gray-100 text-gray-800' },
+// Real stock_ledger.entry_type values (uppercase, per the DB check
+// constraint) — previously this map used lowercase keys ('purchase',
+// 'transfer_in', ...) which never matched a real row, so every Type badge
+// silently fell back to the raw entry_type, Total In/Total Out always
+// summed to 0, and the Entry Type filter dropdown returned zero results
+// for every option. Fixed here using the same uppercase table already
+// used consistently by Daywise Stock Statement / Item Ledger.
+const entryTypeConfig: Record<string, { label: string; color: string; isIn: boolean }> = {
+  PURCHASE_IN:          { label: 'Purchase In',      color: 'bg-green-100 text-green-800', isIn: true },
+  PURCHASE_CANCEL:       { label: 'Purchase Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: false },
+  TRANSFER_IN:           { label: 'Transfer In',      color: 'bg-blue-100 text-blue-800',   isIn: true },
+  TRANSFER_OUT:          { label: 'Transfer Out',     color: 'bg-orange-100 text-orange-800', isIn: false },
+  SALE_OUT:              { label: 'Dispatch',         color: 'bg-red-100 text-red-800',     isIn: false },
+  SALE_CANCEL:           { label: 'Dispatch Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
+  JOB_WORK_OUT:          { label: 'Job Work Out',     color: 'bg-purple-100 text-purple-800', isIn: false },
+  JOB_WORK_RETURN_IN:    { label: 'Job Work Return',  color: 'bg-teal-100 text-teal-800',   isIn: true },
+  JOB_WORK_CANCEL:       { label: 'Job Work Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
+  JOB_WORK_OUTPUT_IN:    { label: 'Job Work Output',  color: 'bg-teal-100 text-teal-800',   isIn: true },
+  JOB_WORK_TRANSFER_OUT: { label: 'JW Transfer Out',  color: 'bg-purple-100 text-purple-800', isIn: false },
+  JOB_WORK_TRANSFER_IN:  { label: 'JW Transfer In',   color: 'bg-purple-100 text-purple-800', isIn: true },
+  VENDOR_RETURN_IN:      { label: 'Vendor Return',    color: 'bg-teal-100 text-teal-800',   isIn: true },
+  ADJUSTMENT_IN:         { label: 'Adjustment In',    color: 'bg-gray-100 text-gray-800',   isIn: true },
+  ADJUSTMENT_OUT:        { label: 'Adjustment Out',   color: 'bg-gray-100 text-gray-800',   isIn: false },
 }
 
 type ItemOption = ComboOption & {
@@ -132,14 +148,31 @@ export default async function MovementsReportPage({
     ? { stock_ledger: [] }
     : await hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: { _and: conditions } })
 
-  const movements: any[] = result.stock_ledger ?? []
+  const totalIn = result.stock_ledger
+    ?.filter((m: any) => entryTypeConfig[m.entry_type]?.isIn)
+    .reduce((s: number, m: any) => s + Number(m.quantity || 0), 0) ?? 0
+  const totalOut = result.stock_ledger
+    ?.filter((m: any) => entryTypeConfig[m.entry_type] && !entryTypeConfig[m.entry_type].isIn)
+    .reduce((s: number, m: any) => s + Math.abs(Number(m.quantity || 0)), 0) ?? 0
 
-  const totalIn = movements
-    .filter(m => ['purchase', 'transfer_in', 'job_work_return'].includes(m.entry_type))
-    .reduce((s, m) => s + Number(m.quantity || 0), 0)
-  const totalOut = movements
-    .filter(m => ['transfer_out', 'dispatch', 'job_work_out'].includes(m.entry_type))
-    .reduce((s, m) => s + Number(m.quantity || 0), 0)
+  // Running Balance, per stock key (item + size + warehouse) — this report
+  // spans many different items/warehouses at once, so a single running
+  // total wouldn't be meaningful; each key's balance resets and starts
+  // fresh from 0 at the top of the selected period (this is a period
+  // movement balance, not an absolute stock position — the report has no
+  // opening-balance concept, unlike Stock Statement / Item Ledger).
+  // Sorted by key first (stable sort preserves the query's own
+  // entry_date/created_at order within each key) so the running total
+  // reads correctly top-to-bottom within each item block.
+  const stockKeyFor = (m: any) => `${m.material_type_id ?? ''}|${m.material_size_id ?? ''}|${m.warehouse_id ?? ''}`
+  const movements: any[] = [...(result.stock_ledger ?? [])].sort((a, b) => stockKeyFor(a).localeCompare(stockKeyFor(b)))
+  const runningByKey = new Map<string, number>()
+  for (const m of movements) {
+    const key = stockKeyFor(m)
+    const next = (runningByKey.get(key) ?? 0) + Number(m.quantity)
+    runningByKey.set(key, next)
+    m.runningBalance = next
+  }
 
   // Rate for each movement comes from the exact purchase line it's tied to
   // (m.purchase_line_id), same as Job Work Report and Vendor Movements — not
@@ -153,22 +186,54 @@ export default async function MovementsReportPage({
   }
   const totalValue = movements.reduce((s, m) => s + (valueFor(m) ?? 0), 0)
 
-  const exportRows = movements.map((m: any) => {
-    const rate = rateFor(m)
-    const value = valueFor(m)
-    return {
-      'Transaction Date': formatDate(m.entry_date),
-      'Type': (entryTypeConfig[m.entry_type] ?? { label: m.entry_type }).label,
-      'Company': m.companies?.name ?? '',
-      'Warehouse': m.warehouses?.name ?? '',
-      'Material': m.material_types?.description ?? '',
-      'Size': m.material_sizes?.size_label ?? m.size_label ?? '',
-      'Qty (T)': Number(m.quantity),
-      'Rate': rate ?? '',
-      'Value (₹)': value ?? '',
-      'Reference': m.reference_id ?? '',
-    }
-  })
+  const exportMeta = {
+    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    fromDate,
+    toDate,
+    filterLine: [
+      `Warehouse: ${warehouses.find((w: any) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+      `Item: ${selectedItem?.label || 'All Items'}`,
+      `Entry Type: ${params.entry_type ? entryTypeConfig[params.entry_type]?.label ?? params.entry_type : 'All'}`,
+    ].join('   |   '),
+    generatedBy: '',
+  }
+  const movementsSheet: ProfessionalSheetSpec = {
+    sheetName: 'Movements',
+    title: 'Movements Report',
+    emptyMessage: 'No movements found for the selected period.',
+    columns: [
+      { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
+      { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Type', key: 'type', width: 18, align: 'left' },
+      { header: 'Company', key: 'company', width: 16, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Material', key: 'material', width: 20, align: 'left' },
+      { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: 'Qty (T)', key: 'qty', width: 12, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: 'Running Balance (Period)', key: 'runningBalance', width: 20, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+      { header: 'Reference', key: 'reference', width: 16, align: 'left' },
+    ],
+    rows: movements.map((m: any, idx: number) => {
+      const rate = rateFor(m)
+      const value = valueFor(m)
+      return {
+        sno: idx + 1,
+        date: m.entry_date,
+        type: entryTypeConfig[m.entry_type]?.label ?? m.entry_type,
+        company: m.companies?.name ?? '',
+        warehouse: m.warehouses?.name ?? '',
+        material: m.material_types?.description ?? '',
+        size: m.material_sizes?.size_label ?? m.size_label ?? '',
+        qty: Number(m.quantity),
+        runningBalance: m.runningBalance,
+        rate: rate ?? null,
+        value: value ?? null,
+        reference: m.reference_id ?? '',
+      }
+    }),
+  }
 
   return (
     <div className="space-y-6">
@@ -179,7 +244,13 @@ export default async function MovementsReportPage({
         </div>
         <div className="flex items-center gap-2">
           {movements.length > 0 && (
-            <ExportExcelButton rows={exportRows} filename={`Movements_Report_${fromDate}_to_${toDate}`} sheetName="Movements" />
+            <ProfessionalExportButton
+              meta={exportMeta}
+              sheets={[movementsSheet]}
+              filenameBase="Movements_Report"
+              successMessage="Movements Report exported successfully."
+              errorMessage="Unable to export the Movements Report. Please try again."
+            />
           )}
           <PrintButton />
           <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
@@ -306,6 +377,7 @@ export default async function MovementsReportPage({
                   <th className="px-4 py-3 text-left">Material</th>
                   <th className="px-4 py-3 text-left">Size</th>
                   <th className="px-4 py-3 text-right">Qty (T)</th>
+                  <th className="px-4 py-3 text-right text-indigo-700 bg-indigo-50" title="Resets per item + warehouse; a period movement total, not an absolute stock position">Running Balance</th>
                   <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Rate</th>
                   <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Value</th>
                   <th className="px-4 py-3 text-left">Reference</th>
@@ -313,8 +385,8 @@ export default async function MovementsReportPage({
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {movements.map((m: any) => {
-                  const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800' }
-                  const isIn = ['purchase', 'transfer_in', 'job_work_return'].includes(m.entry_type)
+                  const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
+                  const isIn = cfg.isIn
                   const rate = rateFor(m)
                   const value = valueFor(m)
                   return (
@@ -332,6 +404,9 @@ export default async function MovementsReportPage({
                       <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-700' : 'text-red-600'}`}>
                         {isIn ? '+' : '-'}{Math.abs(Number(m.quantity)).toFixed(3)}
                       </td>
+                      <td className={`px-4 py-3 text-right font-medium bg-indigo-50/40 ${m.runningBalance < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
+                        {Number(m.runningBalance).toFixed(3)}
+                      </td>
                       <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate != null ? fmtC(rate) : '—'}</td>
                       <td className={`px-4 py-3 text-right font-medium bg-teal-50/40 ${value != null && value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
                         {value != null ? fmtC(value) : '—'}
@@ -347,6 +422,7 @@ export default async function MovementsReportPage({
                   <td className={`px-4 py-3 text-right ${totalIn - totalOut >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                     {totalIn - totalOut >= 0 ? '+' : ''}{(totalIn - totalOut).toFixed(3)}
                   </td>
+                  <td className="px-4 py-3 text-right text-gray-400">—</td>
                   <td className="px-4 py-3 text-right text-gray-400">—</td>
                   <td className={`px-4 py-3 text-right ${totalValue < 0 ? 'text-red-600' : 'text-teal-800'}`}>{fmtC(totalValue)}</td>
                   <td />
