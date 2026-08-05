@@ -53,6 +53,13 @@ type ItemOption = ComboOption & {
   material_size_id: string | null
 }
 
+// The filterable Transaction Type values, matching the labels used in the
+// transaction drill-down (Transaction['type']) — "Return" covers both the
+// genuine-Return and paired-virtual-Return variants, since both post as
+// JOB_WORK_RETURN_IN ledger entries.
+const TRANSACTION_TYPE_OPTIONS = ['Job Work Out', 'Direct Sale', 'Return', 'Transfer Out', 'Transfer In'] as const
+type TransactionTypeFilter = (typeof TRANSACTION_TYPE_OPTIONS)[number]
+
 type GroupRow = {
   key: string
   vendorId: string
@@ -83,6 +90,7 @@ export default async function VendorMovementsPage({
     company?: string
     vendor?: string
     item?: string
+    type?: string
     from?: string
     to?: string
     sort?: string
@@ -93,6 +101,10 @@ export default async function VendorMovementsPage({
   const today = new Date().toISOString().split('T')[0]
   const fromDate = params.from || today
   const toDate = params.to || today
+  const typeFilter: TransactionTypeFilter | null =
+    params.type && (TRANSACTION_TYPE_OPTIONS as readonly string[]).includes(params.type)
+      ? (params.type as TransactionTypeFilter)
+      : null
 
   const [compResult, supResult, itemResult] = await Promise.all([
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
@@ -335,12 +347,22 @@ export default async function VendorMovementsPage({
   }
 
   // Period job work out / return in (drives the Job Work Out + Returns columns,
-  // pending Direct Sales subtraction below).
+  // pending Direct Sales subtraction below). Gated by the Transaction Type
+  // filter — "Job Work Out" keeps only JOB_WORK_OUT rows, "Return" keeps only
+  // JOB_WORK_RETURN_IN rows, any other selected type excludes this query's
+  // rows entirely.
+  const jobWorkEntryAllowed = (entryType: string) => {
+    if (!typeFilter) return true
+    if (typeFilter === 'Job Work Out') return entryType === 'JOB_WORK_OUT'
+    if (typeFilter === 'Return') return entryType === 'JOB_WORK_RETURN_IN'
+    return false
+  }
   const periodReturnInByKey = new Map<string, number>()
   for (const m of periodJobWork) {
     const info = jwoInfoById.get(m.reference_id)
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
+    if (!jobWorkEntryAllowed(m.entry_type)) continue
     const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     const purchaseInfo = m.purchase_line_id ? lineDateRateMap.get(m.purchase_line_id) : undefined
     if (m.entry_type === 'JOB_WORK_OUT') {
@@ -367,10 +389,17 @@ export default async function VendorMovementsPage({
   // under the source vendor and a Transfer In row under the destination
   // vendor — so a transfer is visible wherever the material is being
   // tracked, not just baked silently into the Balance column.
+  const transferEntryAllowed = (entryType: string) => {
+    if (!typeFilter) return true
+    if (typeFilter === 'Transfer Out') return entryType === 'JOB_WORK_TRANSFER_OUT'
+    if (typeFilter === 'Transfer In') return entryType === 'JOB_WORK_TRANSFER_IN'
+    return false
+  }
   for (const m of periodTransfers) {
     const info = jwoInfoById.get(m.reference_id)
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
+    if (!transferEntryAllowed(m.entry_type)) continue
     const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     const lineId = m.sub_purchase_line_id || m.purchase_line_id
     const qtyKey = Math.abs(Number(m.quantity)).toFixed(3)
@@ -402,6 +431,7 @@ export default async function VendorMovementsPage({
   // Direct sales: SALE_OUT entries on vendor-direct dispatches, attributed back
   // to the vendor that held the material.
   for (const m of periodSales) {
+    if (typeFilter && typeFilter !== 'Direct Sale') continue
     const dispatch = dispatchInfoById.get(m.reference_id)
     if (!dispatch?.is_vendor_direct || !dispatch.source_job_work_order_id) continue
     const info = jwoInfoById.get(dispatch.source_job_work_order_id)
@@ -526,6 +556,7 @@ export default async function VendorMovementsPage({
     if (params.company) next.set('company', params.company)
     if (params.vendor) next.set('vendor', params.vendor)
     if (params.item) next.set('item', params.item)
+    if (typeFilter) next.set('type', typeFilter)
     next.set('from', fromDate)
     next.set('to', toDate)
     next.set('sort', column)
@@ -559,6 +590,7 @@ export default async function VendorMovementsPage({
     filterLine: [
       `Vendor: ${suppliers.find((s) => s.id === params.vendor)?.name || 'All Vendors'}`,
       `Item: ${selectedItem?.label || 'All Items'}`,
+      `Transaction Type: ${typeFilter || 'All Types'}`,
     ].join('   |   '),
     generatedBy: '',
   }
@@ -608,13 +640,13 @@ export default async function VendorMovementsPage({
     columns: [
       { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
       { header: 'Transaction Date', key: 'date', width: 16, align: 'center', isDate: true },
+      { header: 'Transaction Type', key: 'type', width: 22, align: 'left' },
+      { header: 'Source', key: 'source', width: 22, align: 'left' },
+      { header: 'Destination', key: 'destination', width: 22, align: 'left' },
       { header: 'Vendor', key: 'vendor', width: 22, align: 'left' },
       { header: 'Company', key: 'company', width: 18, align: 'left' },
       { header: 'Item', key: 'item', width: 26, align: 'left' },
       { header: 'Size', key: 'size', width: 12, align: 'left' },
-      { header: 'Transaction Type', key: 'type', width: 22, align: 'left' },
-      { header: 'Source', key: 'source', width: 22, align: 'left' },
-      { header: 'Destination', key: 'destination', width: 22, align: 'left' },
       { header: 'Quantity', key: 'quantity', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Reference', key: 'reference', width: 18, align: 'left' },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
@@ -694,6 +726,13 @@ export default async function VendorMovementsPage({
               placeholder="Search item…"
               options={itemOptions}
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Transaction Type</label>
+            <select name="type" defaultValue={typeFilter || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+              <option value="">All Types</option>
+              {TRANSACTION_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
