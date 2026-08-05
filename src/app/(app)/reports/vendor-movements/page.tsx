@@ -22,6 +22,32 @@ import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProf
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
+const NOT_AVAILABLE = 'Not Available'
+const readableName = (v: string | null | undefined) => (v && v !== '—' ? v : NOT_AVAILABLE)
+
+// Mirrors VendorMovementsTable's sourceDestinationFor so the Excel export and
+// the on-screen transaction drill-down always agree.
+function sourceDestinationFor(
+  type: Transaction['type'],
+  vendorName: string,
+  companyName: string,
+  counterpartyVendor: string | null | undefined
+): { source: string; destination: string } {
+  switch (type) {
+    case 'Job Work Out':
+      return { source: readableName(companyName), destination: readableName(vendorName) }
+    case 'Transfer Out':
+      return { source: readableName(vendorName), destination: readableName(counterpartyVendor) }
+    case 'Transfer In':
+      return { source: readableName(counterpartyVendor), destination: readableName(vendorName) }
+    case 'Return':
+    case 'Return (paired with direct sale)':
+      return { source: readableName(vendorName), destination: readableName(companyName) }
+    default:
+      return { source: NOT_AVAILABLE, destination: NOT_AVAILABLE }
+  }
+}
+
 type ItemOption = ComboOption & {
   material_type_id: string
   material_size_id: string | null
@@ -452,8 +478,13 @@ export default async function VendorMovementsPage({
     }
   }
 
-  let rows = Array.from(groups.values()).filter(
-    (g) => g.jobWorkOut > 0 || g.directSales > 0 || g.returns > 0 || Math.abs(g.balance) > 0.0005 || g.transactions.length > 0
+  // Exclude a row only when every quantity-related column on it is zero —
+  // job work out, direct sales, returns, both transfer directions, and the
+  // cumulative balance. A row with movement in any one of these stays
+  // visible even if, say, its closing balance nets to zero.
+  const isNonZeroQty = (n: number) => Math.abs(n) > 0.0005
+  let rows = Array.from(groups.values()).filter((g) =>
+    [g.jobWorkOut, g.directSales, g.returns, g.transferOutQty, g.transferInQty, g.balance].some(isNonZeroQty)
   )
   for (const g of rows) {
     g.transactions.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
@@ -582,28 +613,31 @@ export default async function VendorMovementsPage({
       { header: 'Item', key: 'item', width: 26, align: 'left' },
       { header: 'Size', key: 'size', width: 12, align: 'left' },
       { header: 'Transaction Type', key: 'type', width: 22, align: 'left' },
-      { header: 'Source Vendor Name', key: 'sourceVendor', width: 22, align: 'left' },
-      { header: 'Destination Vendor Name', key: 'destinationVendor', width: 22, align: 'left' },
+      { header: 'Source', key: 'source', width: 22, align: 'left' },
+      { header: 'Destination', key: 'destination', width: 22, align: 'left' },
       { header: 'Quantity', key: 'quantity', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Reference', key: 'reference', width: 18, align: 'left' },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
       { header: 'Notes', key: 'notes', width: 30, align: 'left' },
     ],
     rows: rows.flatMap((g) =>
-      g.transactions.map((t) => ({
-        date: t.date,
-        vendor: g.vendorName,
-        company: g.companyName,
-        item: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
-        size: g.sizeLabel || '',
-        type: t.type,
-        sourceVendor: t.type === 'Transfer Out' ? g.vendorName : t.type === 'Transfer In' ? (t.counterpartyVendor || '') : '',
-        destinationVendor: t.type === 'Transfer Out' ? (t.counterpartyVendor || '') : t.type === 'Transfer In' ? g.vendorName : '',
-        quantity: t.quantity,
-        reference: t.reference_number || '',
-        rate: t.rate ?? null,
-        notes: t.notes || '',
-      }))
+      g.transactions.map((t) => {
+        const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor)
+        return {
+          date: t.date,
+          vendor: g.vendorName,
+          company: g.companyName,
+          item: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
+          size: g.sizeLabel || '',
+          type: t.type,
+          source,
+          destination,
+          quantity: t.quantity,
+          reference: t.reference_number || '',
+          rate: t.rate ?? null,
+          notes: t.notes || '',
+        }
+      })
     ).map((row, idx) => ({ sno: idx + 1, ...row })),
   }
 

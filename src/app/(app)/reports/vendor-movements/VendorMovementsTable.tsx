@@ -46,6 +46,35 @@ function formatDate(d: string) {
   return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+const NOT_AVAILABLE = 'Not Available'
+const readableName = (v: string | null | undefined) => (v && v !== '—' ? v : NOT_AVAILABLE)
+
+// Source/Destination per transaction type: Job Work Out moves material from
+// the company to the vendor; a Job Transfer moves it between vendors; a
+// Return moves it back from the vendor to the company. Types without a
+// defined direction (Direct Sale, etc.) fall back to Not Available rather
+// than guessing.
+function sourceDestinationFor(
+  type: Transaction['type'],
+  vendorName: string,
+  companyName: string,
+  counterpartyVendor: string | null | undefined
+): { source: string; destination: string } {
+  switch (type) {
+    case 'Job Work Out':
+      return { source: readableName(companyName), destination: readableName(vendorName) }
+    case 'Transfer Out':
+      return { source: readableName(vendorName), destination: readableName(counterpartyVendor) }
+    case 'Transfer In':
+      return { source: readableName(counterpartyVendor), destination: readableName(vendorName) }
+    case 'Return':
+    case 'Return (paired with direct sale)':
+      return { source: readableName(vendorName), destination: readableName(companyName) }
+    default:
+      return { source: NOT_AVAILABLE, destination: NOT_AVAILABLE }
+  }
+}
+
 export default function VendorMovementsTable({
   rows,
   sortHrefs,
@@ -138,8 +167,8 @@ export default function VendorMovementsTable({
                           <tr className="bg-gray-100 text-left text-gray-500 uppercase">
                             <th className="px-3 py-2">Date</th>
                             <th className="px-3 py-2">Movement</th>
-                            <th className="px-3 py-2">Source Vendor Name</th>
-                            <th className="px-3 py-2">Destination Vendor Name</th>
+                            <th className="px-3 py-2">Source</th>
+                            <th className="px-3 py-2">Destination</th>
                             <th className="px-3 py-2 text-right">Quantity</th>
                             <th className="px-3 py-2">Reference</th>
                             <th className="px-3 py-2">Notes</th>
@@ -150,8 +179,7 @@ export default function VendorMovementsTable({
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {g.transactions.map((t) => {
-                            const sourceVendor = t.type === 'Transfer Out' ? g.vendorName : t.type === 'Transfer In' ? (t.counterpartyVendor ?? '—') : '—'
-                            const destinationVendor = t.type === 'Transfer Out' ? (t.counterpartyVendor ?? '—') : t.type === 'Transfer In' ? g.vendorName : '—'
+                            const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor)
                             return (
                               <tr key={t.id}>
                                 <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(t.date)}</td>
@@ -160,8 +188,8 @@ export default function VendorMovementsTable({
                                     {t.type}
                                   </span>
                                 </td>
-                                <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{sourceVendor}</td>
-                                <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{destinationVendor}</td>
+                                <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{source}</td>
+                                <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{destination}</td>
                                 <td className={`px-3 py-2 text-right font-medium ${t.quantity >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                                   {t.quantity >= 0 ? '+' : ''}{t.quantity.toFixed(3)} {g.unit}
                                 </td>
