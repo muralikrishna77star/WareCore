@@ -107,12 +107,19 @@ function sanitizeFilenamePart(s: string): string {
   return s.replace(/[\\/:*?"<>|]/g, '').trim().replace(/\s+/g, '_')
 }
 
+// ExcelJS serializes a Date cell from its raw getTime() (absolute instant),
+// so a Date built from browser-local midnight only round-trips correctly at
+// UTC+0 — for timezones ahead of UTC (IST included), local midnight is still
+// the previous day in absolute-time terms. Build from Date.UTC instead so
+// the cell's instant is pinned to actual UTC midnight of the intended date,
+// independent of the browser's timezone.
 function toDateOnly(iso: string): Date {
-  return new Date(`${iso}T00:00:00`)
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
 }
 
 function formatDDMMMYYYY(iso: string): string {
-  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
     .format(toDateOnly(iso))
     .replace(/ /g, '-')
 }
