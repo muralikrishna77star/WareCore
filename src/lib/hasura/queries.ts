@@ -1513,6 +1513,7 @@ export const DISPATCH_ORDERS_VENDOR_INFO_QUERY = `
       id
       is_vendor_direct
       source_job_work_order_id
+      customers { name }
     }
   }
 `

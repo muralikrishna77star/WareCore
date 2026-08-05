@@ -31,7 +31,8 @@ function sourceDestinationFor(
   type: Transaction['type'],
   vendorName: string,
   companyName: string,
-  counterpartyVendor: string | null | undefined
+  counterpartyVendor: string | null | undefined,
+  customerName?: string | null
 ): { source: string; destination: string } {
   switch (type) {
     case 'Job Work Out':
@@ -43,6 +44,8 @@ function sourceDestinationFor(
     case 'Return':
     case 'Return (paired with direct sale)':
       return { source: readableName(vendorName), destination: readableName(companyName) }
+    case 'Direct Sale':
+      return { source: readableName(vendorName), destination: readableName(customerName) }
     default:
       return { source: NOT_AVAILABLE, destination: NOT_AVAILABLE }
   }
@@ -282,9 +285,13 @@ export default async function VendorMovementsPage({
   const dispatchInfoResult = dispatchIds.length > 0
     ? await hasuraQuery(DISPATCH_ORDERS_VENDOR_INFO_QUERY, { ids: dispatchIds })
     : { dispatch_orders: [] }
-  const dispatchInfoById = new Map<string, { is_vendor_direct: boolean; source_job_work_order_id: string | null }>()
+  const dispatchInfoById = new Map<string, { is_vendor_direct: boolean; source_job_work_order_id: string | null; customerName: string | null }>()
   for (const d of dispatchInfoResult.dispatch_orders ?? []) {
-    dispatchInfoById.set(d.id, { is_vendor_direct: d.is_vendor_direct, source_job_work_order_id: d.source_job_work_order_id })
+    dispatchInfoById.set(d.id, {
+      is_vendor_direct: d.is_vendor_direct,
+      source_job_work_order_id: d.source_job_work_order_id,
+      customerName: d.customers?.name ?? null,
+    })
   }
 
   // Collect every job work order id we need vendor info for: those directly
@@ -444,6 +451,7 @@ export default async function VendorMovementsPage({
       id: m.id, date: m.entry_date, type: 'Direct Sale',
       quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
       purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
+      customerName: dispatch.customerName,
     })
   }
 
@@ -654,7 +662,7 @@ export default async function VendorMovementsPage({
     ],
     rows: rows.flatMap((g) =>
       g.transactions.map((t) => {
-        const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor)
+        const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor, t.customerName)
         return {
           date: t.date,
           vendor: g.vendorName,

@@ -12,6 +12,7 @@ export type Transaction = {
   purchaseDate: string | null
   rate: number | null
   counterpartyVendor?: string | null
+  customerName?: string | null
 }
 
 export type GroupRow = {
@@ -51,14 +52,15 @@ const readableName = (v: string | null | undefined) => (v && v !== '—' ? v : N
 
 // Source/Destination per transaction type: Job Work Out moves material from
 // the company to the vendor; a Job Transfer moves it between vendors; a
-// Return moves it back from the vendor to the company. Types without a
-// defined direction (Direct Sale, etc.) fall back to Not Available rather
-// than guessing.
+// Return moves it back from the vendor to the company; a Direct Sale moves
+// it from the vendor straight to the customer. Types without a defined
+// direction fall back to Not Available rather than guessing.
 function sourceDestinationFor(
   type: Transaction['type'],
   vendorName: string,
   companyName: string,
-  counterpartyVendor: string | null | undefined
+  counterpartyVendor: string | null | undefined,
+  customerName?: string | null
 ): { source: string; destination: string } {
   switch (type) {
     case 'Job Work Out':
@@ -70,6 +72,8 @@ function sourceDestinationFor(
     case 'Return':
     case 'Return (paired with direct sale)':
       return { source: readableName(vendorName), destination: readableName(companyName) }
+    case 'Direct Sale':
+      return { source: readableName(vendorName), destination: readableName(customerName) }
     default:
       return { source: NOT_AVAILABLE, destination: NOT_AVAILABLE }
   }
@@ -179,7 +183,7 @@ export default function VendorMovementsTable({
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {g.transactions.map((t) => {
-                            const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor)
+                            const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor, t.customerName)
                             return (
                               <tr key={t.id}>
                                 <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(t.date)}</td>
