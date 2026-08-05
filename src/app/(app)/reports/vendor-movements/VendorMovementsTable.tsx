@@ -28,6 +28,10 @@ export type GroupRow = {
   rate: number | null
   purchaseDate: string | null
   transactions: Transaction[]
+  transferOutQty: number
+  transferOutTo: string[]
+  transferInQty: number
+  transferInFrom: string[]
 }
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -94,6 +98,8 @@ export default function VendorMovementsTable({
           <SortableTh column="direct_sales" label="Direct Sales" align="right" />
           <SortableTh column="returns" label="Returns" align="right" />
           <SortableTh column="balance" label="Balance" align="right" />
+          <th className="px-4 py-3 text-xs font-medium text-orange-700 bg-orange-50 uppercase text-left whitespace-nowrap">Transferred Out</th>
+          <th className="px-4 py-3 text-xs font-medium text-indigo-700 bg-indigo-50 uppercase text-left whitespace-nowrap">Transferred In</th>
           <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-left whitespace-nowrap">Purchase Date</th>
           <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-right">Rate</th>
           <th className="px-4 py-3 text-xs font-medium text-amber-700 bg-amber-50 uppercase text-right">Valuation</th>
@@ -121,6 +127,12 @@ export default function VendorMovementsTable({
                 <td className={`px-4 py-2.5 text-right font-semibold ${g.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                   {g.balance.toFixed(3)} {g.unit}
                 </td>
+                <td className="px-4 py-2.5 text-orange-700 bg-orange-50/40 whitespace-nowrap">
+                  {g.transferOutQty > 0 ? `${g.transferOutQty.toFixed(3)} ${g.unit} → ${g.transferOutTo.join(', ')}` : '—'}
+                </td>
+                <td className="px-4 py-2.5 text-indigo-700 bg-indigo-50/40 whitespace-nowrap">
+                  {g.transferInQty > 0 ? `${g.transferInQty.toFixed(3)} ${g.unit} ← ${g.transferInFrom.join(', ')}` : '—'}
+                </td>
                 <td className="px-4 py-2.5 text-teal-700 bg-teal-50/40 whitespace-nowrap">{g.purchaseDate ? formatDate(g.purchaseDate) : '—'}</td>
                 <td className="px-4 py-2.5 text-right text-teal-700 bg-teal-50/40">{g.rate ? fmtC(g.rate) : '—'}</td>
                 <td className={`px-4 py-2.5 text-right font-semibold bg-amber-50/40 ${g.rate && g.balance * g.rate < 0 ? 'text-red-600' : 'text-amber-800'}`}>
@@ -129,7 +141,7 @@ export default function VendorMovementsTable({
               </tr>
               {isOpen && (
                 <tr key={`${g.key}-detail`} className="bg-gray-50/60">
-                  <td colSpan={12} className="px-4 py-3">
+                  <td colSpan={14} className="px-4 py-3">
                     {g.transactions.length === 0 ? (
                       <p className="text-xs text-gray-400 px-2">No individual transactions in this period.</p>
                     ) : (
@@ -138,6 +150,7 @@ export default function VendorMovementsTable({
                           <tr className="bg-gray-100 text-left text-gray-500 uppercase">
                             <th className="px-3 py-2">Date</th>
                             <th className="px-3 py-2">Movement</th>
+                            <th className="px-3 py-2">Source / Destination Vendor</th>
                             <th className="px-3 py-2 text-right">Quantity</th>
                             <th className="px-3 py-2">Reference</th>
                             <th className="px-3 py-2">Notes</th>
@@ -147,24 +160,31 @@ export default function VendorMovementsTable({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {g.transactions.map((t) => (
-                            <tr key={t.id}>
-                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(t.date)}</td>
-                              <td className="px-3 py-2">
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${typeColors[t.type]}`}>
-                                  {t.type}
-                                </span>
-                              </td>
-                              <td className={`px-3 py-2 text-right font-medium ${t.quantity >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                {t.quantity >= 0 ? '+' : ''}{t.quantity.toFixed(3)} {g.unit}
-                              </td>
-                              <td className="px-3 py-2 font-mono text-gray-500">{t.reference_number || '—'}</td>
-                              <td className="px-3 py-2 text-gray-500">{t.notes || '—'}</td>
-                              <td className="px-3 py-2 text-teal-700 whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
-                              <td className="px-3 py-2 text-right text-teal-700">{t.rate ? fmtC(t.rate) : '—'}</td>
-                              <td className="px-3 py-2 text-right text-amber-700">{t.rate ? fmtC(Math.abs(t.quantity) * t.rate) : '—'}</td>
-                            </tr>
-                          ))}
+                          {g.transactions.map((t) => {
+                            const vendorFlow =
+                              t.type === 'Transfer Out' && t.counterpartyVendor ? `${g.vendorName} → ${t.counterpartyVendor}`
+                              : t.type === 'Transfer In' && t.counterpartyVendor ? `${t.counterpartyVendor} → ${g.vendorName}`
+                              : '—'
+                            return (
+                              <tr key={t.id}>
+                                <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{formatDate(t.date)}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${typeColors[t.type]}`}>
+                                    {t.type}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{vendorFlow}</td>
+                                <td className={`px-3 py-2 text-right font-medium ${t.quantity >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                  {t.quantity >= 0 ? '+' : ''}{t.quantity.toFixed(3)} {g.unit}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-gray-500">{t.reference_number || '—'}</td>
+                                <td className="px-3 py-2 text-gray-500">{t.notes || '—'}</td>
+                                <td className="px-3 py-2 text-teal-700 whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
+                                <td className="px-3 py-2 text-right text-teal-700">{t.rate ? fmtC(t.rate) : '—'}</td>
+                                <td className="px-3 py-2 text-right text-amber-700">{t.rate ? fmtC(Math.abs(t.quantity) * t.rate) : '—'}</td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     )}
@@ -182,6 +202,8 @@ export default function VendorMovementsTable({
           <td className="px-4 py-3 text-right text-red-800">{rows.reduce((s, g) => s + g.directSales, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-teal-800">{rows.reduce((s, g) => s + g.returns, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-gray-900">{rows.reduce((s, g) => s + g.balance, 0).toFixed(3)}</td>
+          <td className="px-4 py-3 text-right text-orange-800">{rows.reduce((s, g) => s + g.transferOutQty, 0).toFixed(3)}</td>
+          <td className="px-4 py-3 text-right text-indigo-800">{rows.reduce((s, g) => s + g.transferInQty, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-gray-400">—</td>
           <td className="px-4 py-3 text-right text-gray-400">—</td>
           <td className="px-4 py-3 text-right text-amber-800">
