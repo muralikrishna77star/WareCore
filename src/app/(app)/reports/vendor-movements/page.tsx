@@ -519,10 +519,6 @@ export default async function VendorMovementsPage({
     rate: g.rate,
     purchaseDate: g.purchaseDate,
     transactions: g.transactions,
-    transferOutQty: g.transferOutQty,
-    transferOutTo: g.transferOutTo,
-    transferInQty: g.transferInQty,
-    transferInFrom: g.transferInFrom,
   }))
 
   const exportMeta = {
@@ -586,7 +582,8 @@ export default async function VendorMovementsPage({
       { header: 'Item', key: 'item', width: 26, align: 'left' },
       { header: 'Size', key: 'size', width: 12, align: 'left' },
       { header: 'Transaction Type', key: 'type', width: 22, align: 'left' },
-      { header: 'Source / Destination Vendor', key: 'vendorFlow', width: 28, align: 'left' },
+      { header: 'Source Vendor Name', key: 'sourceVendor', width: 22, align: 'left' },
+      { header: 'Destination Vendor Name', key: 'destinationVendor', width: 22, align: 'left' },
       { header: 'Quantity', key: 'quantity', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Reference', key: 'reference', width: 18, align: 'left' },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
@@ -600,10 +597,8 @@ export default async function VendorMovementsPage({
         item: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
         size: g.sizeLabel || '',
         type: t.type,
-        vendorFlow:
-          t.type === 'Transfer Out' && t.counterpartyVendor ? `${g.vendorName} → ${t.counterpartyVendor}`
-          : t.type === 'Transfer In' && t.counterpartyVendor ? `${t.counterpartyVendor} → ${g.vendorName}`
-          : '',
+        sourceVendor: t.type === 'Transfer Out' ? g.vendorName : t.type === 'Transfer In' ? (t.counterpartyVendor || '') : '',
+        destinationVendor: t.type === 'Transfer Out' ? (t.counterpartyVendor || '') : t.type === 'Transfer In' ? g.vendorName : '',
         quantity: t.quantity,
         reference: t.reference_number || '',
         rate: t.rate ?? null,
