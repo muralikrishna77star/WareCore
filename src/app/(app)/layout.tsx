@@ -7,6 +7,57 @@ import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
 import { RecordPreviewProvider } from '@/components/RecordPreviewProvider'
 import { Copilot } from '@/components/ai/Copilot'
+import { DashboardViewProvider, useDashboardView } from '@/components/DashboardViewProvider'
+import { DashboardViewToggle } from '@/components/DashboardViewToggle'
+import type { DashboardView } from '@/lib/dashboardViewPreference'
+
+// Chrome styling per dashboard view — same links, hrefs, labels, icons and
+// active-route logic everywhere; only these class strings change.
+const CHROME: Record<
+  DashboardView,
+  {
+    sidebarBg: string
+    navItemBase: string
+    navItemActive: string
+    navItemInactive: string
+    headerClass: string
+    mobileNavBg: string
+    mobileNavActive: string
+    mobileNavInactive: string
+  }
+> = {
+  existing: {
+    sidebarBg: 'bg-gray-900',
+    navItemBase: 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+    navItemActive: 'bg-blue-600 text-white',
+    navItemInactive: 'text-gray-400 hover:bg-gray-800 hover:text-white',
+    headerClass: 'h-16 bg-white shadow-sm border-b',
+    mobileNavBg: 'bg-white border-t border-gray-200',
+    mobileNavActive: 'text-blue-600',
+    mobileNavInactive: 'text-gray-500 hover:text-gray-900',
+  },
+  classic: {
+    sidebarBg: 'bg-slate-800',
+    navItemBase:
+      'flex items-center gap-3 px-3 py-2 rounded-sm text-sm font-medium transition-colors border-l-4 border-transparent',
+    navItemActive: 'border-blue-400 bg-slate-700/70 text-white',
+    navItemInactive: 'text-gray-300 hover:bg-slate-700/40 hover:text-white',
+    headerClass: 'h-14 bg-white shadow-none border-b-2 border-slate-300',
+    mobileNavBg: 'bg-slate-50 border-t-2 border-slate-300',
+    mobileNavActive: 'text-blue-700 font-semibold',
+    mobileNavInactive: 'text-slate-500 hover:text-slate-800',
+  },
+  modern: {
+    sidebarBg: 'bg-gradient-to-b from-slate-900 to-blue-950',
+    navItemBase: 'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors',
+    navItemActive: 'bg-blue-600 text-white shadow-md shadow-blue-950/40',
+    navItemInactive: 'text-gray-300 hover:bg-white/10 hover:text-white',
+    headerClass: 'h-16 bg-white shadow-md border-b border-blue-100',
+    mobileNavBg: 'bg-white shadow-[0_-4px_16px_rgba(15,23,42,0.08)]',
+    mobileNavActive: 'text-blue-700',
+    mobileNavInactive: 'text-gray-500 hover:text-gray-900',
+  },
+}
 
 type NavItem = {
   title: string
@@ -93,6 +144,16 @@ const navItems: NavItem[] = [
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <DashboardViewProvider>
+      <AppLayoutShell>{children}</AppLayoutShell>
+    </DashboardViewProvider>
+  )
+}
+
+function AppLayoutShell({ children }: { children: React.ReactNode }) {
+  const { view } = useDashboardView()
+  const chrome = CHROME[view]
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [userEmail, setUserEmail] = useState('')
@@ -145,7 +206,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-50 w-64 transform transition-[transform,background-color] duration-200 ease-in-out lg:static lg:translate-x-0',
+          chrome.sidebarBg,
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           isDesktop && 'border-r-2 border-cyan-600/40'
         )}
@@ -166,6 +228,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* Appearance toggle — also reachable via the header on sm+ screens;
+            shown here too so it's reachable from the mobile drawer. */}
+        <div className="px-6 py-3 sm:hidden">
+          <DashboardViewToggle />
+        </div>
+
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-10rem)]">
           {navItems.map((item) => {
@@ -175,12 +243,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                )}
+                className={cn(chrome.navItemBase, isActive ? chrome.navItemActive : chrome.navItemInactive)}
               >
                 <span className="text-base">{item.icon}</span>
                 {item.title}
@@ -203,7 +266,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top header */}
-        <header className={cn('flex h-16 items-center justify-between bg-white px-6 shadow-sm border-b', isDesktop && 'border-b-2 border-cyan-100')}>
+        <header className={cn('flex items-center justify-between px-6', chrome.headerClass, isDesktop && 'border-b-2 border-cyan-100')}>
           <button
             className="text-gray-500 hover:text-gray-700 lg:hidden"
             onClick={() => setSidebarOpen(true)}
@@ -215,6 +278,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
 
           <div className="flex items-center gap-4 ml-auto relative">
+            <div className="hidden sm:block">
+              <DashboardViewToggle />
+            </div>
             <span className="hidden sm:inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-mono font-medium text-blue-600">
               v{APP_VERSION}
             </span>
@@ -276,7 +342,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile bottom navigation bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 lg:hidden print:hidden">
+      <nav className={cn('fixed bottom-0 left-0 right-0 z-40 lg:hidden print:hidden', chrome.mobileNavBg)}>
         <div className="grid grid-cols-5 h-16">
           {[
             { href: '/dashboard', icon: '📊', label: 'Dashboard' },
@@ -292,7 +358,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className={cn(
                   'flex flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors',
-                  isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'
+                  isActive ? chrome.mobileNavActive : chrome.mobileNavInactive
                 )}
               >
                 <span className="text-xl leading-none">{item.icon}</span>
