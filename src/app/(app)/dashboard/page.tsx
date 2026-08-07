@@ -6,6 +6,7 @@ import { formatNumber } from '@/lib/utils'
 import { DashboardStatCard } from '@/components/DashboardStatCard'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { isReferenceType } from '@/lib/reference'
+import { DashboardViewSwitcher } from './DashboardViewSwitcher'
 
 async function getDashboardStats() {
   try {
@@ -47,76 +48,80 @@ export default async function DashboardPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">Overview of your warehouse operations</p>
-      </div>
+    <DashboardViewSwitcher
+      existingView={
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p className="mt-1 text-sm text-gray-500">Overview of your warehouse operations</p>
+          </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {statCards.map((card) => (
-          <DashboardStatCard
-            key={card.title}
-            category={card.category}
-            icon={card.icon}
-            value={card.value}
-            title={card.title}
-            color={card.color}
-            textColor={card.textColor}
-          />
-        ))}
-      </div>
-
-      {/* Company-wise Stock */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Stock by Company</h2>
-          {Object.keys(companyStock).length === 0 ? (
-            <p className="text-gray-500 text-sm">No stock data yet. Add purchase bills to get started.</p>
-          ) : (
-            <div className="space-y-3">
-              {Object.entries(companyStock).map(([id, data]) => (
-                <div key={id} className="flex items-center justify-between py-2 border-b last:border-0">
-                  <div>
-                    <p className="font-medium text-gray-900">{data.name}</p>
-                    <p className="text-xs text-gray-500">{data.code}</p>
-                  </div>
-                  <span className="font-semibold text-blue-700">{formatNumber(data.stock, 2)} tons</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="rounded-xl border bg-white p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'New Bill Entry', href: '/bills/new', icon: '📋', color: 'bg-blue-600 hover:bg-blue-700' },
-              { label: 'New Transfer', href: '/transfers/new', icon: '↔️', color: 'bg-purple-600 hover:bg-purple-700' },
-              { label: 'New Job Work', href: '/jobwork/new', icon: '🏭', color: 'bg-orange-600 hover:bg-orange-700' },
-              { label: 'New Dispatch', href: '/dispatch/new', icon: '🚚', color: 'bg-green-600 hover:bg-green-700' },
-              { label: 'View Inventory', href: '/inventory', icon: '📦', color: 'bg-gray-700 hover:bg-gray-800' },
-              { label: 'View Reports', href: '/reports', icon: '📈', color: 'bg-teal-600 hover:bg-teal-700' },
-            ].map((action) => (
-              <a
-                key={action.href}
-                href={action.href}
-                className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition-colors ${action.color}`}
-              >
-                <span>{action.icon}</span>
-                {action.label}
-              </a>
+          {/* Stat Cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {statCards.map((card) => (
+              <DashboardStatCard
+                key={card.title}
+                category={card.category}
+                icon={card.icon}
+                value={card.value}
+                title={card.title}
+                color={card.color}
+                textColor={card.textColor}
+              />
             ))}
           </div>
-        </div>
-      </div>
 
-      {/* Recent Movements (top 10 from stock ledger) */}
-      <RecentMovements />
-    </div>
+          {/* Company-wise Stock */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border bg-white p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Stock by Company</h2>
+              {Object.keys(companyStock).length === 0 ? (
+                <p className="text-gray-500 text-sm">No stock data yet. Add purchase bills to get started.</p>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(companyStock).map(([id, data]) => (
+                    <div key={id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <p className="font-medium text-gray-900">{data.name}</p>
+                        <p className="text-xs text-gray-500">{data.code}</p>
+                      </div>
+                      <span className="font-semibold text-blue-700">{formatNumber(data.stock, 2)} tons</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="rounded-xl border bg-white p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'New Bill Entry', href: '/bills/new', icon: '📋', color: 'bg-blue-600 hover:bg-blue-700' },
+                  { label: 'New Transfer', href: '/transfers/new', icon: '↔️', color: 'bg-purple-600 hover:bg-purple-700' },
+                  { label: 'New Job Work', href: '/jobwork/new', icon: '🏭', color: 'bg-orange-600 hover:bg-orange-700' },
+                  { label: 'New Dispatch', href: '/dispatch/new', icon: '🚚', color: 'bg-green-600 hover:bg-green-700' },
+                  { label: 'View Inventory', href: '/inventory', icon: '📦', color: 'bg-gray-700 hover:bg-gray-800' },
+                  { label: 'View Reports', href: '/reports', icon: '📈', color: 'bg-teal-600 hover:bg-teal-700' },
+                ].map((action) => (
+                  <a
+                    key={action.href}
+                    href={action.href}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition-colors ${action.color}`}
+                  >
+                    <span>{action.icon}</span>
+                    {action.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Movements (top 10 from stock ledger) */}
+          <RecentMovements />
+        </div>
+      }
+    />
   )
 }
 

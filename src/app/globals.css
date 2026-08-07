@@ -66,3 +66,11 @@ body {
   animation: copilot-ripple 600ms ease-out forwards;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-copilot-float,
+  .animate-copilot-pulse,
+  .animate-copilot-ripple {
+    animation: none;
+  }
+}
+
