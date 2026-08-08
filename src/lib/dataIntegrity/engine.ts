@@ -121,7 +121,15 @@ export async function runReconciliation(scope: RunScope): Promise<RunResult> {
   `
 
   try {
-    const script = `BEGIN;\n${upserts}\n${closeRunSql}\nCOMMIT;`
+    // No explicit BEGIN/COMMIT: Postgres's simple query protocol already
+    // runs a multi-statement string as one implicit transaction. Adding our
+    // own COMMIT as the trailing statement was a real bug — Hasura's
+    // run_sql returns only the LAST statement's result, and COMMIT returns
+    // none, so the closeRunSql RETURNING data (the entire point of this
+    // query) was discarded and `result.result` came back null, crashing
+    // parseRows. Found by actually calling the deployed API end-to-end
+    // against production, not just the SQL functions directly.
+    const script = `${upserts}\n${closeRunSql}`
     const result = await hasuraRunSql(script)
     const rows = parseRows(result)
     const summaryRow = rows[rows.length - 1]

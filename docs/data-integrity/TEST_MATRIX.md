@@ -181,3 +181,29 @@ against the assignment's §9 role table while writing each route, but there
 is no automated test asserting (e.g.) "a `billing_staff` token gets 403 from
 `POST /api/data-integrity/runs`." This is a straightforward, valuable
 addition — flagged as a gap, not silently assumed covered.
+
+## API/engine integration tests — real gap this release's own deploy found
+
+**Not automated, and this gap had a real cost**: `tests/data-integrity/rules.test.ts`
+calls the `fn_reconcile_rec_XXX()` SQL functions directly; nothing in the
+suite calls `runReconciliation()` (`src/lib/dataIntegrity/engine.ts`) or
+`POST /api/data-integrity/runs` end-to-end. As a result, a real bug in
+`engine.ts` shipped to production undetected by `npm test`: the script
+built for the run-closing SQL wrapped everything in an explicit
+`BEGIN;`/`COMMIT;`, and since Postgres's simple query protocol already runs
+a multi-statement string as one implicit transaction, that trailing
+`COMMIT;` became the *last* statement — Hasura's `run_sql` returns only the
+last statement's result, so the `UPDATE ... RETURNING` result the whole
+function exists to read was discarded, and `result.result` came back
+`null`, crashing `parseRows`. The underlying SQL still executed and
+committed correctly (the exception rows were persisted correctly), but the
+API call itself returned HTTP 500 and the run's own `status` column was
+left as `RUNNING` until the catch handler force-set it to `FAILED` —
+misleading given the scan had actually succeeded. Found immediately by
+running the deployed API against production once, right after this release
+shipped (see the delivery notes for 2026-08-08's deploy); fixed in
+`engine.ts` the same session. An integration test that calls
+`runReconciliation()` against the throwaway Postgres harness (same pattern
+as `rules.test.ts`, just via the engine instead of the raw functions) would
+have caught this before it ever reached production — top priority for the
+next test-writing pass.
