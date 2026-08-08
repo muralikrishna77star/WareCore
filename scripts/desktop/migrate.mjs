@@ -10,10 +10,10 @@ import pg from 'pg'
 const { Client } = pg
 
 /**
- * @param {{ connectionString: string, migrationsDir: string, log?: (msg: string) => void }} opts
- * @returns {Promise<{ appliedCount: number, alreadyAppliedCount: number, totalFiles: number }>}
+ * @param {{ connectionString: string, migrationsDir: string, log?: (msg: string) => void, skipFilenames?: Set<string> }} opts
+ * @returns {Promise<{ appliedCount: number, alreadyAppliedCount: number, totalFiles: number, skippedCount: number }>}
  */
-export async function runPendingMigrations({ connectionString, migrationsDir, log = console.log }) {
+export async function runPendingMigrations({ connectionString, migrationsDir, log = console.log, skipFilenames }) {
   const client = new Client({ connectionString })
   await client.connect()
 
@@ -33,8 +33,13 @@ export async function runPendingMigrations({ connectionString, migrationsDir, lo
     const applied = new Set(rows.map((r) => r.filename))
 
     let appliedCount = 0
+    let skippedCount = 0
     for (const filename of files) {
       if (applied.has(filename)) continue
+      if (skipFilenames?.has(filename)) {
+        skippedCount++
+        continue
+      }
 
       const sql = readFileSync(join(migrationsDir, filename), 'utf-8')
       log(`Applying migration ${filename}...`)
@@ -50,7 +55,7 @@ export async function runPendingMigrations({ connectionString, migrationsDir, lo
       appliedCount++
     }
 
-    return { appliedCount, alreadyAppliedCount: files.length - appliedCount, totalFiles: files.length }
+    return { appliedCount, alreadyAppliedCount: files.length - appliedCount - skippedCount, totalFiles: files.length, skippedCount }
   } finally {
     await client.end()
   }

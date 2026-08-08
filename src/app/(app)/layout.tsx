@@ -82,6 +82,11 @@ const navItems: NavItem[] = [
     icon: '🗄️',
   },
   {
+    title: 'Data Integrity',
+    href: '/data-integrity',
+    icon: '🛡️',
+  },
+  {
     title: 'Purchase Entry',
     href: '/bills',
     icon: '📋',

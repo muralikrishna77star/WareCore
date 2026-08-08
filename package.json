@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "seed:dev": "node scripts/seed-dev.mjs",
     "start:desktop": "node scripts/desktop/start.mjs"
   },
@@ -44,7 +46,8 @@
     "eslint-config-next": "^16.2.6",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "overrides": {
     "postcss": "8.5.10"

@@ -71,6 +71,10 @@ export default function StockReconcilePage() {
   const [error, setError] = useState('')
 
   const runReconcile = async () => {
+    const ok = window.confirm(
+      'This will INSERT correcting PURCHASE_CANCEL entries directly into the stock ledger for any phantom purchase-line balances found. This is a write action, not a check — it cannot be previewed or undone from here. Continue?'
+    )
+    if (!ok) return
     setRunning(true)
     setError('')
     setResult(null)
@@ -147,6 +151,15 @@ export default function StockReconcilePage() {
         </Link>
       </div>
 
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        <span className="font-semibold">Legacy reconciliation tool</span> — use{' '}
+        <Link href="/data-integrity" className="underline font-medium">Data Integrity</Link> for comprehensive,
+        read-only validation across purchases, sales, transfers, and job work, with a persistent exception
+        history and no direct writes. The tools below remain available for the specific phantom-purchase-line
+        check they were built for, but "Run Reconciliation" below writes directly to the stock ledger —
+        it is not the same as "Verify" underneath it, which only reads.
+      </div>
+
       <div className="rounded-xl border bg-white p-6 space-y-4">
         <div>
           <h2 className="font-semibold text-gray-900 mb-1">What this does</h2>
@@ -169,7 +182,7 @@ export default function StockReconcilePage() {
             disabled={running}
             className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50 transition-colors"
           >
-            {running ? 'Running…' : 'Run Reconciliation'}
+            {running ? 'Writing to ledger…' : 'Run Reconciliation (writes to ledger)'}
           </button>
         </div>
 
