@@ -37,6 +37,10 @@ const REFERENCE_TABLE_BY_TYPE: Record<string, string> = {
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// Rows always count toward the balance/totals math; this only gates whether
+// the row itself appears in the displayed table (see displayRows below).
+const CANCEL_ENTRY_TYPES = new Set(['PURCHASE_CANCEL', 'SALE_CANCEL', 'JOB_WORK_CANCEL'])
+
 // A reference missing from the live table isn't necessarily orphaned — a
 // cancelled-and-purged order moves to its archive table (original_*_id) and
 // is still a legitimate record. Only flag a reference as orphaned when it's
@@ -149,12 +153,14 @@ export default async function ItemStockLedgerPage({
     ]
     if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
     if (params.warehouse) baseConditions.push({ warehouse_id: { _eq: params.warehouse } })
-    // Cancellations have their own dedicated pages (Purchase/Sale/Job Work
-    // Cancellations) — keep the ledger focused on net movements unless an
-    // admin explicitly wants to see them for data correction.
-    if (!showCancelled) {
-      baseConditions.push({ entry_type: { _nin: ['PURCHASE_CANCEL', 'SALE_CANCEL', 'JOB_WORK_CANCEL'] } })
-    }
+    // Cancellation rows must always be counted toward the opening/closing
+    // balance and totals — they're real, legitimate offsets against the
+    // PURCHASE_IN/SALE_OUT/JOB_WORK_OUT they reverse, and dropping them from
+    // the math (as opposed to just the displayed row) inflates the balance
+    // by the cancelled amount. Cancellations have their own dedicated pages
+    // (Purchase/Sale/Job Work Cancellations); "Show cancelled entries" here
+    // only controls whether the row itself is shown in the table below —
+    // see the CANCEL_ENTRY_TYPES filter applied to displayRows.
 
     // Optional drill-down from Stock Statement: scope the visible entries to
     // one or more entry types (e.g. just PURCHASE_IN) without affecting the
@@ -361,6 +367,7 @@ export default async function ItemStockLedgerPage({
       continue
     }
     if (consumed.has(i)) continue
+    if (!showCancelled && CANCEL_ENTRY_TYPES.has(ledgerRows[i].entry_type)) continue
     displayRows.push(ledgerRows[i])
   }
 
