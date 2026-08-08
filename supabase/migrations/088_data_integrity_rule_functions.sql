@@ -378,18 +378,33 @@ $$ LANGUAGE sql STABLE;
 -- ============================================================
 -- REC-009 — Job Work equation mismatch
 -- ============================================================
--- Per job_work_items line, the source-of-truth quantities
+-- Per (job work order, material_type, material_size) SCOPE — not per
+-- individual job_work_items line — the source-of-truth quantities
 -- (quantity_sent/quantity_received/quantity_transferred_out) must match
--- what's actually posted to the ledger for that line's order. Output
--- (JOB_WORK_OUTPUT_IN) is intentionally never compared here — it's a
--- different item, not a return of the raw material (see
+-- what's actually posted to the ledger for that scope. An order commonly
+-- has multiple lines sharing the same material+size (e.g. several
+-- physically distinct coils of the identical spec dispatched together);
+-- the ledger only carries one posted total per scope, not one per line, so
+-- lines sharing a scope must be SUMMED before comparing — comparing a
+-- single line's own quantity against the scope-wide ledger total produces
+-- a false mismatch for every line but at most one. Found via the Stage B
+-- shadow test against real production data (see ROLLOUT_PLAN.md): one
+-- order with 6 lines sharing a scope produced 6 spurious exceptions, all
+-- reporting the identical (correct) ledger total against 6 different
+-- (correct, but individually incomparable) per-line quantities — the 6
+-- lines' quantity_sent values summed exactly to the ledger total.
+-- Output (JOB_WORK_OUTPUT_IN) is intentionally never compared here — it's
+-- a different item, not a return of the raw material (see
 -- LEDGER_EVENT_MATRIX.md).
 CREATE OR REPLACE FUNCTION fn_reconcile_rec_009(p_company_id UUID, p_from_date DATE, p_to_date DATE)
 RETURNS SETOF reconciliation_candidate AS $$
-  WITH lines AS (
-    SELECT jwi.id AS line_id, jwo.id AS order_id, jwo.reference_number, jwo.company_id, jwo.warehouse_id,
+  WITH scopes AS (
+    SELECT jwo.id AS order_id, jwo.reference_number, jwo.company_id, jwo.warehouse_id,
            jwi.material_type_id, jwi.material_size_id,
-           jwi.quantity_sent, jwi.quantity_received, jwi.quantity_transferred_out,
+           array_agg(jwi.id) AS line_ids,
+           SUM(jwi.quantity_sent) AS quantity_sent,
+           SUM(COALESCE(jwi.quantity_received, 0)) AS quantity_received,
+           SUM(COALESCE(jwi.quantity_transferred_out, 0)) AS quantity_transferred_out,
            COALESCE((SELECT -SUM(sl.quantity) FROM stock_ledger sl WHERE sl.reference_type = 'job_work' AND sl.reference_id = jwo.id
                      AND sl.entry_type = 'JOB_WORK_OUT' AND sl.material_type_id = jwi.material_type_id
                      AND (sl.material_size_id = jwi.material_size_id OR (sl.material_size_id IS NULL AND jwi.material_size_id IS NULL))), 0) AS ledger_sent,
@@ -405,21 +420,22 @@ RETURNS SETOF reconciliation_candidate AS $$
       AND jwo.dispatch_date BETWEEN p_from_date AND p_to_date
       AND jwo.status <> 'cancelled'
       AND jwi.is_transfer_line = FALSE
+    GROUP BY jwo.id, jwo.reference_number, jwo.company_id, jwo.warehouse_id, jwi.material_type_id, jwi.material_size_id
   )
   SELECT
-    'REC-009|' || line_id::text AS fingerprint,
+    'REC-009|' || order_id::text || '|' || material_type_id::text || '|' || COALESCE(material_size_id::text, 'null') AS fingerprint,
     'HIGH' AS severity, company_id, warehouse_id, material_type_id, material_size_id, NULL::text,
-    'job_work' AS source_document_type, order_id, line_id::text, reference_number,
+    'job_work' AS source_document_type, order_id, array_to_string(line_ids, ','), reference_number,
     quantity_sent AS expected_value, ledger_sent AS actual_value, (quantity_sent - ledger_sent) AS difference,
-    format('Job Work %s line: sent=%s (ledger %s), received=%s (ledger %s), transferred_out=%s (ledger %s)',
-           reference_number, quantity_sent, ledger_sent, quantity_received, ledger_received, quantity_transferred_out, ledger_transferred_out) AS summary,
-    'One or more of quantity_sent/quantity_received/quantity_transferred_out on job_work_items disagrees with its corresponding ledger total for this line.' AS explanation,
+    format('Job Work %s (%s line(s) for this material/size): sent=%s (ledger %s), received=%s (ledger %s), transferred_out=%s (ledger %s)',
+           reference_number, array_length(line_ids, 1), quantity_sent, ledger_sent, quantity_received, ledger_received, quantity_transferred_out, ledger_transferred_out) AS summary,
+    'One or more of quantity_sent/quantity_received/quantity_transferred_out (summed across every job_work_items line sharing this order+material+size) disagrees with the corresponding ledger total for this scope.' AS explanation,
     'Edit/return/transfer flow updated the source columns without reposting the ledger, or vice versa.' AS suspected_cause,
-    jsonb_build_object('confidence', 'HIGH_PROBABILITY',
+    jsonb_build_object('confidence', 'HIGH_PROBABILITY', 'line_count', array_length(line_ids, 1),
       'quantity_sent', quantity_sent, 'ledger_sent', ledger_sent,
       'quantity_received', quantity_received, 'ledger_received', ledger_received,
       'quantity_transferred_out', quantity_transferred_out, 'ledger_transferred_out', ledger_transferred_out) AS evidence
-  FROM lines
+  FROM scopes
   WHERE ABS(quantity_sent - ledger_sent) > 0.001
      OR ABS(COALESCE(quantity_received, 0) - ledger_received) > 0.001
      OR ABS(COALESCE(quantity_transferred_out, 0) - ledger_transferred_out) > 0.001;

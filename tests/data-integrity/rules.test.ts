@@ -275,6 +275,82 @@ async function makeJobWorkOrder(companyId: string, warehouseId: string) {
   return { vendorId: vendor.id as string, orderId: order.id as string }
 }
 
+describe('REC-009 job work equation mismatch', () => {
+  it('does not flag a single-line order whose source and ledger agree', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    // fn_job_work_item_to_ledger() auto-posts JOB_WORK_OUT on insert, so
+    // source and ledger start in agreement by construction.
+    await client.query(
+      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 7.5)`,
+      [orderId, materialTypeId]
+    )
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows.filter((r: { source_document_id: string }) => r.source_document_id === orderId)).toHaveLength(0)
+  })
+
+  it('flags a single-line order where the ledger was edited directly (source/ledger genuinely disagree)', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    await client.query(
+      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 7.5)`,
+      [orderId, materialTypeId]
+    )
+    await client.query(`DELETE FROM stock_ledger WHERE reference_type = 'job_work' AND reference_id = $1 AND entry_type = 'JOB_WORK_OUT'`, [orderId])
+
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
+    const relevant = rows.filter((r: { source_document_id: string }) => r.source_document_id === orderId)
+    expect(relevant).toHaveLength(1)
+    expect(Number(relevant[0].expected_value)).toBeCloseTo(7.5, 3)
+    expect(Number(relevant[0].actual_value)).toBe(0)
+  })
+
+  it('does NOT flag multiple lines sharing the same material+size whose SUM matches the ledger — the exact false-positive this rule had against real production data', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    const { rows: [size] } = await client.query(
+      `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '0.70X1248') RETURNING id`,
+      [materialTypeId]
+    )
+    // Six separate lines (distinct physical coils), same material+size —
+    // reproduces the real JW-MSIWT6Y4-GX93 case found via Stage B: each
+    // insert auto-posts its own JOB_WORK_OUT, so the ledger total for this
+    // scope is the sum of all six, not any single line's value.
+    const quantities = [4.875, 3.515, 3.445, 3.055, 2.180, 4.890]
+    for (const q of quantities) {
+      await client.query(
+        `INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ($1, $2, $3, $4)`,
+        [orderId, materialTypeId, size.id, q]
+      )
+    }
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows.filter((r: { source_document_id: string }) => r.source_document_id === orderId)).toHaveLength(0)
+  })
+
+  it('flags a genuine mismatch across multiple lines sharing a scope, aggregated correctly', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    const { rows: [size] } = await client.query(
+      `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '1.00X1250') RETURNING id`,
+      [materialTypeId]
+    )
+    await client.query(`INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ($1, $2, $3, 5.0)`, [orderId, materialTypeId, size.id])
+    await client.query(`INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ($1, $2, $3, 3.0)`, [orderId, materialTypeId, size.id])
+    // Only one of the two lines' JOB_WORK_OUT rows gets deleted directly —
+    // scope total should now be 8.0 (source) vs 3.0 (ledger), not per-line.
+    await client.query(
+      `DELETE FROM stock_ledger WHERE reference_type = 'job_work' AND reference_id = $1 AND entry_type = 'JOB_WORK_OUT' AND quantity = -5.0`,
+      [orderId]
+    )
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
+    const relevant = rows.filter((r: { source_document_id: string }) => r.source_document_id === orderId)
+    expect(relevant).toHaveLength(1)
+    expect(Number(relevant[0].expected_value)).toBeCloseTo(8.0, 3)
+    expect(Number(relevant[0].actual_value)).toBeCloseTo(3.0, 3)
+    expect(relevant[0].evidence.line_count).toBe(2)
+  })
+})
+
 describe('REC-018 unbalanced vendor-held stock', () => {
   it('does not flag a vendor whose ledger and job_work_items balances agree', async () => {
     const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()

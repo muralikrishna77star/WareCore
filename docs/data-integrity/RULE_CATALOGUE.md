@@ -126,15 +126,28 @@ transfer's `to_company_id`/`to_warehouse_id` carried in evidence so a
 reviewer doesn't have to look the transfer up separately.
 
 ### REC-009 — Job Work equation mismatch
-**Severity: HIGH.** Per `job_work_items` line (excluding transfer-destination
-lines, `is_transfer_line = false`), compares the source-of-truth columns
-(`quantity_sent`, `quantity_received`, `quantity_transferred_out`) against
-their corresponding ledger totals (`JOB_WORK_OUT`, `JOB_WORK_RETURN_IN`,
-`JOB_WORK_TRANSFER_OUT`) for that line's order. `JOB_WORK_OUTPUT_IN` is
-deliberately never compared here — per `LEDGER_EVENT_MATRIX.md`, output is a
-different item, not a return of the raw material, and summing them together
-"merely to force a zero balance" is exactly the mistake the assignment warns
-against.
+**Severity: HIGH.** Per `(job work order, material_type, material_size)`
+*scope* — summed across every `job_work_items` line sharing that scope,
+excluding transfer-destination lines (`is_transfer_line = false`) — compares
+the source-of-truth columns (`quantity_sent`, `quantity_received`,
+`quantity_transferred_out`) against their corresponding ledger totals
+(`JOB_WORK_OUT`, `JOB_WORK_RETURN_IN`, `JOB_WORK_TRANSFER_OUT`).
+`JOB_WORK_OUTPUT_IN` is deliberately never compared here — per
+`LEDGER_EVENT_MATRIX.md`, output is a different item, not a return of the
+raw material, and summing them together "merely to force a zero balance" is
+exactly the mistake the assignment warns against.
+
+*Bug found and fixed via real production investigation, not the synthetic
+test suite* (`ROLLOUT_PLAN.md`): the original version compared each
+individual line's own quantity against the scope-wide ledger total —
+correct only when a scope has exactly one line. An order with multiple
+lines sharing the same material+size (e.g. several distinct physical coils
+of the identical spec) produced one false-positive exception per line, all
+reporting the same (correct) ledger total against different (individually
+incomparable) per-line quantities. Confirmed on a real order: 6 lines'
+`quantity_sent` values summed to exactly the ledger total. Fixed to
+aggregate by scope before comparing; production's REC-009 count dropped
+from 43 to 5 real findings.
 
 ### REC-013 — Zero-stock validation
 **Severity: LOW, and only when something else is actually wrong.** Zero

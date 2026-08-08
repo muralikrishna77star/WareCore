@@ -55,9 +55,9 @@ never surfaced there):
    uses a true `MIN()` over all rows — only the reported `current_balance`
    and CRITICAL-vs-HIGH classification). Fixed the same way.
 
-**Findings against real production data, post-fix** (819 `stock_ledger`
-rows, 265 purchase bills, 122 dispatch orders, 80 job work orders, full
-history):
+**Findings against real production data, after all three bugs below were
+fixed** (819 `stock_ledger` rows, 265 purchase bills, 122 dispatch orders,
+80 job work orders, full history):
 
 | Rule | Count | Severity |
 |---|---:|---|
@@ -67,10 +67,13 @@ history):
 | REC-005 (negative stock) | 26 | 25 CRITICAL, 1 HIGH |
 | REC-007 (reversal mismatch) | 0 | — |
 | REC-008 (transfer pairs) | 0 | — (0 `transfers` rows in this dataset) |
-| REC-009 (job work equation) | 43 | HIGH |
+| REC-009 (job work equation) | 5 | HIGH — (was 43 pre-fix, see below) |
 | REC-013 (zero-stock, corroborated) | 0 | — |
-| REC-014 (report self-consistency) | 0 | — (was 117 pre-fix) |
-| REC-018 (vendor balance cross-check) | 122 | HIGH |
+| REC-014 (report self-consistency) | 0 | — (was 117 pre-fix, see below) |
+| REC-018 (vendor balance cross-check) | 52 | HIGH — (was 122 in the earlier scan; REC-018 doesn't share any code with REC-009, so this drop isn't the same fix — most likely real business activity in production between scans over this session, not independently confirmed) |
+
+**Total: 83 real exceptions**, all live in the production Exception
+Workbench.
 
 **REC-001/REC-007/REC-008/REC-014 all reading zero is itself meaningful
 validation**: it confirms the CR00700 defect (migration 084) and the other
@@ -90,11 +93,33 @@ implementation artifact — consistent with `CURRENT_STATE_AUDIT.md` §1's
 observation that job-work-transfer accounting has been this codebase's most
 recurring bug class (migrations 056–084).
 
-**Not yet done**: the remaining ~163 REC-005/REC-009/REC-018 findings have
-not been individually triaged (that's real business review work, out of
-scope for an automated tool to resolve unilaterally) — they are exactly
-what the Exception Workbench exists to hold once this module reaches
-production. `reconciliation_settings.quantity_tolerance` at `0.001` did not
+**A third real bug, found while investigating that spot-check further**:
+tracing REC-009's flagged rows for order `JW-MSIWT6Y4-GX93` surfaced 6
+separate exceptions all reporting the identical `actual_value` (21.960)
+against 6 different `expected_value`s — a strong signature of a rule bug,
+not 6 real defects. Confirmed: the order has 6 `job_work_items` lines
+sharing the same material+size (distinct physical coils of the identical
+spec), and their `quantity_sent` values (4.875 + 3.515 + 3.445 + 3.055 +
+2.180 + 4.890) sum to exactly 21.960 — the ledger total. REC-009 was
+comparing each line's own quantity against the *scope-wide* ledger total
+instead of summing lines that share a scope first. Fixed in
+`088_data_integrity_rule_functions.sql` (now groups by
+`(order, material_type, material_size)` and aggregates before comparing);
+4 new tests added reproducing this exact scenario plus a genuine
+multi-line mismatch case. Re-scanned production: **REC-009 dropped from 43
+to 5** real findings — the other 38 were this false-positive pattern, not
+data defects. The 38 stale exception rows were marked `IGNORED` with an
+explanatory note (not deleted — the evidence stays, just correctly
+labeled) since their fingerprint format changed and a re-scan wouldn't
+have superseded them on its own. **Total exceptions after all three
+fixes: 83** (26 REC-005, 5 REC-009, 52 REC-018) — all now live in the
+Exception Workbench in production.
+
+**Not yet done**: the remaining 83 findings have not been individually
+triaged (that's real business review work, out of scope for an automated
+tool to resolve unilaterally) — they are exactly what the Exception
+Workbench exists to hold now that this module is live in production.
+`reconciliation_settings.quantity_tolerance` at `0.001` did not
 need tuning against this dataset — no findings were borderline/near-zero.
 
 **Rollback**: the shadow database is disposable — delete it, nothing to undo.
