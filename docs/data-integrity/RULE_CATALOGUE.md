@@ -92,6 +92,14 @@ actually went below `-0.001` are returned — this is the rule the assignment
 is most explicit about never gaming: "Do not hide a negative chronological
 balance by sorting inflows before outflows."
 
+*Bug found and fixed via the Stage B shadow test against real production
+data* (`ROLLOUT_PLAN.md`): the `current_balance` "pick the last row"
+tie-break didn't reverse the window function's own quantity ordering
+correctly, which could misreport the current balance (and thus
+CRITICAL-vs-HIGH severity) for a scope with more than one row sharing its
+latest `entry_date` — never surfaced by the synthetic test suite, which had
+no such scope.
+
 ### REC-007 — Reversal mismatch
 **Severity: HIGH.** Two sub-checks, both an accounting invariant rather than
 a timing heuristic (complementary to REC-001 — catches the same class of
@@ -146,6 +154,13 @@ canonical calculation functions themselves disagree with each other — a bug
 in `087_data_integrity_canonical_stock_layer.sql`, not a data problem. This
 is the rule that directly encodes "Opening + Inward − Outward = Closing"
 and "a display filter must never change accounting totals."
+
+*Bug found and fixed via the Stage B shadow test* (`ROLLOUT_PLAN.md`): the
+same "reverse the window's tie-break to find the last row" mistake as
+REC-005's, but here it caused 117 spurious CRITICAL findings against real
+production data on the first run — a genuine implementation bug in this
+rule, not 117 real accounting defects. Fixed; the same production dataset
+now correctly reads 0.
 
 ### REC-018 — Unbalanced vendor-held stock
 **Severity: HIGH.** Cross-checks the two independently-computed notions of

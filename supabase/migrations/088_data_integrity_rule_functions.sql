@@ -228,10 +228,18 @@ RETURNS SETOF reconciliation_candidate AS $$
     ORDER BY company_id, warehouse_id, material_type_id, material_size_id, running_balance ASC
   ),
   latest AS (
+    -- Same fix as REC-014's computed_closing subquery: to find the LAST row
+    -- in the window's own ascending traversal (entry_date ASC, quantity
+    -- DESC, created_at ASC), the reverse-order pick must flip quantity to
+    -- ASC too, not just entry_date/created_at to DESC. Using quantity DESC
+    -- here again could, for a scope with more than one row on its latest
+    -- entry_date, report the wrong row's cumulative value as "current
+    -- balance" (only this reported value / severity classification was at
+    -- risk — min_balance below is a true MIN over all rows and unaffected).
     SELECT DISTINCT ON (company_id, warehouse_id, material_type_id, material_size_id)
       company_id, warehouse_id, material_type_id, material_size_id, running_balance AS current_balance
     FROM running
-    ORDER BY company_id, warehouse_id, material_type_id, material_size_id, entry_date DESC, quantity DESC, created_at DESC
+    ORDER BY company_id, warehouse_id, material_type_id, material_size_id, entry_date DESC, quantity ASC, created_at DESC
   )
   SELECT
     'REC-005|' || w.company_id::text || '|' || w.warehouse_id::text || '|' || w.material_type_id::text || '|' || COALESCE(w.material_size_id::text, 'null') AS fingerprint,
@@ -476,8 +484,20 @@ RETURNS SETOF reconciliation_candidate AS $$
   checked AS (
     SELECT s.company_id, s.warehouse_id, s.material_type_id, s.material_size_id,
            fn_stock_balance_as_of(s.material_type_id, s.material_size_id, s.company_id, s.warehouse_id, p_to_date) AS expected_closing,
+           -- Must pick the LAST row in fn_stock_movement_history's own
+           -- traversal order (entry_date ASC, quantity DESC, created_at ASC)
+           -- to get its true final cumulative value — i.e. the reverse of
+           -- that order, LIMIT 1. Using quantity DESC here again (instead of
+           -- ASC) was a bug: for any scope with more than one row sharing
+           -- its latest entry_date, it could pick a row from the middle of
+           -- that date's tie-break sequence instead of the last one,
+           -- producing a false REC-014 mismatch. Found via the Stage B
+           -- shadow test (docs/data-integrity/ROLLOUT_PLAN.md) against real
+           -- production data — the synthetic test suite's scenarios never
+           -- had more than one same-date row in a REC-014 scope, so this
+           -- didn't surface until a real, denser dataset was scanned.
            (SELECT h.running_balance FROM fn_stock_movement_history(s.material_type_id, s.material_size_id, s.company_id, s.warehouse_id, p_from_date, p_to_date) h
-            ORDER BY h.entry_date DESC, h.quantity DESC LIMIT 1) AS computed_closing
+            ORDER BY h.entry_date DESC, h.quantity ASC, h.id DESC LIMIT 1) AS computed_closing
     FROM scopes s
   )
   SELECT
