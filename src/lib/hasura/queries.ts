@@ -1735,6 +1735,11 @@ export const MOVEMENTS_REPORT_QUERY = `
 
 // ─── Item Stock Ledger Report ────────────────────────────────────────────────
 
+// entries order_by uses quantity: desc as a tie-break so inflows sort before
+// outflows/cancellations on the same entry_date — created_at alone reflects
+// data-entry order, which for migrated/backfilled rows can put a cancellation
+// before the very entry it reverses, making the running Balance column dip
+// misleadingly negative for a moment before recovering.
 export const ITEM_STOCK_LEDGER_QUERY = `
   query GetItemStockLedger(
     $opening_where: stock_ledger_bool_exp = {},
@@ -1747,7 +1752,7 @@ export const ITEM_STOCK_LEDGER_QUERY = `
     vendor_opening_agg: stock_ledger_aggregate(where: $vendor_opening_where) {
       aggregate { sum { quantity } }
     }
-    entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
+    entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {quantity: desc}, {created_at: asc}], limit: 5000) {
       id entry_type quantity entry_date reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label notes
       companies { name code }
       warehouses { name }

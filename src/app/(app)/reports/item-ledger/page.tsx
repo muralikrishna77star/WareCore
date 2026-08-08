@@ -37,10 +37,6 @@ const REFERENCE_TABLE_BY_TYPE: Record<string, string> = {
 }
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Rows always count toward the balance/totals math; this only gates whether
-// the row itself appears in the displayed table (see displayRows below).
-const CANCEL_ENTRY_TYPES = new Set(['PURCHASE_CANCEL', 'SALE_CANCEL', 'JOB_WORK_CANCEL'])
-
 // A reference missing from the live table isn't necessarily orphaned — a
 // cancelled-and-purged order moves to its archive table (original_*_id) and
 // is still a legitimate record. Only flag a reference as orphaned when it's
@@ -105,7 +101,7 @@ type LedgerEntry = {
 export default async function ItemStockLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string; showCancelled?: string; types?: string }>
+  searchParams: Promise<{ item?: string; size?: string; company?: string; warehouse?: string; from?: string; to?: string; types?: string }>
 }) {
   const params = await searchParams
 
@@ -113,7 +109,6 @@ export default async function ItemStockLedgerPage({
   const token = cookieStore.get('wc_session')?.value
   const session = token ? verifySession(token) : null
   const canManage = !!session && LEDGER_MANAGE_ROLES.has(session.role)
-  const showCancelled = canManage && params.showCancelled === '1'
 
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -153,14 +148,10 @@ export default async function ItemStockLedgerPage({
     ]
     if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
     if (params.warehouse) baseConditions.push({ warehouse_id: { _eq: params.warehouse } })
-    // Cancellation rows must always be counted toward the opening/closing
-    // balance and totals — they're real, legitimate offsets against the
-    // PURCHASE_IN/SALE_OUT/JOB_WORK_OUT they reverse, and dropping them from
-    // the math (as opposed to just the displayed row) inflates the balance
-    // by the cancelled amount. Cancellations have their own dedicated pages
-    // (Purchase/Sale/Job Work Cancellations); "Show cancelled entries" here
-    // only controls whether the row itself is shown in the table below —
-    // see the CANCEL_ENTRY_TYPES filter applied to displayRows.
+    // Cancellation rows are real, legitimate offsets against the
+    // PURCHASE_IN/SALE_OUT/JOB_WORK_OUT they reverse — always fetched and
+    // always shown inline (not just netted into the totals), so the running
+    // Balance column never jumps without an explanatory row on screen.
 
     // Optional drill-down from Stock Statement: scope the visible entries to
     // one or more entry types (e.g. just PURCHASE_IN) without affecting the
@@ -367,7 +358,6 @@ export default async function ItemStockLedgerPage({
       continue
     }
     if (consumed.has(i)) continue
-    if (!showCancelled && CANCEL_ENTRY_TYPES.has(ledgerRows[i].entry_type)) continue
     displayRows.push(ledgerRows[i])
   }
 
@@ -572,13 +562,6 @@ export default async function ItemStockLedgerPage({
             />
           </div>
 
-          {canManage && (
-            <label className="flex items-center gap-1.5 text-xs text-gray-600 pb-1.5">
-              <input type="checkbox" name="showCancelled" value="1" defaultChecked={showCancelled} className="rounded border-gray-300" />
-              Show cancelled entries (admin)
-            </label>
-          )}
-
           <button
             type="submit"
             className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
@@ -588,14 +571,13 @@ export default async function ItemStockLedgerPage({
         </div>
       </form>
 
-      {!showCancelled && (
-        <p className="text-xs text-gray-500 print:hidden">
-          Cancellations are hidden here — see{' '}
-          <Link href="/purchase-cancellations" className="text-blue-600 hover:underline">Purchase</Link>,{' '}
-          <Link href="/sale-cancellations" className="text-blue-600 hover:underline">Sale</Link>, or{' '}
-          <Link href="/jobwork-cancellations" className="text-blue-600 hover:underline">Job Work</Link> Cancellations.
-        </p>
-      )}
+      <p className="text-xs text-gray-500 print:hidden">
+        Every row below — including cancellations — affects the running Balance. For the full
+        cancellation audit trail (who cancelled it, when), see{' '}
+        <Link href="/purchase-cancellations" className="text-blue-600 hover:underline">Purchase</Link>,{' '}
+        <Link href="/sale-cancellations" className="text-blue-600 hover:underline">Sale</Link>, or{' '}
+        <Link href="/jobwork-cancellations" className="text-blue-600 hover:underline">Job Work</Link> Cancellations.
+      </p>
 
       {!selectedItem ? (
         <div className="rounded-xl border bg-white p-12 text-center">
