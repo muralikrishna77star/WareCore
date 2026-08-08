@@ -135,13 +135,20 @@ individually traced. The 22 no-longer-relevant exception rows were marked
 **Total exceptions after all four fixes: 61** (4 REC-005, 5 REC-009, 52
 REC-018) — all live in the Exception Workbench in production.
 
-**Not yet done**: the remaining 61 findings have not been individually
-triaged (that's real business review work, out of scope for an automated
-tool to resolve unilaterally) — they are exactly what the Exception
-Workbench exists to hold now that this module is live in production. The 4
-REC-005 findings (one company, `SALE_OUT`-caused) are the natural next
-investigation target. `reconciliation_settings.quantity_tolerance` at
-`0.001` did not need tuning against this dataset — no findings were
+**Final state after this session's triage** (`reconciliation_exceptions`
+grouped by rule + status):
+
+| Rule | Status | Count | Why |
+|---|---|---:|---|
+| REC-005 | `IGNORED` | 30 | Confirmed intentional by the business owner — 26 per-warehouse splits (rescoped to company-wide, see the REC-005 rescoping note above) + 4 cross-company splits (Sri Sai Steels ↔ DS Steel Enterprises, confirmed sister entities sharing inventory) |
+| REC-009 | `IGNORED` | 43 | The line-vs-scope aggregation bug, already fixed and explained above |
+| REC-009 | `RESOLVED` | 5 | Genuinely fixed — `quantity_received` synced to the ledger (see the Stage D incident note below for how this repair itself went sideways and was corrected) |
+| REC-018 | `OPEN` | 52 | **Not yet investigated** — the real remaining work |
+
+Only REC-018's 52 findings are still open and untriaged. Everything else is
+either a confirmed non-issue (with the business owner's reasoning recorded
+in `resolution_notes`) or genuinely fixed. `reconciliation_settings.quantity_tolerance`
+at `0.001` did not need tuning against this dataset — no findings were
 borderline/near-zero.
 
 **Rollback**: the shadow database is disposable — delete it, nothing to undo.
@@ -175,7 +182,7 @@ FUNCTION`/`DROP VIEW` for 087/088) — not included in this release since nothin
 has been deployed to production yet and the assignment explicitly asks for
 migrations to only ever move forward once applied.
 
-## Stage D — Controlled repair pilot (Phase 2, not started)
+## Stage D — Controlled repair pilot (Phase 2, not started as a formal process — one manual repair performed 2026-08-08, with a live demonstration of exactly why this stage needs to be a reviewed function, not an ad hoc UPDATE)
 
 - Select a small number of `CONFIRMED`-confidence exceptions (REC-001/
   REC-007's highest-confidence output is the natural starting set — it's
@@ -188,6 +195,36 @@ migrations to only ever move forward once applied.
 - Execute one batch at a time, re-running reconciliation after each and
   confirming the exception's fingerprint no longer fires before moving to
   the next.
+
+**Incident, same session**: fixing the 5 confirmed REC-009 exceptions
+(`job_work_items.quantity_received` left at 0 despite the ledger already
+correctly recording the return — see the section above) was done as a
+direct `UPDATE job_work_items SET quantity_received = ...`, on the
+reasoning that it only touched a source column, not `stock_ledger`. That
+reasoning was wrong: `trg_job_work_item_to_ledger` fires on `UPDATE` too
+(`CURRENT_STATE_AUDIT.md` §4), and reacted to the increase by posting 5
+*new* `JOB_WORK_RETURN_IN` rows — dated today instead of the real 2024
+event, and duplicating amounts the ledger already correctly had. Caught
+immediately: re-running REC-014 (report self-consistency) would have
+stayed at 0 either way here (it checks running-balance math, not row
+count), but a direct check of `stock_ledger` for rows created in the same
+instant as the `UPDATE` showed exactly 5 new rows matching the 5 values
+just set. Deleted those 5 specific rows (identified unambiguously by
+`created_at` and matching quantity — no ambiguity, nothing else touched),
+re-verified REC-009 and REC-014 both read 0, and re-ran REC-001/REC-005/
+REC-007 as a broader sanity check before considering it closed.
+
+**This is precisely the scenario `REPAIR_GOVERNANCE.md` describes and
+Stage D is designed to prevent going forward**: a manual fix that looked
+safe on inspection had a side effect a reviewed, transactional repair
+function with a "re-run reconciliation before committing, roll back if it
+didn't work" step would have caught *before* the duplicate rows ever
+committed, not after. This one repair was corrected within minutes because
+it was caught by immediately re-running the same reconciliation rules used
+throughout this session — but it's the concrete argument for why Stage D's
+actual execution function (still unbuilt) must wrap every repair in
+exactly that check-then-commit-or-rollback pattern, not trust a human's
+read of what a table update will do.
 
 **Rollback**: per-batch, via `repair_audit_rows`' before image (design in
 `REPAIR_GOVERNANCE.md` — the execution function itself doesn't exist yet,
