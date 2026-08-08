@@ -10,7 +10,17 @@ import { getPool } from './pool'
  */
 export async function runSqlLocal(sql: string): Promise<{ result: unknown[][] }> {
   const pool = getPool()
-  const res = await pool.query(sql)
+  const queryResult = await pool.query(sql)
+  // node-pg's client.query() returns an ARRAY of QueryResult (one per
+  // statement) when the string contains multiple semicolon-separated
+  // statements via the simple query protocol — but a single QueryResult
+  // object for a single statement. Hasura's real run_sql endpoint always
+  // returns just the last statement's result regardless of how many
+  // statements were sent, so normalize to that same shape here: take the
+  // last element if we got an array, otherwise the object itself. Missed
+  // originally because nothing had exercised this path with a
+  // multi-statement script before (found writing engine.test.ts).
+  const res = Array.isArray(queryResult) ? queryResult[queryResult.length - 1] : queryResult
   const fields = res.fields.map((f) => f.name)
   const rows = res.rows.map((row) =>
     fields.map((f) => {

@@ -1,6 +1,15 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    // Mirrors tsconfig.json's "@/*": ["./src/*"] — vitest doesn't read
+    // tsconfig path mappings on its own, and engine.test.ts imports
+    // src/lib/dataIntegrity/engine.ts, which imports from '@/lib/...'.
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],

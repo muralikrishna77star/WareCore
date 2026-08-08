@@ -2,7 +2,10 @@
 // enabled + implemented rule's Postgres function, upserts candidates into
 // reconciliation_exceptions keyed by fingerprint (so a repeat scan updates
 // an existing open exception instead of duplicating it — REOPENED if it had
-// been RESOLVED/IGNORED), and closes out the run row with final counts.
+// been RESOLVED, but IGNORED is sticky and never auto-reopens, since it
+// means a human already confirmed the pattern isn't a defect), auto-closes
+// exceptions no longer detected by a full, unscoped scan (see
+// autoResolveSql), and closes out the run row with final counts.
 //
 // All accounting math happens in the fn_reconcile_rec_XXX() SQL functions
 // (088_data_integrity_rule_functions.sql) — this file only decides which
@@ -68,8 +71,41 @@ function upsertSql(ruleCode: ImplementedRuleCode, runIdLiteral: string, companyS
       actual_value = EXCLUDED.actual_value,
       difference = EXCLUDED.difference,
       evidence = EXCLUDED.evidence,
-      status = CASE WHEN reconciliation_exceptions.status IN ('RESOLVED', 'IGNORED') THEN 'REOPENED' ELSE reconciliation_exceptions.status END,
+      -- IGNORED means a human reviewed this exact pattern and confirmed
+      -- it's not a defect (e.g. an intentional cross-company/cross-
+      -- warehouse stock split) — it's sticky and must never flip back on
+      -- its own just because the rule keeps detecting the same,
+      -- still-true-by-design pattern every scan. Only RESOLVED (something
+      -- was actually fixed) reopens automatically if the same fingerprint
+      -- reappears, since that's a real regression worth surfacing again.
+      -- Found via a real IGNORED REC-005 exception silently flipping back
+      -- to REOPENED on the very next scan.
+      status = CASE WHEN reconciliation_exceptions.status = 'RESOLVED' THEN 'REOPENED' ELSE reconciliation_exceptions.status END,
       updated_at = NOW();
+  `
+}
+
+// Auto-closes exceptions that were OPEN/REOPENED for a rule but weren't
+// re-detected by this run (their fingerprint didn't appear in this run's
+// upserts, so their run_id is still whatever it was before). Only safe
+// when the run actually checked "everywhere" for that rule — a
+// company-scoped or date-limited run not finding something proves nothing
+// about the rest of the data, so this only fires for scope_type = 'FULL'
+// with no company restriction. Never touches IGNORED exceptions (those are
+// sticky, see upsertSql). Found necessary the same session REC-018's fix
+// via REC-009 left 5 exceptions stuck OPEN with no mechanism to ever close
+// them short of a human doing it by hand.
+function autoResolveSql(ruleCode: ImplementedRuleCode, runIdLiteral: string): string {
+  return `
+    UPDATE reconciliation_exceptions e
+    SET status = 'RESOLVED',
+        resolved_at = NOW(),
+        run_id = ${runIdLiteral},
+        resolution_notes = COALESCE(e.resolution_notes || ' | ', '') || 'Auto-resolved: no longer detected by a full scan (run ' || ${runIdLiteral}::text || ').'
+    FROM reconciliation_rules r
+    WHERE r.id = e.rule_id AND r.rule_code = '${ruleCode}'
+      AND e.status IN ('OPEN', 'REOPENED', 'ACKNOWLEDGED', 'INVESTIGATING')
+      AND e.run_id IS DISTINCT FROM ${runIdLiteral};
   `
 }
 
@@ -103,19 +139,31 @@ export async function runReconciliation(scope: RunScope): Promise<RunResult> {
 
   const upserts = ruleCodes.map((code) => upsertSql(code, runIdLiteral, companySql, fromSql, toSql)).join('\n')
 
+  // Only a true full-history, all-companies run can safely conclude "not
+  // re-detected" means "no longer applies" — see autoResolveSql's comment.
+  const autoResolves = scope.scopeType === 'FULL' && !scope.companyId
+    ? ruleCodes.map((code) => autoResolveSql(code, runIdLiteral)).join('\n')
+    : ''
+
+  // "found" (exceptions_found/critical/high/medium/low counts) means rows
+  // this run detected/re-detected — auto-resolved rows share this run's
+  // run_id too (see autoResolveSql) but were CLOSED, not found, so they're
+  // explicitly excluded from every count below except resolved_count.
+  const notAutoResolved = `NOT (status = 'RESOLVED' AND resolution_notes LIKE 'Auto-resolved:%')`
   const closeRunSql = `
     UPDATE reconciliation_runs SET
-      status = CASE WHEN (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral}) > 0
+      status = CASE WHEN (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND ${notAutoResolved}) > 0
                      THEN 'COMPLETED_WITH_EXCEPTIONS' ELSE 'COMPLETED' END,
       completed_at = NOW(),
       execution_time_ms = EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000,
       records_scanned = (SELECT COUNT(*) FROM stock_ledger WHERE entry_date BETWEEN ${fromSql} AND ${toSql}
                           AND (${companySql}::uuid IS NULL OR company_id = ${companySql}::uuid)),
-      exceptions_found = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral}),
-      critical_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND severity = 'CRITICAL'),
-      high_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND severity = 'HIGH'),
-      medium_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND severity = 'MEDIUM'),
-      low_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND severity IN ('LOW', 'INFO'))
+      exceptions_found = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND ${notAutoResolved}),
+      critical_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND ${notAutoResolved} AND severity = 'CRITICAL'),
+      high_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND ${notAutoResolved} AND severity = 'HIGH'),
+      medium_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND ${notAutoResolved} AND severity = 'MEDIUM'),
+      low_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND ${notAutoResolved} AND severity IN ('LOW', 'INFO')),
+      resolved_count = (SELECT COUNT(*) FROM reconciliation_exceptions WHERE run_id = ${runIdLiteral} AND status = 'RESOLVED' AND resolution_notes LIKE 'Auto-resolved:%')
     WHERE id = ${runIdLiteral}
     RETURNING status, exceptions_found, critical_count, high_count, medium_count, low_count;
   `
@@ -129,7 +177,7 @@ export async function runReconciliation(scope: RunScope): Promise<RunResult> {
     // query) was discarded and `result.result` came back null, crashing
     // parseRows. Found by actually calling the deployed API end-to-end
     // against production, not just the SQL functions directly.
-    const script = `${upserts}\n${closeRunSql}`
+    const script = `${upserts}\n${autoResolves}\n${closeRunSql}`
     const result = await hasuraRunSql(script)
     const rows = parseRows(result)
     const summaryRow = rows[rows.length - 1]
