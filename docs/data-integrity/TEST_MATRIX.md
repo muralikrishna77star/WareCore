@@ -29,9 +29,11 @@ no framework, no config, no `test` script. This release adds:
 
 ```
 $ npm test
- ✓ tests/data-integrity/rules.test.ts (13 tests) 
- Test Files  1 passed (1)
-      Tests  13 passed (13)
+ ✓ tests/data-integrity/rules.test.ts (15 tests)
+ ✓ tests/data-integrity/purchase-lifecycle.test.ts (11 tests)
+ ✓ tests/data-integrity/dispatch-lifecycle.test.ts (9 tests)
+ Test Files  3 passed (3)
+      Tests  35 passed (35)
 ```
 
 (Full output captured at delivery time — see the final report's
@@ -39,7 +41,7 @@ $ npm test
 
 ## Reconciliation rule tests (`tests/data-integrity/rules.test.ts`)
 
-All 9 implemented rules (`REC-001, 002, 003, 005, 007, 008, 009, 013, 014`)
+All 10 implemented rules (`REC-001, 002, 003, 005, 007, 008, 009, 013, 014, 018`)
 have at least a positive case (the rule fires) — every rule with a plausible
 false-positive risk also has a negative case (the rule correctly stays
 silent). All company/warehouse/material ids are freshly generated inside the
@@ -61,8 +63,10 @@ suite**, per the assignment's explicit rule against that.
 | Zero-balance item produced by a duplicate pair | REC-013 | ✅ flagged, LOW severity |
 | Normal movements (canonical self-consistency) | REC-014 | ✅ never fires |
 | End-to-end: CR00700 shape through the canonical layer + two independent rules | REC-001, REC-005, `vw_current_warehouse_stock`, `fn_stock_balance_as_of` | ✅ all agree, `-0.460` exactly |
+| Ledger and `job_work_items` vendor balances agree | REC-018 | ✅ not flagged |
+| Ledger row deleted directly (`/api/stock/ledger-entries`) without updating `job_work_items` | REC-018 | ✅ flagged, correct ledger/source balances in evidence |
 
-Two real bugs were caught and fixed *by this test suite* during development
+Three real bugs/gaps were caught *by these test suites* during development
 (evidence the tests are doing real work, not rubber-stamping):
 1. **REC-005's final `JOIN ... USING (material_size_id)`** never matched
    when `material_size_id` was `NULL` on both sides (`NULL = NULL` is not
@@ -73,6 +77,13 @@ Two real bugs were caught and fixed *by this test suite* during development
    insert and posts both legs) — the tests were rewritten to simulate the
    "missing leg" defect by deleting the auto-posted row, not by skipping an
    insert that was never optional.
+3. **A real REC-001 coverage gap**, found by `purchase-lifecycle.test.ts`:
+   double-submitting a *new* line produces two `PURCHASE_IN` rows with
+   *different* auto-generated `purchase_line_id` values, so REC-001 (which
+   groups by `purchase_line_id` among other columns) does not catch it —
+   only same-line double-postings/cancellations (CR00700's actual shape)
+   are caught. Documented as a known gap in `RULE_CATALOGUE.md`'s REC-001
+   section rather than silently left implicit.
 
 ## Assignment §13's mandatory scenario list — coverage status
 
@@ -101,30 +112,58 @@ explicitly deferred in `RULE_CATALOGUE.md`). This is stated plainly rather
 than rounded up, per the instruction not to claim success where tests were
 skipped.
 
-## Transaction lifecycle tests (assignment §13's other list)
+## Transaction lifecycle tests (`purchase-lifecycle.test.ts`, `dispatch-lifecycle.test.ts`)
 
-**Not implemented in this release.** The assignment asks for lifecycle tests
-(new/draft/post/double-submit/retry/edit/partial-cancel/full-cancel/delete/
-purge/backdated/concurrent/unauthorized) across Purchase, Dispatch, Transfer,
-and Job Work. This is a large, separate test suite exercising the
-*existing* transaction-posting code paths (the triggers/RPCs catalogued in
-`CURRENT_STATE_AUDIT.md` §4), not the reconciliation rules themselves —
-building it is valuable and directly relevant (it would have caught the
-CR00700 double-submit at the source), but it's a distinct body of work from
-"build the reconciliation module," and time did not allow both in this
-release. It's the top recommendation in the final report's "Recommended
-next phase."
+The assignment's full matrix (new/draft/post/double-submit/retry/edit/
+partial-cancel/full-cancel/delete/purge/backdated/concurrent/unauthorized ×
+Purchase/Dispatch/Transfer/Job Work — potentially dozens of cases) is **not
+exhaustively implemented.** What *is* implemented, against the real
+production triggers/RPCs (not simulated), is a deliberately-scoped
+high-value subset:
+
+| Scenario | Purchase | Dispatch |
+|---|---|---|
+| New/final posting (one line → one correct ledger row) | ✅ | ✅ |
+| Draft (posts or not, matching each type's real, different behavior) | ✅ (posts — a real asymmetry vs. Dispatch, see below) | ✅ (does not post) |
+| Double-submit of a new line | ✅ (2 rows post; REC-001 does **not** catch it — see the gap noted above) | ✅ (2 rows post) |
+| Edit without changing quantity (delete + re-insert same qty) | ✅ (nets to original, not zero or double) | — |
+| Edit to a different quantity | ✅ | ✅ |
+| Remove one line, no re-add | ✅ (nets that line to zero, others untouched) | — |
+| Full cancellation via the real RPC | ✅ `cancel_purchase_bill()` | ✅ `cancel_dispatch_order()` |
+| Cancelling an already-cancelled record fails cleanly | ✅ | ✅ |
+| Purge after cancellation (archive + ledger cleanup) | ✅ `purge_cancelled_bill()` | ✅ `purge_cancelled_dispatch()` |
+| Purging a non-cancelled record fails cleanly | ✅ | ✅ |
+| Backdated transaction (business date, not insert date, wins) | ✅ | ✅ |
+
+**Confirmed, not assumed, by these tests**: `fn_bill_item_to_ledger()`
+(Purchase) has no draft-skip check and posts immediately even for a `draft`
+bill, while `fn_dispatch_item_to_ledger()` (Dispatch) correctly skips
+`draft` orders — the asymmetry `CURRENT_STATE_AUDIT.md` §5 flagged from code
+reading alone is now proven with a passing/failing-as-expected test, not
+just inferred.
+
+**Explicitly not covered in this release**: Transfer and Job Work lifecycle
+tests (their trigger behavior is exercised indirectly via
+`rules.test.ts`'s REC-008/REC-009/REC-018 fixtures, but not as a dedicated
+lifecycle suite); "retry after simulated timeout" and "concurrent update"
+(both require simulating client-side retry/race conditions, not just
+DB-level sequencing); "partial cancellation" (neither Purchase nor Dispatch
+has a partial-cancel RPC distinct from edit — only Job Work's
+`quantity_received` increments resemble partial cancellation, and that's
+Job Work-specific, not covered here); "unauthorized action" (that's an API
+route concern — see the Security/authorization gap below, not a
+trigger/RPC-level concern these tests are scoped to).
 
 ## Migration tests
 
-- **Clean database**: `scripts/test/testDb.mjs` applies migrations 000–088
-  minus the 11 documented production-data-only repairs — **79 files, 0
+- **Clean database**: `scripts/test/testDb.mjs` applies migrations 000–089
+  minus the 11 documented production-data-only repairs — **80 files, 0
   failures**, run repeatedly during this release's development (most
-  recently as part of every `npm test` run, since the vitest suite's
+  recently as part of every `npm test` run, since every test file's
   `beforeAll` does exactly this).
 - **"Representative upgraded database"**: the same run *is* the upgrade
   test — it applies the entire pre-existing migration history (000–084,
-  minus the 11) before applying this release's own migrations (085–088),
+  minus the 11) before applying this release's own migrations (085–089),
   which is the closest honest equivalent to "upgrade an existing installation"
   achievable without a real production snapshot (which this package is
   explicitly forbidden from using — assignment rule "Do not use real

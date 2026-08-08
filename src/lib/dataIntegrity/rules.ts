@@ -16,6 +16,7 @@ export const IMPLEMENTED_RULE_CODES = [
   'REC-009',
   'REC-013',
   'REC-014',
+  'REC-018',
 ] as const
 
 export type ImplementedRuleCode = (typeof IMPLEMENTED_RULE_CODES)[number]
@@ -30,6 +31,7 @@ const RULE_FUNCTION_NAME: Record<ImplementedRuleCode, string> = {
   'REC-009': 'fn_reconcile_rec_009',
   'REC-013': 'fn_reconcile_rec_013',
   'REC-014': 'fn_reconcile_rec_014',
+  'REC-018': 'fn_reconcile_rec_018',
 }
 
 export function isImplementedRuleCode(code: string): code is ImplementedRuleCode {

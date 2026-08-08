@@ -264,3 +264,50 @@ describe('canonical layer (087) — CR00700 regression, full end-to-end shape', 
     expect(neg.length).toBeGreaterThanOrEqual(1)
   })
 })
+
+async function makeJobWorkOrder(companyId: string, warehouseId: string) {
+  const { rows: [vendor] } = await client.query(`INSERT INTO suppliers (name) VALUES ('Vendor') RETURNING id`)
+  const { rows: [order] } = await client.query(
+    `INSERT INTO job_work_orders (reference_number, vendor_id, company_id, warehouse_id, dispatch_date, status)
+     VALUES ($1, $2, $3, $4, '2024-06-01', 'dispatched') RETURNING id`,
+    [`SYN-JW-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, vendor.id, companyId, warehouseId]
+  )
+  return { vendorId: vendor.id as string, orderId: order.id as string }
+}
+
+describe('REC-018 unbalanced vendor-held stock', () => {
+  it('does not flag a vendor whose ledger and job_work_items balances agree', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { vendorId, orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    // fn_job_work_item_to_ledger() auto-posts JOB_WORK_OUT on insert — the
+    // ledger and job_work_items.quantity_sent start in agreement by
+    // construction, same as the transfer-pair trigger discovered earlier.
+    await client.query(
+      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 12.0)`,
+      [orderId, materialTypeId]
+    )
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_018($1, '2024-01-01', '2026-12-31')`, [companyId])
+    const relevant = rows.filter((r: { source_document_id: string }) => r.source_document_id === vendorId)
+    expect(relevant).toHaveLength(0)
+  })
+
+  it('flags a vendor where the ledger was edited directly without updating job_work_items (the /api/stock/ledger-entries admin-delete scenario)', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { vendorId, orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    await client.query(
+      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 9.5)`,
+      [orderId, materialTypeId]
+    )
+    // Simulate an admin directly deleting the ledger row via
+    // /api/stock/ledger-entries (a real, supported capability in this app)
+    // without touching job_work_items — job_work_items still says 9.5 is
+    // held at the vendor; the ledger now says 0.
+    await client.query(`DELETE FROM stock_ledger WHERE reference_type = 'job_work' AND reference_id = $1 AND entry_type = 'JOB_WORK_OUT'`, [orderId])
+
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_018($1, '2024-01-01', '2026-12-31')`, [companyId])
+    const relevant = rows.filter((r: { source_document_id: string }) => r.source_document_id === vendorId)
+    expect(relevant).toHaveLength(1)
+    expect(Number(relevant[0].evidence.source_balance)).toBeCloseTo(9.5, 3)
+    expect(Number(relevant[0].evidence.ledger_balance)).toBe(0)
+  })
+})

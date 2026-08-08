@@ -1,9 +1,10 @@
 # Reconciliation Rule Catalogue
 
 All 18 rules from the assignment are catalogued in the `reconciliation_rules`
-table (seeded by `supabase/migrations/086_data_integrity_seed_rules.sql`).
-**9 are implemented** as executable PostgreSQL functions in this release
-(`is_enabled = TRUE`); the other **9 are fully specified here but not yet
+table (seeded by `supabase/migrations/086_data_integrity_seed_rules.sql`,
+REC-018 enabled by `089_data_integrity_rec018.sql`).
+**10 are implemented** as executable PostgreSQL functions in this release
+(`is_enabled = TRUE`); the other **8 are fully specified here but not yet
 coded** (`is_enabled = FALSE`) — a scan only ever invokes enabled rules, so
 an unimplemented rule is never silently skipped at run time, it's just not
 in the catalogue as runnable yet.
@@ -11,7 +12,8 @@ in the catalogue as runnable yet.
 Every implemented rule is a `STABLE` SQL function,
 `fn_reconcile_rec_XXX(p_company_id UUID, p_from_date DATE, p_to_date DATE)`,
 returning `SETOF reconciliation_candidate` (defined in
-`088_data_integrity_rule_functions.sql`). None of them write anything —
+`088_data_integrity_rule_functions.sql`, REC-018 in
+`089_data_integrity_rec018.sql`). None of them write anything —
 `src/lib/dataIntegrity/engine.ts` is the only thing that turns their output
 into persisted `reconciliation_exceptions` rows, via an `INSERT ... ON
 CONFLICT (fingerprint) DO UPDATE`.
@@ -32,6 +34,24 @@ company, warehouse, and quantity. Confidence:
   than LOW without more evidence.
 
 Never proposes deletion — only ever produces an exception for review.
+
+**Known gap, found by `tests/data-integrity/purchase-lifecycle.test.ts`**:
+grouping includes `purchase_line_id` as an identity column, so REC-001
+catches "the same line posted/cancelled twice" (CR00700's exact shape —
+one `purchase_bill_items` row, two `PURCHASE_CANCEL` rows against its one
+`purchase_line_id`) but does **not** catch "two independently-created lines
+that are business-duplicates of each other" — e.g. a double-submit that
+creates two separate `purchase_bill_items` rows (each gets its own
+auto-generated `purchase_line_id` via `generate_purchase_line_id()`,
+migration 020), both legitimately posting `PURCHASE_IN`. From the ledger's
+perspective these are two structurally distinct, valid lines — the
+duplication is only visible at the business level (same bill, same
+material, same quantity, near-identical timestamp). Closing this gap is
+REC-016's job (duplicate source business identifier — catalogued, not yet
+implemented) or a Phase 2 extension to REC-001 that also groups by
+`(reference_id, material_type_id, material_size_id, quantity)` without
+requiring `purchase_line_id` to match, tie-broken by `created_at` proximity
+the same way the existing confidence scoring works.
 Requires at least one stable line/reference key (`purchase_line_id`,
 `sub_purchase_line_id`, or `reference_id`) to avoid false positives on
 under-specified rows.
@@ -127,6 +147,24 @@ in `087_data_integrity_canonical_stock_layer.sql`, not a data problem. This
 is the rule that directly encodes "Opening + Inward − Outward = Closing"
 and "a display filter must never change accounting totals."
 
+### REC-018 — Unbalanced vendor-held stock
+**Severity: HIGH.** Cross-checks the two independently-computed notions of
+"stock currently held at a job-work vendor" that already existed in this
+schema with nothing ever checking them against each other (see
+`CURRENT_STATE_AUDIT.md` §7): `vw_current_vendor_stock` (087, this package
+— derived from `stock_ledger` via `VENDOR_MOVEMENT_TYPES`) against the
+pre-existing `v_stock_at_vendors` view (derived directly from
+`job_work_items.quantity_sent/received/transferred_out`, latest body:
+`056_job_work_vendor_transfer.sql`). Joined by
+`(company_id, vendor_id, material_type_id, size_label)` — `v_stock_at_vendors`
+groups by size *label* (text), not `material_size_id`, so that's the shared
+key, with `IS NOT DISTINCT FROM` for the nullable `size_label` (the same
+NULL-join class of bug REC-005 hit initially, avoided here from the start).
+Deliberately point-in-time, not date-windowed — a vendor's current balance
+isn't a period sum. Implemented in `089_data_integrity_rec018.sql`, added
+after the initial 9-rule release specifically because it's the highest
+value-per-effort item once written — see the delivery report's "next phase."
+
 ## Catalogued, not yet implemented (Phase 2 backlog)
 
 ### REC-004 — Source-to-ledger quantity mismatch
@@ -176,11 +214,3 @@ the assignment, not yet added to `stock_ledger`). Realistically this rule
 becomes much more reliable *after* that Phase 2 schema addition rather than
 before it — attempting it now would mostly duplicate REC-001's signal.
 
-### REC-018 — Unbalanced vendor-held stock
-Compare `vw_current_vendor_stock` (this package, ledger-derived) against the
-existing `v_stock_at_vendors` view (`job_work_items`-derived) — both exist
-today (see `CURRENT_STATE_AUDIT.md` §7), so this is "just" a `FULL OUTER
-JOIN` and a tolerance check between two views that already exist. Deferred
-purely for time; likely the single highest-value Phase 2 addition given it
-would catch drift between two already-independently-computed numbers that
-nothing currently cross-checks.
