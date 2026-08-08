@@ -143,13 +143,49 @@ grouped by rule + status):
 | REC-005 | `IGNORED` | 30 | Confirmed intentional by the business owner — 26 per-warehouse splits (rescoped to company-wide, see the REC-005 rescoping note above) + 4 cross-company splits (Sri Sai Steels ↔ DS Steel Enterprises, confirmed sister entities sharing inventory) |
 | REC-009 | `IGNORED` | 43 | The line-vs-scope aggregation bug, already fixed and explained above |
 | REC-009 | `RESOLVED` | 5 | Genuinely fixed — `quantity_received` synced to the ledger (see the Stage D incident note below for how this repair itself went sideways and was corrected) |
-| REC-018 | `OPEN` | 52 | **Not yet investigated** — the real remaining work |
+| REC-018 | `RESOLVED` | 52 | Genuinely fixed — see the REC-018 root-cause section below. 5 resolved as a side effect of the REC-009 correction, 47 auto-resolved once `090_fix_vendor_stock_transfer_sign.sql` corrected the reconciliation view |
 
-Only REC-018's 52 findings are still open and untriaged. Everything else is
-either a confirmed non-issue (with the business owner's reasoning recorded
-in `resolution_notes`) or genuinely fixed. `reconciliation_settings.quantity_tolerance`
-at `0.001` did not need tuning against this dataset — no findings were
-borderline/near-zero.
+As of `090_fix_vendor_stock_transfer_sign.sql`, **zero exceptions remain
+`OPEN`/`REOPENED`/`ACKNOWLEDGED`/`INVESTIGATING` anywhere in production.**
+Everything left is either a confirmed non-issue (business owner's reasoning
+recorded in `resolution_notes`) or genuinely fixed.
+`reconciliation_settings.quantity_tolerance` at `0.001` did not need tuning
+against this dataset — no findings were borderline/near-zero.
+
+### REC-018 root cause — a bug in the reconciliation view, not the ledger
+
+Tracing one of the 47 findings (a `METALEX STEEL PROCESSOR` /
+`MODERN AGE METAL PROCESSORS` vendor-to-vendor transfer pair, exact
+magnitude 18.040 on both sides) down to its raw `stock_ledger` rows found
+the ledger itself was internally consistent — a production-wide sign-count
+query (`GROUP BY entry_type, sign(quantity)`) showed 204/204 `JOB_WORK_OUT`
+rows negative, 125/125 `JOB_WORK_RETURN_IN` positive, 33/33
+`JOB_WORK_TRANSFER_IN` positive, 33/33 `JOB_WORK_TRANSFER_OUT` negative,
+with no exceptions. The actual bug was in `vw_current_vendor_stock` (087):
+its `-SUM(quantity)` formula assumes every vendor-movement entry type
+follows `JOB_WORK_OUT`/`JOB_WORK_RETURN_IN`'s sign convention, but
+`fn_job_work_item_to_ledger()` deliberately gives
+`JOB_WORK_TRANSFER_IN`/`JOB_WORK_TRANSFER_OUT` the *opposite* polarity, so
+that a transfer pair nets to zero at the warehouse level (material sent
+vendor-to-vendor never re-enters a physical warehouse, so both legs post
+against each order's own `warehouse_id` with opposite signs to wash out).
+`-SUM` inverts that wash into a doubling instead. Fixed in
+`090_fix_vendor_stock_transfer_sign.sql` — `JOB_WORK_TRANSFER_IN`/
+`JOB_WORK_TRANSFER_OUT` now contribute `+quantity` instead of `-quantity`;
+everything else unchanged. Verified against production: hand-computed the
+corrected formula against both exception numbers in the METALEX/MODERN AGE
+pair before touching anything (matched to 3 decimals), then confirmed
+`fn_reconcile_rec_018` returned 0 rows immediately after applying the
+view fix, and a full production scan auto-resolved all 47 open exceptions
+with **zero `stock_ledger` writes**.
+
+This supersedes an earlier plan (approved mid-investigation) to fix this
+pattern by disabling triggers and directly `UPDATE`-ing
+`job_work_items.quantity_transferred_out`, the same technique used for the
+REC-009 repair. That plan was designed for a REC-009-style source-column
+sync gap and was never applied — the real defect turned out to be in the
+read-only reconciliation view itself, not in any production table, so no
+data repair was needed at all.
 
 **Rollback**: the shadow database is disposable — delete it, nothing to undo.
 

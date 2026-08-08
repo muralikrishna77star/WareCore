@@ -204,6 +204,37 @@ isn't a period sum. Implemented in `089_data_integrity_rec018.sql`, added
 after the initial 9-rule release specifically because it's the highest
 value-per-effort item once written — see the delivery report's "next phase."
 
+**Production incident, same session — a bug in this rule's own view, not
+in the ledger.** The initial rollout found 47 open findings, all sharing
+the same shape: exact-magnitude pairs across two vendors (e.g. METALEX
+STEEL PROCESSOR +18.040 / MODERN AGE METAL PROCESSORS -18.040). Tracing
+the raw `stock_ledger` rows behind one pair showed `stock_ledger` itself
+was internally consistent (`JOB_WORK_OUT` always negative, 204/204 rows;
+`JOB_WORK_RETURN_IN` always positive, 125/125; `JOB_WORK_TRANSFER_IN`
+always positive, 33/33; `JOB_WORK_TRANSFER_OUT` always negative, 33/33 —
+verified with a `GROUP BY` sign-count query before concluding anything).
+`fn_job_work_item_to_ledger()` deliberately gives `JOB_WORK_TRANSFER_IN`/
+`JOB_WORK_TRANSFER_OUT` the *opposite* sign polarity from `JOB_WORK_OUT`/
+`JOB_WORK_RETURN_IN`, because the transfer pair is posted against each
+order's own warehouse to net to zero at the warehouse level (the material
+never physically re-enters a warehouse). `vw_current_vendor_stock` (087)
+applied one uniform `-SUM(quantity)` formula to every entry type, which is
+correct for `JOB_WORK_OUT`/`JOB_WORK_RETURN_IN`/`JOB_WORK_CANCEL` but
+inverts the sign for the two transfer types. Fixed in
+`090_fix_vendor_stock_transfer_sign.sql` by giving
+`JOB_WORK_TRANSFER_IN`/`JOB_WORK_TRANSFER_OUT` a `+quantity` branch instead
+of `-quantity`. No `stock_ledger` rows were touched — production ledger
+data was correct the whole time; only the reconciliation view's formula
+was wrong. Confirmed against production: `fn_reconcile_rec_018` dropped
+from 47 rows to 0 immediately after the fix, and a full production scan
+auto-resolved all 47 exceptions with zero manual data changes.
+
+This also means the "disable the trigger, `UPDATE quantity_transferred_out`"
+fix approved earlier for this pattern was never applied and would have been
+wrong — it was designed for a REC-009-style sync gap, but the real defect
+here was in the read-only reconciliation view, not in `job_work_items` or
+`stock_ledger`.
+
 ## Catalogued, not yet implemented (Phase 2 backlog)
 
 ### REC-004 — Source-to-ledger quantity mismatch
