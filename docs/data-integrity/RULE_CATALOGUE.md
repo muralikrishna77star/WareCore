@@ -82,15 +82,16 @@ already used by `reports/item-ledger/page.tsx`'s `findOrphanedReferences()`
 and `/api/stock/verify`'s stale-records check, expressed once as the
 canonical version instead of being reimplemented ad hoc in each report.
 
-### REC-005 — Negative warehouse stock
+### REC-005 — Negative company-wide stock
 **Severity: CRITICAL if currently negative, HIGH if it recovered.** Walks
-full chronological history per company/warehouse/material/size (ordered
-`entry_date, quantity DESC, created_at` — same tie-break as the canonical
-layer, never reordered to hide a real dip) and reports the minimum balance
-ever reached, which row caused it, and the current balance. Only scopes that
-actually went below `-0.001` are returned — this is the rule the assignment
-is most explicit about never gaming: "Do not hide a negative chronological
-balance by sorting inflows before outflows."
+full chronological history per **company/material/size** — deliberately
+*not* per warehouse (see below) — (ordered `entry_date, quantity DESC,
+created_at` — same tie-break as the canonical layer, never reordered to
+hide a real dip) and reports the minimum balance ever reached, which row
+caused it, and the current balance. Only scopes that actually went below
+`-0.001` are returned — this is the rule the assignment is most explicit
+about never gaming: "Do not hide a negative chronological balance by
+sorting inflows before outflows."
 
 *Bug found and fixed via the Stage B shadow test against real production
 data* (`ROLLOUT_PLAN.md`): the `current_balance` "pick the last row"
@@ -99,6 +100,16 @@ correctly, which could misreport the current balance (and thus
 CRITICAL-vs-HIGH severity) for a scope with more than one row sharing its
 latest `entry_date` — never surfaced by the synthetic test suite, which had
 no such scope.
+
+*Rescoped from per-warehouse to per-company after investigating the real
+findings* (`ROLLOUT_PLAN.md`): the original per-warehouse version produced
+26 findings, 22 of which turned out to be an intentional business pattern —
+purchases and their downstream job-work/sale activity are deliberately
+split across an "Opening Stock"/"Virtual" warehouse and a real operating
+warehouse, confirmed by the business owner, with the two warehouses' combined
+net frequently exactly `0.000`. Company-wide aggregation still catches a
+genuine deficit (production data confirms 4 remain, all `SALE_OUT`-caused,
+all one specific company) while no longer flagging the intentional split.
 
 ### REC-007 — Reversal mismatch
 **Severity: HIGH.** Two sub-checks, both an accounting invariant rather than

@@ -142,6 +142,28 @@ describe('REC-005 negative warehouse stock', () => {
     const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_005($1, '2024-01-01', '2026-12-31')`, [companyId])
     expect(rows).toHaveLength(0)
   })
+
+  it('does NOT flag an intentional warehouse split (purchase in one warehouse, job-work-out from another, company-wide net zero) — the real "Opening Stock"/"Virtual" warehouse pattern confirmed by the business owner', async () => {
+    const { companyId, warehouseId: warehouseA, materialTypeId } = await makeCompanyAndWarehouse()
+    const { rows: [warehouseB] } = await client.query(`INSERT INTO warehouses (company_id, name) VALUES ($1, 'WH-B') RETURNING id`, [companyId])
+    // Mirrors the real GA0424-0001 case: purchase into warehouse A, the
+    // job-work-out (and everything after it) posted against warehouse B.
+    await insertLedger({ entryType: 'PURCHASE_IN', quantity: 12.535, entryDate: '2024-04-22', companyId, warehouseId: warehouseA, materialTypeId, purchaseLineId: 'SYN-SPLIT-1' })
+    await insertLedger({ entryType: 'JOB_WORK_OUT', quantity: -12.535, entryDate: '2024-04-22', companyId, warehouseId: warehouseB.id, materialTypeId, purchaseLineId: 'SYN-SPLIT-1' })
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_005($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows).toHaveLength(0)
+  })
+
+  it('still flags a genuine company-wide deficit even when spread across multiple warehouses', async () => {
+    const { companyId, warehouseId: warehouseA, materialTypeId } = await makeCompanyAndWarehouse()
+    const { rows: [warehouseB] } = await client.query(`INSERT INTO warehouses (company_id, name) VALUES ($1, 'WH-B') RETURNING id`, [companyId])
+    await insertLedger({ entryType: 'PURCHASE_IN', quantity: 5.0, entryDate: '2024-04-22', companyId, warehouseId: warehouseA, materialTypeId, purchaseLineId: 'SYN-SPLIT-2' })
+    // Sent out more than the company ever purchased, company-wide — a real deficit, not a split.
+    await insertLedger({ entryType: 'JOB_WORK_OUT', quantity: -8.0, entryDate: '2024-04-23', companyId, warehouseId: warehouseB.id, materialTypeId, purchaseLineId: 'SYN-SPLIT-2' })
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_005($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows).toHaveLength(1)
+    expect(Number(rows[0].evidence.current_balance)).toBeCloseTo(-3.0, 3)
+  })
 })
 
 describe('REC-007 reversal mismatch', () => {

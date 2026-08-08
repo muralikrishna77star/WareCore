@@ -64,7 +64,7 @@ fixed** (819 `stock_ledger` rows, 265 purchase bills, 122 dispatch orders,
 | REC-001 (duplicate events) | 0 | — |
 | REC-002 (missing postings) | 0 | — |
 | REC-003 (orphans) | 0 | — |
-| REC-005 (negative stock) | 26 | 25 CRITICAL, 1 HIGH |
+| REC-005 (negative stock, company-wide) | 4 | CRITICAL — (was 26 per-warehouse, see below) |
 | REC-007 (reversal mismatch) | 0 | — |
 | REC-008 (transfer pairs) | 0 | — (0 `transfers` rows in this dataset) |
 | REC-009 (job work equation) | 5 | HIGH — (was 43 pre-fix, see below) |
@@ -72,7 +72,7 @@ fixed** (819 `stock_ledger` rows, 265 purchase bills, 122 dispatch orders,
 | REC-014 (report self-consistency) | 0 | — (was 117 pre-fix, see below) |
 | REC-018 (vendor balance cross-check) | 52 | HIGH — (was 122 in the earlier scan; REC-018 doesn't share any code with REC-009, so this drop isn't the same fix — most likely real business activity in production between scans over this session, not independently confirmed) |
 
-**Total: 83 real exceptions**, all live in the production Exception
+**Total: 61 real exceptions**, all live in the production Exception
 Workbench.
 
 **REC-001/REC-007/REC-008/REC-014 all reading zero is itself meaningful
@@ -111,33 +111,60 @@ to 5** real findings — the other 38 were this false-positive pattern, not
 data defects. The 38 stale exception rows were marked `IGNORED` with an
 explanatory note (not deleted — the evidence stays, just correctly
 labeled) since their fingerprint format changed and a re-scan wouldn't
-have superseded them on its own. **Total exceptions after all three
-fixes: 83** (26 REC-005, 5 REC-009, 52 REC-018) — all now live in the
-Exception Workbench in production.
+have superseded them on its own.
 
-**Not yet done**: the remaining 83 findings have not been individually
+**A fourth issue — not a bug, a scoping decision that needed the business
+owner's input**: tracing REC-005's 26 findings showed 19 of them in
+warehouses named "VSS"/"Warehouse (SSS Virtual)"/"Warehouse (DSS virtual)".
+Tracing the worst cases (e.g. purchase line `GA0424-0001`): the
+`PURCHASE_IN` posted to one warehouse, the `JOB_WORK_OUT` (and everything
+after it) posted to a *different* warehouse — with the two warehouses'
+combined net exactly `0.000` for several of the largest findings. Asked the
+business owner directly: **confirmed intentional** — "Opening Stock" and
+the "Virtual" warehouses are deliberate bookkeeping constructs, not a data
+entry mistake. Per their direction, REC-005 was rescoped from
+per-warehouse to per-company (aggregating a company's warehouses together
+before checking for a negative balance) — still catches a genuine
+company-wide deficit, just not an intentional internal split. Re-ran:
+**REC-005 dropped from 26 to 4** — all four in one specific company
+("DS Steel Enterprises"), all caused by `SALE_OUT` rows, not yet
+individually traced. The 22 no-longer-relevant exception rows were marked
+`IGNORED` with the business owner's confirmation recorded in
+`resolution_notes`.
+
+**Total exceptions after all four fixes: 61** (4 REC-005, 5 REC-009, 52
+REC-018) — all live in the Exception Workbench in production.
+
+**Not yet done**: the remaining 61 findings have not been individually
 triaged (that's real business review work, out of scope for an automated
 tool to resolve unilaterally) — they are exactly what the Exception
-Workbench exists to hold now that this module is live in production.
-`reconciliation_settings.quantity_tolerance` at `0.001` did not
-need tuning against this dataset — no findings were borderline/near-zero.
+Workbench exists to hold now that this module is live in production. The 4
+REC-005 findings (one company, `SALE_OUT`-caused) are the natural next
+investigation target. `reconciliation_settings.quantity_tolerance` at
+`0.001` did not need tuning against this dataset — no findings were
+borderline/near-zero.
 
 **Rollback**: the shadow database is disposable — delete it, nothing to undo.
 
-## Stage C — Production shadow mode (not yet performed)
+## Stage C — Production shadow mode (performed 2026-08-08)
 
-- Deploy the schema (migrations 085–088), the API routes, and the UI to
-  production.
-- **Repair execution stays disabled** (`reconciliation_settings.repair_execution_enabled = FALSE`,
+- Deployed the schema (migrations 085–089), the API routes, and the UI to
+  production (`main` branch, `warecore.vercel.app`).
+- **Repair execution remains disabled** (`reconciliation_settings.repair_execution_enabled = FALSE`,
   unchanged from its migration default — nothing in this release can flip
-  it anyway, since no execution code exists).
-- Run scheduled read-only scans (manual, via `/data-integrity/runs`, until a
-  real scheduler is wired up — see `OPERATIONS_RUNBOOK.md`'s note on
+  it anyway, since no execution code exists). No ledger data was altered at
+  any point in this stage, including via the legacy `/reports/stock-reconcile`
+  "Run Reconciliation" button, which was left untouched.
+- Ran the first live scan through the deployed API — it initially crashed
+  (HTTP 500) due to a bug in `runReconciliation()`'s SQL result parsing
+  (see git history, commit `b524d40`); the underlying scan had actually
+  executed and committed correctly, only the API response and the run's
+  own status column were affected. Fixed and redeployed the same session.
+- Scheduled scans (manual, via `/data-integrity/runs`, until a real
+  scheduler is wired up — see `OPERATIONS_RUNBOOK.md`'s note on
   scheduling; this repo has no cron infrastructure today, per
-  `CURRENT_STATE_AUDIT.md` §8).
-- Do not alter any ledger data during this stage, including via the legacy
-  `/reports/stock-reconcile` "Run Reconciliation" button — Stage C is purely
-  about validating detection at production scale.
+  `CURRENT_STATE_AUDIT.md` §8) are not yet set up — every run so far has
+  been triggered manually.
 
 **Rollback**: drop the 8 new tables (085) and 2 new functions/3 views (087,
 088) — none of them are referenced by any existing table/trigger/view, so

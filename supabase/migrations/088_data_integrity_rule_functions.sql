@@ -197,20 +197,32 @@ RETURNS SETOF reconciliation_candidate AS $$
 $$ LANGUAGE sql STABLE;
 
 -- ============================================================
--- REC-005 — Negative warehouse stock
+-- REC-005 — Negative company-wide stock
 -- ============================================================
--- Per company/warehouse/material/size scope, walks the full chronological
--- history (never reordered for display) and reports the minimum balance
--- ever reached and the current balance. Only scopes whose minimum
--- historical balance actually went below -tolerance are returned.
+-- Per company/material/size scope — NOT per warehouse — walks the full
+-- chronological history (never reordered for display) and reports the
+-- minimum balance ever reached and the current balance. Only scopes whose
+-- minimum historical balance actually went below -tolerance are returned.
+--
+-- Deliberately aggregated at the COMPANY level, not per-warehouse, per a
+-- confirmed business decision (2026-08-08, see ROLLOUT_PLAN.md's Stage B
+-- section): this business intentionally splits a single purchase's
+-- purchase-in and its downstream job-work/sale activity across an
+-- "Opening Stock" or "Virtual" warehouse and a real operating warehouse —
+-- a deliberate bookkeeping construct, not a defect. Per-warehouse
+-- aggregation produced 26 false positives against real production data,
+-- most with the company-wide net across both warehouses exactly zero.
+-- Company-wide aggregation still catches a genuine deficit (the company
+-- really doesn't have enough of a material anywhere), just not an
+-- intentional split between two of its own warehouses.
 CREATE OR REPLACE FUNCTION fn_reconcile_rec_005(p_company_id UUID, p_from_date DATE, p_to_date DATE)
 RETURNS SETOF reconciliation_candidate AS $$
   WITH running AS (
     SELECT
-      company_id, warehouse_id, material_type_id, material_size_id, purchase_line_id,
+      company_id, material_type_id, material_size_id, purchase_line_id,
       id, entry_type, quantity, entry_date, created_at,
       SUM(quantity) OVER (
-        PARTITION BY company_id, warehouse_id, material_type_id, material_size_id
+        PARTITION BY company_id, material_type_id, material_size_id
         ORDER BY entry_date, quantity DESC, created_at
         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
       ) AS running_balance
@@ -221,11 +233,11 @@ RETURNS SETOF reconciliation_candidate AS $$
     SELECT * FROM running WHERE entry_date BETWEEN p_from_date AND p_to_date
   ),
   worst AS (
-    SELECT DISTINCT ON (company_id, warehouse_id, material_type_id, material_size_id)
-      company_id, warehouse_id, material_type_id, material_size_id,
+    SELECT DISTINCT ON (company_id, material_type_id, material_size_id)
+      company_id, material_type_id, material_size_id,
       id AS worst_ledger_id, entry_type AS worst_entry_type, entry_date AS worst_date, running_balance AS min_balance
     FROM scoped
-    ORDER BY company_id, warehouse_id, material_type_id, material_size_id, running_balance ASC
+    ORDER BY company_id, material_type_id, material_size_id, running_balance ASC
   ),
   latest AS (
     -- Same fix as REC-014's computed_closing subquery: to find the LAST row
@@ -236,20 +248,20 @@ RETURNS SETOF reconciliation_candidate AS $$
     -- entry_date, report the wrong row's cumulative value as "current
     -- balance" (only this reported value / severity classification was at
     -- risk — min_balance below is a true MIN over all rows and unaffected).
-    SELECT DISTINCT ON (company_id, warehouse_id, material_type_id, material_size_id)
-      company_id, warehouse_id, material_type_id, material_size_id, running_balance AS current_balance
+    SELECT DISTINCT ON (company_id, material_type_id, material_size_id)
+      company_id, material_type_id, material_size_id, running_balance AS current_balance
     FROM running
-    ORDER BY company_id, warehouse_id, material_type_id, material_size_id, entry_date DESC, quantity ASC, created_at DESC
+    ORDER BY company_id, material_type_id, material_size_id, entry_date DESC, quantity ASC, created_at DESC
   )
   SELECT
-    'REC-005|' || w.company_id::text || '|' || w.warehouse_id::text || '|' || w.material_type_id::text || '|' || COALESCE(w.material_size_id::text, 'null') AS fingerprint,
+    'REC-005|' || w.company_id::text || '|' || w.material_type_id::text || '|' || COALESCE(w.material_size_id::text, 'null') AS fingerprint,
     CASE WHEN l.current_balance < -0.001 THEN 'CRITICAL' ELSE 'HIGH' END AS severity,
-    w.company_id, w.warehouse_id, w.material_type_id, w.material_size_id, NULL::text,
+    w.company_id, NULL::uuid, w.material_type_id, w.material_size_id, NULL::text,
     NULL::text, NULL::uuid, w.worst_ledger_id::text,
     NULL::text,
     0::numeric, w.min_balance, w.min_balance,
-    format('Stock went negative (minimum %s) on %s, currently %s', w.min_balance, w.worst_date, l.current_balance) AS summary,
-    format('Running balance for this company/warehouse/item/size dipped to %s on %s (row %s, %s), which is physically impossible for real stock.',
+    format('Stock went negative company-wide (minimum %s) on %s, currently %s', w.min_balance, w.worst_date, l.current_balance) AS summary,
+    format('Running balance across all of this company''s warehouses for this item/size dipped to %s on %s (row %s, %s), which is physically impossible for real stock.',
            w.min_balance, w.worst_date, w.worst_ledger_id, w.worst_entry_type) AS explanation,
     'Usually a duplicate cancellation, missing inflow posting, or a transfer/job-work leg recorded against the wrong scope.' AS suspected_cause,
     jsonb_build_object('confidence', 'CONFIRMED', 'minimum_balance', w.min_balance, 'current_balance', l.current_balance, 'worst_ledger_id', w.worst_ledger_id) AS evidence
@@ -258,7 +270,7 @@ RETURNS SETOF reconciliation_candidate AS $$
   -- would generate) never matches NULL = NULL — IS NOT DISTINCT FROM treats
   -- two NULLs as equal, matching how DISTINCT ON already grouped them
   -- within each CTE.
-  JOIN latest l ON l.company_id = w.company_id AND l.warehouse_id = w.warehouse_id
+  JOIN latest l ON l.company_id = w.company_id
     AND l.material_type_id = w.material_type_id AND l.material_size_id IS NOT DISTINCT FROM w.material_size_id
   WHERE w.min_balance < -0.001;
 $$ LANGUAGE sql STABLE;
