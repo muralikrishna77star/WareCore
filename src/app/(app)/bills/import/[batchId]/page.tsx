@@ -54,6 +54,7 @@ export default function BatchReviewPage() {
   const [filter, setFilter] = useState<'all' | 'invalid' | 'unreviewed'>('all')
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [reviewAllMessage, setReviewAllMessage] = useState('')
   const [importResult, setImportResult] = useState<{ bills: ImportResultBill[]; totalBills: number; totalLines: number; totalQuantity: number; totalAmount: number } | null>(null)
 
   const loadBatch = useCallback(async () => {
@@ -110,10 +111,14 @@ export default function BatchReviewPage() {
   const reviewAllValid = async () => {
     setBusy(true)
     setError('')
+    setReviewAllMessage('')
     try {
       const res = await fetch(`/api/bills/import/batches/${batchId}/rows/review-all-valid`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setError(data.error || `Server error (${res.status})`); return }
+      setReviewAllMessage(
+        data.reviewedCount > 0 ? `Marked ${data.reviewedCount} row${data.reviewedCount === 1 ? '' : 's'} reviewed.` : 'No unreviewed valid rows to mark — every valid row is already reviewed.'
+      )
       await loadBatch()
     } finally {
       setBusy(false)
@@ -235,6 +240,7 @@ export default function BatchReviewPage() {
             </button>
             {!counts.readyToImport && <span className="text-xs text-gray-500">Every row must be valid and reviewed before importing.</span>}
           </div>
+          {reviewAllMessage && <p className="text-xs text-green-700">{reviewAllMessage}</p>}
 
           <div className="flex gap-2 text-xs">
             {(['all', 'invalid', 'unreviewed'] as const).map((f) => (
