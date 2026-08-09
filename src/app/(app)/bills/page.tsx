@@ -49,12 +49,20 @@ export default async function BillsPage({
           <h1 className="text-[1.4375rem] font-bold text-gray-900">Purchase Bills</h1>
           <p className="mt-1 text-[0.9375rem] text-gray-500">All inward purchase bills</p>
         </div>
-        <Link
-          href="/bills/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          + New Bill
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/bills/import"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-[0.9375rem] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Import from Excel
+          </Link>
+          <Link
+            href="/bills/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-[0.9375rem] font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            + New Bill
+          </Link>
+        </div>
       </div>
 
       <ListingSummary

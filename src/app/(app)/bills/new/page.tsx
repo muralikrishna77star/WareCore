@@ -16,6 +16,8 @@ import {
   CREATE_COMPANY_MUTATION, CREATE_WAREHOUSE_MUTATION, CREATE_SUPPLIER_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
+import { getMMYY, generatePurchaseId, generatePurchaseLineId } from '@/lib/purchaseIds'
+import { calculateLineTax } from '@/lib/purchaseTax'
 
 type LineItem = {
   rowId: string
@@ -41,36 +43,6 @@ type LineItem = {
   total_with_tax: number
 }
 
-// ─── ID generation helpers ────────────────────────────────────────────────────
-
-function getMMYY(date: Date = new Date()): string {
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const yy = String(date.getFullYear()).slice(-2)
-  return `${mm}${yy}`
-}
-
-function computeNextSeq(ids: string[], pattern: RegExp): number {
-  return ids.reduce((max, id) => {
-    if (!id) return max
-    const m = id.match(pattern)
-    return m ? Math.max(max, parseInt(m[1], 10)) : max
-  }, 0)
-}
-
-function generatePurchaseId(existingBillNumbers: string[], dateStr?: string): string {
-  const seq = computeNextSeq(existingBillNumbers, /^\d{4}-(\d+)$/)
-  const date = dateStr ? new Date(dateStr + 'T00:00:00') : new Date()
-  return `${getMMYY(date)}-${String(seq + 1).padStart(4, '0')}`
-}
-
-function generatePurchaseLineId(groupCode: string, mmyy: string, allLineIds: string[]): string {
-  const prefix = `${groupCode.slice(0, 2).toUpperCase()}${mmyy}-`
-  const count = allLineIds.filter(id => id && id.startsWith(prefix)).length
-  return `${prefix}${String(count + 1).padStart(4, '0')}`
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 const emptyLine = (): LineItem => ({
   rowId: Math.random().toString(36).slice(2, 8),
   purchase_line_id: '', item_master_id: '', item_name: '', item_code: '',
@@ -82,21 +54,13 @@ const emptyLine = (): LineItem => ({
 })
 
 function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
-  const taxable = (parseFloat(line.quantity) || 0) * (parseFloat(line.rate) || 0)
-  if (!line.tax_rate_id) return { taxable_value: taxable, cgst_amount: 0, sgst_amount: 0, tds_amount: 0, total_with_tax: taxable }
-  const tr = taxRates.find((t) => t.id === line.tax_rate_id)
-  if (!tr) return { taxable_value: taxable }
-  const cgst = (taxable * Number(tr.cgst_rate)) / 100
-  const sgst = (taxable * Number(tr.sgst_rate)) / 100
-  const tdsBase = taxable + cgst + sgst
-  const tds = (tdsBase * Number(tr.tds_rate)) / 100
-  return {
-    taxable_value: taxable,
-    cgst_rate: Number(tr.cgst_rate), cgst_amount: cgst,
-    sgst_rate: Number(tr.sgst_rate), sgst_amount: sgst,
-    tds_rate: Number(tr.tds_rate), tds_amount: tds,
-    total_with_tax: taxable + cgst + sgst - tds,
+  const taxRate = line.tax_rate_id ? taxRates.find((t) => t.id === line.tax_rate_id) : null
+  if (line.tax_rate_id && !taxRate) {
+    // Unknown tax_rate_id (e.g. stale selection) — preserve the original
+    // behavior of only updating taxable_value in this edge case.
+    return { taxable_value: (parseFloat(line.quantity) || 0) * (parseFloat(line.rate) || 0) }
   }
+  return calculateLineTax(parseFloat(line.quantity) || 0, parseFloat(line.rate) || 0, taxRate)
 }
 
 export default function NewBillPage() {
