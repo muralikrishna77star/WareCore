@@ -365,7 +365,7 @@ export default function EditDispatchPage() {
 
   const handleCreateMaterialType = async () => {
     const code = newMaterialTypeCode.trim().toUpperCase()
-    if (code.length !== 2) { setError('Material type code must be exactly 2 characters'); return }
+    if (code.length < 1 || code.length > 5) { setError('Material type code must be 1-5 characters'); return }
     if (!newMaterialTypeDescription.trim()) return
     setMaterialTypeDialogLoading(true)
     const { data, error: err } = await hasuraFetch<{ insert_material_types_one: MaterialType }>(CREATE_MATERIAL_TYPE_MUTATION, {
@@ -911,8 +911,8 @@ export default function EditDispatchPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium text-blue-900 mb-1">Code * (2 chars)</label>
-                <input value={newMaterialTypeCode} maxLength={2} onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
+                <label className="block text-sm font-medium text-blue-900 mb-1">Code * (1-5 chars)</label>
+                <input value={newMaterialTypeCode} maxLength={5} onChange={(e) => setNewMaterialTypeCode(e.target.value.toUpperCase())}
                   className="block w-full rounded border border-blue-300 bg-white px-3 py-2 text-sm font-mono uppercase focus:border-blue-500 focus:outline-none" placeholder="e.g. GA" />
               </div>
               <div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { COMPANIES_QUERY, UPDATE_COMPANY_MUTATION, DELETE_COMPANY_MUTATION } from '@/lib/hasura/queries'
+import SearchInput from '@/components/SearchInput'
 
 type Company = { id: string; name: string; code: string; short_name?: string; address?: string; city?: string; state?: string; pincode?: string; phone?: string; email?: string; gstin?: string; is_active: boolean }
 
@@ -13,6 +14,12 @@ export default function CompaniesPage() {
   const [editing, setEditing] = useState<Company | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filtered = companies.filter((c) => {
+    const q = search.toLowerCase()
+    return !q || [c.name, c.code, c.short_name, c.city, c.state, c.gstin].some((v) => v?.toLowerCase().includes(q))
+  })
 
   const load = () => hasuraFetch(COMPANIES_QUERY).then(r => { setCompanies((r.data as any)?.companies ?? []); setLoading(false) })
   useEffect(() => { load() }, [])
@@ -47,9 +54,13 @@ export default function CompaniesPage() {
         </div>
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by name, code, city, state or GSTIN…" />
+
       <div className="rounded-xl border bg-white overflow-hidden">
         {companies.length === 0 && !loading ? (
           <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">🏢</p><p className="text-gray-500">No companies yet.</p></div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center"><p className="text-gray-500">No companies match your search.</p></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -65,7 +76,7 @@ export default function CompaniesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {companies.map(c => (
+                {filtered.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{c.name}</td>
                     <td className="px-5 py-3 font-mono text-gray-700">{c.code}</td>

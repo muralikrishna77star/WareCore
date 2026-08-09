@@ -16,7 +16,7 @@ export default function AdminMaterialForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const code = form.code.trim().toUpperCase()
-    if (code.length !== 2) { setError('Code must be exactly 2 characters.'); return }
+    if (code.length < 1 || code.length > 5) { setError('Code must be 1-5 characters.'); return }
     setLoading(true); setError('')
     const { error: err } = await hasuraFetch(CREATE_MATERIAL_TYPE_MUTATION, {
       code,
@@ -33,8 +33,8 @@ export default function AdminMaterialForm() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Code * (exactly 2 chars, e.g. GA, CR, MS)</label>
-          <input required maxLength={2} value={form.code}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Code * (1-5 chars, e.g. GA, CR, MS)</label>
+          <input required maxLength={5} value={form.code}
             onChange={(e) => set('code', e.target.value.toUpperCase())}
             placeholder="e.g. GA"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { MATERIAL_TYPES_QUERY, UPDATE_MATERIAL_TYPE_MUTATION, DELETE_MATERIAL_TYPE_MUTATION } from '@/lib/hasura/queries'
+import SearchInput from '@/components/SearchInput'
 
 type MaterialType = { id: string; code: string; description: string; unit: string; is_active: boolean }
 
@@ -15,6 +16,12 @@ export default function MaterialTypesPage() {
   const [editing, setEditing] = useState<MaterialType | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filtered = types.filter((t) => {
+    const q = search.toLowerCase()
+    return !q || [t.code, t.description, t.unit].some((v) => v?.toLowerCase().includes(q))
+  })
 
   const load = () => hasuraFetch(MATERIAL_TYPES_QUERY).then(r => { setTypes((r.data as any)?.material_types ?? []); setLoading(false) })
   useEffect(() => { load() }, [])
@@ -22,7 +29,10 @@ export default function MaterialTypesPage() {
   const save = async () => {
     if (!editing) return
     const code = editing.code.trim().toUpperCase()
-    if (code.length !== 2) { setError('Code must be exactly 2 characters.'); return }
+    // Line IDs (purchase/job-work) only ever use the first 2 letters of this
+    // code (src/lib/purchaseIds.ts's generatePurchaseLineId) — that format
+    // is unchanged. This just allows longer, more descriptive codes.
+    if (code.length < 1 || code.length > 5) { setError('Code must be 1-5 characters.'); return }
     setSaving(true); setError('')
     const { error: err } = await hasuraFetch(UPDATE_MATERIAL_TYPE_MUTATION, { ...editing, code })
     if (err) { setError(err.message); setSaving(false); return }
@@ -51,9 +61,13 @@ export default function MaterialTypesPage() {
         </div>
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by code, description or unit…" />
+
       <div className="rounded-xl border bg-white overflow-hidden">
         {types.length === 0 && !loading ? (
           <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">📦</p><p className="text-gray-500">No material types yet.</p></div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center"><p className="text-gray-500">No material types match your search.</p></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -67,7 +81,7 @@ export default function MaterialTypesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {types.map(t => (
+                {filtered.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-mono font-semibold text-blue-700">{t.code}</td>
                     <td className="px-5 py-3 text-gray-800">{t.description}</td>
@@ -97,8 +111,8 @@ export default function MaterialTypesPage() {
             <h2 className="text-lg font-bold text-gray-900">Edit Material Type</h2>
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Code * (2 chars)</label>
-                <input value={editing.code} maxLength={2} onChange={e => f('code', e.target.value.toUpperCase())} className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Code * (1-5 chars)</label>
+                <input value={editing.code} maxLength={5} onChange={e => f('code', e.target.value.toUpperCase())} className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Unit *</label>
                 <select value={editing.unit} onChange={e => f('unit', e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {UNITS.map(u => <option key={u} value={u}>{u}</option>)}

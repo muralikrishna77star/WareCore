@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { MATERIAL_SIZES_QUERY, ACTIVE_MATERIAL_TYPES_QUERY, UPDATE_MATERIAL_SIZE_MUTATION, DELETE_MATERIAL_SIZE_MUTATION } from '@/lib/hasura/queries'
+import SearchInput from '@/components/SearchInput'
 
 type Size = { id: string; size_label: string; material_type_id: string; thickness?: number | null; width?: number | null; is_active: boolean; material_types?: { code: string; description: string } }
 type MT = { id: string; code: string; description: string }
@@ -15,6 +16,12 @@ export default function SizesPage() {
   const [editing, setEditing] = useState<Size | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filtered = sizes.filter((s) => {
+    const q = search.toLowerCase()
+    return !q || [s.size_label, s.material_types?.code, s.material_types?.description].some((v) => v?.toLowerCase().includes(q))
+  })
 
   const load = () => Promise.all([hasuraFetch(MATERIAL_SIZES_QUERY), hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY)]).then(([sr, mr]) => {
     setSizes((sr.data as any)?.material_sizes ?? [])
@@ -56,6 +63,8 @@ export default function SizesPage() {
         </div>
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by size label or material type…" />
+
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -72,8 +81,10 @@ export default function SizesPage() {
             <tbody className="divide-y divide-gray-100">
               {sizes.length === 0 && !loading ? (
                 <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">No sizes yet. <Link href="/admin/sizes/new" className="text-blue-600 hover:underline">Add the first size</Link></td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">No sizes match your search.</td></tr>
               ) : (
-                sizes.map(s => (
+                filtered.map(s => (
                   <tr key={s.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 font-medium text-gray-900">{s.size_label}</td>
                     <td className="px-6 py-3 text-gray-600">

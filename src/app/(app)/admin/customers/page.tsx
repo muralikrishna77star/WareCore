@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { CUSTOMERS_LIST_QUERY, UPDATE_CUSTOMER_MUTATION, DELETE_CUSTOMER_MUTATION } from '@/lib/hasura/queries'
+import SearchInput from '@/components/SearchInput'
 
 type Customer = { id: string; name: string; contact_person?: string; phone?: string; email?: string; city?: string; state?: string; gstin?: string; is_active: boolean }
 
@@ -15,6 +16,12 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<Customer | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filtered = customers.filter((c) => {
+    const q = search.toLowerCase()
+    return !q || [c.name, c.contact_person, c.phone, c.city, c.state, c.gstin].some((v) => v?.toLowerCase().includes(q))
+  })
 
   const load = () => hasuraFetch(CUSTOMERS_LIST_QUERY).then(r => { setCustomers((r.data as any)?.customers ?? []); setLoading(false) })
   useEffect(() => { load() }, [])
@@ -50,9 +57,13 @@ export default function CustomersPage() {
         </div>
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by name, contact, phone, city, state or GSTIN…" />
+
       <div className="rounded-xl border bg-white overflow-hidden">
         {customers.length === 0 && !loading ? (
           <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">👥</p><p className="text-gray-500">No customers yet.</p></div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center"><p className="text-gray-500">No customers match your search.</p></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -68,7 +79,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {customers.map(c => (
+                {filtered.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{c.name}</td>
                     <td className="px-5 py-3 text-gray-600">{c.contact_person || '—'}</td>

@@ -168,7 +168,12 @@ export default function AdminUsersPage() {
                 <td className="px-4 py-3 text-gray-500 text-xs">
                   {user.created_at ? formatDateTime(user.created_at) : '—'}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <Link
+                    href={`/admin/users/${user.id}/edit`}
+                    className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors mr-2">
+                    Edit
+                  </Link>
                   <button
                     onClick={() => setConfirmId(user.id)}
                     disabled={deletingId === user.id}

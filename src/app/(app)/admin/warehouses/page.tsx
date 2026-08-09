@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { WAREHOUSES_QUERY, ACTIVE_COMPANIES_QUERY, UPDATE_WAREHOUSE_MUTATION, DELETE_WAREHOUSE_MUTATION } from '@/lib/hasura/queries'
+import SearchInput from '@/components/SearchInput'
 
 type Warehouse = { id: string; name: string; company_id?: string; address?: string; city?: string; state?: string; is_active: boolean; companies?: { id: string; name: string } }
 type Company = { id: string; name: string }
@@ -21,6 +22,12 @@ export default function WarehousesPage() {
   const [mergeTargetId, setMergeTargetId] = useState('')
   const [merging, setMerging] = useState(false)
   const [mergeError, setMergeError] = useState('')
+  const [search, setSearch] = useState('')
+
+  const filtered = warehouses.filter((w) => {
+    const q = search.toLowerCase()
+    return !q || [w.name, w.companies?.name, w.city, w.state].some((v) => v?.toLowerCase().includes(q))
+  })
 
   const load = () => Promise.all([
     hasuraFetch(WAREHOUSES_QUERY),
@@ -82,9 +89,13 @@ export default function WarehousesPage() {
         </div>
       </div>
 
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by name, company, city or state…" />
+
       <div className="rounded-xl border bg-white overflow-hidden">
         {warehouses.length === 0 && !loading ? (
           <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">🏭</p><p className="text-gray-500">No warehouses yet.</p></div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center"><p className="text-gray-500">No warehouses match your search.</p></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -98,7 +109,7 @@ export default function WarehousesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {warehouses.map(w => (
+                {filtered.map(w => (
                   <tr key={w.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{w.name}</td>
                     <td className="px-5 py-3 text-gray-600">{w.companies?.name || '—'}</td>
