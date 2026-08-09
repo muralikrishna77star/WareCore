@@ -45,7 +45,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { rows, errors: parseErrors } = await parseWorkbook(buffer)
-    if (parseErrors.length) return NextResponse.json({ error: 'Could not read the file.', errors: parseErrors }, { status: 400 })
+    if (parseErrors.length) {
+      // File-level errors (rowNumber: null — bad file, missing columns) are
+      // the only kind parseWorkbook produces before any row is read, so
+      // surfacing the first one directly (rather than a generic "could not
+      // read the file") is what actually tells the user what to fix.
+      return NextResponse.json({ error: parseErrors[0].message, errors: parseErrors }, { status: 400 })
+    }
     if (!rows.length) return NextResponse.json({ error: 'No data rows found in the file.' }, { status: 400 })
 
     const snapshot = await fetchMasterDataSnapshot()

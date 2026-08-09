@@ -8,8 +8,14 @@
 import ExcelJS from 'exceljs'
 import { COLUMNS, REQUIRED_COLUMNS, type ColumnName, type ParsedRow, type RowError } from './types'
 
+// Strips the trailing " *" the template generator appends to required
+// column headers (see COLUMNS.map in template/route.ts) before matching —
+// without this, every required column in the template we ourselves
+// generate ("Company *", "Bill Date *", ...) fails to match its canonical
+// name and the file is rejected as "missing" every required column, no
+// matter how correctly it was filled in.
 function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/\s+/g, ' ')
+  return h.trim().replace(/\s*\*\s*$/, '').toLowerCase().replace(/\s+/g, ' ')
 }
 
 const HEADER_LOOKUP = new Map<string, ColumnName>(COLUMNS.map((c) => [normalizeHeader(c), c]))

@@ -23,6 +23,12 @@ interface DuplicateMatch {
   createdAt: string
 }
 
+interface UploadError {
+  rowNumber: number | null
+  column?: string
+  message: string
+}
+
 const STATUS_COLOR: Record<string, string> = {
   STAGED: 'bg-amber-100 text-amber-800',
   IMPORTED: 'bg-green-100 text-green-800',
@@ -35,6 +41,7 @@ export default function BillsImportPage() {
   const [loadingBatches, setLoadingBatches] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [uploadErrors, setUploadErrors] = useState<UploadError[]>([])
   const [duplicates, setDuplicates] = useState<DuplicateMatch[] | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -55,6 +62,7 @@ export default function BillsImportPage() {
   const upload = async (file: File, confirmDuplicate: boolean) => {
     setUploading(true)
     setError('')
+    setUploadErrors([])
     try {
       const fd = new FormData()
       fd.append('file', file)
@@ -63,6 +71,7 @@ export default function BillsImportPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error || `Server error (${res.status})`)
+        setUploadErrors(data.errors ?? [])
         return
       }
       if (data.duplicate) {
@@ -115,7 +124,18 @@ export default function BillsImportPage() {
           />
         </div>
         {uploading && <p className="text-sm text-gray-500">Uploading and validating…</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <p className="text-sm font-medium text-red-700">{error}</p>
+            {uploadErrors.length > 1 && (
+              <ul className="mt-2 space-y-1 text-sm text-red-600">
+                {uploadErrors.map((e, i) => (
+                  <li key={i}>{e.rowNumber ? <span className="font-mono text-xs">Row {e.rowNumber}{e.column ? ` (${e.column})` : ''}: </span> : null}{e.message}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {duplicates && pendingFile && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
