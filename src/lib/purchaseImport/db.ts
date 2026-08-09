@@ -20,13 +20,18 @@ export function sqlBool(v: boolean): string {
   return v ? 'true' : 'false'
 }
 
-// Real Hasura's run_sql endpoint stringifies every cell, so 'true'/'false'
-// string comparison is correct there — but runSqlLocal() (LOCAL_MODE, used
-// by automated tests and the desktop build) runs raw SQL via `pg`, which
-// returns native booleans for boolean columns. Accept both representations
-// so is_valid/reviewed parse correctly in both modes.
+// Real Hasura's run_sql endpoint stringifies every cell using Postgres's own
+// text output format for booleans, which is 't'/'f' — NOT the JS-style
+// 'true'/'false' string this file's precedent assumed (verified directly
+// against production: `SELECT is_valid FROM purchase_import_rows` comes
+// back as "t"/"f"). That earlier assumption meant is_valid/reviewed always
+// parsed to false in production regardless of the real value, which is why
+// a fully valid+reviewed batch never showed "ready to import" and a clean
+// row displayed "0 errors" instead of "Valid". runSqlLocal() (LOCAL_MODE —
+// automated tests and the desktop build) instead returns native booleans
+// via `pg`. Accept all three representations.
 function toBool(v: unknown): boolean {
-  return v === true || v === 'true'
+  return v === true || v === 'true' || v === 't'
 }
 
 export interface StagingRowRecord {

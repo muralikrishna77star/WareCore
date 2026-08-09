@@ -12,6 +12,14 @@ function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
   return rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])))
 }
 
+// hasuraRunSql's run_sql endpoint stringifies booleans using Postgres's own
+// text output format — 't'/'f' — not the JS-style 'true'/'false' this file
+// previously checked for, which meant is_enabled/repair_execution_enabled
+// always parsed as false regardless of the real value (verified directly
+// against production). See src/lib/purchaseImport/db.ts's toBool() for the
+// same fix applied to the purchase-import module.
+const isTrue = (v: string | undefined) => v === 'true' || v === 't'
+
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: 'bg-red-100 text-red-800',
   HIGH: 'bg-orange-100 text-orange-800',
@@ -34,8 +42,8 @@ export default async function RuleCataloguePage() {
     hasuraRunSql(`SELECT repair_execution_enabled FROM reconciliation_settings WHERE id = TRUE`),
   ])
   const rules = rowsToObjects(result)
-  const implementedCount = rules.filter((r) => r.is_enabled === 'true').length
-  const repairExecutionEnabled = rowsToObjects(settingsResult)[0]?.repair_execution_enabled === 'true'
+  const implementedCount = rules.filter((r) => isTrue(r.is_enabled)).length
+  const repairExecutionEnabled = isTrue(rowsToObjects(settingsResult)[0]?.repair_execution_enabled)
 
   return (
     <div className="space-y-4">
@@ -72,8 +80,8 @@ export default async function RuleCataloguePage() {
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${SEVERITY_COLOR[r.severity] ?? 'bg-gray-100'}`}>{r.severity}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${r.is_enabled === 'true' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
-                    {r.is_enabled === 'true' ? 'Implemented' : 'Catalogued only'}
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${isTrue(r.is_enabled) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
+                    {isTrue(r.is_enabled) ? 'Implemented' : 'Catalogued only'}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right text-gray-500">{r.tolerance ?? '—'}</td>

@@ -107,10 +107,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (targetStatus === 'EXECUTED') {
       if (!CAN_APPROVE_REPAIR.has(session.role)) return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
 
-      // hasuraRunSql renders boolean columns as the strings 'true'/'false'
-      // (see r.is_enabled === 'true' in data-integrity/rules/page.tsx).
+      // hasuraRunSql renders boolean columns using Postgres's own text
+      // output format — 't'/'f' — not 'true'/'false' (see
+      // src/lib/purchaseImport/db.ts's toBool()).
       const settingsResult = await hasuraRunSql(`SELECT repair_execution_enabled FROM reconciliation_settings WHERE id = TRUE`)
-      if (rowsToObjects(settingsResult)[0]?.repair_execution_enabled !== 'true') {
+      const executionEnabled = rowsToObjects(settingsResult)[0]?.repair_execution_enabled
+      if (executionEnabled !== 'true' && executionEnabled !== 't') {
         return NextResponse.json({ error: 'Repair execution is disabled (reconciliation_settings.repair_execution_enabled = FALSE)' }, { status: 403 })
       }
 

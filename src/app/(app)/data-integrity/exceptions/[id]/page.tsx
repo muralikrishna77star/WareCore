@@ -15,6 +15,11 @@ function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
   return rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])))
 }
 
+// hasuraRunSql's run_sql endpoint stringifies booleans using Postgres's own
+// text output format — 't'/'f' — not 'true'/'false'. See
+// src/lib/purchaseImport/db.ts's toBool() for the same fix elsewhere.
+const isTrue = (v: string | undefined) => v === 'true' || v === 't'
+
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: 'bg-red-100 text-red-800',
   HIGH: 'bg-orange-100 text-orange-800',
@@ -49,7 +54,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
   const exception = exceptions[0]
   const evidenceRows = rowsToObjects(evidenceResult)
   const repairBatches = rowsToObjects(repairResult)
-  const repairExecutionEnabled = rowsToObjects(settingsResult)[0]?.repair_execution_enabled === 'true'
+  const repairExecutionEnabled = isTrue(rowsToObjects(settingsResult)[0]?.repair_execution_enabled)
 
   let evidence: Record<string, unknown> = {}
   try {
