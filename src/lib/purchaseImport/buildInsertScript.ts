@@ -23,13 +23,17 @@ export function sqlNumber(n: number): string {
 // collision from a concurrent import — a pre-existing, shared risk with the
 // manual entry form's own client-side ID generation, not new here), nothing
 // commits.
-export function buildInsertScript(bills: (ResolvedBill & { id: string })[]): string {
+// createdBy is optional — the manual "New Bill" form never sets it either
+// (see bills/new/page.tsx's CREATE_PURCHASE_BILL_MUTATION call, which omits
+// the variable), so NULL stays a legitimate value; the staging import route
+// passes the importing user's id since it always has one available.
+export function buildInsertScript(bills: (ResolvedBill & { id: string })[], createdBy?: string | null): string {
   const billRows = bills
-    .map((b) => `(${sqlUuidOrNull(b.id)}, ${sqlUuidOrNull(b.companyId)}, ${sqlUuidOrNull(b.warehouseId)}, ${sqlUuidOrNull(b.supplierId)}, ${sqlTextOrNull(b.billNumber)}, ${sqlDate(b.billDate)}, ${sqlNumber(b.totalQuantity)}, ${sqlNumber(b.totalAmount)}, ${sqlTextOrNull(b.notes)}, 'active')`)
+    .map((b) => `(${sqlUuidOrNull(b.id)}, ${sqlUuidOrNull(b.companyId)}, ${sqlUuidOrNull(b.warehouseId)}, ${sqlUuidOrNull(b.supplierId)}, ${sqlTextOrNull(b.billNumber)}, ${sqlDate(b.billDate)}, ${sqlNumber(b.totalQuantity)}, ${sqlNumber(b.totalAmount)}, ${sqlTextOrNull(b.notes)}, 'active', ${sqlUuidOrNull(createdBy)})`)
     .join(',\n    ')
 
   const billsSql = `
-    INSERT INTO purchase_bills (id, company_id, warehouse_id, supplier_id, bill_number, bill_date, total_quantity, total_amount, notes, status)
+    INSERT INTO purchase_bills (id, company_id, warehouse_id, supplier_id, bill_number, bill_date, total_quantity, total_amount, notes, status, created_by)
     VALUES
     ${billRows};
   `

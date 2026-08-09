@@ -97,6 +97,19 @@ describe('bulk import commit — atomicity and ledger effect', () => {
     expect(Number(ledgerRows[0].quantity)).toBe(10)
   })
 
+  it('populates created_by when passed (used by the staging import route, which always has an importing user)', async () => {
+    const { snapshot } = await seedMasterData('ZQ1B')
+    const { rows: [authUser] } = await client.query(`INSERT INTO auth.users DEFAULT VALUES RETURNING id`)
+    const { bills, errors } = resolveImport([row(snapshot)], snapshot)
+    expect(errors).toHaveLength(0)
+
+    const billsWithIds = withIds(bills)
+    await client.query(buildInsertScript(billsWithIds, authUser.id))
+
+    const { rows: billRows } = await client.query(`SELECT created_by FROM purchase_bills WHERE id = $1`, [billsWithIds[0].id])
+    expect(billRows[0].created_by).toBe(authUser.id)
+  })
+
   it('rolls back the ENTIRE script — including otherwise-valid bills — if any statement fails', async () => {
     const { snapshot } = await seedMasterData('IMP2')
     const { bills, errors } = resolveImport([row(snapshot, {}, 2), row(snapshot, { billDate: '2024-05-01', billDateRaw: '2024-05-01' }, 3)], snapshot)

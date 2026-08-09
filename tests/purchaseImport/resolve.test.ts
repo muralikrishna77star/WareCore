@@ -2,7 +2,7 @@
 // grouping, tax calc, and ID assignment against a hand-built fake master
 // data snapshot. No database needed.
 import { describe, expect, it } from 'vitest'
-import { resolveImport } from '../../src/lib/purchaseImport/resolve'
+import { resolveImport, resolveRowIndependent, findDuplicateLines } from '../../src/lib/purchaseImport/resolve'
 import type { MasterDataSnapshot, ParsedRow } from '../../src/lib/purchaseImport/types'
 
 const SNAPSHOT: MasterDataSnapshot = {
@@ -111,5 +111,96 @@ describe('resolveImport()', () => {
     const { bills, errors } = resolveImport([row({ quantity: 0, quantityRaw: '0' })], SNAPSHOT)
     expect(bills).toHaveLength(0)
     expect(errors[0].message).toMatch(/greater than 0/)
+  })
+})
+
+describe('resolveRowIndependent()', () => {
+  it('resolves a fully valid row with no errors', () => {
+    const result = resolveRowIndependent(row(), SNAPSHOT)
+    expect(result.isValid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+    expect(result.resolved.companyId).toBe('company-1')
+    expect(result.resolved.warehouseId).toBe('wh-1')
+    expect(result.resolved.supplierId).toBe('supplier-1')
+    expect(result.resolved.materialTypeId).toBe('mt-1')
+    expect(result.resolved.materialSizeId).toBe('size-1')
+  })
+
+  it('reports every independent problem on a row at once, not just the first', () => {
+    const result = resolveRowIndependent(
+      row({ company: 'Nonexistent Co', materialType: 'Nonexistent Material', quantity: 0, quantityRaw: '0' }),
+      SNAPSHOT
+    )
+    expect(result.isValid).toBe(false)
+    const columns = result.errors.map((e) => e.column)
+    expect(columns).toContain('Company')
+    expect(columns).toContain('Material Type')
+    expect(columns).toContain('Quantity')
+    // Warehouse/Supplier/Size were fine and should NOT be reported broken
+    // just because Company/Material Type were.
+    expect(columns).not.toContain('Supplier')
+  })
+
+  it('flags an ambiguous unscoped warehouse match when Company is unresolved, rather than dead-ending', () => {
+    const snapshot: MasterDataSnapshot = {
+      ...SNAPSHOT,
+      companies: [{ id: 'company-1', name: 'Acme Co', code: 'ACME' }, { id: 'company-2', name: 'Beta Co', code: 'BETA' }],
+      warehouses: [{ id: 'wh-1', name: 'Main WH', company_id: 'company-1' }, { id: 'wh-2', name: 'Main WH', company_id: 'company-2' }],
+    }
+    const result = resolveRowIndependent(row({ company: 'Nonexistent Co' }), snapshot)
+    expect(result.resolved.warehouseAmbiguous).toBe(true)
+    expect(result.errors.find((e) => e.column === 'Warehouse')?.message).toMatch(/fix Company first/)
+  })
+
+  it('resolves an unscoped warehouse unambiguously when only one company has that warehouse name, even with Company unresolved', () => {
+    const result = resolveRowIndependent(row({ company: 'Nonexistent Co' }), SNAPSHOT)
+    expect(result.resolved.warehouseId).toBe('wh-1')
+    expect(result.resolved.warehouseAmbiguous).toBe(false)
+  })
+
+  it('never fuzzy-matches — a close-but-not-exact supplier name is still unresolved', () => {
+    const result = resolveRowIndependent(row({ supplier: 'XYZ Trader' }), SNAPSHOT) // missing the 's'
+    expect(result.resolved.supplierId).toBeNull()
+    expect(result.errors.find((e) => e.column === 'Supplier')?.message).toMatch(/Unknown supplier/)
+  })
+
+  it('agrees with resolveImport()/resolveRow() on valid/invalid verdicts across a shared fixture set — no drift between the two resolvers', () => {
+    const fixtures: Partial<ParsedRow>[] = [
+      {},
+      { company: 'Nonexistent Co' },
+      { warehouse: 'Nonexistent WH' },
+      { supplier: 'Nonexistent Supplier' },
+      { materialType: 'Nonexistent Material' },
+      { size: 'Nonexistent Size' },
+      { taxRate: 'Nonexistent Tax' },
+      { quantity: 0, quantityRaw: '0' },
+      { rate: -1, rateRaw: '-1' },
+      { billDateRaw: '', billDate: '' },
+    ]
+    for (const overrides of fixtures) {
+      const r = row(overrides, 2)
+      const independent = resolveRowIndependent(r, SNAPSHOT)
+      const bulk = resolveImport([r], SNAPSHOT)
+      expect(independent.isValid).toBe(bulk.errors.length === 0)
+    }
+  })
+})
+
+describe('findDuplicateLines()', () => {
+  it('flags a repeated material/size/quantity/rate signature within the same bill group', () => {
+    const errors = findDuplicateLines([
+      { rowNumber: 2, companyId: 'c1', warehouseId: 'w1', supplierId: 's1', billDate: '2024-04-15', billRef: '', materialTypeId: 'mt-1', materialSizeId: 'size-1', quantity: 10, rate: 55000 },
+      { rowNumber: 3, companyId: 'c1', warehouseId: 'w1', supplierId: 's1', billDate: '2024-04-15', billRef: '', materialTypeId: 'mt-1', materialSizeId: 'size-1', quantity: 10, rate: 55000 },
+    ])
+    expect(errors).toHaveLength(1)
+    expect(errors[0].rowNumber).toBe(3)
+  })
+
+  it('does not flag the same material/quantity/rate across two different bill groups', () => {
+    const errors = findDuplicateLines([
+      { rowNumber: 2, companyId: 'c1', warehouseId: 'w1', supplierId: 's1', billDate: '2024-04-15', billRef: '', materialTypeId: 'mt-1', materialSizeId: 'size-1', quantity: 10, rate: 55000 },
+      { rowNumber: 3, companyId: 'c1', warehouseId: 'w1', supplierId: 's1', billDate: '2024-05-01', billRef: '', materialTypeId: 'mt-1', materialSizeId: 'size-1', quantity: 10, rate: 55000 },
+    ])
+    expect(errors).toHaveLength(0)
   })
 })

@@ -6,9 +6,18 @@
 // between manual and imported bills.
 //
 // All-or-nothing: if ANY row in the file has an error, `bills` comes back
-// empty — nothing is partially resolved, so there's no risk of the preview
-// showing (or the commit route inserting) half of a broken file. This is
-// the same contract at the resolve layer as at the commit layer.
+// empty — nothing is partially resolved. `resolveImport()` is the single
+// authoritative gate used both by the legacy one-shot path's tests and by
+// the staging workflow's final-import step (see
+// src/app/api/bills/import/batches/[id]/import/route.ts) — it is never
+// re-implemented a second time.
+//
+// resolveRow() (bail-on-first-error per row) and resolveRowIndependent()
+// (collect every error on a row at once, for the correction-review screen)
+// share the SAME per-field matcher functions below so the two can never
+// disagree about whether a given value matches master data — see
+// tests/purchaseImport/resolve.test.ts's "no drift" test, which asserts
+// exactly that.
 import { calculateLineTax } from '@/lib/purchaseTax'
 import { generatePurchaseId, generatePurchaseLineId, getMMYY } from '@/lib/purchaseIds'
 import type { MasterDataSnapshot, ParsedRow, ResolvedBill, ResolvedLine, RowError } from './types'
@@ -16,6 +25,59 @@ import type { MasterDataSnapshot, ParsedRow, ResolvedBill, ResolvedLine, RowErro
 function norm(s: string): string {
   return s.trim().toLowerCase()
 }
+
+// ─── Shared per-field matchers ──────────────────────────────────────────────
+// Exact match only (case-insensitive + trimmed via norm()). Warehouse/Size
+// are scoped to their resolved parent when one is known; when the parent
+// isn't known (only relevant to resolveRowIndependent — resolveRow always
+// has a resolved parent by the time it checks these, since it bails
+// earlier otherwise) they're matched unscoped across ALL parents and
+// flagged ambiguous if more than one candidate matches, rather than
+// silently picking one or dead-ending with no signal at all.
+
+function findCompany(row: ParsedRow, snapshot: MasterDataSnapshot) {
+  return snapshot.companies.find((c) => norm(c.name) === norm(row.company) || norm(c.code) === norm(row.company)) ?? null
+}
+
+function findWarehouse(
+  row: ParsedRow, snapshot: MasterDataSnapshot, companyId: string | null
+): { warehouse: MasterDataSnapshot['warehouses'][number] | null; ambiguous: boolean } {
+  if (companyId) {
+    const warehouse = snapshot.warehouses.find((w) => w.company_id === companyId && norm(w.name) === norm(row.warehouse)) ?? null
+    return { warehouse, ambiguous: false }
+  }
+  const matches = snapshot.warehouses.filter((w) => norm(w.name) === norm(row.warehouse))
+  if (matches.length === 1) return { warehouse: matches[0], ambiguous: false }
+  if (matches.length > 1) return { warehouse: null, ambiguous: true }
+  return { warehouse: null, ambiguous: false }
+}
+
+function findSupplier(row: ParsedRow, snapshot: MasterDataSnapshot) {
+  return snapshot.suppliers.find((s) => norm(s.name) === norm(row.supplier)) ?? null
+}
+
+function findMaterialType(row: ParsedRow, snapshot: MasterDataSnapshot) {
+  return snapshot.materialTypes.find((m) => norm(m.code) === norm(row.materialType) || norm(m.description) === norm(row.materialType)) ?? null
+}
+
+function findSize(
+  row: ParsedRow, snapshot: MasterDataSnapshot, materialTypeId: string | null
+): { size: MasterDataSnapshot['materialSizes'][number] | null; ambiguous: boolean } {
+  if (materialTypeId) {
+    const size = snapshot.materialSizes.find((s) => s.material_type_id === materialTypeId && norm(s.size_label) === norm(row.size)) ?? null
+    return { size, ambiguous: false }
+  }
+  const matches = snapshot.materialSizes.filter((s) => norm(s.size_label) === norm(row.size))
+  if (matches.length === 1) return { size: matches[0], ambiguous: false }
+  if (matches.length > 1) return { size: null, ambiguous: true }
+  return { size: null, ambiguous: false }
+}
+
+function findTaxRate(row: ParsedRow, snapshot: MasterDataSnapshot) {
+  return snapshot.taxRates.find((t) => norm(t.name) === norm(row.taxRate)) ?? null
+}
+
+// ─── resolveRow(): bail on first error, used by resolveImport() ────────────
 
 interface RowResolution {
   row: ParsedRow
@@ -49,25 +111,25 @@ function resolveRow(row: ParsedRow, snapshot: MasterDataSnapshot, errors: RowErr
 
   if (errors.length > before) return null // don't cascade into FK lookups on obviously incomplete rows
 
-  const company = snapshot.companies.find((c) => norm(c.name) === norm(row.company) || norm(c.code) === norm(row.company))
+  const company = findCompany(row, snapshot)
   if (!company) {
     errors.push({ rowNumber: row.rowNumber, column: 'Company', message: `Unknown company "${row.company}" — check spelling against the Reference Data sheet.` })
     return null
   }
 
-  const warehouse = snapshot.warehouses.find((w) => w.company_id === company.id && norm(w.name) === norm(row.warehouse))
+  const { warehouse } = findWarehouse(row, snapshot, company.id)
   if (!warehouse) {
     errors.push({ rowNumber: row.rowNumber, column: 'Warehouse', message: `Unknown warehouse "${row.warehouse}" for company "${company.name}".` })
     return null
   }
 
-  const supplier = snapshot.suppliers.find((s) => norm(s.name) === norm(row.supplier))
+  const supplier = findSupplier(row, snapshot)
   if (!supplier) {
     errors.push({ rowNumber: row.rowNumber, column: 'Supplier', message: `Unknown supplier "${row.supplier}" — check spelling against the Reference Data sheet.` })
     return null
   }
 
-  const materialType = snapshot.materialTypes.find((m) => norm(m.code) === norm(row.materialType) || norm(m.description) === norm(row.materialType))
+  const materialType = findMaterialType(row, snapshot)
   if (!materialType) {
     errors.push({ rowNumber: row.rowNumber, column: 'Material Type', message: `Unknown material type "${row.materialType}" — check spelling against the Reference Data sheet.` })
     return null
@@ -76,7 +138,7 @@ function resolveRow(row: ParsedRow, snapshot: MasterDataSnapshot, errors: RowErr
   let materialSizeId: string | null = null
   let sizeLabel: string | null = null
   if (row.size) {
-    const size = snapshot.materialSizes.find((s) => s.material_type_id === materialType.id && norm(s.size_label) === norm(row.size))
+    const { size } = findSize(row, snapshot, materialType.id)
     if (!size) {
       errors.push({ rowNumber: row.rowNumber, column: 'Size', message: `Unknown size "${row.size}" for material type "${materialType.description}".` })
       return null
@@ -87,7 +149,7 @@ function resolveRow(row: ParsedRow, snapshot: MasterDataSnapshot, errors: RowErr
 
   let taxRateId: string | null = null
   if (row.taxRate) {
-    const taxRate = snapshot.taxRates.find((t) => norm(t.name) === norm(row.taxRate))
+    const taxRate = findTaxRate(row, snapshot)
     if (!taxRate) {
       errors.push({ rowNumber: row.rowNumber, column: 'Tax Rate', message: `Unknown tax rate "${row.taxRate}" — check spelling against the Reference Data sheet.` })
       return null
@@ -106,6 +168,125 @@ function resolveRow(row: ParsedRow, snapshot: MasterDataSnapshot, errors: RowErr
     materialSizeId, sizeLabel, unit, taxRateId,
   }
 }
+
+// ─── resolveRowIndependent(): collect every error on a row at once ─────────
+// Used by the staging workflow (create-batch, per-field correction,
+// re-validation) — a correction screen needs to show a row's Company AND
+// Material Type AND Quantity problems together, not one bail-out at a time.
+
+export interface RowResolutionResult {
+  errors: RowError[]
+  isValid: boolean
+  resolved: {
+    companyId: string | null
+    companyLabel: string | null
+    warehouseId: string | null
+    warehouseLabel: string | null
+    warehouseAmbiguous: boolean
+    supplierId: string | null
+    supplierLabel: string | null
+    materialTypeId: string | null
+    materialTypeLabel: string | null
+    materialTypeCode: string | null
+    materialSizeId: string | null
+    sizeLabel: string | null
+    sizeAmbiguous: boolean
+    taxRateId: string | null
+    unit: string | null
+  }
+}
+
+export function resolveRowIndependent(row: ParsedRow, snapshot: MasterDataSnapshot): RowResolutionResult {
+  const errors: RowError[] = []
+  const resolved: RowResolutionResult['resolved'] = {
+    companyId: null, companyLabel: null,
+    warehouseId: null, warehouseLabel: null, warehouseAmbiguous: false,
+    supplierId: null, supplierLabel: null,
+    materialTypeId: null, materialTypeLabel: null, materialTypeCode: null,
+    materialSizeId: null, sizeLabel: null, sizeAmbiguous: false,
+    taxRateId: null, unit: null,
+  }
+
+  if (!row.company) errors.push({ rowNumber: row.rowNumber, column: 'Company', message: 'Company is required.' })
+  if (!row.warehouse) errors.push({ rowNumber: row.rowNumber, column: 'Warehouse', message: 'Warehouse is required.' })
+  if (!row.supplier) errors.push({ rowNumber: row.rowNumber, column: 'Supplier', message: 'Supplier is required.' })
+  if (!row.materialType) errors.push({ rowNumber: row.rowNumber, column: 'Material Type', message: 'Material Type is required.' })
+  if (!row.billDateRaw) errors.push({ rowNumber: row.rowNumber, column: 'Bill Date', message: 'Bill Date is required.' })
+  if (row.quantityRaw === '') errors.push({ rowNumber: row.rowNumber, column: 'Quantity', message: 'Quantity is required.' })
+  else if (row.quantity !== null && row.quantity <= 0) errors.push({ rowNumber: row.rowNumber, column: 'Quantity', message: 'Quantity must be greater than 0.' })
+  if (row.rateRaw === '') errors.push({ rowNumber: row.rowNumber, column: 'Rate', message: 'Rate is required.' })
+  else if (row.rate !== null && row.rate < 0) errors.push({ rowNumber: row.rowNumber, column: 'Rate', message: 'Rate cannot be negative.' })
+
+  // Every FK check below runs regardless of the others' outcome — a row
+  // missing Rate and having an unknown Supplier shows both problems at once.
+  if (row.company) {
+    const company = findCompany(row, snapshot)
+    if (company) { resolved.companyId = company.id; resolved.companyLabel = company.name }
+    else errors.push({ rowNumber: row.rowNumber, column: 'Company', message: `Unknown company "${row.company}" — check spelling against the Reference Data sheet.` })
+  }
+
+  if (row.warehouse) {
+    const { warehouse, ambiguous } = findWarehouse(row, snapshot, resolved.companyId)
+    if (warehouse) {
+      resolved.warehouseId = warehouse.id
+      resolved.warehouseLabel = warehouse.name
+    } else if (ambiguous) {
+      resolved.warehouseAmbiguous = true
+      errors.push({ rowNumber: row.rowNumber, column: 'Warehouse', message: `Warehouse "${row.warehouse}" matches more than one company's warehouse — fix Company first.` })
+    } else {
+      errors.push({
+        rowNumber: row.rowNumber, column: 'Warehouse',
+        message: resolved.companyLabel ? `Unknown warehouse "${row.warehouse}" for company "${resolved.companyLabel}".` : `Unknown warehouse "${row.warehouse}".`,
+      })
+    }
+  }
+
+  if (row.supplier) {
+    const supplier = findSupplier(row, snapshot)
+    if (supplier) { resolved.supplierId = supplier.id; resolved.supplierLabel = supplier.name }
+    else errors.push({ rowNumber: row.rowNumber, column: 'Supplier', message: `Unknown supplier "${row.supplier}" — check spelling against the Reference Data sheet.` })
+  }
+
+  if (row.materialType) {
+    const materialType = findMaterialType(row, snapshot)
+    if (materialType) {
+      resolved.materialTypeId = materialType.id
+      resolved.materialTypeLabel = materialType.description
+      resolved.materialTypeCode = materialType.code
+      resolved.unit = row.unit || materialType.unit
+    } else {
+      errors.push({ rowNumber: row.rowNumber, column: 'Material Type', message: `Unknown material type "${row.materialType}" — check spelling against the Reference Data sheet.` })
+    }
+  }
+
+  if (row.size) {
+    const { size, ambiguous } = findSize(row, snapshot, resolved.materialTypeId)
+    if (size) {
+      resolved.materialSizeId = size.id
+      resolved.sizeLabel = size.size_label
+    } else if (ambiguous) {
+      resolved.sizeAmbiguous = true
+      errors.push({ rowNumber: row.rowNumber, column: 'Size', message: `Size "${row.size}" matches more than one material type — fix Material Type first.` })
+    } else {
+      errors.push({
+        rowNumber: row.rowNumber, column: 'Size',
+        message: resolved.materialTypeLabel ? `Unknown size "${row.size}" for material type "${resolved.materialTypeLabel}".` : `Unknown size "${row.size}".`,
+      })
+    }
+  }
+
+  if (row.taxRate) {
+    const taxRate = findTaxRate(row, snapshot)
+    if (taxRate) resolved.taxRateId = taxRate.id
+    else errors.push({ rowNumber: row.rowNumber, column: 'Tax Rate', message: `Unknown tax rate "${row.taxRate}" — check spelling against the Reference Data sheet.` })
+  }
+
+  if (!resolved.unit) resolved.unit = row.unit || null
+
+  return { errors, isValid: errors.length === 0, resolved }
+}
+
+// ─── resolveImport(): whole-file, all-or-nothing, grouping + ID assignment ─
 
 export function resolveImport(rows: ParsedRow[], snapshot: MasterDataSnapshot): { bills: ResolvedBill[]; errors: RowError[] } {
   const errors: RowError[] = []
@@ -198,4 +379,48 @@ export function resolveImport(rows: ParsedRow[], snapshot: MasterDataSnapshot): 
   }
 
   return { bills, errors: [] }
+}
+
+// ─── findDuplicateLines(): standalone, reusable cross-row duplicate check ───
+// Same signature logic resolveImport() enforces at commit time, but usable
+// standalone by the "get batch" endpoint to show a non-blocking warning on
+// the review screen BEFORE the user hits Import — built from each row's
+// currently-resolved ids (from resolveRowIndependent()), not from the
+// private RowResolution shape above, so it has no dependency on resolveRow's
+// internals.
+export interface DuplicateCheckEntry {
+  rowNumber: number
+  companyId: string
+  warehouseId: string
+  supplierId: string
+  billDate: string
+  billRef: string
+  materialTypeId: string
+  materialSizeId: string | null
+  quantity: number
+  rate: number
+}
+
+export function findDuplicateLines(entries: DuplicateCheckEntry[]): RowError[] {
+  const groups = new Map<string, DuplicateCheckEntry[]>()
+  for (const e of entries) {
+    const key = [e.companyId, e.warehouseId, e.supplierId, e.billDate, norm(e.billRef)].join('|')
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(e)
+  }
+
+  const found: RowError[] = []
+  for (const groupEntries of groups.values()) {
+    const seen = new Map<string, number>()
+    for (const e of groupEntries) {
+      const sig = [e.materialTypeId, e.materialSizeId ?? '', e.quantity, e.rate].join('|')
+      const firstRow = seen.get(sig)
+      if (firstRow) {
+        found.push({ rowNumber: e.rowNumber, message: `Duplicate line: same material/size/quantity/rate as row ${firstRow} in the same bill.` })
+      } else {
+        seen.set(sig, e.rowNumber)
+      }
+    }
+  }
+  return found
 }
