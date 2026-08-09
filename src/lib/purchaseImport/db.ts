@@ -20,6 +20,15 @@ export function sqlBool(v: boolean): string {
   return v ? 'true' : 'false'
 }
 
+// Real Hasura's run_sql endpoint stringifies every cell, so 'true'/'false'
+// string comparison is correct there — but runSqlLocal() (LOCAL_MODE, used
+// by automated tests and the desktop build) runs raw SQL via `pg`, which
+// returns native booleans for boolean columns. Accept both representations
+// so is_valid/reviewed parse correctly in both modes.
+function toBool(v: unknown): boolean {
+  return v === true || v === 'true'
+}
+
 export interface StagingRowRecord {
   id: string
   batch_id: string
@@ -46,8 +55,8 @@ export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
     current_data: JSON.parse(raw.current_data),
     resolved_field_ids: raw.resolved_field_ids ? JSON.parse(raw.resolved_field_ids) : null,
     validation_errors: JSON.parse(raw.validation_errors ?? '[]'),
-    is_valid: raw.is_valid === 'true',
-    reviewed: raw.reviewed === 'true',
+    is_valid: toBool(raw.is_valid),
+    reviewed: toBool(raw.reviewed),
     reviewed_by: raw.reviewed_by || null,
     reviewed_at: raw.reviewed_at || null,
     correction_history: JSON.parse(raw.correction_history ?? '[]'),

@@ -4,11 +4,8 @@ import { Fragment, useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
-import {
-  ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
-  ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_PURCHASE_TAX_RATES_QUERY,
-} from '@/lib/hasura/queries'
 import RowEditor, { type StagingRow } from './RowEditor'
+import { MASTER_QUERIES, type MasterData } from './masterData'
 import type { RowError } from '@/lib/purchaseImport/types'
 
 interface Batch {
@@ -51,14 +48,7 @@ export default function BatchReviewPage() {
   const [rows, setRows] = useState<StagingRow[]>([])
   const [batchWarnings, setBatchWarnings] = useState<RowError[]>([])
   const [counts, setCounts] = useState<Counts | null>(null)
-  const [masterData, setMasterData] = useState<{
-    companies: { id: string; name: string; code: string }[]
-    warehouses: { id: string; name: string; company_id: string }[]
-    suppliers: { id: string; name: string }[]
-    materialTypes: { id: string; code: string; description: string }[]
-    materialSizes: { id: string; material_type_id: string; size_label: string }[]
-    taxRates: { id: string; name: string }[]
-  } | null>(null)
+  const [masterData, setMasterData] = useState<MasterData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<'all' | 'invalid' | 'unreviewed'>('all')
@@ -76,25 +66,25 @@ export default function BatchReviewPage() {
     setCounts(data.counts)
   }, [batchId])
 
+  // Refreshes just one master list — used both for the initial load and by
+  // RowEditor's per-field "↻" refresh icon / after its "+ Add New" dialogs.
+  const refreshMasterField = useCallback(async (type: keyof MasterData) => {
+    const [query, key] = MASTER_QUERIES[type]
+    const res = await hasuraFetch<Record<string, unknown[]>>(query)
+    const list = (res.data?.[key] as MasterData[typeof type]) ?? []
+    setMasterData((prev) => (prev ? { ...prev, [type]: list } : prev))
+  }, [])
+
   useEffect(() => {
     (async () => {
       setLoading(true)
-      const [companies, warehouses, suppliers, materialTypes, materialSizes, taxRates] = await Promise.all([
-        hasuraFetch<{ companies: any[] }>(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch<{ warehouses: any[] }>(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch<{ suppliers: any[] }>(ACTIVE_SUPPLIERS_QUERY),
-        hasuraFetch<{ material_types: any[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch<{ material_sizes: any[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch<{ tax_rates: any[] }>(ACTIVE_PURCHASE_TAX_RATES_QUERY),
-      ])
-      setMasterData({
-        companies: companies.data?.companies ?? [],
-        warehouses: warehouses.data?.warehouses ?? [],
-        suppliers: suppliers.data?.suppliers ?? [],
-        materialTypes: materialTypes.data?.material_types ?? [],
-        materialSizes: materialSizes.data?.material_sizes ?? [],
-        taxRates: taxRates.data?.tax_rates ?? [],
+      const entries = Object.entries(MASTER_QUERIES) as [keyof MasterData, readonly [string, string]][]
+      const results = await Promise.all(entries.map(([, [query]]) => hasuraFetch<Record<string, unknown[]>>(query)))
+      const initial: Record<string, unknown[]> = {}
+      entries.forEach(([type, [, key]], i) => {
+        initial[type] = results[i].data?.[key] ?? []
       })
+      setMasterData(initial as unknown as MasterData)
       await loadBatch()
       setLoading(false)
     })()
@@ -322,7 +312,7 @@ export default function BatchReviewPage() {
                   <tr>
                     <td colSpan={7} className="p-0">
                       {batch.status === 'STAGED' ? (
-                        <RowEditor batchId={batchId} row={row} masterData={masterData} onChanged={loadBatch} />
+                        <RowEditor batchId={batchId} row={row} masterData={masterData} onChanged={loadBatch} onRefreshMasterData={refreshMasterField} />
                       ) : (
                         <div className="border-t bg-gray-50 p-4 text-sm text-gray-500">This batch is {batch.status.toLowerCase()} — rows can no longer be edited.</div>
                       )}

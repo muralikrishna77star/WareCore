@@ -21,6 +21,8 @@ export default function AutocompleteSelect({
   placeholder = 'Search…',
   error,
   disabled = false,
+  onAddNew,
+  addNewLabel = '+ Add New',
 }: {
   currentLabel: string | null
   options: AutocompleteOption[]
@@ -28,6 +30,11 @@ export default function AutocompleteSelect({
   placeholder?: string
   error?: string
   disabled?: boolean
+  // Renders a "+ Add New ..." row at the top of the dropdown — same
+  // placement/style bills/new/page.tsx's own hand-rolled dropdowns use for
+  // their inline "+ New Company" etc. options.
+  onAddNew?: () => void
+  addNewLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -52,6 +59,16 @@ export default function AutocompleteSelect({
         } ${!currentLabel && !open ? 'text-red-600 placeholder:text-red-400' : ''}`}
       />
       <DropdownPortal anchorEl={anchorRef.current} open={open} matchWidth className="rounded-md border border-gray-300 bg-white shadow-lg overflow-y-auto max-h-60">
+        {onAddNew && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onAddNew(); setOpen(false); setSearch('') }}
+            className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100"
+          >
+            {addNewLabel}
+          </button>
+        )}
         {filtered.length === 0 && <div className="px-3 py-2 text-sm text-gray-400">No matches</div>}
         {filtered.map((o) => (
           <button

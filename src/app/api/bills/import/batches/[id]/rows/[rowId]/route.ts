@@ -62,21 +62,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (field === 'rate') next.rateRaw = value === null || value === '' ? '' : String(value)
     }
 
-    if (Object.keys(changes).length === 0) {
-      return NextResponse.json({ isValid: existing.is_valid, errors: existing.validation_errors })
-    }
-
+    // Always re-resolve against a FRESH snapshot, even when every submitted
+    // value is textually identical to what's already stored — e.g. after
+    // using "+ Add New" to create a missing Size/Company/etc. with the same
+    // label the row already shows, the field "value" never changes but the
+    // master data it resolves against just did, and the row must flip from
+    // invalid to valid without requiring an unrelated edit to trigger it.
+    const hasChanges = Object.keys(changes).length > 0
     const snapshot = await fetchMasterDataSnapshot()
     const resolution = resolveRowIndependent(next, snapshot)
-    const newHistory = [...existing.correction_history, { at: new Date().toISOString(), by: session.userId, changes }]
+    const newHistory = hasChanges
+      ? [...existing.correction_history, { at: new Date().toISOString(), by: session.userId, changes }]
+      : existing.correction_history
 
     await hasuraRunSql(`
       UPDATE purchase_import_rows SET
         current_data = ${sqlJsonb(next)},
         resolved_field_ids = ${sqlJsonb(resolution.resolved)},
         validation_errors = ${sqlJsonb(resolution.errors)},
-        is_valid = ${sqlBool(resolution.isValid)},
-        reviewed = false, reviewed_by = NULL, reviewed_at = NULL,
+        is_valid = ${sqlBool(resolution.isValid)}
+        ${hasChanges ? ', reviewed = false, reviewed_by = NULL, reviewed_at = NULL' : ''},
         correction_history = ${sqlJsonb(newHistory)}
       WHERE id = '${rowId}'::uuid
     `)
