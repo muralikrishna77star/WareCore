@@ -128,3 +128,51 @@ describe('staging a batch', () => {
     expect(rows[0].duplicate_of_batch_id).toBe(firstBatchId)
   })
 })
+
+describe('deleting a batch', () => {
+  it('deleting a STAGED batch cascades to remove its staging rows too', async () => {
+    const snapshot = await seedMasterData('BAT4')
+    const r = row(snapshot, {}, 2)
+    const staged: StagedRowInput[] = [{ rowNumber: 2, parsedRow: r, resolution: resolveRowIndependent(r, snapshot) }]
+    const batchId = randomUUID()
+    await client.query(buildStageInsertScript({ id: batchId, fileName: 'bad.xlsx', fileHash: 'hash-bat4', fileSizeBytes: 1, rowCount: 1, createdBy: null }, staged))
+
+    // Mirrors the route: DELETE ... WHERE id = $1 AND status <> 'IMPORTED'.
+    await client.query(`DELETE FROM purchase_import_batches WHERE id = $1 AND status <> 'IMPORTED'`, [batchId])
+
+    const { rows: batches } = await client.query(`SELECT id FROM purchase_import_batches WHERE id = $1`, [batchId])
+    expect(batches).toHaveLength(0)
+    const { rows: stagingRows } = await client.query(`SELECT id FROM purchase_import_rows WHERE batch_id = $1`, [batchId])
+    expect(stagingRows).toHaveLength(0) // ON DELETE CASCADE
+  })
+
+  it('deleting a CANCELLED batch also works', async () => {
+    const snapshot = await seedMasterData('BAT5')
+    const r = row(snapshot, {}, 2)
+    const staged: StagedRowInput[] = [{ rowNumber: 2, parsedRow: r, resolution: resolveRowIndependent(r, snapshot) }]
+    const batchId = randomUUID()
+    await client.query(buildStageInsertScript({ id: batchId, fileName: 'x.xlsx', fileHash: 'hash-bat5', fileSizeBytes: 1, rowCount: 1, createdBy: null }, staged))
+    await client.query(`UPDATE purchase_import_batches SET status = 'CANCELLED' WHERE id = $1`, [batchId])
+
+    await client.query(`DELETE FROM purchase_import_batches WHERE id = $1 AND status <> 'IMPORTED'`, [batchId])
+
+    const { rows } = await client.query(`SELECT id FROM purchase_import_batches WHERE id = $1`, [batchId])
+    expect(rows).toHaveLength(0)
+  })
+
+  it('the guard clause never deletes an IMPORTED batch, even if somehow invoked directly', async () => {
+    const snapshot = await seedMasterData('BAT6')
+    const r = row(snapshot, {}, 2)
+    const staged: StagedRowInput[] = [{ rowNumber: 2, parsedRow: r, resolution: resolveRowIndependent(r, snapshot) }]
+    const batchId = randomUUID()
+    await client.query(buildStageInsertScript({ id: batchId, fileName: 'y.xlsx', fileHash: 'hash-bat6', fileSizeBytes: 1, rowCount: 1, createdBy: null }, staged))
+    await client.query(`UPDATE purchase_import_batches SET status = 'IMPORTED' WHERE id = $1`, [batchId])
+
+    // Same guarded DELETE the route runs — must be a no-op for an IMPORTED batch.
+    await client.query(`DELETE FROM purchase_import_batches WHERE id = $1 AND status <> 'IMPORTED'`, [batchId])
+
+    const { rows } = await client.query(`SELECT id, status FROM purchase_import_batches WHERE id = $1`, [batchId])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].status).toBe('IMPORTED')
+  })
+})

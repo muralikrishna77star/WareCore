@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import {
@@ -46,6 +46,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function BatchReviewPage() {
   const { batchId } = useParams<{ batchId: string }>()
+  const router = useRouter()
   const [batch, setBatch] = useState<Batch | null>(null)
   const [rows, setRows] = useState<StagingRow[]>([])
   const [batchWarnings, setBatchWarnings] = useState<RowError[]>([])
@@ -143,6 +144,21 @@ export default function BatchReviewPage() {
     }
   }
 
+  const deleteBatch = async () => {
+    if (!batch) return
+    if (!window.confirm(`Delete batch ${batch.batch_number}? This permanently removes it and its staged rows so you can re-upload a fixed file. This cannot be undone.`)) return
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/bills/import/batches/${batchId}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || `Server error (${res.status})`); return }
+      router.push('/bills/import')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const runImport = async () => {
     if (!window.confirm('Import this batch now? This posts directly to stock and cannot be undone from this screen.')) return
     setBusy(true)
@@ -215,6 +231,9 @@ export default function BatchReviewPage() {
             <button type="button" disabled={busy} onClick={cancelBatch} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">
               Cancel batch
             </button>
+            <button type="button" disabled={busy} onClick={deleteBatch} className="rounded border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">
+              Delete batch
+            </button>
             <button
               type="button"
               disabled={busy || !counts.readyToImport}
@@ -239,6 +258,15 @@ export default function BatchReviewPage() {
             ))}
           </div>
         </>
+      )}
+
+      {batch.status === 'CANCELLED' && !importResult && (
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={busy} onClick={deleteBatch} className="rounded border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40">
+            Delete batch
+          </button>
+          <span className="text-xs text-gray-500">This batch is cancelled — delete it to clear it from the list, or leave it for reference.</span>
+        </div>
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}

@@ -53,3 +53,36 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to load batch' }, { status: 500 })
   }
 }
+
+// Permanently removes a batch and its staging rows (ON DELETE CASCADE) — for
+// cleaning up a batch that turned out to be the wrong file, so the user can
+// fix it and upload fresh without the old attempt cluttering the batch
+// history. Never allowed on an IMPORTED batch: that batch is the audit
+// record for real purchase_bills already created from it, and deleting the
+// batch row does NOT touch those bills — removing the batch would just
+// sever the audit trail while leaving the actual financial records intact,
+// which is confusing at best. Cancel (STAGED -> CANCELLED) already exists
+// for "stop, don't import this" while keeping a record; this is for
+// actually discarding one, from either STAGED or CANCELLED.
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await verifySessionCookie(request)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!ALLOWED_ROLES.has(session.role)) return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+
+  const { id } = await params
+  if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid batch id' }, { status: 400 })
+
+  try {
+    const batchResult = await hasuraRunSql(`SELECT status FROM purchase_import_batches WHERE id = '${id}'::uuid`)
+    const batches = rowsToObjects(batchResult)
+    if (!batches.length) return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
+    if (batches[0].status === 'IMPORTED') {
+      return NextResponse.json({ error: 'Cannot delete an imported batch — it is the audit record for bills already created from it.' }, { status: 400 })
+    }
+
+    await hasuraRunSql(`DELETE FROM purchase_import_batches WHERE id = '${id}'::uuid AND status <> 'IMPORTED'`)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to delete batch' }, { status: 500 })
+  }
+}

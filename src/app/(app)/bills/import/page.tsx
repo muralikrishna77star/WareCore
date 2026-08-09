@@ -44,6 +44,7 @@ export default function BillsImportPage() {
   const [uploadErrors, setUploadErrors] = useState<UploadError[]>([])
   const [duplicates, setDuplicates] = useState<DuplicateMatch[] | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadBatches = async () => {
@@ -84,6 +85,19 @@ export default function BillsImportPage() {
       setError(err instanceof Error ? err.message : 'Network error')
     } finally {
       setUploading(false)
+    }
+  }
+
+  const deleteBatch = async (b: BatchSummary) => {
+    if (!window.confirm(`Delete batch ${b.batch_number} (${b.file_name})? This permanently removes it and its staged rows so you can re-upload a fixed file. This cannot be undone.`)) return
+    setDeletingId(b.id)
+    try {
+      const res = await fetch(`/api/bills/import/batches/${b.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { alert(data.error || `Server error (${res.status})`); return }
+      await loadBatches()
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -186,6 +200,7 @@ export default function BillsImportPage() {
                 <th className="px-4 py-2 text-right">Valid</th>
                 <th className="px-4 py-2 text-right">Reviewed</th>
                 <th className="px-4 py-2 text-left">Uploaded</th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -201,6 +216,18 @@ export default function BillsImportPage() {
                   <td className="px-4 py-2 text-right text-gray-600">{b.valid_rows}/{b.row_count}</td>
                   <td className="px-4 py-2 text-right text-gray-600">{b.reviewed_rows}/{b.row_count}</td>
                   <td className="px-4 py-2 text-gray-500">{new Date(b.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right">
+                    {b.status !== 'IMPORTED' && (
+                      <button
+                        type="button"
+                        disabled={deletingId === b.id}
+                        onClick={() => deleteBatch(b)}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40"
+                      >
+                        {deletingId === b.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
