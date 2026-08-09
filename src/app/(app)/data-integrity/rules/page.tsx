@@ -1,6 +1,10 @@
 export const dynamic = 'force-dynamic'
 
+import { cookies } from 'next/headers'
 import { hasuraRunSql } from '@/lib/hasura/server'
+import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import { CAN_MANAGE_RULES } from '@/lib/dataIntegrity/auth'
+import RepairExecutionToggle from './RepairExecutionToggle'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -17,19 +21,31 @@ const SEVERITY_COLOR: Record<string, string> = {
 }
 
 export default async function RuleCataloguePage() {
-  const result = await hasuraRunSql(`
-    SELECT rule_code, rule_name, description, category, severity, is_enabled, supports_auto_repair, tolerance, version, updated_at
-    FROM reconciliation_rules ORDER BY rule_code
-  `)
+  const cookieStore = await cookies()
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  const session = token ? verifySession(token) : null
+  const canManage = !!session && CAN_MANAGE_RULES.has(session.role)
+
+  const [result, settingsResult] = await Promise.all([
+    hasuraRunSql(`
+      SELECT rule_code, rule_name, description, category, severity, is_enabled, supports_auto_repair, tolerance, version, updated_at
+      FROM reconciliation_rules ORDER BY rule_code
+    `),
+    hasuraRunSql(`SELECT repair_execution_enabled FROM reconciliation_settings WHERE id = TRUE`),
+  ])
   const rules = rowsToObjects(result)
   const implementedCount = rules.filter((r) => r.is_enabled === 'true').length
+  const repairExecutionEnabled = rowsToObjects(settingsResult)[0]?.repair_execution_enabled === 'true'
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
-        <span className="font-semibold text-gray-900">{implementedCount} of {rules.length} rules implemented</span> in this release
-        (is_enabled). The rest are fully specified but not yet executable — see{' '}
-        <code className="text-xs bg-gray-100 px-1 rounded">docs/data-integrity/RULE_CATALOGUE.md</code> for the Phase 2 backlog and rationale per rule.
+      <div className="rounded-xl border bg-white p-4 text-sm text-gray-600 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <span className="font-semibold text-gray-900">{implementedCount} of {rules.length} rules implemented</span> in this release
+          (is_enabled). The rest are fully specified but not yet executable — see{' '}
+          <code className="text-xs bg-gray-100 px-1 rounded">docs/data-integrity/RULE_CATALOGUE.md</code> for the Phase 2 backlog and rationale per rule.
+        </div>
+        <RepairExecutionToggle enabled={repairExecutionEnabled} canManage={canManage} />
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">

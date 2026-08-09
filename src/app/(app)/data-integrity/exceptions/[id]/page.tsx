@@ -3,9 +3,11 @@ export const dynamic = 'force-dynamic'
 import { notFound } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import Link from 'next/link'
 import { hasuraRunSql } from '@/lib/hasura/server'
-import { UUID_RE } from '@/lib/dataIntegrity/auth'
+import { UUID_RE, CAN_PROPOSE_REPAIR } from '@/lib/dataIntegrity/auth'
 import StatusForm from './StatusForm'
+import ProposeRepairForm from './ProposeRepairForm'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -29,8 +31,9 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
   const session = token ? verifySession(token) : null
   const canClose = session?.role === 'admin' || session?.role === 'developer'
+  const canPropose = !!session && CAN_PROPOSE_REPAIR.has(session.role)
 
-  const [exceptionResult, evidenceResult, repairResult] = await Promise.all([
+  const [exceptionResult, evidenceResult, repairResult, settingsResult] = await Promise.all([
     hasuraRunSql(`
       SELECT e.*, r.rule_code, r.rule_name, r.description AS rule_description
       FROM reconciliation_exceptions e LEFT JOIN reconciliation_rules r ON r.id = e.rule_id
@@ -38,6 +41,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
     `),
     hasuraRunSql(`SELECT * FROM reconciliation_exception_rows WHERE exception_id = '${id}'::uuid ORDER BY created_at`),
     hasuraRunSql(`SELECT id, repair_batch_number, status, proposed_action, created_at FROM repair_batches WHERE exception_id = '${id}'::uuid ORDER BY created_at DESC`),
+    hasuraRunSql(`SELECT repair_execution_enabled FROM reconciliation_settings WHERE id = TRUE`),
   ])
 
   const exceptions = rowsToObjects(exceptionResult)
@@ -45,6 +49,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
   const exception = exceptions[0]
   const evidenceRows = rowsToObjects(evidenceResult)
   const repairBatches = rowsToObjects(repairResult)
+  const repairExecutionEnabled = rowsToObjects(settingsResult)[0]?.repair_execution_enabled === 'true'
 
   let evidence: Record<string, unknown> = {}
   try {
@@ -124,16 +129,33 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
 
       <div className="rounded-xl border bg-amber-50 border-amber-200 p-4">
         <p className="text-sm font-semibold text-amber-900">Proposed repair</p>
-        <p className="text-sm text-amber-800 mt-1">
-          Repair execution is disabled. Review and approval workflow will be enabled only after validation in shadow mode.
-        </p>
+        {!repairExecutionEnabled && (
+          <p className="text-sm text-amber-800 mt-1">
+            Repair execution is disabled (reconciliation_settings.repair_execution_enabled = FALSE) — an admin/developer can enable it from the Rules page.
+          </p>
+        )}
         {repairBatches.length > 0 && (
           <ul className="mt-3 space-y-1 text-sm text-amber-900">
             {repairBatches.map((b) => (
-              <li key={b.id}>{b.repair_batch_number} — {b.proposed_action} <span className="text-xs">({b.status})</span></li>
+              <li key={b.id}>
+                <Link href={`/data-integrity/repair-batches/${b.id}`} className="underline hover:no-underline">
+                  {b.repair_batch_number}
+                </Link>
+                {' '}— {b.proposed_action} <span className="text-xs">({b.status})</span>
+              </li>
             ))}
           </ul>
         )}
+        {repairExecutionEnabled &&
+          canPropose &&
+          exception.rule_code === 'REC-001' &&
+          evidence.confidence === 'CONFIRMED' &&
+          !['RESOLVED', 'IGNORED'].includes(exception.status) &&
+          !repairBatches.some((b) => b.status !== 'REJECTED') && (
+            <div className="mt-3">
+              <ProposeRepairForm exceptionId={id} />
+            </div>
+          )}
       </div>
 
       <div className="rounded-xl border bg-white p-4">
