@@ -18,6 +18,7 @@ export function ListingFilters({
   itemValue,
   itemOptions,
   extra,
+  dateLabel = 'Created',
 }: {
   basePath: string
   fromDate: string
@@ -29,6 +30,7 @@ export function ListingFilters({
   itemValue: string
   itemOptions: ItemOption[]
   extra?: ReactNode
+  dateLabel?: string
 }) {
   const partyCombo: ComboOption[] = (partyOptions ?? []).map((p) => ({ id: p.id, label: p.name, search: p.name.toLowerCase() }))
   const itemCombo: ComboOption[] = itemOptions.map((i) => ({
@@ -69,7 +71,7 @@ export function ListingFilters({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Created From</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{dateLabel} From</label>
           <input
             type="date"
             name="from"
@@ -79,7 +81,7 @@ export function ListingFilters({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Created To</label>
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{dateLabel} To</label>
           <input
             type="date"
             name="to"

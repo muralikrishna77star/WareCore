@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { PURCHASE_BILLS_QUERY, PURCHASE_BILLS_MAX_CREATED_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
-import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
+import { PURCHASE_BILLS_QUERY, PURCHASE_BILLS_MAX_BILL_DATE_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { defaultCreatedRange } from '@/lib/dateRange'
 import BillsTable from './BillsTable'
 import { ListingFilters } from '@/components/ListingFilters'
 import { ListingSummary } from '@/components/ListingSummary'
@@ -16,15 +16,15 @@ export default async function BillsPage({
   const params = await searchParams
   const lineId = params.line_id?.trim() || ''
 
-  const maxCreatedResult = await hasuraQuery(PURCHASE_BILLS_MAX_CREATED_QUERY)
-  const maxCreatedAt = maxCreatedResult.purchase_bills_aggregate?.aggregate?.max?.created_at
-  const defaults = defaultCreatedRange(maxCreatedAt)
+  const maxBillDateResult = await hasuraQuery(PURCHASE_BILLS_MAX_BILL_DATE_QUERY)
+  const maxBillDate = maxBillDateResult.purchase_bills_aggregate?.aggregate?.max?.bill_date
+  const defaults = defaultCreatedRange(maxBillDate)
   const fromDate = params.from || defaults.from
   const toDate = params.to || defaults.to
 
   const conditions: Record<string, unknown>[] = [
-    { created_at: { _gte: fromDate } },
-    { created_at: { _lt: nextDay(toDate) } },
+    { bill_date: { _gte: fromDate } },
+    { bill_date: { _lte: toDate } },
   ]
   if (lineId) conditions.push({ purchase_bill_items: { purchase_line_id: { _ilike: `%${lineId}%` } } })
   if (params.supplier) conditions.push({ supplier_id: { _eq: params.supplier } })
@@ -74,6 +74,7 @@ export default async function BillsPage({
 
       <ListingFilters
         basePath="/bills"
+        dateLabel="Purchase"
         fromDate={fromDate}
         toDate={toDate}
         partyLabel="Supplier"

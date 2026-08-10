@@ -496,9 +496,9 @@ export const ITEM_MASTERS_QUERY = `
 
 // ─── Purchase Bills ──────────────────────────────────────────────────────────
 
-export const PURCHASE_BILLS_MAX_CREATED_QUERY = `
-  query GetPurchaseBillsMaxCreated {
-    purchase_bills_aggregate { aggregate { max { created_at } } }
+export const PURCHASE_BILLS_MAX_BILL_DATE_QUERY = `
+  query GetPurchaseBillsMaxBillDate {
+    purchase_bills_aggregate { aggregate { max { bill_date } } }
   }
 `
 
