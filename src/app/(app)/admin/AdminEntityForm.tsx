@@ -12,7 +12,7 @@ interface Props {
   companies: { id: string; name: string }[]
 }
 
-export default function AdminEntityForm({ table, label, companies }: Props) {
+export default function AdminEntityForm({ table, label }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

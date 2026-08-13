@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft, Lock, Check, Save } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { DropdownPortal } from '@/components/DropdownPortal'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_PURCHASE_TAX_RATES_QUERY,
-  ALL_BILL_NUMBERS_QUERY, ALL_PURCHASE_LINE_IDS_QUERY,
+  ALL_PURCHASE_LINE_IDS_QUERY,
   PURCHASE_BILL_FOR_EDIT_QUERY,
   UPDATE_PURCHASE_BILL_MUTATION,
   DELETE_PURCHASE_BILL_ITEMS_MUTATION,
@@ -46,18 +48,48 @@ type LineItem = {
   total_with_tax: number
 }
 
+interface EditBillItemRow {
+  id: string
+  purchase_line_id: string | null
+  item_master_id: string | null
+  item_name: string | null
+  material_type_id: string | null
+  material_size_id: string | null
+  size_label: string | null
+  quantity: number | string | null
+  rate: number | string | null
+  amount: number | string | null
+  notes: string | null
+  tax_rate_id: string | null
+  taxable_value: number | string | null
+  cgst_rate: number | string | null
+  cgst_amount: number | string | null
+  sgst_rate: number | string | null
+  sgst_amount: number | string | null
+  tds_rate: number | string | null
+  tds_amount: number | string | null
+  total_with_tax: number | string | null
+}
+
+interface EditBillRow {
+  id: string
+  bill_number: string
+  bill_date: string
+  notes: string | null
+  status: string
+  company_id: string | null
+  warehouse_id: string | null
+  supplier_id: string | null
+  companies: { name: string } | null
+  warehouses: { name: string } | null
+  suppliers: { name: string } | null
+  purchase_bill_items: EditBillItemRow[]
+}
+
 function getMMYY(date: Date = new Date()): string {
   const mm = String(date.getMonth() + 1).padStart(2, '0')
   const yy = String(date.getFullYear()).slice(-2)
   return `${mm}${yy}`
-}
-
-function computeNextSeq(ids: string[], pattern: RegExp): number {
-  return ids.reduce((max, id) => {
-    if (!id) return max
-    const m = id.match(pattern)
-    return m ? Math.max(max, parseInt(m[1], 10)) : max
-  }, 0)
 }
 
 function generatePurchaseLineId(groupCode: string, mmyy: string, allLineIds: string[]): string {
@@ -93,6 +125,121 @@ function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
     tds_rate: Number(tr.tds_rate), tds_amount: tds,
     total_with_tax: taxable + cgst + sgst - tds,
   }
+}
+
+// Item-search cell for a line row: owns its own plain useRef() anchor
+// (declared here, not in a shared keyed ref-map indexed from the parent),
+// matching the pattern used by InputLineRow/OutputLineRow in the job work
+// edit page — a ref created and consumed entirely within one component
+// instance is safe; a ref looked up from a shared map via a helper function
+// called during a different component's render is not.
+function ItemSearchCell({
+  rowId,
+  lineIndex,
+  materialTypeId,
+  materialSizeId,
+  searchValue,
+  open,
+  highlight,
+  filteredItems,
+  setItemSearch,
+  setItemOpen,
+  setItemHighlight,
+  updateLine,
+  setNewItemLineIndex,
+  setShowNewItemDialog,
+  setNewItemMaterialTypeId,
+  setNewItemMaterialSizeId,
+  setNewItemName,
+  setNewItemDescription,
+  setNewItemCode,
+}: {
+  rowId: string
+  lineIndex: number
+  materialTypeId: string
+  materialSizeId: string
+  searchValue: string
+  open: boolean
+  highlight: number
+  filteredItems: ItemMaster[]
+  setItemSearch: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  setItemOpen: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  setItemHighlight: React.Dispatch<React.SetStateAction<Record<string, number>>>
+  updateLine: (index: number, field: keyof LineItem, value: string) => void
+  setNewItemLineIndex: React.Dispatch<React.SetStateAction<number | null>>
+  setShowNewItemDialog: React.Dispatch<React.SetStateAction<boolean>>
+  setNewItemMaterialTypeId: React.Dispatch<React.SetStateAction<string>>
+  setNewItemMaterialSizeId: React.Dispatch<React.SetStateAction<string>>
+  setNewItemName: React.Dispatch<React.SetStateAction<string>>
+  setNewItemDescription: React.Dispatch<React.SetStateAction<string>>
+  setNewItemCode: React.Dispatch<React.SetStateAction<string>>
+}) {
+  const anchorRef = useRef<HTMLDivElement | null>(null)
+  return (
+    <div className="relative" ref={anchorRef}>
+      <input type="text" value={searchValue}
+        onChange={(e) => {
+          setItemSearch(prev => ({ ...prev, [rowId]: e.target.value }))
+          setItemOpen(prev => ({ ...prev, [rowId]: true }))
+          setItemHighlight(prev => ({ ...prev, [rowId]: -1 }))
+        }}
+        onKeyDown={(e) => {
+          const count = filteredItems.length
+          const cur = highlight
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setItemOpen(prev => ({ ...prev, [rowId]: true }))
+            setItemHighlight(prev => ({ ...prev, [rowId]: Math.min(cur + 1, count - 1) }))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setItemHighlight(prev => ({ ...prev, [rowId]: Math.max(cur - 1, 0) }))
+          } else if (e.key === 'Enter' && cur >= 0 && cur < count) {
+            e.preventDefault()
+            const im = filteredItems[cur]
+            updateLine(lineIndex, 'item_master_id', im.id)
+            setItemSearch(prev => ({ ...prev, [rowId]: im.item_name }))
+            setItemOpen(prev => ({ ...prev, [rowId]: false }))
+            setItemHighlight(prev => ({ ...prev, [rowId]: -1 }))
+          } else if (e.key === 'Escape') {
+            setItemOpen(prev => ({ ...prev, [rowId]: false }))
+          }
+        }}
+        onFocus={() => setItemOpen(prev => ({ ...prev, [rowId]: true }))}
+        onBlur={() => setItemOpen(prev => ({ ...prev, [rowId]: false }))}
+        placeholder="Search item..."
+        className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none"
+      />
+      <DropdownPortal anchorRef={anchorRef} open={open} className="w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+          <button type="button" onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setNewItemLineIndex(lineIndex)
+              setShowNewItemDialog(true)
+              setNewItemMaterialTypeId(materialTypeId)
+              setNewItemMaterialSizeId(materialSizeId)
+              setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
+              setItemOpen(prev => ({ ...prev, [rowId]: false }))
+            }}
+            className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+            + New Item
+          </button>
+          {filteredItems.map((im, idx) => (
+            <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                updateLine(lineIndex, 'item_master_id', im.id)
+                setItemSearch(prev => ({ ...prev, [rowId]: im.item_name }))
+                setItemOpen(prev => ({ ...prev, [rowId]: false }))
+                setItemHighlight(prev => ({ ...prev, [rowId]: -1 }))
+              }}
+              className={`w-full text-left px-2 py-2 text-[0.8125rem] ${highlight === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}>
+              {im.item_name}
+            </button>
+          ))}
+          {filteredItems.length === 0 && (
+            <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
+          )}
+      </DropdownPortal>
+    </div>
+  )
 }
 
 export default function EditBillPage() {
@@ -134,29 +281,28 @@ export default function EditBillPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
-  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
     const load = async () => {
       const [c, w, s, mt, ms, im, tr, lis, billRes] = await Promise.all([
-        hasuraFetch(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
-        hasuraFetch(ALL_PURCHASE_LINE_IDS_QUERY),
-        hasuraFetch(PURCHASE_BILL_FOR_EDIT_QUERY, { id: billId }),
+        hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch<{ suppliers: Supplier[] }>(ACTIVE_SUPPLIERS_QUERY),
+        hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_PURCHASE_TAX_RATES_QUERY),
+        hasuraFetch<{ purchase_bill_items: { purchase_line_id: string | null }[] }>(ALL_PURCHASE_LINE_IDS_QUERY),
+        hasuraFetch<{ purchase_bills_by_pk: EditBillRow | null }>(PURCHASE_BILL_FOR_EDIT_QUERY, { id: billId }),
       ])
 
-      const loadedCompanies: Company[] = (c.data as any)?.companies ?? []
-      const loadedWarehouses: Warehouse[] = (w.data as any)?.warehouses ?? []
-      const loadedSuppliers: Supplier[] = (s.data as any)?.suppliers ?? []
-      const loadedMaterialTypes: MaterialType[] = (mt.data as any)?.material_types ?? []
-      const loadedMaterialSizes: MaterialSize[] = (ms.data as any)?.material_sizes ?? []
-      const loadedItemMasters: ItemMaster[] = (im.data as any)?.item_master ?? []
-      const loadedTaxRates: TaxRate[] = (tr.data as any)?.tax_rates ?? []
+      const loadedCompanies: Company[] = c.data?.companies ?? []
+      const loadedWarehouses: Warehouse[] = w.data?.warehouses ?? []
+      const loadedSuppliers: Supplier[] = s.data?.suppliers ?? []
+      const loadedMaterialTypes: MaterialType[] = mt.data?.material_types ?? []
+      const loadedMaterialSizes: MaterialSize[] = ms.data?.material_sizes ?? []
+      const loadedItemMasters: ItemMaster[] = im.data?.item_master ?? []
+      const loadedTaxRates: TaxRate[] = tr.data?.tax_rates ?? []
 
       setCompanies(loadedCompanies)
       setWarehouses(loadedWarehouses)
@@ -166,11 +312,11 @@ export default function EditBillPage() {
       setItemMasters(loadedItemMasters)
       setTaxRates(loadedTaxRates)
 
-      const allLineIds: string[] = ((lis.data as any)?.purchase_bill_items ?? [])
-        .map((i: any) => i.purchase_line_id).filter(Boolean)
+      const allLineIds: string[] = (lis.data?.purchase_bill_items ?? [])
+        .map((i) => i.purchase_line_id).filter((id): id is string => Boolean(id))
       setExistingLineIds(allLineIds)
 
-      const bill = (billRes.data as any)?.purchase_bills_by_pk
+      const bill = billRes.data?.purchase_bills_by_pk
       if (!bill || bill.status === 'cancelled') { setNotFound(true); setPageLoading(false); return }
 
       setBillStatus(bill.status as 'draft' | 'active')
@@ -193,7 +339,7 @@ export default function EditBillPage() {
         if (sp) setSupplierSearch(sp.name)
       }
 
-      const loadedLines: LineItem[] = (bill.purchase_bill_items ?? []).map((item: any) => {
+      const loadedLines: LineItem[] = (bill.purchase_bill_items ?? []).map((item) => {
         const itemMaster = loadedItemMasters.find(im => im.id === item.item_master_id)
         return {
           rowId: Math.random().toString(36).slice(2, 8),
@@ -226,10 +372,13 @@ export default function EditBillPage() {
       if (bill.status === 'active') {
         const lineIds = loadedLines.map(l => l.purchase_line_id).filter(Boolean)
         if (lineIds.length) {
-          const usageRes = await hasuraFetch(CHECK_PURCHASE_LINE_USAGE_QUERY, { line_ids: lineIds })
+          const usageRes = await hasuraFetch<{
+            dispatch_items: { purchase_line_id: string }[]
+            job_work_items: { purchase_line_id: string }[]
+          }>(CHECK_PURCHASE_LINE_USAGE_QUERY, { line_ids: lineIds })
           const usedLineIds = new Set<string>([
-            ...((usageRes.data as any)?.dispatch_items ?? []).map((d: any) => d.purchase_line_id),
-            ...((usageRes.data as any)?.job_work_items ?? []).map((j: any) => j.purchase_line_id),
+            ...(usageRes.data?.dispatch_items ?? []).map((d) => d.purchase_line_id),
+            ...(usageRes.data?.job_work_items ?? []).map((j) => j.purchase_line_id),
           ])
           loadedLines.forEach(l => {
             if (l.purchase_line_id && usedLineIds.has(l.purchase_line_id)) l.isLocked = true
@@ -376,20 +525,22 @@ export default function EditBillPage() {
   const [newItemDialogLoading, setNewItemDialogLoading] = useState(false)
 
   useEffect(() => {
-    const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
-    if (mt) setNewItemUnit(mt.unit || 'tons')
-    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
-    if (!mt?.code) { setNewItemCode(''); return }
-    const prefix = mt.code.trim().toUpperCase()
-    const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const sequence = itemMasters.reduce((max, item) => {
-      if (!item.item_code?.startsWith(prefix)) return max
-      const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
-      if (!match) return max
-      const n = Number(match[1])
-      return Number.isFinite(n) ? Math.max(max, n) : max
-    }, 0)
-    setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    Promise.resolve().then(() => {
+      const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
+      if (mt) setNewItemUnit(mt.unit || 'tons')
+      if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
+      if (!mt?.code) { setNewItemCode(''); return }
+      const prefix = mt.code.trim().toUpperCase()
+      const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const sequence = itemMasters.reduce((max, item) => {
+        if (!item.item_code?.startsWith(prefix)) return max
+        const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
+        if (!match) return max
+        const n = Number(match[1])
+        return Number.isFinite(n) ? Math.max(max, n) : max
+      }, 0)
+      setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    })
   }, [newItemMaterialTypeId, materialTypes, itemMasters])
 
   const selectedNewItemSize = materialSizes.find(s => s.id === newItemMaterialSizeId)
@@ -579,7 +730,7 @@ export default function EditBillPage() {
     }
 
     // Draft bill: direct GraphQL update
-    const { error: updateError } = await hasuraFetch<any>(UPDATE_PURCHASE_BILL_MUTATION, {
+    const { error: updateError } = await hasuraFetch<{ update_purchase_bills_by_pk: { id: string; bill_number: string; status: string } | null }>(UPDATE_PURCHASE_BILL_MUTATION, {
       id: billId,
       company_id: companyId || null, warehouse_id: warehouseId || null,
       supplier_id: supplierId || null, bill_number: billNumber,
@@ -587,7 +738,7 @@ export default function EditBillPage() {
     })
     if (updateError) { setError(updateError.message); setLoading(false); return }
 
-    const { error: deleteError } = await hasuraFetch<any>(DELETE_PURCHASE_BILL_ITEMS_MUTATION, { bill_id: billId })
+    const { error: deleteError } = await hasuraFetch<{ delete_purchase_bill_items: { affected_rows: number } | null }>(DELETE_PURCHASE_BILL_ITEMS_MUTATION, { bill_id: billId })
     if (deleteError) { setError(deleteError.message); setLoading(false); return }
 
     const itemsToSave = lines.filter(l => l.material_type_id && parseFloat(l.quantity) > 0)
@@ -621,7 +772,9 @@ export default function EditBillPage() {
     return (
       <div className="max-w-6xl mx-auto p-6">
         <p className="text-red-600 font-medium">Bill not found or cannot be edited.</p>
-        <a href="/bills" className="mt-2 text-blue-600 hover:underline text-sm block">← Back to Bills</a>
+        <Link href="/bills" className="mt-2 text-blue-600 hover:underline text-sm inline-flex items-center gap-1">
+          <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Bills
+        </Link>
       </div>
     )
   }
@@ -631,8 +784,8 @@ export default function EditBillPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
-        <a href={`/bills/${billId}`} className="text-[0.9375rem] text-blue-600 hover:underline mb-1 block">
-          ← Back to {isActiveBill ? 'Bill' : 'Draft'}
+        <a href={`/bills/${billId}`} className="text-[0.9375rem] text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
+          <ArrowLeft className="h-4 w-4 shrink-0" /> Back to {isActiveBill ? 'Bill' : 'Draft'}
         </a>
         <h1 className="text-[1.4375rem] font-bold text-gray-900">{isActiveBill ? 'Edit Bill' : 'Edit Draft'}</h1>
         <p className="mt-1 text-[0.9375rem] text-gray-500">Purchase ID: {billNumber}</p>
@@ -831,7 +984,9 @@ export default function EditBillPage() {
                         <td className="pr-2 py-1 text-[0.8125rem] text-gray-500">{mt ? `${mt.code} — ${mt.description}` : '—'}</td>
                         <td className="pr-2 py-1">
                           <span className="text-[0.8125rem] text-gray-600">{line.item_name || '—'}</span>
-                          <span className="ml-2 inline-flex items-center rounded bg-orange-50 border border-orange-200 px-1.5 py-0.5 text-[0.625rem] font-medium text-orange-700">🔒 Locked</span>
+                          <span className="ml-2 inline-flex items-center gap-1 rounded bg-orange-50 border border-orange-200 px-1.5 py-0.5 text-[0.625rem] font-medium text-orange-700">
+                            <Lock className="inline h-3.5 w-3.5" /> Locked
+                          </span>
                         </td>
                         <td className="pr-2 py-1">
                           <span className="inline-flex items-center rounded bg-gray-100 border border-gray-300 px-2 py-1 text-[0.6875rem] font-mono text-gray-500">{line.purchase_line_id || '—'}</span>
@@ -871,69 +1026,27 @@ export default function EditBillPage() {
                       </td>
                       {/* Item Name */}
                       <td className="pr-2 py-0">
-                        <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
-                          <input type="text" value={itemSearchValue}
-                            onChange={(e) => {
-                              setItemSearch(prev => ({ ...prev, [line.rowId]: e.target.value }))
-                              setItemOpen(prev => ({ ...prev, [line.rowId]: true }))
-                              setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
-                            }}
-                            onKeyDown={(e) => {
-                              const count = filteredDropdownItems.length
-                              const cur = itemHighlight[line.rowId] ?? -1
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault()
-                                setItemOpen(prev => ({ ...prev, [line.rowId]: true }))
-                                setItemHighlight(prev => ({ ...prev, [line.rowId]: Math.min(cur + 1, count - 1) }))
-                              } else if (e.key === 'ArrowUp') {
-                                e.preventDefault()
-                                setItemHighlight(prev => ({ ...prev, [line.rowId]: Math.max(cur - 1, 0) }))
-                              } else if (e.key === 'Enter' && cur >= 0 && cur < count) {
-                                e.preventDefault()
-                                const im = filteredDropdownItems[cur]
-                                updateLine(i, 'item_master_id', im.id)
-                                setItemSearch(prev => ({ ...prev, [line.rowId]: im.item_name }))
-                                setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
-                                setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
-                              } else if (e.key === 'Escape') {
-                                setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
-                              }
-                            }}
-                            onFocus={() => setItemOpen(prev => ({ ...prev, [line.rowId]: true }))}
-                            onBlur={() => setItemOpen(prev => ({ ...prev, [line.rowId]: false }))}
-                            placeholder="Search item..."
-                            className="block w-36 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none"
-                          />
-                          <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-36 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
-                              <button type="button" onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
-                                  setNewItemLineIndex(i)
-                                  setShowNewItemDialog(true)
-                                  setNewItemMaterialTypeId(line.material_type_id)
-                                  setNewItemMaterialSizeId(line.material_size_id)
-                                  setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
-                                  setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
-                                }}
-                                className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                                + New Item
-                              </button>
-                              {filteredDropdownItems.map((im, idx) => (
-                                <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
-                                  onClick={() => {
-                                    updateLine(i, 'item_master_id', im.id)
-                                    setItemSearch(prev => ({ ...prev, [line.rowId]: im.item_name }))
-                                    setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
-                                    setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
-                                  }}
-                                  className={`w-full text-left px-2 py-2 text-[0.8125rem] ${itemHighlight[line.rowId] === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}>
-                                  {im.item_name}
-                                </button>
-                              ))}
-                              {filteredDropdownItems.length === 0 && (
-                                <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
-                              )}
-                          </DropdownPortal>
-                        </div>
+                        <ItemSearchCell
+                          rowId={line.rowId}
+                          lineIndex={i}
+                          materialTypeId={line.material_type_id}
+                          materialSizeId={line.material_size_id}
+                          searchValue={itemSearchValue}
+                          open={!!itemOpen[line.rowId]}
+                          highlight={itemHighlight[line.rowId] ?? -1}
+                          filteredItems={filteredDropdownItems}
+                          setItemSearch={setItemSearch}
+                          setItemOpen={setItemOpen}
+                          setItemHighlight={setItemHighlight}
+                          updateLine={updateLine}
+                          setNewItemLineIndex={setNewItemLineIndex}
+                          setShowNewItemDialog={setShowNewItemDialog}
+                          setNewItemMaterialTypeId={setNewItemMaterialTypeId}
+                          setNewItemMaterialSizeId={setNewItemMaterialSizeId}
+                          setNewItemName={setNewItemName}
+                          setNewItemDescription={setNewItemDescription}
+                          setNewItemCode={setNewItemCode}
+                        />
                       </td>
                       {/* Line ID */}
                       <td className="pr-2 py-0">
@@ -1070,17 +1183,17 @@ export default function EditBillPage() {
           {isActiveBill ? (
             <button type="button" onClick={() => saveBill('active')} disabled={loading}
               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {loading ? 'Saving...' : '✓ Save Changes'}
+              {loading ? 'Saving...' : (<><Check className="h-4 w-4" /> Save Changes</>)}
             </button>
           ) : (
             <>
               <button type="button" onClick={() => saveBill('active')} disabled={loading}
                 className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
-                {loading ? 'Saving...' : '✓ Submit Bill'}
+                {loading ? 'Saving...' : (<><Check className="h-4 w-4" /> Submit Bill</>)}
               </button>
               <button type="button" onClick={() => saveBill('draft')} disabled={loading}
                 className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-2.5 text-[0.9375rem] font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">
-                {loading ? 'Saving...' : '⎘ Save Draft'}
+                {loading ? 'Saving...' : (<><Save className="h-4 w-4" /> Save Draft</>)}
               </button>
             </>
           )}

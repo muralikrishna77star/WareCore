@@ -31,10 +31,12 @@ function LoginForm() {
   }, [])
 
   useEffect(() => {
-    const errorParam = searchParams.get('error')
-    if (errorParam) {
-      setError(GOOGLE_ERROR_MESSAGES[errorParam] ?? 'An error occurred. Please try again.')
-    }
+    Promise.resolve().then(() => {
+      const errorParam = searchParams.get('error')
+      if (errorParam) {
+        setError(GOOGLE_ERROR_MESSAGES[errorParam] ?? 'An error occurred. Please try again.')
+      }
+    })
   }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {

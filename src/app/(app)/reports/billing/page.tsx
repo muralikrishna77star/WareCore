@@ -6,12 +6,65 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   PURCHASE_IN: 'Purchase In',
   PURCHASE_CANCEL: 'Purchase Cancelled',
+}
+
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+interface Warehouse {
+  id: string
+  name: string
+  company_id: string
+}
+
+interface PurchaseBillItem {
+  quantity: number | string
+  rate: number | string | null
+  amount: number | string | null
+  size_label: string | null
+  unit?: string | null
+  material_types: { description: string | null; unit?: string | null } | null
+  material_sizes: { size_label: string | null } | null
+}
+
+interface PurchaseBill {
+  id: string
+  bill_number: string
+  bill_date: string
+  total_quantity: number | string | null
+  total_amount: number | string | null
+  notes?: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  suppliers: { name: string } | null
+  purchase_bill_items: PurchaseBillItem[]
+}
+
+interface LedgerRow {
+  id: string
+  entry_type: string
+  quantity: number | string
+  entry_date: string
+  reference_number: string | null
+  reference_type: string | null
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  size_label: string | null
+  notes: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  material_types: { description: string | null; unit?: string | null } | null
+  material_sizes: { size_label: string | null } | null
 }
 
 export default async function BillingReportPage({
@@ -38,11 +91,11 @@ export default async function BillingReportPage({
     hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
   ])
 
-  const bills: any[] = result.purchase_bills ?? []
-  const companies: any[] = compResult.companies ?? []
-  const allWarehouses: any[] = whResult.warehouses ?? []
+  const bills = (result.purchase_bills ?? []) as PurchaseBill[]
+  const companies = (compResult.companies ?? []) as Company[]
+  const allWarehouses = (whResult.warehouses ?? []) as Warehouse[]
   const warehouses = params.company
-    ? allWarehouses.filter((w: any) => w.company_id === params.company)
+    ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
 
   const totalQty = bills.reduce((s, b) => s + Number(b.total_quantity || 0), 0)
@@ -51,20 +104,20 @@ export default async function BillingReportPage({
   // Ledger Detail: the actual PURCHASE_IN/PURCHASE_CANCEL stock_ledger rows
   // these bills produced — real transaction-level traceability. No running
   // balance: mixed items/warehouses have no single meaningful one.
-  const billIds = bills.map((b: any) => b.id)
+  const billIds = bills.map((b) => b.id)
   const ledgerResult = billIds.length > 0
     ? await hasuraQuery(MOVEMENTS_REPORT_QUERY, {
         where: { _and: [{ reference_type: { _eq: 'purchase_bill' } }, { reference_id: { _in: billIds } }] },
       })
     : { stock_ledger: [] }
-  const ledgerRows: any[] = ledgerResult.stock_ledger ?? []
-  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m: any) => m.purchase_line_id))
+  const ledgerRows = (ledgerResult.stock_ledger ?? []) as LedgerRow[]
+  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m) => m.purchase_line_id))
 
   const exportMeta = {
-    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
     fromDate,
     toDate,
-    filterLine: `Warehouse: ${warehouses.find((w: any) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+    filterLine: `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
     generatedBy: '',
   }
   const summarySheet: ProfessionalSheetSpec = {
@@ -83,7 +136,10 @@ export default async function BillingReportPage({
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
       { header: 'Amount (₹)', key: 'amount', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
     ],
-    rows: bills.flatMap((bill: any) => {
+    rows: bills.flatMap((bill): Array<{
+      billNo: string; date: string; supplier: string; company: string; warehouse: string
+      material: string; size: string; qty: number | null; rate: number | null; amount: number | null
+    }> => {
       const items = bill.purchase_bill_items ?? []
       const base = {
         billNo: bill.bill_number,
@@ -95,7 +151,7 @@ export default async function BillingReportPage({
       if (items.length === 0) {
         return [{ ...base, material: '', size: '', qty: null, rate: null, amount: null }]
       }
-      return items.map((item: any) => ({
+      return items.map((item) => ({
         ...base,
         material: item.material_types?.description || '',
         size: item.material_sizes?.size_label ?? item.size_label ?? '',
@@ -125,7 +181,7 @@ export default async function BillingReportPage({
       { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
       { header: 'Remarks', key: 'remarks', width: 24, align: 'left' },
     ],
-    rows: ledgerRows.map((m: any, idx: number) => {
+    rows: ledgerRows.map((m, idx: number) => {
       const qty = Number(m.quantity)
       const rate = m.purchase_line_id ? ledgerRateMap.get(m.purchase_line_id) ?? null : null
       return {
@@ -166,7 +222,7 @@ export default async function BillingReportPage({
             />
           )}
           <PrintButton />
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -183,14 +239,14 @@ export default async function BillingReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Companies</option>
-              {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
             <select name="warehouse" defaultValue={params.warehouse || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Warehouses</option>
-              {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
           <div>
@@ -247,7 +303,7 @@ export default async function BillingReportPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {bills.map((bill: any) => {
+                {bills.map((bill) => {
                   const items = bill.purchase_bill_items ?? []
                   if (items.length === 0) {
                     return (
@@ -261,7 +317,7 @@ export default async function BillingReportPage({
                       </tr>
                     )
                   }
-                  return items.map((item: any, idx: number) => (
+                  return items.map((item, idx: number) => (
                     <tr key={`${bill.id}-${idx}`} className="hover:bg-gray-50">
                       {idx === 0 && (
                         <>

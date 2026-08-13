@@ -58,7 +58,7 @@ export default function AutocompleteSelect({
           error ? 'border-red-400' : 'border-gray-300 focus:border-blue-500'
         } ${!currentLabel && !open ? 'text-red-600 placeholder:text-red-400' : ''}`}
       />
-      <DropdownPortal anchorEl={anchorRef.current} open={open} matchWidth className="rounded-md border border-gray-300 bg-white shadow-lg overflow-y-auto max-h-60">
+      <DropdownPortal anchorRef={anchorRef} open={open} matchWidth className="rounded-md border border-gray-300 bg-white shadow-lg overflow-y-auto max-h-60">
         {onAddNew && (
           <button
             type="button"

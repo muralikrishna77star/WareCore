@@ -27,6 +27,7 @@ import type { StockStatementExportItem, TransactionDetailRow } from '@/lib/expor
 import { type StatementRow } from './StockStatementTable'
 import StockStatementTabs from './StockStatementTabs'
 import Link from 'next/link'
+import { ArrowLeft, ChartColumn } from 'lucide-react'
 
 type LedgerRow = {
   id: string
@@ -172,11 +173,11 @@ export default async function StockStatementPage({
   const warehouses = params.company
     ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
-  const suppliers: any[] = supResult.suppliers ?? []
-  const materialTypes: any[] = matTypeResult.material_types ?? []
-  const allSizes: any[] = matSizeResult.material_sizes ?? []
+  const suppliers = (supResult.suppliers ?? []) as { id: string; name: string }[]
+  const materialTypes = (matTypeResult.material_types ?? []) as { id: string; description: string }[]
+  const allSizes = (matSizeResult.material_sizes ?? []) as { id: string; material_type_id: string | null; size_label: string }[]
   const sizes = params.material_type
-    ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
+    ? allSizes.filter((s) => !s.material_type_id || s.material_type_id === params.material_type)
     : allSizes
 
   // material_type_id + material_size_id → item_master.id, so each row's
@@ -224,8 +225,8 @@ export default async function StockStatementPage({
       hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
     ])
     const refIds = [
-      ...(billIdsResult.purchase_bills ?? []).map((b: any) => b.id),
-      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: any) => o.id),
+      ...(billIdsResult.purchase_bills ?? []).map((b: { id: string }) => b.id),
+      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: { id: string }) => o.id),
     ]
     if (refIds.length === 0) {
       noResults = true
@@ -717,7 +718,7 @@ export default async function StockStatementPage({
 
   const selectedCompanyName = params.company ? companies.find((c) => c.id === params.company)?.name : undefined
   const selectedWarehouseName = params.warehouse ? warehouses.find((w) => w.id === params.warehouse)?.name : undefined
-  const selectedVendorName = params.vendor ? suppliers.find((s: any) => s.id === params.vendor)?.name : undefined
+  const selectedVendorName = params.vendor ? suppliers.find((s) => s.id === params.vendor)?.name : undefined
   const exportMeta = {
     companyName: selectedCompanyName ?? 'All Companies',
     warehouseName: selectedWarehouseName ?? 'All Warehouses',
@@ -749,8 +750,8 @@ export default async function StockStatementPage({
           <Link href="/reports/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
             Reconcile Stock
           </Link>
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">
-            ← Back to Reports
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">
+            <ArrowLeft className="h-4 w-4" /> Back to Reports
           </Link>
         </div>
       </div>
@@ -794,7 +795,7 @@ export default async function StockStatementPage({
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Material Types</option>
-              {materialTypes.map((mt: any) => (
+              {materialTypes.map((mt) => (
                 <option key={mt.id} value={mt.id}>{mt.description}</option>
               ))}
             </select>
@@ -808,7 +809,7 @@ export default async function StockStatementPage({
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Sizes</option>
-              {sizes.map((s: any) => (
+              {sizes.map((s) => (
                 <option key={s.id} value={s.id}>{s.size_label}</option>
               ))}
             </select>
@@ -833,7 +834,7 @@ export default async function StockStatementPage({
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Suppliers</option>
-              {suppliers.map((s: any) => (
+              {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -904,7 +905,7 @@ export default async function StockStatementPage({
         <div className="overflow-auto max-h-[70vh]">
           {sorted.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-4xl mb-3">📊</p>
+              <ChartColumn className="mx-auto h-10 w-10 mb-3 text-gray-400" />
               <p className="text-gray-500 text-sm">No stock movements found for the selected filters.</p>
               <p className="text-gray-400 text-xs mt-1">Try adjusting the date range or company filter.</p>
             </div>

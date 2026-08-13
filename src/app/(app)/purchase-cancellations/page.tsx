@@ -1,16 +1,34 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { ArrowLeft, Trash2, Undo2 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_CANCELLATIONS_QUERY } from '@/lib/hasura/queries'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ListingSummary } from '@/components/ListingSummary'
+
+interface PurchaseCancellationRow {
+  id: string
+  bill_number: string
+  bill_date: string
+  company_name: string | null
+  warehouse_name: string | null
+  supplier_name: string | null
+  total_quantity: number
+  total_amount: number
+  cancelled_at: string | null
+  purged_at: string
+}
 
 export default async function PurchaseCancellationsPage() {
   const result = await hasuraQuery(PURCHASE_CANCELLATIONS_QUERY)
-  const records = result.purchase_cancellations ?? []
+  const records: PurchaseCancellationRow[] = result.purchase_cancellations ?? []
 
-  const exportRows = records.map((r: any) => {
+  const totalQuantity = records.reduce((s, r) => s + Number(r.total_quantity || 0), 0)
+  const totalAmount = records.reduce((s, r) => s + Number(r.total_amount || 0), 0)
+
+  const exportRows = records.map((r) => {
     const qty = Number(r.total_quantity || 0)
     const amount = Number(r.total_amount || 0)
     return {
@@ -36,17 +54,21 @@ export default async function PurchaseCancellationsPage() {
         </div>
         <div className="flex items-center gap-4">
           {records.length > 0 && <ExportExcelButton rows={exportRows} filename="purchase-cancellations" sheetName="Purchase Cancellations" />}
-          <Link href="/bills" className="text-[0.9375rem] text-blue-600 hover:underline">
-            ← Purchase Bills
+          <Link href="/bills" className="text-[0.9375rem] text-blue-600 hover:underline inline-flex items-center gap-1">
+            <ArrowLeft className="h-4 w-4 shrink-0" /> Purchase Bills
           </Link>
         </div>
       </div>
+
+      {records.length > 0 && (
+        <ListingSummary count={records.length} countLabel="cancellation" countIcon={Undo2} totalQuantity={totalQuantity} totalAmount={totalAmount} />
+      )}
 
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
           {records.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-gray-400 text-[1.1875rem] mb-3">🗑</p>
+              <Trash2 className="mx-auto h-10 w-10 text-gray-400 mb-3" />
               <p className="text-gray-500">No purged cancellations yet.</p>
               <p className="text-[0.8125rem] text-gray-400 mt-1">Cancelled bills appear here after you purge them from the bill detail page.</p>
             </div>
@@ -67,7 +89,7 @@ export default async function PurchaseCancellationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {records.map((r: any) => (
+                {records.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 font-mono text-[0.8125rem] text-gray-500 line-through whitespace-nowrap">{r.bill_number}</td>
                     <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDate(r.bill_date)}</td>

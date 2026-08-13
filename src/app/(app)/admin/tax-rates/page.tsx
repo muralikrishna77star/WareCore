@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { TAX_RATES_QUERY } from '@/lib/hasura/queries'
 import type { TaxRate } from '@/types'
@@ -8,7 +9,7 @@ import TaxRatesTable from './TaxRatesTable'
 
 export default async function TaxRatesPage() {
   const result = await hasuraQuery(TAX_RATES_QUERY).catch(() => ({ tax_rates: [] }))
-  const taxRates: TaxRate[] = (result as any).tax_rates ?? []
+  const taxRates: TaxRate[] = (result as { tax_rates?: TaxRate[] }).tax_rates ?? []
 
   return (
     <div className="space-y-6">
@@ -20,8 +21,8 @@ export default async function TaxRatesPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-            ← Admin
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <ArrowLeft className="h-4 w-4" /> Admin
           </Link>
           <Link
             href="/admin/tax-rates/new"

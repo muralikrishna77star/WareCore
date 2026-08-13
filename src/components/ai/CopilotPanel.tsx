@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Minus, X, History } from 'lucide-react'
+import { Plus, Minus, X, History, Brain } from 'lucide-react'
 import { WelcomeScreen } from '@/components/ai/WelcomeScreen'
 import { SuggestionCards } from '@/components/ai/SuggestionCards'
 import { ChatInput } from '@/components/ai/ChatInput'
@@ -126,7 +126,7 @@ export default function CopilotPanel({ isOpen, onClose }: { isOpen: boolean; onC
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
           <p className="flex items-center gap-1.5 font-semibold text-gray-900">
-            🧠 WareCore Copilot
+            <Brain className="h-4 w-4 shrink-0" /> WareCore Copilot
           </p>
           <p className="flex items-center gap-1.5 text-xs text-gray-500">
             AI Warehouse Assistant

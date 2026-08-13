@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { MATERIAL_SIZES_QUERY, ACTIVE_MATERIAL_TYPES_QUERY, UPDATE_MATERIAL_SIZE_MUTATION, DELETE_MATERIAL_SIZE_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
@@ -23,9 +24,12 @@ export default function SizesPage() {
     return !q || [s.size_label, s.material_types?.code, s.material_types?.description].some((v) => v?.toLowerCase().includes(q))
   })
 
-  const load = () => Promise.all([hasuraFetch(MATERIAL_SIZES_QUERY), hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY)]).then(([sr, mr]) => {
-    setSizes((sr.data as any)?.material_sizes ?? [])
-    setMts((mr.data as any)?.material_types ?? [])
+  const load = () => Promise.all([
+    hasuraFetch<{ material_sizes: Size[] }>(MATERIAL_SIZES_QUERY),
+    hasuraFetch<{ material_types: MT[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+  ]).then(([sr, mr]) => {
+    setSizes(sr.data?.material_sizes ?? [])
+    setMts(mr.data?.material_types ?? [])
     setLoading(false)
   })
   useEffect(() => { load() }, [])
@@ -48,7 +52,7 @@ export default function SizesPage() {
     load()
   }
 
-  const f = (field: keyof Size, val: any) => setEditing(e => e ? { ...e, [field]: val } : e)
+  const f = (field: keyof Size, val: string | number | boolean | null) => setEditing(e => e ? { ...e, [field]: val } : e)
 
   return (
     <div className="space-y-6">
@@ -58,7 +62,7 @@ export default function SizesPage() {
           <p className="mt-1 text-sm text-gray-500">{loading ? 'Loading…' : `${sizes.length} sizes`}</p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">← Admin</Link>
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="h-4 w-4" /> Admin</Link>
           <Link href="/admin/sizes/new" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">+ Add Size</Link>
         </div>
       </div>

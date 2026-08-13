@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type RefObject } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check, RefreshCw } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import { DropdownPortal } from '@/components/DropdownPortal'
@@ -29,8 +30,31 @@ type AvailablePurchaseLine = {
   available_quantity: number
 }
 
+interface PurchaseBillItemForDispatch {
+  id: string
+  purchase_line_id: string | null
+  item_name: string | null
+  item_master_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+}
+
+interface StockLedgerLineQuantity {
+  purchase_line_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+  quantity: number | string
+}
+
 type DispatchLine = {
   rowId: string
+  // Stable per-row anchor for the item-search dropdown, created once when the
+  // line is added and carried forward by updateLine's object spread. A plain
+  // object (not a useRef) so reading it during render to pass as a JSX prop
+  // is just a normal state-field read, not a ref dereference.
+  anchorRef: RefObject<HTMLDivElement | null>
   item_master_id: string
   sale_line_id: string
   purchase_line_id: string
@@ -100,6 +124,7 @@ function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<Dispatch
 
 const emptyLine = (): DispatchLine => ({
   rowId: Math.random().toString(36).slice(2, 8),
+  anchorRef: { current: null },
   item_master_id: '',
   sale_line_id: '',
   purchase_line_id: '',
@@ -141,8 +166,6 @@ export default function NewDispatchPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
-  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
-
   // ── Refresh loading state ────────────────────────────────────────────────
   const [refreshingItems, setRefreshingItems] = useState(false)
   const [refreshingPurchaseLines, setRefreshingPurchaseLines] = useState(false)
@@ -172,45 +195,52 @@ export default function NewDispatchPage() {
   const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
   const [vehicleNumber, setVehicleNumber] = useState('')
   const [driverName, setDriverName] = useState('')
-  const [saleRefId, setSaleRefId] = useState('')
+  const [saleRefId] = useState('')
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<DispatchLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [masterDataLoading, setMasterDataLoading] = useState(true)
 
+  // Mount-only master-data load below needs dispatchDate just to seed the
+  // initial Sale ID; read it via a ref so the (expensive, all-reference-data)
+  // load effect doesn't have to re-run every time the date field changes —
+  // the date picker's onChange already regenerates the Sale ID on its own.
+  const dispatchDateRef = useRef(dispatchDate)
+  useEffect(() => { dispatchDateRef.current = dispatchDate })
+
   useEffect(() => {
     const load = async () => {
       const [c, w, cu, mt, ms, im, tr, invs, slis, pbiRes, slRes] = await Promise.all([
-        hasuraFetch(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
-        hasuraFetch(ALL_INVOICE_NUMBERS_QUERY),
-        hasuraFetch(ALL_SALE_LINE_IDS_QUERY),
-        hasuraFetch(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
-        hasuraFetch(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+        hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch<{ customers: Customer[] }>(ACTIVE_CUSTOMERS_QUERY),
+        hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_SALES_TAX_RATES_QUERY),
+        hasuraFetch<{ dispatch_orders: { invoice_number: string | null }[] }>(ALL_INVOICE_NUMBERS_QUERY),
+        hasuraFetch<{ dispatch_items: { sale_line_id: string | null }[] }>(ALL_SALE_LINE_IDS_QUERY),
+        hasuraFetch<{ purchase_bill_items: PurchaseBillItemForDispatch[] }>(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
+        hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
       ])
-      setCompanies((c.data as any)?.companies ?? [])
-      setWarehouses((w.data as any)?.warehouses ?? [])
-      setCustomers((cu.data as any)?.customers ?? [])
-      setMaterialTypes((mt.data as any)?.material_types ?? [])
-      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemMasters((im.data as any)?.item_master ?? [])
-      setTaxRates((tr.data as any)?.tax_rates ?? [])
+      setCompanies(c.data?.companies ?? [])
+      setWarehouses(w.data?.warehouses ?? [])
+      setCustomers(cu.data?.customers ?? [])
+      setMaterialTypes(mt.data?.material_types ?? [])
+      setMaterialSizes(ms.data?.material_sizes ?? [])
+      setItemMasters(im.data?.item_master ?? [])
+      setTaxRates(tr.data?.tax_rates ?? [])
 
-      const invoiceNums: string[] = ((invs.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
-      const lineIds: string[] = ((slis.data as any)?.dispatch_items ?? []).map((i: any) => i.sale_line_id).filter(Boolean)
+      const invoiceNums: string[] = (invs.data?.dispatch_orders ?? []).map((o) => o.invoice_number).filter((n): n is string => !!n)
+      const lineIds: string[] = (slis.data?.dispatch_items ?? []).map((i) => i.sale_line_id).filter((n): n is string => !!n)
       setExistingInvoiceNumbers(invoiceNums)
       setExistingLineIds(lineIds)
-      setSaleId(generateSaleId(invoiceNums, dispatchDate))
+      setSaleId(generateSaleId(invoiceNums, dispatchDateRef.current))
 
       const stockByLine: Record<string, number> = {}
       const stockByMaterial: Record<string, number> = {}
-      for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
+      for (const entry of slRes.data?.stock_ledger ?? []) {
         if (entry.purchase_line_id) {
           stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
         } else {
@@ -221,7 +251,7 @@ export default function NewDispatchPage() {
 
       const seen = new Set<string>()
       const avail: AvailablePurchaseLine[] = []
-      for (const item of (pbiRes.data as any)?.purchase_bill_items ?? []) {
+      for (const item of pbiRes.data?.purchase_bill_items ?? []) {
         let qty: number
         let key: string
         if (item.purchase_line_id) {
@@ -247,20 +277,20 @@ export default function NewDispatchPage() {
 
   const refreshItems = async () => {
     setRefreshingItems(true)
-    const res = await hasuraFetch(ACTIVE_ITEM_MASTER_QUERY)
-    setItemMasters((res.data as any)?.item_master ?? [])
+    const res = await hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY)
+    setItemMasters(res.data?.item_master ?? [])
     setRefreshingItems(false)
   }
 
   const refreshPurchaseLines = async () => {
     setRefreshingPurchaseLines(true)
     const [pbiRes, slRes] = await Promise.all([
-      hasuraFetch(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
-      hasuraFetch(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+      hasuraFetch<{ purchase_bill_items: PurchaseBillItemForDispatch[] }>(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
+      hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
     ])
     const stockByLine: Record<string, number> = {}
     const stockByMaterial: Record<string, number> = {}
-    for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
+    for (const entry of slRes.data?.stock_ledger ?? []) {
       if (entry.purchase_line_id) {
         stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
       } else {
@@ -270,7 +300,7 @@ export default function NewDispatchPage() {
     }
     const seen = new Set<string>()
     const avail: AvailablePurchaseLine[] = []
-    for (const item of (pbiRes.data as any)?.purchase_bill_items ?? []) {
+    for (const item of pbiRes.data?.purchase_bill_items ?? []) {
       let qty: number
       let key: string
       if (item.purchase_line_id) {
@@ -294,22 +324,22 @@ export default function NewDispatchPage() {
 
   const refreshMaterialTypes = async () => {
     setRefreshingMaterialTypes(true)
-    const res = await hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY)
-    setMaterialTypes((res.data as any)?.material_types ?? [])
+    const res = await hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY)
+    setMaterialTypes(res.data?.material_types ?? [])
     setRefreshingMaterialTypes(false)
   }
 
   const refreshSizes = async () => {
     setRefreshingSizes(true)
-    const res = await hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY)
-    setMaterialSizes((res.data as any)?.material_sizes ?? [])
+    const res = await hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY)
+    setMaterialSizes(res.data?.material_sizes ?? [])
     setRefreshingSizes(false)
   }
 
   const refreshTaxRates = async () => {
     setRefreshingTaxRates(true)
-    const res = await hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY)
-    setTaxRates((res.data as any)?.tax_rates ?? [])
+    const res = await hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_SALES_TAX_RATES_QUERY)
+    setTaxRates(res.data?.tax_rates ?? [])
     setRefreshingTaxRates(false)
   }
 
@@ -493,22 +523,22 @@ export default function NewDispatchPage() {
     }
 
     // Refetch invoice numbers right before saving to catch any IDs added/cancelled since page load
-    const freshInvRes = await hasuraFetch(ALL_INVOICE_NUMBERS_QUERY)
-    const freshInvoiceNumbers: string[] = ((freshInvRes.data as any)?.dispatch_orders ?? [])
-      .map((o: any) => o.invoice_number).filter(Boolean)
+    const freshInvRes = await hasuraFetch<{ dispatch_orders: { invoice_number: string | null }[] }>(ALL_INVOICE_NUMBERS_QUERY)
+    const freshInvoiceNumbers: string[] = (freshInvRes.data?.dispatch_orders ?? [])
+      .map((o) => o.invoice_number).filter((n): n is string => !!n)
     setExistingInvoiceNumbers(freshInvoiceNumbers)
 
-    let invoiceToUse = saleId.trim()
+    const invoiceToUse = saleId.trim()
     if (freshInvoiceNumbers.includes(invoiceToUse)) {
       // ID is taken (e.g. by a cancelled order) — generate a fresh one
-      invoiceToUse = generateSaleId(freshInvoiceNumbers, dispatchDate)
-      setSaleId(invoiceToUse)
-      setError(`Sale ID "${saleId}" was already taken — new ID "${invoiceToUse}" assigned. Review and save again.`)
+      const regenerated = generateSaleId(freshInvoiceNumbers, dispatchDate)
+      setSaleId(regenerated)
+      setError(`Sale ID "${saleId}" was already taken — new ID "${regenerated}" assigned. Review and save again.`)
       setLoading(false)
       return
     }
 
-    const { data: orderData, error: oErr } = await hasuraFetch<any>(
+    const { data: orderData, error: oErr } = await hasuraFetch<{ insert_dispatch_orders_one: { id: string; invoice_number: string | null; status: string } }>(
       CREATE_DISPATCH_ORDER_MUTATION, {
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
@@ -634,7 +664,7 @@ export default function NewDispatchPage() {
                   placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
                   className="block flex-1 min-w-0 rounded border border-gray-300 px-2 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
                 <button type="button" onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers, dispatchDate))}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">↻</button>
+                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"><RefreshCw className="h-3.5 w-3.5" /></button>
               </div>
             </div>
             <div>
@@ -683,28 +713,28 @@ export default function NewDispatchPage() {
                     Item
                     <button type="button" onClick={refreshItems} title="Refresh items"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingItems ? '…' : '↻'}
+                      {refreshingItems ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-2 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Purchase Line
                     <button type="button" onClick={refreshPurchaseLines} title="Refresh available stock"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingPurchaseLines ? '…' : '↻'}
+                      {refreshingPurchaseLines ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-2 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Material
                     <button type="button" onClick={refreshMaterialTypes} title="Refresh material types"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingMaterialTypes ? '…' : '↻'}
+                      {refreshingMaterialTypes ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-2 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Size
                     <button type="button" onClick={refreshSizes} title="Refresh sizes"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingSizes ? '…' : '↻'}
+                      {refreshingSizes ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-2 pr-2 text-xs font-medium text-gray-500">Qty</th>
@@ -714,7 +744,7 @@ export default function NewDispatchPage() {
                     Tax Rate
                     <button type="button" onClick={refreshTaxRates} title="Refresh tax rates"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingTaxRates ? '…' : '↻'}
+                      {refreshingTaxRates ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-2 pr-2 text-xs font-medium text-gray-500 text-right">CGST</th>
@@ -757,7 +787,7 @@ export default function NewDispatchPage() {
                       {/* ── Item — combo search ── */}
                       <td className="pr-2 py-2">
                         <div className="space-y-1">
-                          <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
+                          <div className="relative" ref={el => { line.anchorRef.current = el }}>
                             <input
                               type="text"
                               value={itemSearchValue}
@@ -804,7 +834,7 @@ export default function NewDispatchPage() {
                               placeholder="Search item..."
                               className="block w-56 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                             />
-                            <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-64 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
+                            <DropdownPortal anchorRef={line.anchorRef} open={!!itemOpen[line.rowId]} className="w-64 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
                                 {filteredItems.map((im, idx) => (
                                   <button
                                     key={im.id}
@@ -859,7 +889,7 @@ export default function NewDispatchPage() {
                             ))}
                           </select>
                           {line.available_quantity ? (
-                            <p className="text-[10px] text-green-600 mt-0.5 font-medium">✓ {line.available_quantity} avail</p>
+                            <p className="text-[10px] text-green-600 mt-0.5 font-medium inline-flex items-center gap-0.5"><Check className="h-3 w-3" /> {line.available_quantity} avail</p>
                           ) : line.item_master_id && purchaseLinesForRow.length === 0 && !masterDataLoading ? (
                             <p className="text-[10px] text-amber-600 mt-0.5">No stock for this item</p>
                           ) : null}

@@ -6,6 +6,30 @@ import { formatDate } from '@/lib/utils'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import DeleteJobWorkTransferButton from './DeleteJobWorkTransferButton'
 
+interface JobWorkTransferItem {
+  id: string
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  item_name: string | null
+  quantity_transferred: number | string
+  unit: string | null
+  size_label: string | null
+}
+
+interface JobWorkTransferRecord {
+  id: string
+  transfer_number: string | null
+  transfer_date: string
+  reason: string | null
+  notes: string | null
+  created_at: string
+  from_job_work_order?: { id: string; reference_number: string | null } | null
+  to_job_work_order?: { id: string; reference_number: string | null } | null
+  from_vendor?: { name: string } | null
+  to_vendor?: { name: string } | null
+  job_work_transfer_items?: JobWorkTransferItem[]
+}
+
 type FlatRow = {
   key: string
   transferId: string
@@ -37,11 +61,11 @@ const COLUMNS = [
   { key: 'reason', label: 'Reason' },
 ] as const
 
-export default function JobWorkTransfersTable({ records, canDelete }: { records: any[]; canDelete: boolean }) {
+export default function JobWorkTransfersTable({ records, canDelete }: { records: JobWorkTransferRecord[]; canDelete: boolean }) {
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const flatRows: FlatRow[] = useMemo(() => {
-    return records.flatMap((t: any) => {
+    return records.flatMap((t) => {
       const items = t.job_work_transfer_items ?? []
       const base = {
         transferId: t.id,
@@ -55,8 +79,8 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
         toOrderId: t.to_job_work_order?.id || null,
         reason: t.reason || '',
       }
-      const rows = items.length > 0 ? items : [null]
-      return rows.map((it: any, idx: number) => ({
+      const rows: (JobWorkTransferItem | null)[] = items.length > 0 ? items : [null]
+      return rows.map((it, idx) => ({
         key: it?.id ?? `${t.id}-${idx}`,
         ...base,
         purchaseLine: it?.purchase_line_id || '',
@@ -77,7 +101,7 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
         const needle = value.trim().toLowerCase()
         if (key === 'from') return `${row.fromVendor} ${row.fromOrderRef}`.toLowerCase().includes(needle)
         if (key === 'to') return `${row.toVendor} ${row.toOrderRef}`.toLowerCase().includes(needle)
-        const hay = (row as any)[key]
+        const hay = (row as Record<string, unknown>)[key]
         return typeof hay === 'string' && hay.toLowerCase().includes(needle)
       })
     )

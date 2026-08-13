@@ -1,13 +1,34 @@
 'use client'
 
 import { useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 
-export default function BillRow({ bill, highlight }: { bill: any; highlight?: string }) {
+export interface PurchaseBillLineItem {
+  id: string
+  item_name?: string | null
+  purchase_line_id?: string | null
+}
+
+export interface PurchaseBillListItem {
+  id: string
+  bill_number: string
+  bill_date: string
+  total_quantity?: number | string | null
+  total_amount?: number | string | null
+  notes?: string | null
+  status?: string | null
+  companies?: { id: string; name: string; code: string } | null
+  warehouses?: { id: string; name: string } | null
+  suppliers?: { id: string; name: string } | null
+  purchase_bill_items?: PurchaseBillLineItem[]
+}
+
+export default function BillRow({ bill, highlight }: { bill: PurchaseBillListItem; highlight?: string }) {
   const items = bill.purchase_bill_items ?? []
   const needle = highlight?.trim().toLowerCase() || ''
-  const isMatch = (item: any) => !!needle && (item.purchase_line_id ?? '').toLowerCase().includes(needle)
+  const isMatch = (item: PurchaseBillLineItem) => !!needle && (item.purchase_line_id ?? '').toLowerCase().includes(needle)
   const hasMatch = needle ? items.some(isMatch) : false
 
   const [expanded, setExpanded] = useState(hasMatch)
@@ -25,7 +46,7 @@ export default function BillRow({ bill, highlight }: { bill: any; highlight?: st
             className="mr-2 inline-flex w-4 text-gray-400 hover:text-gray-600 disabled:opacity-30"
             aria-label={expanded ? 'Collapse line items' : 'Expand line items'}
           >
-            {expanded ? '▾' : '▸'}
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
           {bill.bill_number}
         </td>
@@ -71,7 +92,7 @@ export default function BillRow({ bill, highlight }: { bill: any; highlight?: st
         <tr className="bg-gray-50/60">
           <td colSpan={10} className="px-6 py-3">
             <div className="pl-8 space-y-1.5">
-              {items.map((item: any) => (
+              {items.map((item) => (
                 <div key={item.id} className="flex items-center gap-3 text-[0.8125rem]">
                   <span className="text-gray-600 min-w-[12rem]">{item.item_name || '—'}</span>
                   <span

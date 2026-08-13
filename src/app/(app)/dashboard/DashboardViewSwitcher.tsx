@@ -1,7 +1,6 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import type { ReactNode } from 'react'
 import { useDashboardView } from '@/components/DashboardViewProvider'
 
 const ClassicDashboard = dynamic(() => import('./ClassicDashboard').then((m) => m.ClassicDashboard), {
@@ -24,15 +23,13 @@ function DashboardViewLoading() {
 }
 
 /**
- * The Existing/Classic/Modern choice itself now lives in DashboardViewProvider
- * (mounted app-wide in the (app) layout, with a selector in the header/sidebar
+ * The Classic/Modern choice itself lives in DashboardViewProvider (mounted
+ * app-wide in the (app) layout, with a selector in the header/sidebar
  * drawer) so it can also reskin the shell on every page. This component just
  * renders the right dashboard content for whichever view is currently selected.
  */
-export function DashboardViewSwitcher({ existingView }: { existingView: ReactNode }) {
+export function DashboardViewSwitcher() {
   const { view } = useDashboardView()
 
-  if (view === 'classic') return <ClassicDashboard />
-  if (view === 'modern') return <ModernDashboard />
-  return <>{existingView}</>
+  return view === 'classic' ? <ClassicDashboard /> : <ModernDashboard />
 }

@@ -3,7 +3,6 @@ import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
 import { CAN_VIEW, UUID_RE } from '@/lib/dataIntegrity/auth'
 
-const STATUSES = new Set(['OPEN', 'ACKNOWLEDGED', 'INVESTIGATING', 'REPAIR_PROPOSED', 'APPROVED', 'RESOLVED', 'IGNORED', 'REOPENED'])
 // Only review/triage transitions are reachable through this route.
 // APPROVED and REPAIR_PROPOSED are set exclusively by the repair-proposal
 // and repair-batch-approval flows (POST /api/data-integrity/repair-proposals,

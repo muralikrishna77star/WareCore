@@ -4,27 +4,32 @@ import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 type RoleSet = ReadonlySet<string>
 
-const ADMIN: RoleSet = new Set(['admin', 'developer'])
 const ADMIN_MANAGER: RoleSet = new Set(['admin', 'developer', 'company_manager'])
 const ALL_STAFF: RoleSet = new Set(['admin', 'developer', 'company_manager', 'billing_staff', 'sales_manager'])
+// Accounts module (financial entries): per docs/PROPOSED_ROLE_PERMISSION_MATRIX.md,
+// company_manager is view-only there (not full/create) and sales_manager/
+// warehouse_manager have no access at all — narrower than ALL_STAFF.
+const ACCOUNTS_STAFF: RoleSet = new Set(['admin', 'developer', 'billing_staff'])
 
 // Mutation operation name → roles permitted to execute it.
 // Mutations absent from this map are queries (read-only) and pass through freely.
 // Any unknown mutation name is blocked by default to prevent privilege escalation
 // from future mutations added without a corresponding permission entry.
 const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
-  // Company / warehouse setup
-  CreateCompany:    ADMIN,
-  UpdateCompany:    ADMIN,
-  DeleteCompany:    ADMIN,
-  CreateWarehouse:  ADMIN,
-  UpdateWarehouse:  ADMIN,
-  DeleteWarehouse:  ADMIN,
+  // Company / warehouse setup — matrix confirms company_manager has full
+  // access to the Admin module (companies/warehouses/users/tax-rates), same
+  // as it already does for suppliers/customers/materials below.
+  CreateCompany:    ADMIN_MANAGER,
+  UpdateCompany:    ADMIN_MANAGER,
+  DeleteCompany:    ADMIN_MANAGER,
+  CreateWarehouse:  ADMIN_MANAGER,
+  UpdateWarehouse:  ADMIN_MANAGER,
+  DeleteWarehouse:  ADMIN_MANAGER,
   // User management
-  CreateUserProfile: ADMIN,
+  CreateUserProfile: ADMIN_MANAGER,
   // Tax rate control database
-  CreateTaxRate:    ADMIN,
-  UpdateTaxRate:    ADMIN,
+  CreateTaxRate:    ADMIN_MANAGER,
+  UpdateTaxRate:    ADMIN_MANAGER,
   // Material catalogue
   CreateMaterialType: ADMIN_MANAGER,
   UpdateMaterialType: ADMIN_MANAGER,
@@ -67,7 +72,7 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   CreateJobWorkTransfer:           ALL_STAFF,
   CreateJobWorkTransferItems:      ALL_STAFF,
   // Financial entries
-  CreateFinancialEntry: ALL_STAFF,
+  CreateFinancialEntry: ACCOUNTS_STAFF,
   // Roles & permissions management
   CreateCustomRole:          ADMIN_MANAGER,
   InsertRolePermissions:     ADMIN_MANAGER,

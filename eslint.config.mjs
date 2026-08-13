@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local-only runtime data (embedded Postgres data dir, desktop browser
+    // profile, jwt secret) — gitignored, not source, was being linted as
+    // if it were app code and drowning real findings in noise.
+    "warecore-data/**",
+    "WC-Installer/dist/**",
+    "WC-Installer/node-runtime/**",
   ]),
 ]);
 

@@ -1,10 +1,12 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { FileText } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILLS_QUERY, PURCHASE_BILLS_MAX_BILL_DATE_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import { defaultCreatedRange } from '@/lib/dateRange'
 import BillsTable from './BillsTable'
+import type { PurchaseBillListItem } from './BillRow'
 import { ListingFilters } from '@/components/ListingFilters'
 import { ListingSummary } from '@/components/ListingSummary'
 
@@ -35,12 +37,12 @@ export default async function BillsPage({
     hasuraQuery(ACTIVE_SUPPLIERS_QUERY),
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
   ])
-  const bills = billsResult.purchase_bills ?? []
+  const bills: PurchaseBillListItem[] = billsResult.purchase_bills ?? []
   const suppliers: { id: string; name: string }[] = suppliersResult.suppliers ?? []
   const itemOptions: { id: string; item_code: string; item_name: string }[] = itemsResult.item_master ?? []
 
-  const totalQuantity = bills.reduce((s: number, b: any) => s + Number(b.total_quantity || 0), 0)
-  const totalAmount = bills.reduce((s: number, b: any) => s + Number(b.total_amount || 0), 0)
+  const totalQuantity = bills.reduce((s, b) => s + Number(b.total_quantity || 0), 0)
+  const totalAmount = bills.reduce((s, b) => s + Number(b.total_amount || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -68,6 +70,7 @@ export default async function BillsPage({
       <ListingSummary
         count={bills.length}
         countLabel="bill"
+        countIcon={FileText}
         totalQuantity={totalQuantity}
         totalAmount={totalAmount}
       />
@@ -101,7 +104,7 @@ export default async function BillsPage({
         <div className="overflow-auto max-h-[70vh]">
           {!bills || bills.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-gray-400 text-[1.1875rem] mb-3">📋</p>
+              <FileText className="mx-auto h-10 w-10 text-gray-400 mb-3" />
               {lineId ? (
                 <p className="text-gray-500">No purchase bills found with a line item matching &quot;{lineId}&quot;.</p>
               ) : (

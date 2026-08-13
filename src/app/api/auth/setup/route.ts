@@ -33,13 +33,13 @@ const CREATE_ADMIN_MUTATION = `
  * user exists, this route refuses to run again.
  */
 export async function GET() {
-  const countJson = await hasuraFetchEnvelope(COUNT_USERS_QUERY)
+  const countJson = await hasuraFetchEnvelope<{ user_profiles_aggregate: { aggregate: { count: number } } }>(COUNT_USERS_QUERY)
   const count = countJson?.data?.user_profiles_aggregate?.aggregate?.count ?? 0
   return NextResponse.json({ needsSetup: count === 0 })
 }
 
 export async function POST(request: NextRequest) {
-  const countJson = await hasuraFetchEnvelope(COUNT_USERS_QUERY)
+  const countJson = await hasuraFetchEnvelope<{ user_profiles_aggregate: { aggregate: { count: number } } }>(COUNT_USERS_QUERY)
   const count = countJson?.data?.user_profiles_aggregate?.aggregate?.count ?? 0
   if (count > 0) {
     return NextResponse.json({ error: 'Setup has already been completed' }, { status: 403 })
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const password_hash = await bcrypt.hash(password, 12)
   const id = crypto.randomUUID()
 
-  const json = await hasuraFetchEnvelope(CREATE_ADMIN_MUTATION, {
+  const json = await hasuraFetchEnvelope<{ insert_user_profiles_one: { id: string; full_name: string } | null }>(CREATE_ADMIN_MUTATION, {
     id,
     email: email.toLowerCase().trim(),
     password_hash,

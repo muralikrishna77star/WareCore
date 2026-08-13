@@ -2,11 +2,27 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
 import CancelDispatchButton from './CancelDispatchButton'
 import PurgeDispatchButton from './PurgeDispatchButton'
+
+interface DispatchItemDetail {
+  id: string
+  dispatch_order_id: string
+  item_name: string | null
+  purchase_line_id: string | null
+  sale_line_id: string | null
+  sub_purchase_line_id: string | null
+  quantity: number | string
+  rate: number | string | null
+  amount: number | string | null
+  notes: string | null
+  size_label: string | null
+  material_types?: { description: string | null } | null
+}
 
 export default async function DispatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -17,7 +33,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
   ])
   const order = orderResult.dispatch_orders_by_pk
   if (!order) notFound()
-  const items = itemsResult.dispatch_items ?? []
+  const items: DispatchItemDetail[] = itemsResult.dispatch_items ?? []
 
   let createdByName: string | null = null
   if (order.created_by) {
@@ -25,8 +41,8 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
     createdByName = creatorResult.user_profiles_by_pk?.full_name ?? null
   }
 
-  const totalAmount = items.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
-  const totalQty = items.reduce((sum: number, i: any) => sum + (Number(i.quantity) || 0), 0)
+  const totalAmount = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+  const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
 
   const isCancelled = order.status === 'cancelled'
 
@@ -35,8 +51,8 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/dispatch" className="text-sm text-blue-600 hover:underline mb-1 block">
-            ← Back to Dispatch
+          <Link href="/dispatch" className="text-sm text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
+            <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Dispatch
           </Link>
           <h1 className={`text-2xl font-bold ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
             Dispatch: {order.invoice_number ?? id.slice(0, 8)}
@@ -117,8 +133,8 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Source Job Work Order</p>
               <Link href={`/jobwork/${order.source_job_work_order_id}`}
-                className="text-sm font-medium text-amber-700 hover:underline mt-1 block">
-                View Job Work Order →
+                className="text-sm font-medium text-amber-700 hover:underline mt-1 inline-flex items-center gap-1">
+                View Job Work Order <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
             </div>
           )}
@@ -159,7 +175,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items.map((item: any, idx: number) => (
+              {items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">

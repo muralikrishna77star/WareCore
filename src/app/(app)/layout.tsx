@@ -1,8 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import {
+  LayoutDashboard, Settings, DatabaseBackup, ShieldCheck, ClipboardList, Undo2,
+  Wallet, Package, RefreshCw, ArrowLeftRight, Factory, Shuffle, Receipt,
+  ChartColumn, Truck, KeyRound, LogOut, Search, X, type LucideIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
 import { RecordPreviewProvider } from '@/components/RecordPreviewProvider'
@@ -26,16 +31,6 @@ const CHROME: Record<
     mobileNavInactive: string
   }
 > = {
-  existing: {
-    sidebarBg: 'bg-gray-900',
-    navItemBase: 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-    navItemActive: 'bg-blue-600 text-white',
-    navItemInactive: 'text-gray-400 hover:bg-gray-800 hover:text-white',
-    headerClass: 'h-16 bg-white shadow-sm border-b',
-    mobileNavBg: 'bg-white border-t border-gray-200',
-    mobileNavActive: 'text-blue-600',
-    mobileNavInactive: 'text-gray-500 hover:text-gray-900',
-  },
   classic: {
     sidebarBg: 'bg-slate-800',
     navItemBase:
@@ -62,90 +57,34 @@ const CHROME: Record<
 type NavItem = {
   title: string
   href: string
-  icon: string
+  icon: LucideIcon
 }
 
 const navItems: NavItem[] = [
-  {
-    title: 'Dashboard',
-    href: '/dashboard',
-    icon: '📊',
-  },
-  {
-    title: 'Admin',
-    href: '/admin',
-    icon: '⚙️',
-  },
-  {
-    title: 'Backup & Restore',
-    href: '/admin/backups',
-    icon: '🗄️',
-  },
-  {
-    title: 'Data Integrity',
-    href: '/data-integrity',
-    icon: '🛡️',
-  },
-  {
-    title: 'Purchase Entry',
-    href: '/bills',
-    icon: '📋',
-  },
-  {
-    title: 'Purchase Cancellations',
-    href: '/purchase-cancellations',
-    icon: '🗑️',
-  },
-  {
-    title: 'Accounts',
-    href: '/accounts',
-    icon: '💰',
-  },
-  {
-    title: 'Inventory',
-    href: '/inventory',
-    icon: '📦',
-  },
-  {
-    title: 'Movements',
-    href: '/movements',
-    icon: '🔄',
-  },
-  {
-    title: 'Transfers',
-    href: '/transfers',
-    icon: '↔️',
-  },
-  {
-    title: 'Job Work',
-    href: '/jobwork',
-    icon: '🏭',
-  },
-  {
-    title: 'Job Work Transfers',
-    href: '/jobwork-transfers',
-    icon: '⇄',
-  },
-  {
-    title: 'Job Work Cancellations',
-    href: '/jobwork-cancellations',
-    icon: '🗑️',
-  },
-  {
-    title: 'Sale Entry',
-    href: '/dispatch',
-    icon: '🧾',
-  },
-  {
-    title: 'Sale Cancellations',
-    href: '/sale-cancellations',
-    icon: '🗑️',
-  },
-  {
-    title: 'Reports',
-    href: '/reports',
-    icon: '📈',
-  },
+  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { title: 'Admin', href: '/admin', icon: Settings },
+  { title: 'Backup & Restore', href: '/admin/backups', icon: DatabaseBackup },
+  { title: 'Data Integrity', href: '/data-integrity', icon: ShieldCheck },
+  { title: 'Purchase Entry', href: '/bills', icon: ClipboardList },
+  { title: 'Purchase Cancellations', href: '/purchase-cancellations', icon: Undo2 },
+  { title: 'Accounts', href: '/accounts', icon: Wallet },
+  { title: 'Inventory', href: '/inventory', icon: Package },
+  { title: 'Movements', href: '/movements', icon: RefreshCw },
+  { title: 'Transfers', href: '/transfers', icon: ArrowLeftRight },
+  { title: 'Job Work', href: '/jobwork', icon: Factory },
+  { title: 'Job Work Transfers', href: '/jobwork-transfers', icon: Shuffle },
+  { title: 'Job Work Cancellations', href: '/jobwork-cancellations', icon: Undo2 },
+  { title: 'Sale Entry', href: '/dispatch', icon: Receipt },
+  { title: 'Sale Cancellations', href: '/sale-cancellations', icon: Undo2 },
+  { title: 'Reports', href: '/reports', icon: ChartColumn },
+]
+
+const MOBILE_NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/bills/new', icon: ClipboardList, label: 'Bill' },
+  { href: '/dispatch/new', icon: Truck, label: 'Dispatch' },
+  { href: '/inventory', icon: Package, label: 'Stock' },
+  { href: '/reports', icon: ChartColumn, label: 'Reports' },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -165,6 +104,36 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
   const [isDesktop, setIsDesktop] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+
+  // Quick page search — Modern header only. Filters the real sidebar nav
+  // list; does not search records (items/bills/vendors), since that would
+  // need its own query wiring. Cmd/Ctrl+K focuses it, matching the visible hint.
+  const [navQuery, setNavQuery] = useState('')
+  const [navSearchOpen, setNavSearchOpen] = useState(false)
+  const navSearchRef = useRef<HTMLInputElement>(null)
+  const navMatches = navQuery.trim()
+    ? navItems.filter((item) => item.title.toLowerCase().includes(navQuery.trim().toLowerCase()))
+    : []
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        navSearchRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const goToNavMatch = (item: NavItem) => {
+    router.push(item.href)
+    setNavQuery('')
+    setNavSearchOpen(false)
+    navSearchRef.current?.blur()
+  }
+
+  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
   const handleSignOut = async () => {
     await fetch('/api/auth/login', { method: 'DELETE' })
@@ -229,7 +198,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
             className="text-gray-400 hover:text-white lg:hidden"
             onClick={() => setSidebarOpen(false)}
           >
-            ✕
+            <X className="h-5 w-5" />
           </button>
         </div>
 
@@ -241,8 +210,12 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-10rem)]">
+          {view === 'modern' && (
+            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500">Workspace</p>
+          )}
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            const Icon = item.icon
             return (
               <Link
                 key={item.href}
@@ -250,7 +223,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setSidebarOpen(false)}
                 className={cn(chrome.navItemBase, isActive ? chrome.navItemActive : chrome.navItemInactive)}
               >
-                <span className="text-base">{item.icon}</span>
+                <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {item.title}
               </Link>
             )
@@ -271,7 +244,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top header */}
-        <header className={cn('flex items-center justify-between px-6', chrome.headerClass, isDesktop && 'border-b-2 border-cyan-100')}>
+        <header className={cn('flex items-center gap-4 px-6', chrome.headerClass, isDesktop && 'border-b-2 border-cyan-100')}>
           <button
             className="text-gray-500 hover:text-gray-700 lg:hidden"
             onClick={() => setSidebarOpen(true)}
@@ -282,16 +255,78 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
             </svg>
           </button>
 
+          {view === 'modern' && (
+            <div className="relative hidden md:block w-full max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                ref={navSearchRef}
+                type="text"
+                value={navQuery}
+                onChange={(e) => { setNavQuery(e.target.value); setNavSearchOpen(true) }}
+                onFocus={() => setNavSearchOpen(true)}
+                onBlur={() => setTimeout(() => setNavSearchOpen(false), 100)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && navMatches.length > 0) goToNavMatch(navMatches[0])
+                  if (e.key === 'Escape') { setNavQuery(''); setNavSearchOpen(false) }
+                }}
+                placeholder="Jump to a page..."
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-14 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none"
+              />
+              {!navQuery && (
+                <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[10px] font-mono text-gray-400">
+                  ⌘K
+                </kbd>
+              )}
+              {navQuery && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setNavQuery(''); navSearchRef.current?.focus() }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+              {navSearchOpen && navQuery && (
+                <div className="absolute left-0 right-0 z-50 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                  {navMatches.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-gray-500">No matching pages</p>
+                  ) : (
+                    navMatches.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <button
+                          key={item.href}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => goToNavMatch(item)}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          <Icon className="h-4 w-4 shrink-0 text-gray-400" />
+                          {item.title}
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-4 ml-auto relative">
             <div className="hidden sm:block">
               <DashboardViewToggle />
             </div>
+            {view === 'modern' && (
+              <span className="hidden sm:inline text-xs font-mono text-gray-400">{today}</span>
+            )}
             <span className="hidden sm:inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-mono font-medium text-blue-600">
               v{APP_VERSION}
             </span>
             <Link
               href="/"
-              className="text-sm text-gray-500 hover:text-blue-600 transition-colors"
+              className="hidden lg:inline text-sm text-gray-500 hover:text-blue-600 transition-colors whitespace-nowrap"
               target="_blank"
             >
               View Website →
@@ -319,7 +354,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                       onClick={() => setProfileOpen(false)}
                       className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      <span>🔑</span>
+                      <KeyRound className="h-4 w-4" />
                       Change Password
                     </Link>
                     <button
@@ -330,7 +365,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                       }}
                       className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
                     >
-                      <span>🚪</span>
+                      <LogOut className="h-4 w-4" />
                       Sign Out
                     </button>
                   </div>
@@ -349,14 +384,9 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom navigation bar */}
       <nav className={cn('fixed bottom-0 left-0 right-0 z-40 lg:hidden print:hidden', chrome.mobileNavBg)}>
         <div className="grid grid-cols-5 h-16">
-          {[
-            { href: '/dashboard', icon: '📊', label: 'Dashboard' },
-            { href: '/bills/new', icon: '📋', label: 'Bill' },
-            { href: '/dispatch/new', icon: '🚚', label: 'Dispatch' },
-            { href: '/inventory', icon: '📦', label: 'Stock' },
-            { href: '/reports', icon: '📈', label: 'Reports' },
-          ].map((item) => {
+          {MOBILE_NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/bills/new' && item.href !== '/dispatch/new' && pathname.startsWith(item.href.split('/new')[0] + '/'))
+            const Icon = item.icon
             return (
               <Link
                 key={item.href}
@@ -366,7 +396,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                   isActive ? chrome.mobileNavActive : chrome.mobileNavInactive
                 )}
               >
-                <span className="text-xl leading-none">{item.icon}</span>
+                <Icon className="h-5 w-5" strokeWidth={2} />
                 <span>{item.label}</span>
               </Link>
             )

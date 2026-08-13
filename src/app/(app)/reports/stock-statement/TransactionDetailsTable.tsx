@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { X, TriangleAlert } from 'lucide-react'
 import type { TransactionDetailRow } from '@/lib/exportStockStatementExcel'
 
 const fmtQ = (n: number) => n.toFixed(3)
@@ -96,12 +97,16 @@ export default function TransactionDetailsTable({
         {focusItemKey && (
           <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 text-blue-800 text-xs px-3 py-1.5">
             Showing: {focusItemLabel}
-            <button type="button" onClick={onClearFocus} className="font-bold hover:text-blue-900">✕</button>
+            <button type="button" onClick={onClearFocus} className="font-bold hover:text-blue-900"><X className="h-3.5 w-3.5" /></button>
           </span>
         )}
         <span className="ml-auto text-xs text-gray-500">
           {filtered.length} of {transactions.length} rows
-          {!reconciled && <span className="ml-2 font-semibold text-red-600">⚠ Reconciliation mismatch detected</span>}
+          {!reconciled && (
+            <span className="ml-2 inline-flex items-center gap-1 font-semibold text-red-600">
+              <TriangleAlert className="inline h-3.5 w-3.5" /> Reconciliation mismatch detected
+            </span>
+          )}
         </span>
       </div>
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, type RefObject } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { ArrowLeft, Check } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { DropdownPortal } from '@/components/DropdownPortal'
 import {
@@ -30,8 +31,70 @@ type AvailablePurchaseLine = {
   available_quantity: number
 }
 
+interface PurchaseBillItemForDispatch {
+  id: string
+  purchase_line_id: string | null
+  item_name: string | null
+  item_master_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+}
+
+interface StockLedgerLineQuantity {
+  purchase_line_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+  quantity: number | string
+}
+
+interface DispatchOrderItemForEdit {
+  id: string
+  sale_line_id: string | null
+  purchase_line_id: string | null
+  item_master_id: string | null
+  item_name: string | null
+  material_type_id: string | null
+  material_size_id: string | null
+  size_label: string | null
+  quantity: number | string | null
+  rate: number | string | null
+  amount: number | string | null
+  notes: string | null
+  tax_rate_id: string | null
+  taxable_value: number | string | null
+  cgst_rate: number | string | null
+  cgst_amount: number | string | null
+  sgst_rate: number | string | null
+  sgst_amount: number | string | null
+  tcs_rate: number | string | null
+  tcs_amount: number | string | null
+  total_with_tax: number | string | null
+}
+
+interface DispatchOrderForEdit {
+  id: string
+  invoice_number: string | null
+  dispatch_date: string | null
+  status: string
+  notes: string | null
+  vehicle_number: string | null
+  driver_name: string | null
+  sale_ref_id: string | null
+  company_id: string | null
+  warehouse_id: string | null
+  customer_id: string | null
+  dispatch_items: DispatchOrderItemForEdit[]
+}
+
 type DispatchLine = {
   rowId: string
+  // Stable per-row anchor for the item-search dropdown, created once when the
+  // line is created and carried forward by updateLine's object spread. A
+  // plain object (not a useRef) so reading it during render to pass as a
+  // JSX prop is just a normal state-field read, not a ref dereference.
+  anchorRef: RefObject<HTMLDivElement | null>
   item_master_id: string
   sale_line_id: string
   purchase_line_id: string
@@ -95,6 +158,7 @@ function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<Dispatch
 
 const emptyLine = (): DispatchLine => ({
   rowId: Math.random().toString(36).slice(2, 8),
+  anchorRef: { current: null },
   item_master_id: '', sale_line_id: '', purchase_line_id: '', available_quantity: '',
   item_name: '', material_type_id: '', material_size_id: '', size_label: '',
   quantity: '', rate: '', amount: '', notes: '', tax_rate_id: '',
@@ -123,8 +187,6 @@ export default function EditDispatchPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
-  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
-
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
   const [newMaterialTypeCode, setNewMaterialTypeCode] = useState('')
   const [newMaterialTypeDescription, setNewMaterialTypeDescription] = useState('')
@@ -156,20 +218,20 @@ export default function EditDispatchPage() {
   useEffect(() => {
     const load = async () => {
       const [orderRes, c, w, cu, mt, ms, im, tr, slis, pbiRes, slRes] = await Promise.all([
-        hasuraFetch(GET_DISPATCH_ORDER_FOR_EDIT_QUERY, { id: orderId }),
-        hasuraFetch(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
-        hasuraFetch(ALL_SALE_LINE_IDS_QUERY),
-        hasuraFetch(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
-        hasuraFetch(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+        hasuraFetch<{ dispatch_orders_by_pk: DispatchOrderForEdit | null }>(GET_DISPATCH_ORDER_FOR_EDIT_QUERY, { id: orderId }),
+        hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch<{ customers: Customer[] }>(ACTIVE_CUSTOMERS_QUERY),
+        hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_SALES_TAX_RATES_QUERY),
+        hasuraFetch<{ dispatch_items: { sale_line_id: string | null }[] }>(ALL_SALE_LINE_IDS_QUERY),
+        hasuraFetch<{ purchase_bill_items: PurchaseBillItemForDispatch[] }>(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
+        hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
       ])
 
-      const order = (orderRes.data as any)?.dispatch_orders_by_pk
+      const order = orderRes.data?.dispatch_orders_by_pk
       if (!order) { setError('Sale order not found'); setPageLoading(false); return }
 
       setOrderStatus(order.status)
@@ -183,31 +245,31 @@ export default function EditDispatchPage() {
       setSaleRefId(order.sale_ref_id ?? '')
       setNotes(order.notes ?? '')
 
-      const loadedMaterialTypes: MaterialType[] = (mt.data as any)?.material_types ?? []
-      const loadedMaterialSizes: MaterialSize[] = (ms.data as any)?.material_sizes ?? []
-      const loadedItemMasters: ItemMaster[] = (im.data as any)?.item_master ?? []
-      const loadedTaxRates: TaxRate[] = (tr.data as any)?.tax_rates ?? []
+      const loadedMaterialTypes: MaterialType[] = mt.data?.material_types ?? []
+      const loadedMaterialSizes: MaterialSize[] = ms.data?.material_sizes ?? []
+      const loadedItemMasters: ItemMaster[] = im.data?.item_master ?? []
+      const loadedTaxRates: TaxRate[] = tr.data?.tax_rates ?? []
 
-      setCompanies((c.data as any)?.companies ?? [])
-      setWarehouses((w.data as any)?.warehouses ?? [])
-      setCustomers((cu.data as any)?.customers ?? [])
+      setCompanies(c.data?.companies ?? [])
+      setWarehouses(w.data?.warehouses ?? [])
+      setCustomers(cu.data?.customers ?? [])
       setMaterialTypes(loadedMaterialTypes)
       setMaterialSizes(loadedMaterialSizes)
       setItemMasters(loadedItemMasters)
       setTaxRates(loadedTaxRates)
 
-      const lineIds: string[] = ((slis.data as any)?.dispatch_items ?? [])
-        .map((i: any) => i.sale_line_id).filter(Boolean)
-        .filter((id: string) => {
+      const lineIds: string[] = (slis.data?.dispatch_items ?? [])
+        .map((i) => i.sale_line_id).filter((id): id is string => !!id)
+        .filter((id) => {
           // Exclude the current order's line IDs so they can be reused
-          return !order.dispatch_items?.some((di: any) => di.sale_line_id === id)
+          return !order.dispatch_items?.some((di) => di.sale_line_id === id)
         })
       setExistingLineIds(lineIds)
 
       // Stock maps
       const stockByLine: Record<string, number> = {}
       const stockByMaterial: Record<string, number> = {}
-      for (const entry of (slRes.data as any)?.stock_ledger ?? []) {
+      for (const entry of slRes.data?.stock_ledger ?? []) {
         if (entry.purchase_line_id) {
           stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
         } else {
@@ -218,7 +280,7 @@ export default function EditDispatchPage() {
 
       const seen = new Set<string>()
       const avail: AvailablePurchaseLine[] = []
-      for (const item of (pbiRes.data as any)?.purchase_bill_items ?? []) {
+      for (const item of pbiRes.data?.purchase_bill_items ?? []) {
         let qty: number
         let key: string
         if (item.purchase_line_id) {
@@ -239,8 +301,9 @@ export default function EditDispatchPage() {
 
       // Map existing items → DispatchLine rows
       if (order.dispatch_items?.length) {
-        const existingLines: DispatchLine[] = order.dispatch_items.map((di: any) => ({
+        const existingLines: DispatchLine[] = order.dispatch_items.map((di: DispatchOrderItemForEdit) => ({
           rowId: Math.random().toString(36).slice(2, 8),
+          anchorRef: { current: null },
           item_master_id: di.item_master_id ?? '',
           sale_line_id: di.sale_line_id ?? '',
           purchase_line_id: di.purchase_line_id ?? '',
@@ -537,7 +600,9 @@ export default function EditDispatchPage() {
     return (
       <div className="max-w-5xl mx-auto py-12 text-center">
         <p className="text-red-600 font-medium">This sale order is cancelled and cannot be edited.</p>
-        <a href={`/dispatch/${orderId}`} className="mt-4 inline-block text-blue-600 hover:underline text-sm">← Back to order</a>
+        <a href={`/dispatch/${orderId}`} className="mt-4 inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+          <ArrowLeft className="h-4 w-4 shrink-0" /> Back to order
+        </a>
       </div>
     )
   }
@@ -545,7 +610,9 @@ export default function EditDispatchPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <a href={`/dispatch/${orderId}`} className="text-sm text-blue-600 hover:underline mb-1 block">← Back to order</a>
+        <a href={`/dispatch/${orderId}`} className="text-sm text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
+          <ArrowLeft className="h-4 w-4 shrink-0" /> Back to order
+        </a>
         <h1 className="text-2xl font-bold text-gray-900">Edit Sale Entry</h1>
         <p className="mt-1 text-sm text-gray-500">
           {orderStatus === 'active'
@@ -691,7 +758,7 @@ export default function EditDispatchPage() {
                       {/* Item combo */}
                       <td className="pr-3 py-2">
                         <div className="space-y-1">
-                          <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
+                          <div className="relative" ref={el => { line.anchorRef.current = el }}>
                             <input
                               type="text"
                               value={itemSearchValue}
@@ -737,7 +804,7 @@ export default function EditDispatchPage() {
                               placeholder="Search item..."
                               className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                             />
-                            <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
+                            <DropdownPortal anchorRef={line.anchorRef} open={!!itemOpen[line.rowId]} className="w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
                                 {filteredItems.map((im, idx) => (
                                   <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}
                                     onClick={() => {
@@ -968,8 +1035,8 @@ export default function EditDispatchPage() {
 
         <div className="flex gap-3">
           <button type="button" onClick={() => handleSave('active')} disabled={loading}
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Submit Sale'}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            {loading ? 'Saving...' : (<><Check className="h-4 w-4" /> Submit Sale</>)}
           </button>
           <button type="button" onClick={() => handleSave('draft')} disabled={loading}
             className="rounded-lg border border-gray-300 bg-white px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">

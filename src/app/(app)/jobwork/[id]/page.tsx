@@ -1,10 +1,50 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY } from '@/lib/hasura/queries'
 import { formatDate, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
+
+interface JobWorkOrderDetail {
+  id: string
+  reference_number: string | null
+  dispatch_date: string
+  expected_return_date: string | null
+  actual_return_date: string | null
+  status: string
+  notes: string | null
+  companies: { name: string } | null
+  warehouses: { name: string } | null
+  suppliers: { name: string } | null
+}
+
+interface JobWorkItemDetail {
+  id: string
+  purchase_line_id: string | null
+  job_line_id: string | null
+  quantity_sent: number
+  quantity_received: number | null
+  quantity_transferred_out: number | null
+  size_label: string | null
+  unit: string
+  item_name: string | null
+  material_types: { description: string } | null
+  material_sizes: { size_label: string } | null
+}
+
+interface JobWorkOutputItemDetail {
+  id: string
+  item_name: string | null
+  size_label: string | null
+  quantity: number
+  unit: string
+  source_job_line_id: string | null
+  received_date: string | null
+  material_types: { description: string } | null
+  material_sizes: { size_label: string } | null
+}
 
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,10 +54,10 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
     hasuraQuery(JOB_WORK_ITEMS_QUERY, { job_work_order_id: id }),
     hasuraQuery(JOB_WORK_OUTPUT_ITEMS_QUERY, { job_work_order_id: id }),
   ])
-  const order = orderResult.job_work_orders_by_pk
+  const order: JobWorkOrderDetail | null = orderResult.job_work_orders_by_pk
   if (!order) notFound()
-  const items = itemsResult.job_work_items ?? []
-  const outputItems = outputItemsResult.job_work_output_items ?? []
+  const items: JobWorkItemDetail[] = itemsResult.job_work_items ?? []
+  const outputItems: JobWorkOutputItemDetail[] = outputItemsResult.job_work_output_items ?? []
 
   // Display output quantities in the same unit as the input item they were produced from,
   // so input (e.g. MT) and output (e.g. Kgs) are comparable at a glance.
@@ -25,7 +65,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
   for (const it of items) {
     if (it.job_line_id && it.unit) inputUnitByJobLine[it.job_line_id] = it.unit
   }
-  const defaultInputUnit = items.find((it: any) => it.unit)?.unit
+  const defaultInputUnit = items.find((it) => it.unit)?.unit
 
   const isOverdue =
     order.expected_return_date &&
@@ -36,8 +76,8 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/jobwork" className="text-sm text-blue-600 hover:underline mb-1 block">
-            ← Back to Job Work
+          <Link href="/jobwork" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mb-1">
+            <ArrowLeft className="h-4 w-4" /> Back to Job Work
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">
             Job Work Order: {order.reference_number ?? id.slice(0, 8)}
@@ -127,7 +167,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {outputItems.map((item: any, idx: number) => {
+                {outputItems.map((item, idx) => {
                   const targetUnit =
                     (item.source_job_line_id && inputUnitByJobLine[item.source_job_line_id]) || defaultInputUnit
                   const converted = targetUnit ? convertQuantity(Number(item.quantity), item.unit, targetUnit) : null

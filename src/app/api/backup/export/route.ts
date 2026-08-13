@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
-import { dataToCSV, getAllTableData, getPointInTimeBackup } from '@/lib/backup/backup.service'
+import { dataToCSV, getAllTableData, getPointInTimeBackup, type BackupRow } from '@/lib/backup/backup.service'
 
 export const maxDuration = 60
+
+// Full-table data export — matches the other backup routes' admin/developer gate.
+const ALLOWED_ROLES = new Set(['admin', 'developer'])
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,6 +13,9 @@ export async function GET(request: NextRequest) {
     const session = await verifySessionCookie(request)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.has(session.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -25,7 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch data
-    let data: any[] = []
+    let data: BackupRow[] = []
     if (pointInTime) {
       const backupData = await getPointInTimeBackup(pointInTime, [table])
       data = backupData[table] || []
@@ -71,6 +77,9 @@ export async function POST(request: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!ALLOWED_ROLES.has(session.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
 
     const body = await request.json()
     const { tables, pointInTime, format } = body
@@ -83,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch data
-    let allData: { [table: string]: any[] } = {}
+    let allData: { [table: string]: BackupRow[] } = {}
     if (pointInTime) {
       allData = await getPointInTimeBackup(pointInTime, tables)
     } else {

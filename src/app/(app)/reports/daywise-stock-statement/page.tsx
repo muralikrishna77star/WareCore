@@ -19,7 +19,7 @@ import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './DaywiseStockStatementTable'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { ArrowLeft } from 'lucide-react'
 import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -73,6 +73,61 @@ type ItemOption = ComboOption & {
   material_size_id: string | null
 }
 
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+interface Warehouse {
+  id: string
+  name: string
+  company_id: string
+}
+
+interface Supplier {
+  id: string
+  name: string
+}
+
+interface MaterialType {
+  id: string
+  description: string
+}
+
+interface MaterialSize {
+  id: string
+  material_type_id: string | null
+  size_label: string
+}
+
+interface ItemMasterRow {
+  id: string
+  item_code: string
+  item_name: string
+  material_type_id: string
+  material_size_id: string | null
+  size_label?: string | null
+  material_sizes?: { size_label: string } | null
+}
+
+interface StockLedgerMovement {
+  id: string
+  entry_type: string
+  quantity: number | string
+  entry_date: string
+  reference_number: string | null
+  reference_type: string | null
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  size_label: string | null
+  notes: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  material_types: { description: string | null; unit?: string | null } | null
+  material_sizes: { size_label: string | null } | null
+}
+
 export default async function DaywiseStockStatementPage({
   searchParams,
 }: {
@@ -102,19 +157,19 @@ export default async function DaywiseStockStatementPage({
     hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
   ])
 
-  const companies: any[] = compResult.companies ?? []
-  const allWarehouses: any[] = whResult.warehouses ?? []
+  const companies = (compResult.companies ?? []) as Company[]
+  const allWarehouses = (whResult.warehouses ?? []) as Warehouse[]
   const warehouses = params.company
-    ? allWarehouses.filter((w: any) => w.company_id === params.company)
+    ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
-  const suppliers: any[] = supResult.suppliers ?? []
-  const materialTypes: any[] = matTypeResult.material_types ?? []
-  const allSizes: any[] = matSizeResult.material_sizes ?? []
+  const suppliers = (supResult.suppliers ?? []) as Supplier[]
+  const materialTypes = (matTypeResult.material_types ?? []) as MaterialType[]
+  const allSizes = (matSizeResult.material_sizes ?? []) as MaterialSize[]
   const sizes = params.material_type
-    ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
+    ? allSizes.filter((s) => !s.material_type_id || s.material_type_id === params.material_type)
     : allSizes
 
-  const itemRows: any[] = itemResult.item_master ?? []
+  const itemRows = (itemResult.item_master ?? []) as ItemMasterRow[]
   const itemOptions: ItemOption[] = itemRows.map((i) => {
     const size = i.material_sizes?.size_label || i.size_label
     return {
@@ -153,8 +208,8 @@ export default async function DaywiseStockStatementPage({
       hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
     ])
     const refIds = [
-      ...(billIdsResult.purchase_bills ?? []).map((b: any) => b.id),
-      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: any) => o.id),
+      ...(billIdsResult.purchase_bills ?? []).map((b: { id: string }) => b.id),
+      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: { id: string }) => o.id),
     ]
     if (refIds.length === 0) {
       noResults = true
@@ -181,19 +236,19 @@ export default async function DaywiseStockStatementPage({
 
   // Query already orders by entry_date asc, created_at asc — grouping below
   // preserves that order within and across days.
-  const movements: any[] = result.stock_ledger ?? []
+  const movements = (result.stock_ledger ?? []) as StockLedgerMovement[]
   const openingWarehouseBalance = Number(openingWhResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
   // Vendor balance rises when warehouse-side quantity falls (JOB_WORK_OUT is
   // negative), so it's accumulated as the negation — same convention as the
   // Item Stock Ledger report's vendorOpeningBalance.
   const openingVendorBalance = -Number(openingVendorResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
 
-  const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m: any) => m.purchase_line_id))
+  const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m) => m.purchase_line_id))
 
   // Bucket movements by day first (preserving within-day order), then walk
   // the days in order maintaining running Warehouse/Vendor balances — so
   // each day's Opening is the prior day's Closing.
-  const byDay = new Map<string, any[]>()
+  const byDay = new Map<string, StockLedgerMovement[]>()
   for (const m of movements) {
     const list = byDay.get(m.entry_date) ?? []
     list.push(m)
@@ -208,19 +263,24 @@ export default async function DaywiseStockStatementPage({
   // agrees with the screen.
   const transactionDetailRows: Record<string, unknown>[] = []
 
-  let warehouseRunning = openingWarehouseBalance
-  let vendorRunning = openingVendorBalance
+  // Plain accumulators for a one-shot server-side computation — held in
+  // objects (rather than reassigned `let`s) so the running totals are
+  // mutated via property writes, not variable reassignment, inside the
+  // doubly-nested map (days, then transactions within a day).
+  const runningBalance = { warehouse: openingWarehouseBalance, vendor: openingVendorBalance }
   const groups: DayGroup[] = sortedDates.map((date) => {
     const dayMovements = byDay.get(date)!
-    const openingWarehouse = warehouseRunning
-    const openingVendor = vendorRunning
-    let purchasesRaw = 0
-    let salesRaw = 0
-    let transferIn = 0
-    let transferOutRaw = 0
-    let jobWorkOutRaw = 0
-    let jobReturns = 0
-    let value = 0
+    const openingWarehouse = runningBalance.warehouse
+    const openingVendor = runningBalance.vendor
+    const dayTotals = {
+      purchasesRaw: 0,
+      salesRaw: 0,
+      transferIn: 0,
+      transferOutRaw: 0,
+      jobWorkOutRaw: 0,
+      jobReturns: 0,
+      value: 0,
+    }
     const transactions: Transaction[] = dayMovements.map((m) => {
       const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
       const rawQty = Number(m.quantity)
@@ -231,15 +291,15 @@ export default async function DaywiseStockStatementPage({
       const size = m.material_sizes?.size_label ?? m.size_label ?? ''
       const itemName = size ? `${material} — ${size}` : material
 
-      warehouseRunning += rawQty
-      if (VENDOR_MOVEMENT_TYPES.includes(m.entry_type)) vendorRunning -= rawQty
-      if (m.entry_type === 'PURCHASE_IN' || m.entry_type === 'PURCHASE_CANCEL') purchasesRaw += rawQty
-      if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL') salesRaw += rawQty
-      if (m.entry_type === 'TRANSFER_IN') transferIn += rawQty
-      if (m.entry_type === 'TRANSFER_OUT') transferOutRaw += rawQty
-      if (m.entry_type === 'JOB_WORK_OUT') jobWorkOutRaw += rawQty
-      if (m.entry_type === 'JOB_WORK_RETURN_IN' || m.entry_type === 'VENDOR_RETURN_IN') jobReturns += rawQty
-      value += txnValue ?? 0
+      runningBalance.warehouse += rawQty
+      if (VENDOR_MOVEMENT_TYPES.includes(m.entry_type)) runningBalance.vendor -= rawQty
+      if (m.entry_type === 'PURCHASE_IN' || m.entry_type === 'PURCHASE_CANCEL') dayTotals.purchasesRaw += rawQty
+      if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL') dayTotals.salesRaw += rawQty
+      if (m.entry_type === 'TRANSFER_IN') dayTotals.transferIn += rawQty
+      if (m.entry_type === 'TRANSFER_OUT') dayTotals.transferOutRaw += rawQty
+      if (m.entry_type === 'JOB_WORK_OUT') dayTotals.jobWorkOutRaw += rawQty
+      if (m.entry_type === 'JOB_WORK_RETURN_IN' || m.entry_type === 'VENDOR_RETURN_IN') dayTotals.jobReturns += rawQty
+      dayTotals.value += txnValue ?? 0
 
       const isVendorMovement = VENDOR_MOVEMENT_TYPES.includes(m.entry_type)
       transactionDetailRows.push({
@@ -255,8 +315,8 @@ export default async function DaywiseStockStatementPage({
         outwardQty: rawQty < 0 ? Math.abs(rawQty) : null,
         warehouseChange: rawQty,
         vendorChange: isVendorMovement ? -rawQty : 0,
-        warehouseBalance: warehouseRunning,
-        vendorBalance: vendorRunning,
+        warehouseBalance: runningBalance.warehouse,
+        vendorBalance: runningBalance.vendor,
         rate: rate ?? null,
         value: txnValue ?? null,
         remarks: m.notes ?? '',
@@ -283,15 +343,15 @@ export default async function DaywiseStockStatementPage({
       count: dayMovements.length,
       openingWarehouse,
       openingVendor,
-      purchases: purchasesRaw,
-      sales: -salesRaw,
-      transferIn,
-      transferOut: -transferOutRaw,
-      jobWorkOut: -jobWorkOutRaw,
-      jobReturns,
-      closingWarehouse: warehouseRunning,
-      closingVendor: vendorRunning,
-      value,
+      purchases: dayTotals.purchasesRaw,
+      sales: -dayTotals.salesRaw,
+      transferIn: dayTotals.transferIn,
+      transferOut: -dayTotals.transferOutRaw,
+      jobWorkOut: -dayTotals.jobWorkOutRaw,
+      jobReturns: dayTotals.jobReturns,
+      closingWarehouse: runningBalance.warehouse,
+      closingVendor: runningBalance.vendor,
+      value: dayTotals.value,
       transactions,
     }
   })
@@ -306,8 +366,8 @@ export default async function DaywiseStockStatementPage({
     transferOut: groups.reduce((s, g) => s + g.transferOut, 0),
     jobWorkOut: groups.reduce((s, g) => s + g.jobWorkOut, 0),
     jobReturns: groups.reduce((s, g) => s + g.jobReturns, 0),
-    closingWarehouse: warehouseRunning,
-    closingVendor: vendorRunning,
+    closingWarehouse: runningBalance.warehouse,
+    closingVendor: runningBalance.vendor,
     value: groups.reduce((s, g) => s + g.value, 0),
   }
 
@@ -406,7 +466,7 @@ export default async function DaywiseStockStatementPage({
             />
           )}
           <PrintButton />
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -422,21 +482,21 @@ export default async function DaywiseStockStatementPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Companies</option>
-              {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
             <select name="warehouse" defaultValue={params.warehouse || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Warehouses</option>
-              {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Material Type</label>
             <select name="material_type" defaultValue={params.material_type || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Material Types</option>
-              {materialTypes.map((mt: any) => (
+              {materialTypes.map((mt) => (
                 <option key={mt.id} value={mt.id}>{mt.description}</option>
               ))}
             </select>
@@ -445,7 +505,7 @@ export default async function DaywiseStockStatementPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
             <select name="size" defaultValue={params.size || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Sizes</option>
-              {sizes.map((s: any) => (
+              {sizes.map((s) => (
                 <option key={s.id} value={s.id}>{s.size_label}</option>
               ))}
             </select>
@@ -464,7 +524,7 @@ export default async function DaywiseStockStatementPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Supplier</label>
             <select name="vendor" defaultValue={params.vendor || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Suppliers</option>
-              {suppliers.map((s: any) => (
+              {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>

@@ -1,34 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+
+// No-op subscribe: there is nothing to subscribe to — this is only used to
+// get an SSR-safe "have we hydrated on the client yet" flag without setState
+// in an effect (see useSyncExternalStore docs for this exact pattern).
+const noopSubscribe = () => () => {}
 
 // Renders dropdown content into document.body as a fixed-position overlay,
 // so it escapes any overflow:auto/hidden ancestor (e.g. sticky-header table
 // wrappers) and always renders above everything else. Flips above the anchor
 // when there isn't enough room below in the viewport.
 export function DropdownPortal({
-  anchorEl,
+  anchorRef,
   open,
   className = '',
   children,
   matchWidth = false,
   maxHeight = 240,
 }: {
-  anchorEl: HTMLElement | null
+  anchorRef: RefObject<HTMLElement | null>
   open: boolean
   className?: string
   children: React.ReactNode
   matchWidth?: boolean
   maxHeight?: number
 }) {
-  const [mounted, setMounted] = useState(false)
+  // true only once hydrated on the client; false during SSR — avoids calling
+  // createPortal() before document.body exists, without setState in an effect.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false)
   const [style, setStyle] = useState<React.CSSProperties | null>(null)
 
-  useEffect(() => { setMounted(true) }, [])
-
   useEffect(() => {
-    if (!open || !anchorEl) { setStyle(null); return }
+    const anchorEl = anchorRef.current
+    if (!open || !anchorEl) return
 
     const update = () => {
       const rect = anchorEl.getBoundingClientRect()
@@ -54,9 +60,9 @@ export function DropdownPortal({
       window.removeEventListener('scroll', update, true)
       window.removeEventListener('resize', update)
     }
-  }, [open, anchorEl, matchWidth, maxHeight])
+  }, [open, anchorRef, matchWidth, maxHeight])
 
-  if (!mounted || !open || !anchorEl || !style) return null
+  if (!mounted || !open || !style) return null
 
   return createPortal(
     <div style={style} className={className}>{children}</div>,

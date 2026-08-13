@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Copy, Check, RefreshCw } from 'lucide-react'
+import { Copy, Check, RefreshCw, ArrowRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import type { LedgerBlock } from '@/lib/ai/tools'
 
@@ -89,9 +89,9 @@ function LedgerTable({ ledger }: { ledger: LedgerBlock }) {
           Showing first 200 entries.{' '}
           <Link
             href={`/reports/item-ledger?item=${ledger.itemId}&from=${ledger.fromDate}&to=${ledger.toDate}`}
-            className="font-medium hover:underline"
+            className="inline-flex items-center gap-0.5 font-medium hover:underline"
           >
-            View full ledger →
+            View full ledger <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
       )}

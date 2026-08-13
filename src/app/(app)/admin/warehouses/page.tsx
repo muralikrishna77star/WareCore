@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft, Factory } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { WAREHOUSES_QUERY, ACTIVE_COMPANIES_QUERY, UPDATE_WAREHOUSE_MUTATION, DELETE_WAREHOUSE_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
@@ -30,11 +31,11 @@ export default function WarehousesPage() {
   })
 
   const load = () => Promise.all([
-    hasuraFetch(WAREHOUSES_QUERY),
-    hasuraFetch(ACTIVE_COMPANIES_QUERY),
+    hasuraFetch<{ warehouses: Warehouse[] }>(WAREHOUSES_QUERY),
+    hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
   ]).then(([wr, cr]) => {
-    setWarehouses((wr.data as any)?.warehouses ?? [])
-    setCompanies((cr.data as any)?.companies ?? [])
+    setWarehouses(wr.data?.warehouses ?? [])
+    setCompanies(cr.data?.companies ?? [])
     setLoading(false)
   })
   useEffect(() => { load() }, [])
@@ -84,7 +85,7 @@ export default function WarehousesPage() {
           <p className="mt-1 text-sm text-gray-500">{loading ? 'Loading…' : `${warehouses.length} warehouses`}</p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">← Admin</Link>
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="h-4 w-4" /> Admin</Link>
           <Link href="/admin/warehouses/new" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">+ Add Warehouse</Link>
         </div>
       </div>
@@ -93,7 +94,7 @@ export default function WarehousesPage() {
 
       <div className="rounded-xl border bg-white overflow-hidden">
         {warehouses.length === 0 && !loading ? (
-          <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">🏭</p><p className="text-gray-500">No warehouses yet.</p></div>
+          <div className="p-12 text-center"><Factory className="mx-auto h-10 w-10 text-gray-400 mb-3" /><p className="text-gray-500">No warehouses yet.</p></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center"><p className="text-gray-500">No warehouses match your search.</p></div>
         ) : (
@@ -140,7 +141,7 @@ export default function WarehousesPage() {
             <h2 className="text-lg font-bold text-gray-900">Merge Warehouse</h2>
             <p className="text-sm text-gray-600">
               Reassign all stock, bills, sales, and transfers from{' '}
-              <span className="font-semibold text-red-700">"{mergeSource.name}"</span>{' '}
+              <span className="font-semibold text-red-700">&quot;{mergeSource.name}&quot;</span>{' '}
               into another warehouse, then delete it.
             </p>
             {mergeError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{mergeError}</p>}

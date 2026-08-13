@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { ArrowLeftRight } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { TRANSFERS_QUERY, TRANSFERS_MAX_CREATED_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
@@ -34,7 +35,8 @@ export default async function TransfersPage({
   const itemOptions: { id: string; item_code: string; item_name: string }[] = itemsResult.item_master ?? []
 
   const totalQuantity = transfers.reduce(
-    (s: number, t: any) => s + (t.transfer_items ?? []).reduce((s2: number, i: any) => s2 + Number(i.quantity || 0), 0),
+    (s: number, t: { transfer_items?: { quantity: number | string }[] }) =>
+      s + (t.transfer_items ?? []).reduce((s2: number, i: { quantity: number | string }) => s2 + Number(i.quantity || 0), 0),
     0
   )
 
@@ -53,7 +55,7 @@ export default async function TransfersPage({
         </Link>
       </div>
 
-      <ListingSummary count={transfers.length} countLabel="transfer" totalQuantity={totalQuantity} />
+      <ListingSummary count={transfers.length} countLabel="transfer" countIcon={ArrowLeftRight} totalQuantity={totalQuantity} />
 
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">

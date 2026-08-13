@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { formatDate } from '@/lib/utils'
-import BillRow from './BillRow'
+import BillRow, { type PurchaseBillListItem } from './BillRow'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 
 type Column = {
   key: string
   label: string
   align?: 'right'
-  filterValue: (bill: any) => string
+  filterValue: (bill: PurchaseBillListItem) => string
 }
 
 const columns: Column[] = [
@@ -30,7 +30,7 @@ export default function BillsTable({
   fromDate,
   toDate,
 }: {
-  bills: any[]
+  bills: PurchaseBillListItem[]
   highlight?: string
   fromDate?: string
   toDate?: string
@@ -49,7 +49,7 @@ export default function BillsTable({
     )
   }, [bills, filters])
 
-  const exportRows = filtered.map((b: any) => {
+  const exportRows = filtered.map((b) => {
     const qty = Number(b.total_quantity || 0)
     const amount = Number(b.total_amount || 0)
     return {
@@ -110,7 +110,7 @@ export default function BillsTable({
             </td>
           </tr>
         )}
-        {filtered.map((bill: any) => (
+        {filtered.map((bill) => (
           <BillRow key={bill.id} bill={bill} highlight={highlight} />
         ))}
       </tbody>

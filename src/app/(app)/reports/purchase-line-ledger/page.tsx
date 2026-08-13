@@ -7,6 +7,7 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
 import Link from 'next/link'
+import { ArrowLeft, Search, CircleHelp } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -112,12 +113,15 @@ export default async function PurchaseLineLedgerPage({
 
   const entries: LedgerEntry[] = entriesResult.entries ?? []
 
-  let running = 0
+  // Plain accumulator for a one-shot server-side computation — held in an
+  // object (rather than a reassigned `let`) so the running total is mutated
+  // via a property write, not variable reassignment, inside the nested map.
+  const runningBalance = { value: 0 }
   const rows = entries.map((e) => {
-    running += Number(e.quantity)
-    return { ...e, balance: running }
+    runningBalance.value += Number(e.quantity)
+    return { ...e, balance: runningBalance.value }
   })
-  const currentBalance = running
+  const currentBalance = runningBalance.value
 
   const totalIn = entries
     .filter((e) => Number(e.quantity) > 0)
@@ -203,7 +207,7 @@ export default async function PurchaseLineLedgerPage({
             />
           )}
           {lineId && <PrintButton />}
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -225,12 +229,12 @@ export default async function PurchaseLineLedgerPage({
 
       {!lineId ? (
         <div className="rounded-xl border bg-white p-12 text-center">
-          <p className="text-4xl mb-3">🔎</p>
+          <Search className="mx-auto h-10 w-10 mb-3 text-gray-400" />
           <p className="text-gray-500 text-sm">Enter a Purchase Line ID above to view its full movement history.</p>
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-xl border bg-white p-12 text-center">
-          <p className="text-4xl mb-3">🤷</p>
+          <CircleHelp className="mx-auto h-10 w-10 mb-3 text-gray-400" />
           <p className="text-gray-500 text-sm">No stock ledger entries found for purchase line <span className="font-mono font-medium">{lineId}</span>.</p>
         </div>
       ) : (

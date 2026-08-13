@@ -39,10 +39,9 @@ type StatsResult = {
 type MovementsResult = { stock_ledger?: MovementRow[] }
 
 /**
- * Client-side counterpart to the server-fetched Existing dashboard's getDashboardStats().
- * Reuses the same two GraphQL queries via the browser-safe hasuraFetch() proxy, so
- * Classic and Modern show real data computed the same way — only fetched lazily,
- * on mount, instead of during the server render.
+ * Shared data hook for both dashboard views. Uses the browser-safe
+ * hasuraFetch() proxy so Classic and Modern show real data computed the
+ * same way — fetched lazily, on mount, since neither view is server-rendered.
  */
 export function useDashboardData() {
   const [data, setData] = useState<DashboardData | null>(null)

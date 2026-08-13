@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 
-  const checkJson = await hasuraFetchEnvelope(GET_USER_QUERY, { id })
+  const checkJson = await hasuraFetchEnvelope<{ user_profiles_by_pk: { id: string; role: string } | null }>(GET_USER_QUERY, { id })
   const target = checkJson?.data?.user_profiles_by_pk
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
@@ -73,12 +73,12 @@ export async function PATCH(request: NextRequest) {
   }
 
   const normalizedEmail = email.toLowerCase().trim()
-  const dupCheck = await hasuraFetchEnvelope(CHECK_EMAIL_QUERY, { email: normalizedEmail, id })
-  if (dupCheck?.data?.user_profiles?.length > 0) {
+  const dupCheck = await hasuraFetchEnvelope<{ user_profiles: { id: string }[] }>(CHECK_EMAIL_QUERY, { email: normalizedEmail, id })
+  if ((dupCheck?.data?.user_profiles?.length ?? 0) > 0) {
     return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 })
   }
 
-  const updateJson = await hasuraFetchEnvelope(UPDATE_USER_MUTATION, {
+  const updateJson = await hasuraFetchEnvelope<{ update_user_profiles_by_pk: { id: string; full_name: string; email: string; role: string; is_active: boolean } | null }>(UPDATE_USER_MUTATION, {
     id, full_name, email: normalizedEmail, role,
     company_id: company_id || null, warehouse_id: warehouse_id || null, is_active,
   })

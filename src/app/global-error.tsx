@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { ServerCrash } from 'lucide-react'
 
 export default function GlobalError({
   error,
@@ -18,7 +19,7 @@ export default function GlobalError({
       <body>
         <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center bg-gray-50">
           <div className="rounded-2xl border bg-white p-10 shadow-sm max-w-md w-full">
-            <div className="text-5xl mb-4">💥</div>
+            <ServerCrash className="mx-auto mb-4 h-12 w-12 text-red-500" />
             <h1 className="text-xl font-bold text-gray-900 mb-2">Application error</h1>
             <p className="text-gray-500 text-sm mb-4">
               Something went wrong at the application level.

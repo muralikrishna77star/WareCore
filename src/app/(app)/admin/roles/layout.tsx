@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifySession } from '@/lib/auth/session'
 
-const ALLOWED_ROLES = new Set(['admin', 'company_manager'])
+const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager'])
 
 export default async function RolesLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies()

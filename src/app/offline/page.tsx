@@ -1,10 +1,12 @@
 'use client'
 
+import { Package } from 'lucide-react'
+
 export default function OfflinePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
       <div className="max-w-sm w-full bg-white rounded-2xl shadow-lg p-8 text-center">
-        <div className="text-6xl mb-4">📦</div>
+        <Package className="mx-auto mb-4 h-16 w-16 text-gray-700" />
         <h1 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re Offline</h1>
         <p className="text-gray-500 text-sm mb-6">
           WareCore needs an internet connection to sync data. Please check your connection and try again.

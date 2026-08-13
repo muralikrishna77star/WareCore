@@ -5,9 +5,35 @@ import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { UPDATE_TRANSFER_STATUS_MUTATION } from '@/lib/hasura/queries'
 
+interface Transfer {
+  id: string
+  transfer_date: string
+  status: string
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+  from_company?: { name?: string | null } | null
+  to_company?: { name?: string | null } | null
+  from_warehouse?: { name?: string | null } | null
+  to_warehouse?: { name?: string | null } | null
+}
+
+interface TransferItem {
+  id: string
+  transfer_id: string
+  quantity: number | string
+  notes?: string | null
+  size_label?: string | null
+  item_master_id?: string | null
+  item_name?: string | null
+  purchase_line_id?: string | null
+  material_types?: { description?: string | null } | null
+  material_sizes?: { size_label?: string | null } | null
+}
+
 interface TransferDetailClientProps {
-  transfer: any
-  items: any[]
+  transfer: Transfer
+  items: TransferItem[]
 }
 
 export default function TransferDetailClient({ transfer, items }: TransferDetailClientProps) {
@@ -97,7 +123,7 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map((item: any, idx: number) => (
+            {items.map((item: TransferItem, idx: number) => (
               <tr key={item.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">
@@ -117,7 +143,7 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
             <tr>
               <td colSpan={5} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Total</td>
               <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">
-                {items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0).toFixed(3)} MT
+                {items.reduce((s: number, i: TransferItem) => s + (Number(i.quantity) || 0), 0).toFixed(3)} MT
               </td>
               <td></td>
             </tr>

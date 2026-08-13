@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { ArrowRight, CircleCheck, TriangleAlert, OctagonAlert, CircleAlert, Info } from 'lucide-react'
 import { hasuraRunSql } from '@/lib/hasura/server'
+import { StatCard } from '@/components/StatCard'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -50,36 +52,32 @@ export default async function DataIntegrityDashboardPage() {
   const statusColor = overallStatus === 'Critical' ? 'text-red-700 bg-red-50 border-red-200'
     : overallStatus === 'Warning' ? 'text-amber-700 bg-amber-50 border-amber-200'
     : 'text-green-700 bg-green-50 border-green-200'
+  const StatusIcon = overallStatus === 'Critical' ? OctagonAlert : overallStatus === 'Warning' ? TriangleAlert : CircleCheck
+  const statusIconBg = overallStatus === 'Critical' ? 'bg-red-100' : overallStatus === 'Warning' ? 'bg-amber-100' : 'bg-green-100'
+  const statusIconColor = overallStatus === 'Critical' ? 'text-red-600' : overallStatus === 'Warning' ? 'text-amber-600' : 'text-green-600'
 
   const ruleCount = (code: string) => Number(openByRule.find((r) => r.rule_code === code)?.n ?? 0)
 
   return (
     <div className="space-y-6">
       <div className={`rounded-xl border p-4 flex items-center justify-between ${statusColor}`}>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide">Overall Status</p>
-          <p className="text-2xl font-bold">{overallStatus}</p>
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${statusIconBg}`}>
+            <StatusIcon className={`h-5 w-5 ${statusIconColor}`} strokeWidth={2} />
+          </span>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide">Overall Status</p>
+            <p className="text-2xl font-bold">{overallStatus}</p>
+          </div>
         </div>
         <p className="text-sm">{totalOpen} open exception{totalOpen !== 1 ? 's' : ''}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border bg-red-50 p-4">
-          <p className="text-xs text-gray-500">Critical</p>
-          <p className="text-xl font-bold text-red-700">{critical}</p>
-        </div>
-        <div className="rounded-xl border bg-orange-50 p-4">
-          <p className="text-xs text-gray-500">High</p>
-          <p className="text-xl font-bold text-orange-700">{high}</p>
-        </div>
-        <div className="rounded-xl border bg-amber-50 p-4">
-          <p className="text-xs text-gray-500">Medium</p>
-          <p className="text-xl font-bold text-amber-700">{medium}</p>
-        </div>
-        <div className="rounded-xl border bg-gray-50 p-4">
-          <p className="text-xs text-gray-500">Low / Info</p>
-          <p className="text-xl font-bold text-gray-700">{low}</p>
-        </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard icon={OctagonAlert} iconBg="bg-red-100" iconColor="text-red-600" value={String(critical)} label="Critical" />
+        <StatCard icon={TriangleAlert} iconBg="bg-orange-100" iconColor="text-orange-600" value={String(high)} label="High" />
+        <StatCard icon={CircleAlert} iconBg="bg-amber-100" iconColor="text-amber-600" value={String(medium)} label="Medium" />
+        <StatCard icon={Info} iconBg="bg-gray-100" iconColor="text-gray-600" value={String(low)} label="Low / Info" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -110,7 +108,7 @@ export default async function DataIntegrityDashboardPage() {
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
           <span className="font-semibold text-gray-700 text-sm">Open exceptions by rule</span>
-          <Link href="/data-integrity/exceptions?openOnly=1" className="text-xs text-blue-600 hover:underline">View all →</Link>
+          <Link href="/data-integrity/exceptions?openOnly=1" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">View all <ArrowRight className="h-3.5 w-3.5" /></Link>
         </div>
         <table className="w-full text-sm">
           <thead>

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
-import { restoreFromBackup, getAllTableData, getPointInTimeBackup } from '@/lib/backup/backup.service'
+import { restoreFromBackup, getPointInTimeBackup } from '@/lib/backup/backup.service'
 
 export const maxDuration = 60 // Allow up to 60 seconds for restore
+
+const ALLOWED_ROLES = new Set(['admin', 'developer'])
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +12,9 @@ export async function POST(request: NextRequest) {
     const session = await verifySessionCookie(request)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.has(session.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const body = await request.json()

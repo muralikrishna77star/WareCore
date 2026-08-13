@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { TRANSFER_BY_ID_QUERY, TRANSFER_ITEMS_QUERY } from '@/lib/hasura/queries'
@@ -20,8 +21,8 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/transfers" className="text-sm text-blue-600 hover:underline mb-1 block">
-            ← Back to Transfers
+          <Link href="/transfers" className="text-sm text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
+            <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Transfers
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Transfer #{transfer.reference_number ?? id.slice(0, 8)}</h1>
         </div>

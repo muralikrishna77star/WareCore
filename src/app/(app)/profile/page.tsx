@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -60,7 +61,7 @@ export default function ChangePasswordPage() {
     <div className="max-w-md mx-auto py-8 px-4">
       <div className="mb-6">
         <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-          ← Back
+          <ArrowLeft className="h-4 w-4" /> Back
         </button>
         <h1 className="text-2xl font-bold text-gray-900 mt-3">Change Password</h1>
         <p className="mt-1 text-sm text-gray-500">Update your account password</p>

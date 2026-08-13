@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY } from '@/lib/hasura/queries'
 import EditUserForm from './EditUserForm'
@@ -28,7 +29,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="p-6 max-w-xl mx-auto">
-      <Link href="/admin/users" className="text-sm text-blue-600 hover:underline mb-4 block">← Back to Users</Link>
+      <Link href="/admin/users" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mb-4"><ArrowLeft className="h-4 w-4" /> Back to Users</Link>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Edit User</h1>
       <EditUserForm user={user} companies={companyResult.companies ?? []} warehouses={warehouseResult.warehouses ?? []} />
     </div>

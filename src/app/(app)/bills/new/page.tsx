@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { RefreshCw } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import { DropdownPortal } from '@/components/DropdownPortal'
@@ -61,6 +62,149 @@ function calcTax(line: LineItem, taxRates: TaxRate[]): Partial<LineItem> {
     return { taxable_value: (parseFloat(line.quantity) || 0) * (parseFloat(line.rate) || 0) }
   }
   return calculateLineTax(parseFloat(line.quantity) || 0, parseFloat(line.rate) || 0, taxRate)
+}
+
+// Item-search cell for a line row: owns its own plain useRef() anchor
+// (declared here, not in a shared keyed ref-map indexed from the parent),
+// matching the pattern used by InputLineRow/OutputLineRow in the job work
+// edit page — a ref created and consumed entirely within one component
+// instance is safe; a ref looked up from a shared map via a helper function
+// called during a different component's render is not.
+function ItemSearchCell({
+  rowId,
+  lineIndex,
+  materialTypeId,
+  materialSizeId,
+  quantity,
+  itemName,
+  searchValue,
+  open,
+  highlight,
+  filteredItems,
+  itemMasters,
+  setItemSearch,
+  setItemOpen,
+  setItemHighlight,
+  updateLine,
+  setNewItemLineIndex,
+  setShowNewItemDialog,
+  setNewItemMaterialTypeId,
+  setNewItemMaterialSizeId,
+  setNewItemName,
+  setNewItemDescription,
+  setNewItemCode,
+}: {
+  rowId: string
+  lineIndex: number
+  materialTypeId: string
+  materialSizeId: string
+  quantity: string
+  itemName: string
+  searchValue: string
+  open: boolean
+  highlight: number
+  filteredItems: ItemMaster[]
+  itemMasters: ItemMaster[]
+  setItemSearch: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  setItemOpen: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  setItemHighlight: React.Dispatch<React.SetStateAction<Record<string, number>>>
+  updateLine: (index: number, field: keyof LineItem, value: string) => void
+  setNewItemLineIndex: React.Dispatch<React.SetStateAction<number | null>>
+  setShowNewItemDialog: React.Dispatch<React.SetStateAction<boolean>>
+  setNewItemMaterialTypeId: React.Dispatch<React.SetStateAction<string>>
+  setNewItemMaterialSizeId: React.Dispatch<React.SetStateAction<string>>
+  setNewItemName: React.Dispatch<React.SetStateAction<string>>
+  setNewItemDescription: React.Dispatch<React.SetStateAction<string>>
+  setNewItemCode: React.Dispatch<React.SetStateAction<string>>
+}) {
+  const anchorRef = useRef<HTMLDivElement | null>(null)
+  return (
+    <div className="relative" ref={anchorRef}>
+      <input type="text" value={searchValue}
+        onChange={(e) => {
+          const val = e.target.value
+          setItemSearch((prev) => ({ ...prev, [rowId]: val }))
+          setItemOpen((prev) => ({ ...prev, [rowId]: true }))
+          setItemHighlight((prev) => ({ ...prev, [rowId]: -1 }))
+          if (val && !materialTypeId) {
+            const q = val.toLowerCase()
+            const matches = itemMasters.filter(im =>
+              im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
+            )
+            const typeIds = [...new Set(matches.map(im => im.material_type_id))]
+            if (typeIds.length === 1) updateLine(lineIndex, 'material_type_id', typeIds[0])
+          }
+        }}
+        onKeyDown={(e) => {
+          const count = filteredItems.length
+          const cur = highlight
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            if (!open) {
+              setItemOpen(prev => ({ ...prev, [rowId]: true }))
+              setItemHighlight(prev => ({ ...prev, [rowId]: 0 }))
+              return
+            }
+            const next = Math.min(cur + 1, count - 1)
+            setItemHighlight(prev => ({ ...prev, [rowId]: next }))
+            document.getElementById(`item-opt-${rowId}-${next}`)?.scrollIntoView({ block: 'nearest' })
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            const next = Math.max(cur - 1, 0)
+            setItemHighlight(prev => ({ ...prev, [rowId]: next }))
+            document.getElementById(`item-opt-${rowId}-${next}`)?.scrollIntoView({ block: 'nearest' })
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            if (cur >= 0 && cur < count) {
+              const im = filteredItems[cur]
+              updateLine(lineIndex, 'item_master_id', im.id)
+              setItemSearch(prev => ({ ...prev, [rowId]: im.item_name }))
+              setItemOpen(prev => ({ ...prev, [rowId]: false }))
+              setItemHighlight(prev => ({ ...prev, [rowId]: -1 }))
+            }
+          } else if (e.key === 'Escape') {
+            setItemOpen(prev => ({ ...prev, [rowId]: false }))
+            setItemHighlight(prev => ({ ...prev, [rowId]: -1 }))
+          }
+        }}
+        onFocus={() => setItemOpen((prev) => ({ ...prev, [rowId]: true }))}
+        onBlur={() => setItemOpen((prev) => ({ ...prev, [rowId]: false }))}
+        placeholder="Search item..."
+        className={`block w-56 rounded border px-2 py-2 text-sm h-9 focus:outline-none ${
+          materialTypeId && quantity && !itemName
+            ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
+        }`} />
+      <DropdownPortal anchorRef={anchorRef} open={open} className="w-64 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
+          <button type="button" onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setNewItemLineIndex(lineIndex)
+              setShowNewItemDialog(true)
+              setNewItemMaterialTypeId(materialTypeId)
+              setNewItemMaterialSizeId(materialSizeId)
+              setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
+              setItemOpen((prev) => ({ ...prev, [rowId]: false }))
+            }}
+            className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+            + New Item
+          </button>
+          {filteredItems.map((im, idx) => (
+              <button key={im.id} id={`item-opt-${rowId}-${idx}`} type="button" onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  updateLine(lineIndex, 'item_master_id', im.id)
+                  setItemSearch((prev) => ({ ...prev, [rowId]: im.item_name }))
+                  setItemOpen((prev) => ({ ...prev, [rowId]: false }))
+                  setItemHighlight((prev) => ({ ...prev, [rowId]: -1 }))
+                }}
+                className={`w-full text-left px-2 py-2 text-[0.8125rem] ${highlight === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}>
+                {im.item_name}
+              </button>
+            ))}
+          {filteredItems.length === 0 && (
+            <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
+          )}
+      </DropdownPortal>
+    </div>
+  )
 }
 
 export default function NewBillPage() {
@@ -150,14 +294,6 @@ export default function NewBillPage() {
   const [itemSearch, setItemSearch] = useState<Record<string, string>>({})
   const [itemOpen, setItemOpen] = useState<Record<string, boolean>>({})
   const [itemHighlight, setItemHighlight] = useState<Record<string, number>>({})
-  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const [materialTypeSearch, setMaterialTypeSearch] = useState<Record<string, string>>({})
-  const [materialTypeOpen, setMaterialTypeOpen] = useState<Record<string, boolean>>({})
-  const [sizeSearch, setSizeSearch] = useState<Record<string, string>>({})
-  const [sizeOpen, setSizeOpen] = useState<Record<string, boolean>>({})
-  const [taxRateSearch, setTaxRateSearch] = useState<Record<string, string>>({})
-  const [taxRateOpen, setTaxRateOpen] = useState<Record<string, boolean>>({})
-
   // ── Refresh loading state ────────────────────────────────────────────────
   const [refreshingMaterialTypes, setRefreshingMaterialTypes] = useState(false)
   const [refreshingItemMasters, setRefreshingItemMasters] = useState(false)
@@ -175,27 +311,27 @@ export default function NewBillPage() {
   useEffect(() => {
     const load = async () => {
       const [c, w, s, mt, ms, im, tr, bns, lis] = await Promise.all([
-        hasuraFetch(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY),
-        hasuraFetch(ALL_BILL_NUMBERS_QUERY),
-        hasuraFetch(ALL_PURCHASE_LINE_IDS_QUERY),
+        hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch<{ suppliers: Supplier[] }>(ACTIVE_SUPPLIERS_QUERY),
+        hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_PURCHASE_TAX_RATES_QUERY),
+        hasuraFetch<{ purchase_bills: { bill_number: string }[] }>(ALL_BILL_NUMBERS_QUERY),
+        hasuraFetch<{ purchase_bill_items: { purchase_line_id: string | null }[] }>(ALL_PURCHASE_LINE_IDS_QUERY),
       ])
-      setCompanies((c.data as any)?.companies ?? [])
-      setWarehouses((w.data as any)?.warehouses ?? [])
-      setSuppliers((s.data as any)?.suppliers ?? [])
-      setMaterialTypes((mt.data as any)?.material_types ?? [])
-      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemMasters((im.data as any)?.item_master ?? [])
-      setTaxRates((tr.data as any)?.tax_rates ?? [])
+      setCompanies(c.data?.companies ?? [])
+      setWarehouses(w.data?.warehouses ?? [])
+      setSuppliers(s.data?.suppliers ?? [])
+      setMaterialTypes(mt.data?.material_types ?? [])
+      setMaterialSizes(ms.data?.material_sizes ?? [])
+      setItemMasters(im.data?.item_master ?? [])
+      setTaxRates(tr.data?.tax_rates ?? [])
 
-      const bills: string[] = ((bns.data as any)?.purchase_bills ?? []).map((b: any) => b.bill_number)
-      const lineIds: string[] = ((lis.data as any)?.purchase_bill_items ?? [])
-        .map((i: any) => i.purchase_line_id).filter(Boolean)
+      const bills: string[] = (bns.data?.purchase_bills ?? []).map((b) => b.bill_number)
+      const lineIds: string[] = (lis.data?.purchase_bill_items ?? [])
+        .map((i) => i.purchase_line_id).filter((id): id is string => Boolean(id))
 
       setExistingBillNumbers(bills)
       setExistingLineIds(lineIds)
@@ -207,46 +343,48 @@ export default function NewBillPage() {
 
   const refreshMaterialTypes = async () => {
     setRefreshingMaterialTypes(true)
-    const res = await hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY)
-    setMaterialTypes((res.data as any)?.material_types ?? [])
+    const res = await hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY)
+    setMaterialTypes(res.data?.material_types ?? [])
     setRefreshingMaterialTypes(false)
   }
   const refreshItemMasters = async () => {
     setRefreshingItemMasters(true)
-    const res = await hasuraFetch(ACTIVE_ITEM_MASTER_QUERY)
-    setItemMasters((res.data as any)?.item_master ?? [])
+    const res = await hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY)
+    setItemMasters(res.data?.item_master ?? [])
     setRefreshingItemMasters(false)
   }
   const refreshSizes = async () => {
     setRefreshingSizes(true)
-    const res = await hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY)
-    setMaterialSizes((res.data as any)?.material_sizes ?? [])
+    const res = await hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY)
+    setMaterialSizes(res.data?.material_sizes ?? [])
     setRefreshingSizes(false)
   }
   const refreshTaxRates = async () => {
     setRefreshingTaxRates(true)
-    const res = await hasuraFetch(ACTIVE_PURCHASE_TAX_RATES_QUERY)
-    setTaxRates((res.data as any)?.tax_rates ?? [])
+    const res = await hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_PURCHASE_TAX_RATES_QUERY)
+    setTaxRates(res.data?.tax_rates ?? [])
     setRefreshingTaxRates(false)
   }
 
   const filteredWarehouses = warehouses
 
   useEffect(() => {
-    const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
-    if (mt) setNewItemUnit(mt.unit || 'tons')
-    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
-    if (!mt?.code) { setNewItemCode(''); return }
-    const prefix = mt.code.trim().toUpperCase()
-    const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const sequence = itemMasters.reduce((max, item) => {
-      if (!item.item_code?.startsWith(prefix)) return max
-      const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
-      if (!match) return max
-      const n = Number(match[1])
-      return Number.isFinite(n) ? Math.max(max, n) : max
-    }, 0)
-    setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    Promise.resolve().then(() => {
+      const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
+      if (mt) setNewItemUnit(mt.unit || 'tons')
+      if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
+      if (!mt?.code) { setNewItemCode(''); return }
+      const prefix = mt.code.trim().toUpperCase()
+      const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const sequence = itemMasters.reduce((max, item) => {
+        if (!item.item_code?.startsWith(prefix)) return max
+        const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
+        if (!match) return max
+        const n = Number(match[1])
+        return Number.isFinite(n) ? Math.max(max, n) : max
+      }, 0)
+      setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    })
   }, [newItemMaterialTypeId, materialTypes, itemMasters])
 
   const selectedNewItemSize = materialSizes.find((s) => s.id === newItemMaterialSizeId)
@@ -512,7 +650,7 @@ export default function NewBillPage() {
       if (!warehouseId) { setError('Please select a warehouse before saving.'); setLoading(false); return }
     }
 
-    const { data: billData, error: billError } = await hasuraFetch<any>(CREATE_PURCHASE_BILL_MUTATION, {
+    const { data: billData, error: billError } = await hasuraFetch<{ insert_purchase_bills_one: { id: string; bill_number: string } | null }>(CREATE_PURCHASE_BILL_MUTATION, {
       company_id: companyId || null, warehouse_id: warehouseId || null,
       supplier_id: supplierId || null, bill_number: billNumber,
       bill_date: billDate, total_quantity: totalQty, total_amount: totalAmt,
@@ -699,7 +837,7 @@ export default function NewBillPage() {
                     placeholder={masterDataLoading ? 'Loading…' : 'MMYY-NNNN'}
                     className="block flex-1 min-w-0 rounded border border-gray-300 px-2 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
                   <button type="button" onClick={() => setBillNumber(generatePurchaseId(existingBillNumbers, billDate))}
-                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap">↻</button>
+                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 whitespace-nowrap"><RefreshCw className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
 
@@ -767,14 +905,14 @@ export default function NewBillPage() {
                     Material Type
                     <button type="button" onClick={refreshMaterialTypes} title="Refresh material types"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingMaterialTypes ? '…' : '↻'}
+                      {refreshingMaterialTypes ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
                     Item Name <span className="text-red-500">*</span>
                     <button type="button" onClick={refreshItemMasters} title="Refresh items"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingItemMasters ? '…' : '↻'}
+                      {refreshingItemMasters ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500">Line ID</th>
@@ -783,7 +921,7 @@ export default function NewBillPage() {
                     Size
                     <button type="button" onClick={refreshSizes} title="Refresh sizes"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingSizes ? '…' : '↻'}
+                      {refreshingSizes ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500">Qty</th>
@@ -793,7 +931,7 @@ export default function NewBillPage() {
                     Tax Rate
                     <button type="button" onClick={refreshTaxRates} title="Refresh tax rates"
                       className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                      {refreshingTaxRates ? '…' : '↻'}
+                      {refreshingTaxRates ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
                     </button>
                   </th>
                   {showTaxColumns && <th className="pb-3 pr-2 text-xs font-medium text-gray-500 text-right">CGST</th>}
@@ -820,9 +958,6 @@ export default function NewBillPage() {
                         return im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
                       })
                     : itemsForType
-                  const materialTypeSearchValue = materialTypeSearch[line.rowId] ?? (materialTypes.find(mt => mt.id === line.material_type_id)?.description ?? '')
-                  const sizeSearchValue = sizeSearch[line.rowId] ?? (materialSizes.find(s => s.id === line.material_size_id)?.size_label ?? '')
-                  const taxRateSearchValue = taxRateSearch[line.rowId] ?? (taxRates.find(tr => tr.id === line.tax_rate_id)?.name ?? '')
                   return (
                     <tr key={i} className="hover:bg-gray-50/50">
                       {/* Material Type — first column */}
@@ -843,91 +978,30 @@ export default function NewBillPage() {
                       </td>
                       {/* Item Name */}
                       <td className="pr-1 py-2">
-                        <div className="relative" ref={el => { itemRefs.current[line.rowId] = el }}>
-                          <input type="text" value={itemSearchValue}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              setItemSearch((prev) => ({ ...prev, [line.rowId]: val }))
-                              setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))
-                              setItemHighlight((prev) => ({ ...prev, [line.rowId]: -1 }))
-                              if (val && !line.material_type_id) {
-                                const q = val.toLowerCase()
-                                const matches = itemMasters.filter(im =>
-                                  im.item_name.toLowerCase().includes(q) || im.item_code.toLowerCase().startsWith(q)
-                                )
-                                const typeIds = [...new Set(matches.map(im => im.material_type_id))]
-                                if (typeIds.length === 1) updateLine(i, 'material_type_id', typeIds[0])
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              const count = filteredDropdownItems.length
-                              const cur = itemHighlight[line.rowId] ?? -1
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault()
-                                if (!itemOpen[line.rowId]) {
-                                  setItemOpen(prev => ({ ...prev, [line.rowId]: true }))
-                                  setItemHighlight(prev => ({ ...prev, [line.rowId]: 0 }))
-                                  return
-                                }
-                                const next = Math.min(cur + 1, count - 1)
-                                setItemHighlight(prev => ({ ...prev, [line.rowId]: next }))
-                                document.getElementById(`item-opt-${line.rowId}-${next}`)?.scrollIntoView({ block: 'nearest' })
-                              } else if (e.key === 'ArrowUp') {
-                                e.preventDefault()
-                                const next = Math.max(cur - 1, 0)
-                                setItemHighlight(prev => ({ ...prev, [line.rowId]: next }))
-                                document.getElementById(`item-opt-${line.rowId}-${next}`)?.scrollIntoView({ block: 'nearest' })
-                              } else if (e.key === 'Enter') {
-                                e.preventDefault()
-                                if (cur >= 0 && cur < count) {
-                                  const im = filteredDropdownItems[cur]
-                                  updateLine(i, 'item_master_id', im.id)
-                                  setItemSearch(prev => ({ ...prev, [line.rowId]: im.item_name }))
-                                  setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
-                                  setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
-                                }
-                              } else if (e.key === 'Escape') {
-                                setItemOpen(prev => ({ ...prev, [line.rowId]: false }))
-                                setItemHighlight(prev => ({ ...prev, [line.rowId]: -1 }))
-                              }
-                            }}
-                            onFocus={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: true }))}
-                            onBlur={() => setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))}
-                            placeholder="Search item..."
-                            className={`block w-56 rounded border px-2 py-2 text-sm h-9 focus:outline-none ${
-                              line.material_type_id && line.quantity && !line.item_name
-                                ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-blue-500'
-                            }`} />
-                          <DropdownPortal anchorEl={itemRefs.current[line.rowId]} open={!!itemOpen[line.rowId]} className="w-64 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-40">
-                              <button type="button" onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => {
-                                  setNewItemLineIndex(i)
-                                  setShowNewItemDialog(true)
-                                  setNewItemMaterialTypeId(line.material_type_id)
-                                  setNewItemMaterialSizeId(line.material_size_id)
-                                  setNewItemName(''); setNewItemDescription(''); setNewItemCode('')
-                                  setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
-                                }}
-                                className="w-full text-left px-2 py-2 text-[0.8125rem] text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                                + New Item
-                              </button>
-                              {filteredDropdownItems.map((im, idx) => (
-                                  <button key={im.id} id={`item-opt-${line.rowId}-${idx}`} type="button" onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => {
-                                      updateLine(i, 'item_master_id', im.id)
-                                      setItemSearch((prev) => ({ ...prev, [line.rowId]: im.item_name }))
-                                      setItemOpen((prev) => ({ ...prev, [line.rowId]: false }))
-                                      setItemHighlight((prev) => ({ ...prev, [line.rowId]: -1 }))
-                                    }}
-                                    className={`w-full text-left px-2 py-2 text-[0.8125rem] ${itemHighlight[line.rowId] === idx ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'}`}>
-                                    {im.item_name}
-                                  </button>
-                                ))}
-                              {filteredDropdownItems.length === 0 && (
-                                <div className="px-2 py-2 text-[0.8125rem] text-gray-500">No items found</div>
-                              )}
-                          </DropdownPortal>
-                        </div>
+                        <ItemSearchCell
+                          rowId={line.rowId}
+                          lineIndex={i}
+                          materialTypeId={line.material_type_id}
+                          materialSizeId={line.material_size_id}
+                          quantity={line.quantity}
+                          itemName={line.item_name}
+                          searchValue={itemSearchValue}
+                          open={!!itemOpen[line.rowId]}
+                          highlight={itemHighlight[line.rowId] ?? -1}
+                          filteredItems={filteredDropdownItems}
+                          itemMasters={itemMasters}
+                          setItemSearch={setItemSearch}
+                          setItemOpen={setItemOpen}
+                          setItemHighlight={setItemHighlight}
+                          updateLine={updateLine}
+                          setNewItemLineIndex={setNewItemLineIndex}
+                          setShowNewItemDialog={setShowNewItemDialog}
+                          setNewItemMaterialTypeId={setNewItemMaterialTypeId}
+                          setNewItemMaterialSizeId={setNewItemMaterialSizeId}
+                          setNewItemName={setNewItemName}
+                          setNewItemDescription={setNewItemDescription}
+                          setNewItemCode={setNewItemCode}
+                        />
                       </td>
                       {/* Line ID */}
                       <td className="pr-1 py-2">

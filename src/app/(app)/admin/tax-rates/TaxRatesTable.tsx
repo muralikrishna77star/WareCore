@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ArrowRight, Receipt } from 'lucide-react'
 import SearchInput from '@/components/SearchInput'
 import type { TaxRate } from '@/types'
 
@@ -24,10 +25,10 @@ export default function TaxRatesTable({ taxRates }: { taxRates: TaxRate[] }) {
       <div className="rounded-xl border bg-white overflow-hidden">
         {taxRates.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-gray-400 text-4xl mb-3">🧾</p>
+            <Receipt className="mx-auto h-10 w-10 text-gray-400 mb-3" />
             <p className="text-gray-500">No tax rates configured yet.</p>
-            <Link href="/admin/tax-rates/new" className="mt-4 inline-block text-blue-600 hover:underline text-sm">
-              Add your first tax rate →
+            <Link href="/admin/tax-rates/new" className="mt-4 inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+              Add your first tax rate <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         ) : filtered.length === 0 ? (

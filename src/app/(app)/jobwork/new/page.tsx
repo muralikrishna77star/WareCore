@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { RefreshCw } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import { DropdownPortal } from '@/components/DropdownPortal'
@@ -89,6 +90,292 @@ const emptyOutput = (): OutputLine => ({
   job_line_id: '',
 })
 
+type SelectableItem = ItemMaster & { availableStock: number }
+
+// Each row gets its own plain useRef() (declared here, not in a shared keyed
+// ref-map indexed from the parent), matching the same pattern already used
+// by ItemComboBox — a ref created and consumed entirely within one component
+// instance is safe; a ref looked up from a shared map via a helper function
+// called during render is not.
+function InputLineRow({
+  line,
+  index,
+  outputLines,
+  itemSearch,
+  isOpen,
+  masterDataLoading,
+  setInputItemSearch,
+  setInputItemOpen,
+  updateInputLine,
+  openNewItemDialog,
+  filteredInputItems,
+  onRemove,
+  canRemove,
+  inputFieldCls,
+  selectCls,
+}: {
+  line: InputLine
+  index: number
+  outputLines: OutputLine[]
+  itemSearch: string
+  isOpen: boolean
+  masterDataLoading: boolean
+  setInputItemSearch: React.Dispatch<React.SetStateAction<Record<number, string>>>
+  setInputItemOpen: React.Dispatch<React.SetStateAction<Record<number, boolean>>>
+  updateInputLine: (index: number, field: keyof InputLine, value: string) => void
+  openNewItemDialog: (lineIndex: number, lineType: 'input' | 'output', materialTypeId: string, materialSizeId: string) => void
+  filteredInputItems: (search: string) => SelectableItem[]
+  onRemove: () => void
+  canRemove: boolean
+  inputFieldCls: string
+  selectCls: string
+}) {
+  const anchorRef = useRef<HTMLDivElement | null>(null)
+  return (
+    <tr className="hover:bg-blue-50/30">
+      {/* Item */}
+      <td className="px-2 py-2">
+        <div className="relative" ref={anchorRef}>
+          <input type="text"
+            value={itemSearch}
+            onChange={e => { setInputItemSearch(p => ({ ...p, [index]: e.target.value })); setInputItemOpen(p => ({ ...p, [index]: true })) }}
+            onFocus={() => setInputItemOpen(p => ({ ...p, [index]: true }))}
+            onBlur={() => setInputItemOpen(p => ({ ...p, [index]: false }))}
+            placeholder="Search item…"
+            className={inputFieldCls} />
+          <DropdownPortal anchorRef={anchorRef} open={isOpen}
+            className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
+              <button type="button" onMouseDown={e => e.preventDefault()}
+                onClick={() => openNewItemDialog(index, 'input', line.material_type_id, line.material_size_id)}
+                className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                + New Item
+              </button>
+              {!masterDataLoading && filteredInputItems(itemSearch).map(im => (
+                <button key={im.id} type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { updateInputLine(index, 'item_master_id', im.id); setInputItemSearch(p => ({ ...p, [index]: im.item_name })); setInputItemOpen(p => ({ ...p, [index]: false })) }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0 flex-1 truncate">
+                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
+                    <span className="text-gray-800">{im.item_name}</span>
+                    {im.size_label && <span className="text-gray-400 ml-1">{im.size_label}</span>}
+                  </div>
+                  <span className="shrink-0 text-[11px] font-mono bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                    {im.availableStock.toFixed(3)} {im.unit}
+                  </span>
+                </button>
+              ))}
+              {!masterDataLoading && filteredInputItems(itemSearch).length === 0 && (
+                <div className="px-3 py-2 text-xs text-gray-400">
+                  {itemSearch.length > 0 ? 'No matching items with stock' : 'No items with available stock'}
+                </div>
+              )}
+          </DropdownPortal>
+        </div>
+      </td>
+
+      {/* Job Line ID */}
+      <td className="px-2 py-2">
+        {line.job_line_id ? (
+          <>
+            <span className="inline-block text-[11px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {line.job_line_id}
+            </span>
+            {(() => {
+              const allocated = outputLines
+                .filter(o => o.job_line_id === line.job_line_id)
+                .reduce((s, o) => s + (parseFloat(o.quantity) || 0), 0)
+              const remaining = (parseFloat(line.quantity) || 0) - allocated
+              return remaining < -0.0005
+                ? <p className="text-[10px] text-red-500 mt-0.5">Over by {Math.abs(remaining).toFixed(3)} {line.unit}</p>
+                : <p className="text-[10px] text-green-600 mt-0.5">Remaining: {remaining.toFixed(3)} {line.unit}</p>
+            })()}
+          </>
+        ) : (
+          <span className="text-xs text-gray-300 italic">—</span>
+        )}
+      </td>
+
+      {/* Purchase Line ID */}
+      <td className="px-2 py-2">
+        {!line.item_master_id
+          ? <span className="text-xs text-gray-400 italic">Select item first</span>
+          : line.purchase_lines_loading
+          ? <span className="text-xs text-gray-400">Loading…</span>
+          : line.purchase_line_options.length === 0
+          ? <span className="text-xs text-red-500">No stock available</span>
+          : (
+            <select value={line.purchase_line_id}
+              onChange={e => updateInputLine(index, 'purchase_line_id', e.target.value)}
+              className={selectCls + ' font-mono'}>
+              <option value="">— Select —</option>
+              {line.purchase_line_options.map(opt => (
+                <option key={opt.purchase_line_id} value={opt.purchase_line_id}>
+                  {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
+                </option>
+              ))}
+            </select>
+          )}
+      </td>
+
+      {/* Avail Stock */}
+      <td className="px-2 py-2 text-right">
+        {line.available_quantity
+          ? <span className="text-sm font-semibold text-green-700">{Number(line.available_quantity).toFixed(3)} <span className="text-xs font-normal text-green-600">{line.unit}</span></span>
+          : <span className="text-gray-300 text-xs">—</span>}
+      </td>
+
+      {/* Qty Consumed */}
+      <td className="px-2 py-2">
+        <input type="number" value={line.quantity}
+          onChange={e => updateInputLine(index, 'quantity', e.target.value)}
+          step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
+          className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
+            line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
+              ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+        {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
+          <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
+        )}
+      </td>
+
+      {/* Unit */}
+      <td className="px-2 py-2">
+        <select value={line.unit} onChange={e => updateInputLine(index, 'unit', e.target.value)} className={selectCls}>
+          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </td>
+
+      {/* Notes */}
+      <td className="px-2 py-2">
+        <input type="text" value={line.notes} onChange={e => updateInputLine(index, 'notes', e.target.value)} className={inputFieldCls} />
+      </td>
+
+      <td className="px-2 py-2 text-center">
+        {canRemove && (
+          <button type="button" onClick={onRemove}
+            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function OutputLineRow({
+  line,
+  index,
+  inputLines,
+  itemSearch,
+  isOpen,
+  masterDataLoading,
+  setOutputItemSearch,
+  setOutputItemOpen,
+  updateOutputLine,
+  openNewItemDialog,
+  filteredAllItems,
+  onRemove,
+  canRemove,
+  inputFieldCls,
+  selectCls,
+}: {
+  line: OutputLine
+  index: number
+  inputLines: InputLine[]
+  itemSearch: string
+  isOpen: boolean
+  masterDataLoading: boolean
+  setOutputItemSearch: React.Dispatch<React.SetStateAction<Record<number, string>>>
+  setOutputItemOpen: React.Dispatch<React.SetStateAction<Record<number, boolean>>>
+  updateOutputLine: (index: number, field: keyof OutputLine, value: string) => void
+  openNewItemDialog: (lineIndex: number, lineType: 'input' | 'output', materialTypeId: string, materialSizeId: string) => void
+  filteredAllItems: (search: string) => SelectableItem[]
+  onRemove: () => void
+  canRemove: boolean
+  inputFieldCls: string
+  selectCls: string
+}) {
+  const anchorRef = useRef<HTMLDivElement | null>(null)
+  return (
+    <tr className="hover:bg-emerald-50/30">
+      {/* Item */}
+      <td className="px-2 py-2">
+        <div className="relative" ref={anchorRef}>
+          <input type="text"
+            value={itemSearch}
+            onChange={e => { setOutputItemSearch(p => ({ ...p, [index]: e.target.value })); setOutputItemOpen(p => ({ ...p, [index]: true })) }}
+            onFocus={() => setOutputItemOpen(p => ({ ...p, [index]: true }))}
+            onBlur={() => setOutputItemOpen(p => ({ ...p, [index]: false }))}
+            placeholder="Search produced item…"
+            className={inputFieldCls} />
+          <DropdownPortal anchorRef={anchorRef} open={isOpen}
+            className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
+              <button type="button" onMouseDown={e => e.preventDefault()}
+                onClick={() => openNewItemDialog(index, 'output', line.material_type_id, line.material_size_id)}
+                className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
+                + New Item
+              </button>
+              {!masterDataLoading && filteredAllItems(itemSearch).map(im => (
+                <button key={im.id} type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { updateOutputLine(index, 'item_master_id', im.id); setOutputItemSearch(p => ({ ...p, [index]: im.item_name })); setOutputItemOpen(p => ({ ...p, [index]: false })) }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0 flex-1 truncate">
+                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
+                    <span className="text-gray-800">{im.item_name}</span>
+                    {im.size_label && <span className="text-gray-400 ml-1">{im.size_label}</span>}
+                  </div>
+                  {im.availableStock > 0 && (
+                    <span className="shrink-0 text-[11px] font-mono bg-gray-50 text-gray-500 border border-gray-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                      {im.availableStock.toFixed(3)} {im.unit}
+                    </span>
+                  )}
+                </button>
+              ))}
+              {!masterDataLoading && filteredAllItems(itemSearch).length === 0 && (
+                <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
+              )}
+          </DropdownPortal>
+        </div>
+      </td>
+
+      <td className="px-2 py-2">
+        <select value={line.job_line_id} onChange={e => updateOutputLine(index, 'job_line_id', e.target.value)} className={selectCls + ' font-mono'}>
+          <option value="">— none —</option>
+          {inputLines.filter(l => l.item_master_id && l.job_line_id).map(l => (
+            <option key={l.job_line_id} value={l.job_line_id}>
+              {l.job_line_id} — {l.item_name} ({l.quantity || '0'} {l.unit})
+            </option>
+          ))}
+        </select>
+      </td>
+
+      <td className="px-2 py-2">
+        <input type="number" value={line.quantity} onChange={e => updateOutputLine(index, 'quantity', e.target.value)}
+          step="0.001" min="0" placeholder="0.000"
+          className="block w-full rounded border border-gray-300 px-2 py-2 text-sm text-right focus:border-blue-500 focus:outline-none" />
+      </td>
+
+      <td className="px-2 py-2">
+        <select value={line.unit} onChange={e => updateOutputLine(index, 'unit', e.target.value)} className={selectCls}>
+          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </td>
+
+      <td className="px-2 py-2">
+        <input type="text" value={line.notes} onChange={e => updateOutputLine(index, 'notes', e.target.value)} className={inputFieldCls} />
+      </td>
+
+      <td className="px-2 py-2 text-center">
+        {canRemove && (
+          <button type="button" onClick={onRemove}
+            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+        )}
+      </td>
+    </tr>
+  )
+}
+
 export default function NewJobWorkPage() {
   const router = useRouter()
 
@@ -102,13 +389,15 @@ export default function NewJobWorkPage() {
   const [masterDataLoading, setMasterDataLoading] = useState(true)
   const [existingJobLineIds, setExistingJobLineIds] = useState<string[]>([])
 
-  // Item search state for inputs and outputs separately
+  // Item search state for inputs and outputs separately. Per-row anchor refs
+  // for the item-search dropdowns live inside InputLineRow/OutputLineRow
+  // themselves (a plain useRef per row component instance) rather than in a
+  // shared keyed ref-map here, so no ref is ever read via a helper function
+  // during this component's render.
   const [inputItemSearch, setInputItemSearch] = useState<Record<number, string>>({})
   const [inputItemOpen, setInputItemOpen] = useState<Record<number, boolean>>({})
-  const inputItemRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const [outputItemSearch, setOutputItemSearch] = useState<Record<number, string>>({})
   const [outputItemOpen, setOutputItemOpen] = useState<Record<number, boolean>>({})
-  const outputItemRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   // ── New Item dialog (input or output line) ──────────────────────────────
   const [showNewItemDialog, setShowNewItemDialog] = useState(false)
@@ -149,34 +438,36 @@ export default function NewJobWorkPage() {
   useEffect(() => {
     const load = async () => {
       const [c, s, w, mt, ms, im, billLines, stockRows, jli] = await Promise.all([
-        hasuraFetch(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
-        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
-        hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
-        hasuraFetch(ALL_JOB_WORK_LINE_IDS_QUERY),
+        hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch<{ suppliers: Supplier[] }>(ACTIVE_SUPPLIERS_QUERY),
+        hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch<{ purchase_bill_items: { item_master_id: string; purchase_line_id: string }[] }>(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
+        hasuraFetch<{ stock_ledger: { purchase_line_id: string; quantity: number }[] }>(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
+        hasuraFetch<{ job_work_items: { job_line_id: string | null }[] }>(ALL_JOB_WORK_LINE_IDS_QUERY),
       ])
-      setCompanies((c.data as any)?.companies ?? [])
-      setSuppliers((s.data as any)?.suppliers ?? [])
-      setWarehouses((w.data as any)?.warehouses ?? [])
-      setMaterialTypes((mt.data as any)?.material_types ?? [])
-      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemMasters((im.data as any)?.item_master ?? [])
+      setCompanies(c.data?.companies ?? [])
+      setSuppliers(s.data?.suppliers ?? [])
+      setWarehouses(w.data?.warehouses ?? [])
+      setMaterialTypes(mt.data?.material_types ?? [])
+      setMaterialSizes(ms.data?.material_sizes ?? [])
+      setItemMasters(im.data?.item_master ?? [])
       setExistingJobLineIds(
-        ((jli.data as any)?.job_work_items ?? []).map((r: any) => r.job_line_id).filter(Boolean)
+        (jli.data?.job_work_items ?? [])
+          .map((r) => r.job_line_id)
+          .filter((id): id is string => Boolean(id))
       )
 
       // Build stock-by-item map: aggregate stock_ledger by purchase_line_id,
       // then map purchase_line_id → item_master_id via purchase_bill_items
       const stockByLine: Record<string, number> = {}
-      for (const row of (stockRows.data as any)?.stock_ledger ?? []) {
+      for (const row of stockRows.data?.stock_ledger ?? []) {
         stockByLine[row.purchase_line_id] = (stockByLine[row.purchase_line_id] ?? 0) + Number(row.quantity)
       }
       const itemStockMap: Record<string, number> = {}
-      for (const pbi of (billLines.data as any)?.purchase_bill_items ?? []) {
+      for (const pbi of billLines.data?.purchase_bill_items ?? []) {
         const qty = stockByLine[pbi.purchase_line_id] ?? 0
         itemStockMap[pbi.item_master_id] = (itemStockMap[pbi.item_master_id] ?? 0) + qty
       }
@@ -191,18 +482,18 @@ export default function NewJobWorkPage() {
   const refreshItemMasters = useCallback(async () => {
     setRefreshingItemMasters(true)
     const [im, billLines, stockRows] = await Promise.all([
-      hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-      hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
-      hasuraFetch(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
+      hasuraFetch<{ item_master: ItemMaster[] }>(ACTIVE_ITEM_MASTER_QUERY),
+      hasuraFetch<{ purchase_bill_items: { item_master_id: string; purchase_line_id: string }[] }>(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
+      hasuraFetch<{ stock_ledger: { purchase_line_id: string; quantity: number }[] }>(ALL_STOCK_BY_PURCHASE_LINE_QUERY),
     ])
-    setItemMasters((im.data as any)?.item_master ?? [])
+    setItemMasters(im.data?.item_master ?? [])
 
     const stockByLine: Record<string, number> = {}
-    for (const row of (stockRows.data as any)?.stock_ledger ?? []) {
+    for (const row of stockRows.data?.stock_ledger ?? []) {
       stockByLine[row.purchase_line_id] = (stockByLine[row.purchase_line_id] ?? 0) + Number(row.quantity)
     }
     const itemStockMap: Record<string, number> = {}
-    for (const pbi of (billLines.data as any)?.purchase_bill_items ?? []) {
+    for (const pbi of billLines.data?.purchase_bill_items ?? []) {
       const qty = stockByLine[pbi.purchase_line_id] ?? 0
       itemStockMap[pbi.item_master_id] = (itemStockMap[pbi.item_master_id] ?? 0) + qty
     }
@@ -227,10 +518,10 @@ export default function NewJobWorkPage() {
       return u
     })
 
-    const { data: linesData } = await hasuraFetch<any>(ITEM_PURCHASE_LINES_QUERY, { item_master_id: itemMasterId })
+    const { data: linesData } = await hasuraFetch<{ purchase_bill_items: { purchase_line_id: string | null }[] }>(ITEM_PURCHASE_LINES_QUERY, { item_master_id: itemMasterId })
     const purchaseLineIds: string[] = (linesData?.purchase_bill_items ?? [])
-      .map((r: any) => r.purchase_line_id)
-      .filter(Boolean)
+      .map((r) => r.purchase_line_id)
+      .filter((id): id is string => Boolean(id))
 
     if (!purchaseLineIds.length) {
       setInputLines(prev => {
@@ -241,7 +532,7 @@ export default function NewJobWorkPage() {
       return
     }
 
-    const { data: stockData } = await hasuraFetch<any>(PURCHASE_LINES_STOCK_QUERY, { purchase_line_ids: purchaseLineIds })
+    const { data: stockData } = await hasuraFetch<{ stock_ledger: { purchase_line_id: string; quantity: number }[] }>(PURCHASE_LINES_STOCK_QUERY, { purchase_line_ids: purchaseLineIds })
     const ledgerRows: { purchase_line_id: string; quantity: number }[] = stockData?.stock_ledger ?? []
 
     // Aggregate per purchase_line_id in JS
@@ -345,36 +636,40 @@ export default function NewJobWorkPage() {
 
   // Clear stale Output Job Line ID references when their Input row's item is removed
   useEffect(() => {
-    const validIds = new Set(inputLines.map(l => l.job_line_id).filter(Boolean))
-    setOutputLines(prev => {
-      let changed = false
-      const next = prev.map(l => {
-        if (l.job_line_id && !validIds.has(l.job_line_id)) {
-          changed = true
-          return { ...l, job_line_id: '' }
-        }
-        return l
+    Promise.resolve().then(() => {
+      const validIds = new Set(inputLines.map(l => l.job_line_id).filter(Boolean))
+      setOutputLines(prev => {
+        let changed = false
+        const next = prev.map(l => {
+          if (l.job_line_id && !validIds.has(l.job_line_id)) {
+            changed = true
+            return { ...l, job_line_id: '' }
+          }
+          return l
+        })
+        return changed ? next : prev
       })
-      return changed ? next : prev
     })
   }, [inputLines])
 
   // Auto-generate item code from material type prefix for the New Item dialog
   useEffect(() => {
-    const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
-    if (mt) setNewItemUnit(mt.unit || 'MT')
-    if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
-    if (!mt?.code) { setNewItemCode(''); return }
-    const prefix = mt.code.trim().toUpperCase()
-    const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const sequence = itemMasters.reduce((max, item) => {
-      if (!item.item_code?.startsWith(prefix)) return max
-      const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
-      if (!match) return max
-      const n = Number(match[1])
-      return Number.isFinite(n) ? Math.max(max, n) : max
-    }, 0)
-    setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    Promise.resolve().then(() => {
+      const mt = materialTypes.find(m => m.id === newItemMaterialTypeId)
+      if (mt) setNewItemUnit(mt.unit || 'MT')
+      if (!newItemMaterialTypeId) setNewItemMaterialSizeId('')
+      if (!mt?.code) { setNewItemCode(''); return }
+      const prefix = mt.code.trim().toUpperCase()
+      const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const sequence = itemMasters.reduce((max, item) => {
+        if (!item.item_code?.startsWith(prefix)) return max
+        const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
+        if (!match) return max
+        const n = Number(match[1])
+        return Number.isFinite(n) ? Math.max(max, n) : max
+      }, 0)
+      setNewItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    })
   }, [newItemMaterialTypeId, materialTypes, itemMasters])
 
   const openNewItemDialog = (lineIndex: number, lineType: 'input' | 'output', materialTypeId: string, materialSizeId: string) => {
@@ -535,7 +830,7 @@ export default function NewJobWorkPage() {
     }
 
     // Create order
-    const { data: orderData, error: oErr } = await hasuraFetch<any>(
+    const { data: orderData, error: oErr } = await hasuraFetch<{ insert_job_work_orders_one: { id: string } | null }>(
       CREATE_JOB_WORK_ORDER_MUTATION, {
         reference_number: generateReferenceNumber('JW'),
         company_id: companyId || null,
@@ -730,7 +1025,7 @@ export default function NewJobWorkPage() {
                       Item
                       <button type="button" onClick={refreshItemMasters} title="Refresh master items"
                         className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                        {refreshingItemMasters ? '…' : '↻'}
+                        {refreshingItemMasters ? '…' : <RefreshCw className="inline h-3.5 w-3.5" />}
                       </button>
                     </th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-40">Job Line ID</th>
@@ -744,132 +1039,24 @@ export default function NewJobWorkPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {inputLines.map((line, i) => (
-                    <tr key={i} className="hover:bg-blue-50/30">
-                      {/* Item */}
-                      <td className="px-2 py-2">
-                        <div className="relative" ref={el => { inputItemRefs.current[i] = el }}>
-                          <input type="text"
-                            value={inputItemSearch[i] ?? line.item_name}
-                            onChange={e => { setInputItemSearch(p => ({ ...p, [i]: e.target.value })); setInputItemOpen(p => ({ ...p, [i]: true })) }}
-                            onFocus={() => setInputItemOpen(p => ({ ...p, [i]: true }))}
-                            onBlur={() => setInputItemOpen(p => ({ ...p, [i]: false }))}
-                            placeholder="Search item…"
-                            className={inputFieldCls} />
-                          <DropdownPortal anchorEl={inputItemRefs.current[i]} open={!!inputItemOpen[i]}
-                            className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
-                              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
-                              <button type="button" onMouseDown={e => e.preventDefault()}
-                                onClick={() => openNewItemDialog(i, 'input', line.material_type_id, line.material_size_id)}
-                                className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                                + New Item
-                              </button>
-                              {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').map(im => (
-                                <button key={im.id} type="button"
-                                  onMouseDown={e => e.preventDefault()}
-                                  onClick={() => { updateInputLine(i, 'item_master_id', im.id); setInputItemSearch(p => ({ ...p, [i]: im.item_name })); setInputItemOpen(p => ({ ...p, [i]: false })) }}
-                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
-                                  <div className="min-w-0 flex-1 truncate">
-                                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
-                                    <span className="text-gray-800">{im.item_name}</span>
-                                    {im.size_label && <span className="text-gray-400 ml-1">{im.size_label}</span>}
-                                  </div>
-                                  <span className="shrink-0 text-[11px] font-mono bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5 whitespace-nowrap">
-                                    {im.availableStock.toFixed(3)} {im.unit}
-                                  </span>
-                                </button>
-                              ))}
-                              {!masterDataLoading && filteredInputItems(inputItemSearch[i] ?? '').length === 0 && (
-                                <div className="px-3 py-2 text-xs text-gray-400">
-                                  {(inputItemSearch[i] ?? '').length > 0 ? 'No matching items with stock' : 'No items with available stock'}
-                                </div>
-                              )}
-                          </DropdownPortal>
-                        </div>
-                      </td>
-
-                      {/* Job Line ID */}
-                      <td className="px-2 py-2">
-                        {line.job_line_id ? (
-                          <>
-                            <span className="inline-block text-[11px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {line.job_line_id}
-                            </span>
-                            {(() => {
-                              const allocated = outputLines
-                                .filter(o => o.job_line_id === line.job_line_id)
-                                .reduce((s, o) => s + (parseFloat(o.quantity) || 0), 0)
-                              const remaining = (parseFloat(line.quantity) || 0) - allocated
-                              return remaining < -0.0005
-                                ? <p className="text-[10px] text-red-500 mt-0.5">Over by {Math.abs(remaining).toFixed(3)} {line.unit}</p>
-                                : <p className="text-[10px] text-green-600 mt-0.5">Remaining: {remaining.toFixed(3)} {line.unit}</p>
-                            })()}
-                          </>
-                        ) : (
-                          <span className="text-xs text-gray-300 italic">—</span>
-                        )}
-                      </td>
-
-                      {/* Purchase Line ID */}
-                      <td className="px-2 py-2">
-                        {!line.item_master_id
-                          ? <span className="text-xs text-gray-400 italic">Select item first</span>
-                          : line.purchase_lines_loading
-                          ? <span className="text-xs text-gray-400">Loading…</span>
-                          : line.purchase_line_options.length === 0
-                          ? <span className="text-xs text-red-500">No stock available</span>
-                          : (
-                            <select value={line.purchase_line_id}
-                              onChange={e => updateInputLine(i, 'purchase_line_id', e.target.value)}
-                              className={selectCls + ' font-mono'}>
-                              <option value="">— Select —</option>
-                              {line.purchase_line_options.map(opt => (
-                                <option key={opt.purchase_line_id} value={opt.purchase_line_id}>
-                                  {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                      </td>
-
-                      {/* Avail Stock */}
-                      <td className="px-2 py-2 text-right">
-                        {line.available_quantity
-                          ? <span className="text-sm font-semibold text-green-700">{Number(line.available_quantity).toFixed(3)} <span className="text-xs font-normal text-green-600">{line.unit}</span></span>
-                          : <span className="text-gray-300 text-xs">—</span>}
-                      </td>
-
-                      {/* Qty Consumed */}
-                      <td className="px-2 py-2">
-                        <input type="number" value={line.quantity}
-                          onChange={e => updateInputLine(i, 'quantity', e.target.value)}
-                          step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
-                          className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
-                            line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
-                              ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
-                        {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
-                          <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
-                        )}
-                      </td>
-
-                      {/* Unit */}
-                      <td className="px-2 py-2">
-                        <select value={line.unit} onChange={e => updateInputLine(i, 'unit', e.target.value)} className={selectCls}>
-                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                      </td>
-
-                      {/* Notes */}
-                      <td className="px-2 py-2">
-                        <input type="text" value={line.notes} onChange={e => updateInputLine(i, 'notes', e.target.value)} className={inputFieldCls} />
-                      </td>
-
-                      <td className="px-2 py-2 text-center">
-                        {inputLines.length > 1 && (
-                          <button type="button" onClick={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
-                            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
-                        )}
-                      </td>
-                    </tr>
+                    <InputLineRow
+                      key={i}
+                      line={line}
+                      index={i}
+                      outputLines={outputLines}
+                      itemSearch={inputItemSearch[i] ?? line.item_name}
+                      isOpen={!!inputItemOpen[i]}
+                      masterDataLoading={masterDataLoading}
+                      setInputItemSearch={setInputItemSearch}
+                      setInputItemOpen={setInputItemOpen}
+                      updateInputLine={updateInputLine}
+                      openNewItemDialog={openNewItemDialog}
+                      filteredInputItems={filteredInputItems}
+                      onRemove={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
+                      canRemove={inputLines.length > 1}
+                      inputFieldCls={inputFieldCls}
+                      selectCls={selectCls}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -897,7 +1084,7 @@ export default function NewJobWorkPage() {
                       Produced Item
                       <button type="button" onClick={refreshItemMasters} title="Refresh master items"
                         className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-                        {refreshingItemMasters ? '…' : '↻'}
+                        {refreshingItemMasters ? '…' : <RefreshCw className="inline h-3.5 w-3.5" />}
                       </button>
                     </th>
                     <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 w-40">Job Line ID</th>
@@ -909,83 +1096,24 @@ export default function NewJobWorkPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {outputLines.map((line, i) => (
-                    <tr key={i} className="hover:bg-emerald-50/30">
-                      {/* Item */}
-                      <td className="px-2 py-2">
-                        <div className="relative" ref={el => { outputItemRefs.current[i] = el }}>
-                          <input type="text"
-                            value={outputItemSearch[i] ?? line.item_name}
-                            onChange={e => { setOutputItemSearch(p => ({ ...p, [i]: e.target.value })); setOutputItemOpen(p => ({ ...p, [i]: true })) }}
-                            onFocus={() => setOutputItemOpen(p => ({ ...p, [i]: true }))}
-                            onBlur={() => setOutputItemOpen(p => ({ ...p, [i]: false }))}
-                            placeholder="Search produced item…"
-                            className={inputFieldCls} />
-                          <DropdownPortal anchorEl={outputItemRefs.current[i]} open={!!outputItemOpen[i]}
-                            className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
-                              {masterDataLoading && <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>}
-                              <button type="button" onMouseDown={e => e.preventDefault()}
-                                onClick={() => openNewItemDialog(i, 'output', line.material_type_id, line.material_size_id)}
-                                className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
-                                + New Item
-                              </button>
-                              {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').map(im => (
-                                <button key={im.id} type="button"
-                                  onMouseDown={e => e.preventDefault()}
-                                  onClick={() => { updateOutputLine(i, 'item_master_id', im.id); setOutputItemSearch(p => ({ ...p, [i]: im.item_name })); setOutputItemOpen(p => ({ ...p, [i]: false })) }}
-                                  className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0">
-                                  <div className="min-w-0 flex-1 truncate">
-                                    <span className="font-mono text-blue-600 mr-1">{im.item_code}</span>
-                                    <span className="text-gray-800">{im.item_name}</span>
-                                    {im.size_label && <span className="text-gray-400 ml-1">{im.size_label}</span>}
-                                  </div>
-                                  {im.availableStock > 0 && (
-                                    <span className="shrink-0 text-[11px] font-mono bg-gray-50 text-gray-500 border border-gray-200 rounded px-1.5 py-0.5 whitespace-nowrap">
-                                      {im.availableStock.toFixed(3)} {im.unit}
-                                    </span>
-                                  )}
-                                </button>
-                              ))}
-                              {!masterDataLoading && filteredAllItems(outputItemSearch[i] ?? '').length === 0 && (
-                                <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
-                              )}
-                          </DropdownPortal>
-                        </div>
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <select value={line.job_line_id} onChange={e => updateOutputLine(i, 'job_line_id', e.target.value)} className={selectCls + ' font-mono'}>
-                          <option value="">— none —</option>
-                          {inputLines.filter(l => l.item_master_id && l.job_line_id).map(l => (
-                            <option key={l.job_line_id} value={l.job_line_id}>
-                              {l.job_line_id} — {l.item_name} ({l.quantity || '0'} {l.unit})
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input type="number" value={line.quantity} onChange={e => updateOutputLine(i, 'quantity', e.target.value)}
-                          step="0.001" min="0" placeholder="0.000"
-                          className="block w-full rounded border border-gray-300 px-2 py-2 text-sm text-right focus:border-blue-500 focus:outline-none" />
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <select value={line.unit} onChange={e => updateOutputLine(i, 'unit', e.target.value)} className={selectCls}>
-                          {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                      </td>
-
-                      <td className="px-2 py-2">
-                        <input type="text" value={line.notes} onChange={e => updateOutputLine(i, 'notes', e.target.value)} className={inputFieldCls} />
-                      </td>
-
-                      <td className="px-2 py-2 text-center">
-                        {outputLines.length > 1 && (
-                          <button type="button" onClick={() => setOutputLines(p => p.filter((_, idx) => idx !== i))}
-                            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
-                        )}
-                      </td>
-                    </tr>
+                    <OutputLineRow
+                      key={i}
+                      line={line}
+                      index={i}
+                      inputLines={inputLines}
+                      itemSearch={outputItemSearch[i] ?? line.item_name}
+                      isOpen={!!outputItemOpen[i]}
+                      masterDataLoading={masterDataLoading}
+                      setOutputItemSearch={setOutputItemSearch}
+                      setOutputItemOpen={setOutputItemOpen}
+                      updateOutputLine={updateOutputLine}
+                      openNewItemDialog={openNewItemDialog}
+                      filteredAllItems={filteredAllItems}
+                      onRemove={() => setOutputLines(p => p.filter((_, idx) => idx !== i))}
+                      canRemove={outputLines.length > 1}
+                      inputFieldCls={inputFieldCls}
+                      selectCls={selectCls}
+                    />
                   ))}
                 </tbody>
               </table>

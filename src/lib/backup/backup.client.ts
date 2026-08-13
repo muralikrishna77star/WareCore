@@ -2,9 +2,19 @@
  * Client-side backup utilities for downloading and managing backups
  */
 
+import type { BackupData, BackupMetadata, BackupRow } from './backup.service'
+
 export interface DownloadOptions {
   filename?: string
   format?: 'json' | 'csv'
+}
+
+/** Shape of GET /api/backup/export?format=json&table=... (see route.ts) */
+export interface TableJSONExport {
+  table: string
+  timestamp: string
+  count: number
+  data: BackupRow[]
 }
 
 /**
@@ -158,7 +168,7 @@ export async function exportTablesToCSV(
 export async function exportTableToJSON(
   table: string,
   pointInTime?: string
-): Promise<any> {
+): Promise<TableJSONExport> {
   try {
     const params = new URLSearchParams({
       table,
@@ -187,7 +197,7 @@ export async function exportTableToJSON(
  * Restore from backup
  */
 export async function restoreBackup(
-  backupData: any,
+  backupData: BackupData,
   options?: {
     tables?: string[]
     truncateFirst?: boolean
@@ -223,7 +233,7 @@ export async function restoreBackup(
 /**
  * Get list of backups
  */
-export async function getBackupsList(): Promise<any[]> {
+export async function getBackupsList(): Promise<BackupMetadata[]> {
   try {
     const response = await fetch('/api/backup/metadata')
 

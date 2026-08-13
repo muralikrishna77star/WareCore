@@ -66,13 +66,44 @@ type TransferLine = {
   quantity: string
 }
 
+interface TransferOrder {
+  vendor_id: string
+  company_id: string
+  warehouse_id: string
+  reference_number: string
+  expected_return_date: string | null
+  suppliers: { name: string } | null
+}
+
+interface TransferSourceItem {
+  id: string
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  quantity_sent: number
+  quantity_received: number | null
+  quantity_transferred_out: number | null
+  size_label: string | null
+  unit: string | null
+  item_master_id: string | null
+  item_name: string | null
+  material_type_id: string
+  material_size_id: string | null
+  material_types: { description: string } | null
+  material_sizes: { size_label: string } | null
+}
+
+interface SupplierOption {
+  id: string
+  name: string
+}
+
 export default function JobWorkTransferPage() {
   const router = useRouter()
   const params = useParams()
   const sourceId = params.id as string
 
-  const [order, setOrder] = useState<any>(null)
-  const [suppliers, setSuppliers] = useState<any[]>([])
+  const [order, setOrder] = useState<TransferOrder | null>(null)
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [existingJobLineIds, setExistingJobLineIds] = useState<string[]>([])
   const [existingTransferNumbers, setExistingTransferNumbers] = useState<string[]>([])
   const [lines, setLines] = useState<TransferLine[]>([])
@@ -87,24 +118,28 @@ export default function JobWorkTransferPage() {
 
   useEffect(() => {
     Promise.all([
-      hasuraFetch(JOB_WORK_ORDER_BY_ID_QUERY, { id: sourceId }),
-      hasuraFetch(JOB_WORK_ITEMS_QUERY, { job_work_order_id: sourceId }),
-      hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
-      hasuraFetch(ALL_JOB_WORK_LINE_IDS_QUERY),
-      hasuraFetch(ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY),
+      hasuraFetch<{ job_work_orders_by_pk: TransferOrder | null }>(JOB_WORK_ORDER_BY_ID_QUERY, { id: sourceId }),
+      hasuraFetch<{ job_work_items: TransferSourceItem[] }>(JOB_WORK_ITEMS_QUERY, { job_work_order_id: sourceId }),
+      hasuraFetch<{ suppliers: SupplierOption[] }>(ACTIVE_SUPPLIERS_QUERY),
+      hasuraFetch<{ job_work_items: { job_line_id: string | null }[] }>(ALL_JOB_WORK_LINE_IDS_QUERY),
+      hasuraFetch<{ job_work_transfers: { transfer_number: string | null }[] }>(ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY),
     ]).then(([orderRes, itemsRes, supRes, lineIdRes, transferNumRes]) => {
-      const jwo = (orderRes.data as any)?.job_work_orders_by_pk
-      const items = (itemsRes.data as any)?.job_work_items ?? []
+      const jwo = orderRes.data?.job_work_orders_by_pk ?? null
+      const items = itemsRes.data?.job_work_items ?? []
       setOrder(jwo)
-      setSuppliers((supRes.data as any)?.suppliers ?? [])
-      const lineIds: string[] = ((lineIdRes.data as any)?.job_work_items ?? []).map((i: any) => i.job_line_id).filter(Boolean)
+      setSuppliers(supRes.data?.suppliers ?? [])
+      const lineIds = (lineIdRes.data?.job_work_items ?? [])
+        .map((i) => i.job_line_id)
+        .filter((id): id is string => Boolean(id))
       setExistingJobLineIds(lineIds)
-      const transferNums: string[] = ((transferNumRes.data as any)?.job_work_transfers ?? []).map((t: any) => t.transfer_number).filter(Boolean)
+      const transferNums = (transferNumRes.data?.job_work_transfers ?? [])
+        .map((t) => t.transfer_number)
+        .filter((n): n is string => Boolean(n))
       setExistingTransferNumbers(transferNums)
 
       setLines(
         items
-          .map((item: any): TransferLine => {
+          .map((item): TransferLine => {
             const pending = Number(item.quantity_sent) - Number(item.quantity_received ?? 0) - Number(item.quantity_transferred_out ?? 0)
             return {
               sourceItemId: item.id,
@@ -152,7 +187,7 @@ export default function JobWorkTransferPage() {
     const referenceNumber = generateReferenceNumber('JW')
     const transferNumber = generateTransferNumber(existingTransferNumbers)
 
-    const { data: orderData, error: oErr } = await hasuraFetch<any>(CREATE_JOB_WORK_ORDER_MUTATION, {
+    const { data: orderData, error: oErr } = await hasuraFetch<{ insert_job_work_orders_one: { id: string } | null }>(CREATE_JOB_WORK_ORDER_MUTATION, {
       reference_number: referenceNumber,
       company_id: order.company_id,
       warehouse_id: order.warehouse_id,
@@ -200,7 +235,7 @@ export default function JobWorkTransferPage() {
       })
     }
 
-    const { data: transferData, error: tErr } = await hasuraFetch<any>(CREATE_JOB_WORK_TRANSFER_MUTATION, {
+    const { data: transferData, error: tErr } = await hasuraFetch<{ insert_job_work_transfers_one: { id: string; transfer_number: string } | null }>(CREATE_JOB_WORK_TRANSFER_MUTATION, {
       transfer_number: transferNumber,
       transfer_date: transferDate,
       from_job_work_order_id: sourceId,
@@ -264,7 +299,7 @@ export default function JobWorkTransferPage() {
               <label className="block text-xs font-medium text-gray-500 mb-1">Target Vendor *</label>
               <select value={targetVendorId} onChange={e => setTargetVendorId(e.target.value)} className={fieldCls}>
                 <option value="">— Select —</option>
-                {targetVendorOptions.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {targetVendorOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>

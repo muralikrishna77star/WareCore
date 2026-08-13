@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft, Package } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { MATERIAL_TYPES_QUERY, UPDATE_MATERIAL_TYPE_MUTATION, DELETE_MATERIAL_TYPE_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
@@ -23,7 +24,7 @@ export default function MaterialTypesPage() {
     return !q || [t.code, t.description, t.unit].some((v) => v?.toLowerCase().includes(q))
   })
 
-  const load = () => hasuraFetch(MATERIAL_TYPES_QUERY).then(r => { setTypes((r.data as any)?.material_types ?? []); setLoading(false) })
+  const load = () => hasuraFetch<{ material_types: MaterialType[] }>(MATERIAL_TYPES_QUERY).then(r => { setTypes(r.data?.material_types ?? []); setLoading(false) })
   useEffect(() => { load() }, [])
 
   const save = async () => {
@@ -56,7 +57,7 @@ export default function MaterialTypesPage() {
           <p className="mt-1 text-sm text-gray-500">{loading ? 'Loading…' : `${types.length} types`}</p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">← Admin</Link>
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="h-4 w-4" /> Admin</Link>
           <Link href="/admin/materials/new" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">+ Add Type</Link>
         </div>
       </div>
@@ -65,7 +66,7 @@ export default function MaterialTypesPage() {
 
       <div className="rounded-xl border bg-white overflow-hidden">
         {types.length === 0 && !loading ? (
-          <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">📦</p><p className="text-gray-500">No material types yet.</p></div>
+          <div className="p-12 text-center"><Package className="mx-auto h-10 w-10 text-gray-400 mb-3" /><p className="text-gray-500">No material types yet.</p></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center"><p className="text-gray-500">No material types match your search.</p></div>
         ) : (

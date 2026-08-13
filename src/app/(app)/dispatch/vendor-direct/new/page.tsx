@@ -2,9 +2,10 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { RefreshCw } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import {
   ACTIVE_JOB_WORK_ORDERS_PENDING_QUERY,
@@ -15,6 +16,39 @@ import {
   ALL_INVOICE_NUMBERS_QUERY,
   ALL_SALE_LINE_IDS_QUERY,
 } from '@/lib/hasura/queries'
+import type { Customer, TaxRate } from '@/types'
+
+interface JobWorkItemForVendorSale {
+  id: string
+  item_name: string | null
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  job_line_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+  quantity_sent: number | string
+  quantity_received: number | string | null
+  quantity_transferred_out: number | string | null
+  unit: string | null
+  item_master_id: string | null
+  material_types?: { id: string; description: string; code: string; unit: string } | null
+  material_sizes?: { size_label: string } | null
+}
+
+interface JobWorkOrderForVendorSale {
+  id: string
+  reference_number: string
+  dispatch_date: string
+  status: string
+  vendor_id: string | null
+  company_id: string | null
+  warehouse_id: string | null
+  companies?: { id: string; name: string; code: string } | null
+  warehouses?: { id: string; name: string } | null
+  suppliers?: { name: string } | null
+  job_work_items: JobWorkItemForVendorSale[]
+}
 
 function getMMYY(date = new Date()) {
   const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -35,7 +69,7 @@ function generateSaleLineId(typeCode: string, all: string[]) {
   const prefix = typeCode.slice(0, 2).toUpperCase()
   return `${prefix}${getMMYY()}-${String(nextSeq(all, /^[A-Z]{2}\d{4}-(\d+)$/) + 1).padStart(4, '0')}`
 }
-function calcTax(qty: number, rate: number, tr: any) {
+function calcTax(qty: number, rate: number, tr: TaxRate | null) {
   const taxable = qty * rate
   if (!tr) return { taxable_value: taxable, cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0, tcs_rate: 0, tcs_amount: 0, total_with_tax: taxable }
   const cgst = (taxable * Number(tr.cgst_rate)) / 100
@@ -79,9 +113,9 @@ function VendorDirectSaleForm() {
   const searchParams = useSearchParams()
   const preselectedJwId = searchParams.get('jw')
 
-  const [jwOrders, setJwOrders] = useState<any[]>([])
-  const [customers, setCustomers] = useState<any[]>([])
-  const [taxRates, setTaxRates] = useState<any[]>([])
+  const [jwOrders, setJwOrders] = useState<JobWorkOrderForVendorSale[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([])
   const [existingInvoiceNumbers, setExistingInvoiceNumbers] = useState<string[]>([])
   const [existingLineIds, setExistingLineIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,29 +131,37 @@ function VendorDirectSaleForm() {
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<SaleLine[]>([])
 
+  // Mount-only master-data load below needs saleDate just to seed the initial
+  // Sale ID; read it via a ref so this (expensive, all-reference-data) load
+  // effect doesn't have to re-run every time the date field changes — the
+  // date picker's onChange already regenerates the Sale ID on its own.
+  const saleDateRef = useRef(saleDate)
+  useEffect(() => { saleDateRef.current = saleDate })
+
   useEffect(() => {
     Promise.all([
-      hasuraFetch(ACTIVE_JOB_WORK_ORDERS_PENDING_QUERY),
-      hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
-      hasuraFetch(ACTIVE_SALES_TAX_RATES_QUERY),
-      hasuraFetch(ALL_INVOICE_NUMBERS_QUERY),
-      hasuraFetch(ALL_SALE_LINE_IDS_QUERY),
+      hasuraFetch<{ job_work_orders: JobWorkOrderForVendorSale[] }>(ACTIVE_JOB_WORK_ORDERS_PENDING_QUERY),
+      hasuraFetch<{ customers: Customer[] }>(ACTIVE_CUSTOMERS_QUERY),
+      hasuraFetch<{ tax_rates: TaxRate[] }>(ACTIVE_SALES_TAX_RATES_QUERY),
+      hasuraFetch<{ dispatch_orders: { invoice_number: string | null }[] }>(ALL_INVOICE_NUMBERS_QUERY),
+      hasuraFetch<{ dispatch_items: { sale_line_id: string | null }[] }>(ALL_SALE_LINE_IDS_QUERY),
     ]).then(([jwoRes, cuRes, trRes, invRes, sliRes]) => {
-      setJwOrders((jwoRes.data as any)?.job_work_orders ?? [])
-      setCustomers((cuRes.data as any)?.customers ?? [])
-      setTaxRates((trRes.data as any)?.tax_rates ?? [])
-      const invNums: string[] = ((invRes.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
-      const lineIds: string[] = ((sliRes.data as any)?.dispatch_items ?? []).map((i: any) => i.sale_line_id).filter(Boolean)
+      setJwOrders(jwoRes.data?.job_work_orders ?? [])
+      setCustomers(cuRes.data?.customers ?? [])
+      setTaxRates(trRes.data?.tax_rates ?? [])
+      const invNums: string[] = (invRes.data?.dispatch_orders ?? []).map((o) => o.invoice_number).filter((n): n is string => !!n)
+      const lineIds: string[] = (sliRes.data?.dispatch_items ?? []).map((i) => i.sale_line_id).filter((n): n is string => !!n)
       setExistingInvoiceNumbers(invNums)
       setExistingLineIds(lineIds)
-      setSaleId(generateSaleId(invNums, saleDate))
+      setSaleId(generateSaleId(invNums, saleDateRef.current))
       setLoading(false)
     })
   }, [])
 
   useEffect(() => {
+    Promise.resolve().then(() => {
     if (!selectedJwId) { setLines([]); return }
-    const jwo = jwOrders.find((o: any) => o.id === selectedJwId)
+    const jwo = jwOrders.find((o) => o.id === selectedJwId)
     if (!jwo) { setLines([]); return }
 
     const usedLineIds: string[] = [...existingLineIds]
@@ -148,9 +190,10 @@ function VendorDirectSaleForm() {
       })
     }
     setLines(newLines)
+    })
   }, [selectedJwId, jwOrders, existingLineIds])
 
-  const selectedJwo = jwOrders.find((o: any) => o.id === selectedJwId)
+  const selectedJwo = jwOrders.find((o) => o.id === selectedJwId)
 
   function updateLine(i: number, field: keyof SaleLine, value: string) {
     setLines(prev => {
@@ -174,9 +217,9 @@ function VendorDirectSaleForm() {
 
     setSaving(true); setError('')
 
-    const freshInvRes = await hasuraFetch(ALL_INVOICE_NUMBERS_QUERY)
-    const freshInvNums: string[] = ((freshInvRes.data as any)?.dispatch_orders ?? []).map((o: any) => o.invoice_number).filter(Boolean)
-    let invoiceToUse = saleId.trim()
+    const freshInvRes = await hasuraFetch<{ dispatch_orders: { invoice_number: string | null }[] }>(ALL_INVOICE_NUMBERS_QUERY)
+    const freshInvNums: string[] = (freshInvRes.data?.dispatch_orders ?? []).map((o) => o.invoice_number).filter((n): n is string => !!n)
+    const invoiceToUse = saleId.trim()
     if (freshInvNums.includes(invoiceToUse)) {
       const newId = generateSaleId(freshInvNums, saleDate)
       setSaleId(newId); setExistingInvoiceNumbers(freshInvNums)
@@ -184,7 +227,7 @@ function VendorDirectSaleForm() {
       setSaving(false); return
     }
 
-    const { data: orderData, error: oErr } = await hasuraFetch<any>(CREATE_DISPATCH_ORDER_MUTATION, {
+    const { data: orderData, error: oErr } = await hasuraFetch<{ insert_dispatch_orders_one: { id: string; invoice_number: string | null; status: string } }>(CREATE_DISPATCH_ORDER_MUTATION, {
       company_id: selectedJwo?.company_id ?? null,
       warehouse_id: selectedJwo?.warehouse_id ?? null,
       customer_id: customerId,
@@ -272,7 +315,7 @@ function VendorDirectSaleForm() {
               <label className="block text-xs font-medium text-gray-500 mb-1">Job Work Order *</label>
               <select value={selectedJwId} onChange={e => setSelectedJwId(e.target.value)} className={fieldCls} disabled={loading}>
                 <option value="">{loading ? 'Loading…' : '— Select order —'}</option>
-                {jwOrders.map((o: any) => (
+                {jwOrders.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.reference_number} · {o.suppliers?.name} ({o.status})
                   </option>
@@ -288,7 +331,7 @@ function VendorDirectSaleForm() {
               <label className="block text-xs font-medium text-gray-500 mb-1">Customer *</label>
               <select value={customerId} onChange={e => setCustomerId(e.target.value)} className={fieldCls}>
                 <option value="">— Select —</option>
-                {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
@@ -297,7 +340,7 @@ function VendorDirectSaleForm() {
                 <input value={saleId} onChange={e => setSaleId(e.target.value)}
                   className="block flex-1 min-w-0 rounded border border-gray-300 px-2 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none" />
                 <button type="button" onClick={() => setSaleId(generateSaleId(existingInvoiceNumbers, saleDate))}
-                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50">↻</button>
+                  className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"><RefreshCw className="h-3.5 w-3.5" /></button>
               </div>
             </div>
             <div>
@@ -393,7 +436,7 @@ function VendorDirectSaleForm() {
                         <select value={line.taxRateId} onChange={e => updateLine(i, 'taxRateId', e.target.value)}
                           className="block w-32 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
                           <option value="">No Tax</option>
-                          {taxRates.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          {taxRates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                       </td>
                       <td className="px-3 py-2 text-right">

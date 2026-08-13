@@ -38,7 +38,7 @@ const fetchOptions = (body) => ({
 async function callMetadata(body) {
   const res = await fetch(new URL('/v1/metadata', endpoint), fetchOptions(body))
   const txt = await res.text()
-  try { return JSON.parse(txt) } catch (e) { return txt }
+  try { return JSON.parse(txt) } catch { return txt }
 }
 
 async function main() {

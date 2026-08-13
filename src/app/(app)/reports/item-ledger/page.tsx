@@ -19,7 +19,7 @@ import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { ArrowLeft, BookOpen } from 'lucide-react'
 import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -221,7 +221,19 @@ export default async function ItemStockLedgerPage({
   const transferInCounterparty = new Map<string, string>()
   if (hasTransferEntries) {
     const transferAuditResult = await hasuraQuery(VENDOR_JOB_WORK_TRANSFERS_QUERY)
-    for (const t of (transferAuditResult.job_work_transfers ?? []) as any[]) {
+    interface VendorJobWorkTransfer {
+      transfer_number: string
+      from_job_work_order_id: string | null
+      to_job_work_order_id: string | null
+      from_vendor: { name: string } | null
+      to_vendor: { name: string } | null
+      job_work_transfer_items: {
+        purchase_line_id: string | null
+        sub_purchase_line_id: string | null
+        quantity_transferred: number | string
+      }[]
+    }
+    for (const t of (transferAuditResult.job_work_transfers ?? []) as VendorJobWorkTransfer[]) {
       for (const item of t.job_work_transfer_items ?? []) {
         const lineId = item.sub_purchase_line_id || item.purchase_line_id
         if (!lineId) continue
@@ -250,11 +262,13 @@ export default async function ItemStockLedgerPage({
     dupKeyCounts.set(key, (dupKeyCounts.get(key) ?? 0) + 1)
   }
 
-  let running = openingBalance
-  let vendorRunning = vendorOpeningBalance
+  // Plain accumulators for a one-shot server-side computation — held in an
+  // object (rather than reassigned `let`s) so the running totals are mutated
+  // via property writes, not variable reassignment, inside the nested map.
+  const runningBalance = { warehouse: openingBalance, vendor: vendorOpeningBalance }
   const ledgerRows = entries.map((e) => {
-    running += Number(e.quantity)
-    if (VENDOR_MOVEMENT_TYPES.includes(e.entry_type)) vendorRunning -= Number(e.quantity)
+    runningBalance.warehouse += Number(e.quantity)
+    if (VENDOR_MOVEMENT_TYPES.includes(e.entry_type)) runningBalance.vendor -= Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
     const ownVendorName = e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null
@@ -276,15 +290,15 @@ export default async function ItemStockLedgerPage({
 
     return {
       ...e,
-      balance: running,
-      vendorBalance: vendorRunning,
+      balance: runningBalance.warehouse,
+      vendorBalance: runningBalance.vendor,
       orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
       vendorName,
     }
   })
-  const closingBalance = running
-  const vendorClosingBalance = vendorRunning
+  const closingBalance = runningBalance.warehouse
+  const vendorClosingBalance = runningBalance.vendor
 
   // Vendor-direct-sale pairs post as two separate ledger rows (a
   // JOB_WORK_RETURN_IN "virtual return" from the vendor + the SALE_OUT
@@ -487,7 +501,7 @@ export default async function ItemStockLedgerPage({
             />
           )}
           {selectedItem && <PrintButton />}
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -581,7 +595,7 @@ export default async function ItemStockLedgerPage({
 
       {!selectedItem ? (
         <div className="rounded-xl border bg-white p-12 text-center">
-          <p className="text-4xl mb-3">📒</p>
+          <BookOpen className="mx-auto h-10 w-10 mb-3 text-gray-400" />
           <p className="text-gray-500 text-sm">Select an item above to view its stock ledger.</p>
         </div>
       ) : (

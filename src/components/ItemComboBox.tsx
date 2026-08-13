@@ -90,7 +90,7 @@ export function ItemComboBox({
         autoComplete="off"
         className="rounded border border-gray-300 px-2 py-1.5 text-sm w-full focus:border-blue-500 focus:outline-none"
       />
-      <DropdownPortal anchorEl={anchorRef.current} open={open} matchWidth className="max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg">
+      <DropdownPortal anchorRef={anchorRef} open={open} matchWidth className="max-h-60 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg">
         {filtered.length === 0 ? (
           <div className="px-3 py-2 text-sm text-gray-500">No items found</div>
         ) : (

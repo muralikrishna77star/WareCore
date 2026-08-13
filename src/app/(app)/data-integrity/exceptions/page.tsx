@@ -20,10 +20,6 @@ const SEVERITY_COLOR: Record<string, string> = {
   INFO: 'bg-blue-100 text-blue-700',
 }
 
-function sqlIn(values: string[]) {
-  return values.map((v) => `'${v}'`).join(',')
-}
-
 export default async function ExceptionWorkbenchPage({
   searchParams,
 }: {

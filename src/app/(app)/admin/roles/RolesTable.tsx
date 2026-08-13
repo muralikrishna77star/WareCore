@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 import SearchInput from '@/components/SearchInput'
 import { formatDateTime } from '@/lib/utils'
 
@@ -32,8 +33,8 @@ export default function RolesTable({ roles }: { roles: CustomRole[] }) {
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
           <p className="text-sm text-gray-500">{roles.length === 0 ? 'No roles created yet.' : 'No roles match your search.'}</p>
           {roles.length === 0 && (
-            <Link href="/admin/roles/new" className="mt-3 inline-block text-sm text-blue-600 hover:underline">
-              Create your first role →
+            <Link href="/admin/roles/new" className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">
+              Create your first role <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           )}
         </div>

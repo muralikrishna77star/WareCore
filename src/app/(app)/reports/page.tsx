@@ -3,14 +3,71 @@ export const dynamic = 'force-dynamic'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { REPORTS_QUERY } from '@/lib/hasura/queries'
 import Link from 'next/link'
+import {
+  ChartColumn, Calendar, Receipt, ArrowLeftRight, RefreshCw, Factory, Truck,
+  Wrench, BookOpen, Compass, HardHat, type LucideIcon,
+} from 'lucide-react'
+
+interface CurrentStockRow {
+  company_name: string
+  company_code: string
+  material_type_name: string
+  unit: string
+  size_label: string | null
+  current_stock: number | string
+}
+
+interface StockAtVendorRow {
+  vendor_name: string
+  material_type_name: string
+  size_label: string | null
+  pending_quantity: number | string
+}
+
+interface PurchaseBillSummary {
+  bill_date: string
+  total_quantity: number | string | null
+  total_amount: number | string | null
+  companies: { name: string; code?: string | null } | null
+}
+
+interface DispatchOrderSummary {
+  dispatch_date: string
+  total_quantity: number | string | null
+  total_amount: number | string | null
+  companies: { name: string; code?: string | null } | null
+}
+
+const REPORT_LINKS: {
+  href: string
+  icon: LucideIcon
+  iconBg: string
+  iconColor: string
+  hoverBorder: string
+  hoverText: string
+  title: string
+  description: string
+}[] = [
+  { href: '/reports/stock-statement', icon: ChartColumn, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', hoverBorder: 'hover:border-blue-300', hoverText: 'group-hover:text-blue-700', title: 'Stock Statement', description: 'Opening · Purchases · Transfers · Dispatch · Closing stock' },
+  { href: '/reports/daywise-stock-statement', icon: Calendar, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', hoverBorder: 'hover:border-blue-300', hoverText: 'group-hover:text-blue-700', title: 'Daywise Stock Statement', description: 'Day-by-day summary with every transaction listed underneath' },
+  { href: '/reports/billing', icon: Receipt, iconBg: 'bg-green-100', iconColor: 'text-green-600', hoverBorder: 'hover:border-green-300', hoverText: 'group-hover:text-green-700', title: 'Billing Report', description: 'Purchase bills with supplier, materials, quantities and amounts' },
+  { href: '/reports/transfers', icon: ArrowLeftRight, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600', hoverBorder: 'hover:border-indigo-300', hoverText: 'group-hover:text-indigo-700', title: 'Transfers Report', description: 'Inter-company and inter-warehouse material transfers' },
+  { href: '/reports/movements', icon: RefreshCw, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', hoverBorder: 'hover:border-orange-300', hoverText: 'group-hover:text-orange-700', title: 'Movements Report', description: 'All stock ledger entries: purchase, dispatch, transfers, job work' },
+  { href: '/reports/jobwork', icon: Factory, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', hoverBorder: 'hover:border-purple-300', hoverText: 'group-hover:text-purple-700', title: 'Job Work Report', description: 'Material sent to vendors: sent, received, and pending quantities' },
+  { href: '/reports/dispatch', icon: Truck, iconBg: 'bg-red-100', iconColor: 'text-red-600', hoverBorder: 'hover:border-red-300', hoverText: 'group-hover:text-red-700', title: 'Dispatch Report', description: 'Customer dispatch orders with invoice, vehicle, and item details' },
+  { href: '/reports/stock-reconcile', icon: Wrench, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', hoverBorder: 'hover:border-orange-300', hoverText: 'group-hover:text-orange-700', title: 'Stock Reconciliation', description: 'Detect and fix phantom stock entries from past bill edits' },
+  { href: '/reports/item-ledger', icon: BookOpen, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', hoverBorder: 'hover:border-teal-300', hoverText: 'group-hover:text-teal-700', title: 'Item Stock Ledger', description: 'Opening, movements, and running balance for a single item between two dates' },
+  { href: '/reports/purchase-line-ledger', icon: Compass, iconBg: 'bg-pink-100', iconColor: 'text-pink-600', hoverBorder: 'hover:border-pink-300', hoverText: 'group-hover:text-pink-700', title: 'Purchase Line Movements', description: 'Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns' },
+  { href: '/reports/vendor-movements', icon: HardHat, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', hoverBorder: 'hover:border-amber-300', hoverText: 'group-hover:text-amber-700', title: 'Vendorwise Stock Movement', description: 'Job work out, direct sales, returns and pending balance, by vendor' },
+]
 
 export default async function ReportsPage() {
   const result = await hasuraQuery(REPORTS_QUERY)
 
-  const stockRows = (result.v_current_stock ?? []) as any[]
-  const jwRows = (result.v_stock_at_vendors ?? []) as any[]
-  const bills = (result.purchase_bills ?? []) as any[]
-  const dispatches = (result.dispatch_orders ?? []) as any[]
+  const stockRows = (result.v_current_stock ?? []) as CurrentStockRow[]
+  const jwRows = (result.v_stock_at_vendors ?? []) as StockAtVendorRow[]
+  const bills = (result.purchase_bills ?? []) as PurchaseBillSummary[]
+  const dispatches = (result.dispatch_orders ?? []) as DispatchOrderSummary[]
 
   // Group inventory by company/material
   const inventoryByCompany: Record<string, { code: string; materials: Record<string, number> }> = {}
@@ -22,12 +79,12 @@ export default async function ReportsPage() {
   }
 
   // Bills summary
-  const totalPurchased = bills.reduce((s: number, b: any) => s + Number(b.total_quantity || 0), 0)
-  const totalPurchaseAmt = bills.reduce((s: number, b: any) => s + Number(b.total_amount || 0), 0)
-  const totalDispatched = dispatches.reduce((s: number, d: any) => s + Number(d.total_quantity || 0), 0)
-  const totalDispatchAmt = dispatches.reduce((s: number, d: any) => s + Number(d.total_amount || 0), 0)
-  const totalCurrentStock = stockRows.reduce((s: number, r: any) => s + Number(r.current_stock), 0)
-  const totalAtVendors = jwRows.reduce((s: number, r: any) => s + Number(r.pending_quantity), 0)
+  const totalPurchased = bills.reduce((s, b) => s + Number(b.total_quantity || 0), 0)
+  const totalPurchaseAmt = bills.reduce((s, b) => s + Number(b.total_amount || 0), 0)
+  const totalDispatched = dispatches.reduce((s, d) => s + Number(d.total_quantity || 0), 0)
+  const totalDispatchAmt = dispatches.reduce((s, d) => s + Number(d.total_amount || 0), 0)
+  const totalCurrentStock = stockRows.reduce((s, r) => s + Number(r.current_stock), 0)
+  const totalAtVendors = jwRows.reduce((s, r) => s + Number(r.pending_quantity), 0)
 
   return (
     <div className="space-y-6">
@@ -38,116 +95,21 @@ export default async function ReportsPage() {
 
       {/* Quick Links */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Link
-          href="/reports/stock-statement"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-blue-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">�</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-blue-700">Stock Statement</p>
-            <p className="text-sm text-gray-500 mt-0.5">Opening · Purchases · Transfers · Dispatch · Closing stock</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/daywise-stock-statement"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-blue-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">📅</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-blue-700">Daywise Stock Statement</p>
-            <p className="text-sm text-gray-500 mt-0.5">Day-by-day summary with every transaction listed underneath</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/billing"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-green-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🧾</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-green-700">Billing Report</p>
-            <p className="text-sm text-gray-500 mt-0.5">Purchase bills with supplier, materials, quantities and amounts</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/transfers"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-indigo-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">↔️</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-indigo-700">Transfers Report</p>
-            <p className="text-sm text-gray-500 mt-0.5">Inter-company and inter-warehouse material transfers</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/movements"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-orange-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🔄</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-orange-700">Movements Report</p>
-            <p className="text-sm text-gray-500 mt-0.5">All stock ledger entries: purchase, dispatch, transfers, job work</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/jobwork"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-purple-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🏭</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-purple-700">Job Work Report</p>
-            <p className="text-sm text-gray-500 mt-0.5">Material sent to vendors: sent, received, and pending quantities</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/dispatch"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-red-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🚚</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-red-700">Dispatch Report</p>
-            <p className="text-sm text-gray-500 mt-0.5">Customer dispatch orders with invoice, vehicle, and item details</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/stock-reconcile"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-orange-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🔧</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-orange-700">Stock Reconciliation</p>
-            <p className="text-sm text-gray-500 mt-0.5">Detect and fix phantom stock entries from past bill edits</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/item-ledger"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-teal-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">📒</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-teal-700">Item Stock Ledger</p>
-            <p className="text-sm text-gray-500 mt-0.5">Opening, movements, and running balance for a single item between two dates</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/purchase-line-ledger"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-pink-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🧭</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-pink-700">Purchase Line Movements</p>
-            <p className="text-sm text-gray-500 mt-0.5">Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns</p>
-          </div>
-        </Link>
-        <Link
-          href="/reports/vendor-movements"
-          className="flex items-start gap-4 rounded-xl border bg-white p-5 hover:border-amber-300 hover:shadow-sm transition-all group"
-        >
-          <div className="text-3xl">🏗️</div>
-          <div>
-            <p className="font-semibold text-gray-900 group-hover:text-amber-700">Vendorwise Stock Movement</p>
-            <p className="text-sm text-gray-500 mt-0.5">Job work out, direct sales, returns and pending balance, by vendor</p>
-          </div>
-        </Link>
+        {REPORT_LINKS.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`flex items-start gap-4 rounded-xl border bg-white p-5 ${item.hoverBorder} hover:shadow-sm transition-all group`}
+          >
+            <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${item.iconBg}`}>
+              <item.icon className={`h-5 w-5 ${item.iconColor}`} strokeWidth={2} />
+            </span>
+            <div>
+              <p className={`font-semibold text-gray-900 ${item.hoverText}`}>{item.title}</p>
+              <p className="text-sm text-gray-500 mt-0.5">{item.description}</p>
+            </div>
+          </Link>
+        ))}
       </div>
 
       {/* Summary Cards */}

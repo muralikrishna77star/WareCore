@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { X, ArrowUpRight, ArrowRight } from 'lucide-react'
 import type { ReferenceType } from '@/lib/reference'
 import { REFERENCE_LABEL } from '@/lib/reference'
 
@@ -75,19 +76,22 @@ function PreviewDialog({
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError('')
-    setRecord(null)
-    setList(null)
 
-    const extraParams = state.mode === 'list' && state.params ? `&${new URLSearchParams(state.params).toString()}` : ''
-    const url =
-      state.mode === 'record'
-        ? `/api/preview?type=${state.type}&id=${state.id}`
-        : `/api/preview/list?category=${state.category}${extraParams}`
+    Promise.resolve().then(async () => {
+      if (cancelled) return
+      setLoading(true)
+      setError('')
+      setRecord(null)
+      setList(null)
 
-    fetch(url)
-      .then(async (res) => {
+      const extraParams = state.mode === 'list' && state.params ? `&${new URLSearchParams(state.params).toString()}` : ''
+      const url =
+        state.mode === 'record'
+          ? `/api/preview?type=${state.type}&id=${state.id}`
+          : `/api/preview/list?category=${state.category}${extraParams}`
+
+      try {
+        const res = await fetch(url)
         const data = await res.json().catch(() => ({}))
         if (cancelled) return
         if (!res.ok) {
@@ -96,13 +100,12 @@ function PreviewDialog({
         }
         if (state.mode === 'record') setRecord(data)
         else setList(data)
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Network error')
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false)
-      })
+      }
+    })
 
     return () => {
       cancelled = true
@@ -131,7 +134,7 @@ function PreviewDialog({
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             aria-label="Close"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -207,8 +210,8 @@ function PreviewDialog({
                 </div>
               )}
               <div className="flex justify-end border-t pt-3">
-                <Link href={record.fullUrl} className="text-sm font-medium text-blue-600 hover:underline">
-                  Open Full Page ↗
+                <Link href={record.fullUrl} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
+                  Open Full Page <ArrowUpRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>
@@ -255,8 +258,8 @@ function PreviewDialog({
                 </div>
               )}
               <div className="flex justify-end border-t pt-3">
-                <Link href={list.viewAllUrl} className="text-sm font-medium text-blue-600 hover:underline">
-                  View All →
+                <Link href={list.viewAllUrl} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
+                  View All <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>

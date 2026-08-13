@@ -6,12 +6,31 @@ import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 
+export interface DispatchItemRow {
+  quantity: number | string
+  amount?: number | string | null
+}
+
+export interface DispatchOrderRow {
+  id: string
+  dispatch_date: string
+  invoice_number?: string | null
+  vehicle_number?: string | null
+  notes?: string | null
+  status: string
+  sale_ref_id?: string | null
+  is_vendor_direct?: boolean | null
+  companies?: { code?: string | null } | null
+  customers?: { name?: string | null } | null
+  dispatch_items?: DispatchItemRow[]
+}
+
 type Column = {
   key: string
   label: string
   align?: 'right'
   searchable?: boolean
-  filterValue?: (o: any) => string
+  filterValue?: (o: DispatchOrderRow) => string
 }
 
 const columns: Column[] = [
@@ -34,7 +53,7 @@ export default function DispatchTable({
   fromDate,
   toDate,
 }: {
-  orders: any[]
+  orders: DispatchOrderRow[]
   fromDate?: string
   toDate?: string
 }) {
@@ -52,10 +71,10 @@ export default function DispatchTable({
     )
   }, [orders, filters])
 
-  const exportRows = filtered.map((o: any) => {
+  const exportRows = filtered.map((o) => {
     const dispItems = o.dispatch_items ?? []
-    const totalQty = dispItems.reduce((s: number, i: any) => s + Number(i.quantity), 0)
-    const totalAmt = dispItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+    const totalQty = dispItems.reduce((s: number, i) => s + Number(i.quantity), 0)
+    const totalAmt = dispItems.reduce((s: number, i) => s + Number(i.amount || 0), 0)
     return {
       'Transaction Date': formatDate(o.dispatch_date),
       'Invoice Number': o.invoice_number || '',
@@ -116,10 +135,10 @@ export default function DispatchTable({
             </td>
           </tr>
         )}
-        {filtered.map((o: any) => {
+        {filtered.map((o) => {
           const dispItems = o.dispatch_items ?? []
-          const totalQty = dispItems.reduce((s: number, i: any) => s + Number(i.quantity), 0)
-          const totalAmt = dispItems.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+          const totalQty = dispItems.reduce((s: number, i) => s + Number(i.quantity), 0)
+          const totalAmt = dispItems.reduce((s: number, i) => s + Number(i.amount || 0), 0)
           const cancelled = o.status === 'cancelled'
 
           return (

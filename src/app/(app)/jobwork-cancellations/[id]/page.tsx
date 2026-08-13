@@ -2,9 +2,33 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_CANCELLATION_BY_ID_QUERY } from '@/lib/hasura/queries'
+
+interface JobWorkCancellationInputItem {
+  id: string
+  item_name: string | null
+  material_type_name: string | null
+  size_label: string | null
+  quantity_sent: number | string | null
+  quantity_received: number | string | null
+  unit: string | null
+  purchase_line_id: string | null
+  job_line_id: string | null
+}
+
+interface JobWorkCancellationOutputItem {
+  id: string
+  item_name: string | null
+  material_type_name: string | null
+  size_label: string | null
+  quantity: number | string | null
+  unit: string | null
+  source_job_line_id: string | null
+  notes: string | null
+}
 
 export default async function JobWorkCancellationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -12,15 +36,15 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
   const record = result.job_work_cancellations_by_pk
   if (!record) notFound()
 
-  const items = record.job_work_cancellation_items ?? []
-  const outputItems = record.job_work_cancellation_output_items ?? []
+  const items: JobWorkCancellationInputItem[] = record.job_work_cancellation_items ?? []
+  const outputItems: JobWorkCancellationOutputItem[] = record.job_work_cancellation_output_items ?? []
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/jobwork-cancellations" className="text-sm text-blue-600 hover:underline mb-1 block">
-            ← Job Work Cancellations
+          <Link href="/jobwork-cancellations" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mb-1">
+            <ArrowLeft className="h-4 w-4" /> Job Work Cancellations
           </Link>
           <h1 className="text-2xl font-bold text-gray-400 line-through">
             {record.reference_number || `Job Work ${id.slice(0, 8)}`}
@@ -115,7 +139,7 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 ? (
                 <tr><td colSpan={9} className="px-6 py-8 text-center text-gray-400">No line items.</td></tr>
-              ) : items.map((item: any, idx: number) => (
+              ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-700">{item.item_name || '—'}</td>
@@ -166,7 +190,7 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {outputItems.map((item: any, idx: number) => (
+                {outputItems.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-700">{item.item_name || '—'}</td>
@@ -191,8 +215,8 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
       )}
 
       <Link href="/jobwork-cancellations"
-        className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
-        ← Back to Cancellations
+        className="inline-flex items-center gap-1 px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
+        <ArrowLeft className="h-4 w-4" /> Back to Cancellations
       </Link>
     </div>
   )

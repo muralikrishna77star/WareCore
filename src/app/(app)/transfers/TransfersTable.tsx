@@ -16,6 +16,26 @@ const statusColors: Record<string, string> = {
 
 type ItemOption = { id: string; item_code: string; item_name: string }
 
+interface TransferItem {
+  quantity: number | string
+  size_label?: string | null
+  material_types?: { description?: string | null } | null
+  material_sizes?: { size_label?: string | null } | null
+}
+
+interface Transfer {
+  id: string
+  transfer_date: string
+  status: string
+  notes?: string | null
+  created_at?: string
+  from_company?: { name?: string; code?: string } | null
+  to_company?: { name?: string; code?: string } | null
+  from_warehouse?: { name?: string } | null
+  to_warehouse?: { name?: string } | null
+  transfer_items?: TransferItem[]
+}
+
 export default function TransfersTable({
   transfers,
   fromDate,
@@ -25,7 +45,7 @@ export default function TransfersTable({
   itemValue,
   emptyMessage,
 }: {
-  transfers: any[]
+  transfers: Transfer[]
   fromDate?: string
   toDate?: string
   basePath: string
@@ -90,9 +110,9 @@ export default function TransfersTable({
     })
   }, [transfers, fromFilter, toFilter, statusFilter])
 
-  const exportRows = filtered.map((t: any) => {
+  const exportRows = filtered.map((t: Transfer) => {
     const items = t.transfer_items ?? []
-    const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
+    const totalQty = items.reduce((s: number, i: TransferItem) => s + Number(i.quantity), 0)
     return {
       'Transaction Date': formatDate(t.transfer_date),
       'From': `${t.from_company?.code || ''} / ${t.from_warehouse?.name || ''}`,
@@ -212,9 +232,9 @@ export default function TransfersTable({
               </td>
             </tr>
           )}
-          {filtered.map((t: any) => {
+          {filtered.map((t: Transfer) => {
             const items = t.transfer_items ?? []
-            const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity), 0)
+            const totalQty = items.reduce((s: number, i: TransferItem) => s + Number(i.quantity), 0)
 
             return (
               <tr key={t.id} className="hover:bg-gray-50">

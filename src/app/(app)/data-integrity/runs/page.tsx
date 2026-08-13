@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { cookies } from 'next/headers'
+import { TriangleAlert } from 'lucide-react'
 import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
 import { CAN_RUN_SCAN } from '@/lib/dataIntegrity/auth'
@@ -72,7 +73,7 @@ export default async function ReconciliationRunsPage() {
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[r.status] ?? 'bg-gray-100 text-gray-700'}`}>
                       {r.status}
                     </span>
-                    {r.error_message && <span className="ml-1 text-xs text-red-600" title={r.error_message}>⚠</span>}
+                    {r.error_message && <span className="ml-1 text-red-600" title={r.error_message}><TriangleAlert className="inline h-3.5 w-3.5" /></span>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.started_at ? new Date(r.started_at).toLocaleString() : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-500">{r.execution_time_ms ? `${(Number(r.execution_time_ms) / 1000).toFixed(1)}s` : '—'}</td>

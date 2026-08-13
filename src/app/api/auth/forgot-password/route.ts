@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Look up user — always return 200 to prevent email enumeration
-  const result = await hasuraRequest(FIND_USER_BY_EMAIL, { email })
+  const result = await hasuraRequest<{ user_profiles: { id: string; full_name: string; email: string }[] }>(FIND_USER_BY_EMAIL, { email })
   const user = result?.data?.user_profiles?.[0]
 
   if (!user) {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { TriangleAlert } from 'lucide-react'
 
 export default function AppError({
   error,
@@ -22,7 +23,7 @@ export default function AppError({
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
       <div className="rounded-2xl border bg-white p-10 shadow-sm max-w-lg w-full">
-        <div className="text-5xl mb-4">⚠️</div>
+        <TriangleAlert className="mx-auto mb-4 h-12 w-12 text-amber-500" />
         <h1 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h1>
 
         {isHasuraError ? (

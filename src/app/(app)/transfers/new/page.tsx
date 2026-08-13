@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { Check, X } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import {
@@ -14,6 +15,20 @@ import {
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, MaterialType, MaterialSize } from '@/types'
+
+interface ItemMasterRow {
+  id: string
+  item_code: string
+  item_name: string
+  material_type_id: string
+  material_size_id?: string | null
+  size_label?: string | null
+  unit: string
+  is_active: boolean
+  created_at: string
+  material_types?: { id: string; code: string; description: string; unit: string } | null
+  material_sizes?: { id: string; size_label: string } | null
+}
 
 type TransferLine = {
   item_master_id: string
@@ -46,7 +61,7 @@ export default function NewTransferPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [materialTypes, setMaterialTypes] = useState<MaterialType[]>([])
   const [materialSizes, setMaterialSizes] = useState<MaterialSize[]>([])
-  const [itemMaster, setItemMaster] = useState<any[]>([])
+  const [itemMaster, setItemMaster] = useState<ItemMasterRow[]>([])
   const [purchaseLinesByItem, setPurchaseLinesByItem] = useState<Record<string, string[]>>({})
 
   const [showMaterialTypeDialog, setShowMaterialTypeDialog] = useState(false)
@@ -80,26 +95,28 @@ export default function NewTransferPage() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
   const [isMounted, setIsMounted] = useState(false)
 
-  useEffect(() => { setIsMounted(true) }, [])
+  useEffect(() => {
+    Promise.resolve().then(() => { setIsMounted(true) })
+  }, [])
 
   useEffect(() => {
     const load = async () => {
       const [c, w, mt, ms, im, pbl] = await Promise.all([
-        hasuraFetch(ACTIVE_COMPANIES_QUERY),
-        hasuraFetch(ACTIVE_WAREHOUSES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
-        hasuraFetch(ACTIVE_MATERIAL_SIZES_QUERY),
-        hasuraFetch(ACTIVE_ITEM_MASTER_QUERY),
-        hasuraFetch(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
+        hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+        hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
+        hasuraFetch<{ material_types: MaterialType[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
+        hasuraFetch<{ material_sizes: MaterialSize[] }>(ACTIVE_MATERIAL_SIZES_QUERY),
+        hasuraFetch<{ item_master: ItemMasterRow[] }>(ACTIVE_ITEM_MASTER_QUERY),
+        hasuraFetch<{ purchase_bill_items: { item_master_id: string; purchase_line_id: string }[] }>(ALL_PURCHASE_BILL_ITEM_LINES_QUERY),
       ])
-      setCompanies((c.data as any)?.companies ?? [])
-      setWarehouses((w.data as any)?.warehouses ?? [])
-      setMaterialTypes((mt.data as any)?.material_types ?? [])
-      setMaterialSizes((ms.data as any)?.material_sizes ?? [])
-      setItemMaster((im.data as any)?.item_master ?? [])
+      setCompanies(c.data?.companies ?? [])
+      setWarehouses(w.data?.warehouses ?? [])
+      setMaterialTypes(mt.data?.material_types ?? [])
+      setMaterialSizes(ms.data?.material_sizes ?? [])
+      setItemMaster(im.data?.item_master ?? [])
 
       const raw: { item_master_id: string; purchase_line_id: string }[] =
-        (pbl.data as any)?.purchase_bill_items ?? []
+        pbl.data?.purchase_bill_items ?? []
       const byItem: Record<string, string[]> = {}
       for (const r of raw) {
         if (!r.item_master_id || !r.purchase_line_id) continue
@@ -153,7 +170,7 @@ export default function NewTransferPage() {
     })
   }, [])
 
-  const selectItem = useCallback((i: number, item: any) => {
+  const selectItem = useCallback((i: number, item: ItemMasterRow) => {
     const linesForItem = purchaseLinesByItem[item.id] ?? []
     // Auto-select when there is exactly one purchase line; leave empty for user to choose otherwise
     const autoLine = linesForItem.length === 1 ? linesForItem[0] : ''
@@ -230,7 +247,7 @@ export default function NewTransferPage() {
       setLoading(false); return
     }
 
-    const { data: transferData, error: tErr } = await hasuraFetch<any>(CREATE_TRANSFER_MUTATION, {
+    const { data: transferData, error: tErr } = await hasuraFetch<{ insert_transfers_one: { id: string } }>(CREATE_TRANSFER_MUTATION, {
       from_company_id: fromCompanyId || null,
       to_company_id: toCompanyId || null,
       from_warehouse_id: fromWarehouseId || null,
@@ -345,15 +362,6 @@ export default function NewTransferPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {lines.map((line, i) => {
-                  const q = line.item_search.trim()
-                  const filtered = q
-                    ? itemMaster.filter(it =>
-                        it.item_name?.toLowerCase().includes(q.toLowerCase()) ||
-                        it.item_code?.toLowerCase().includes(q.toLowerCase())
-                      )
-                    : itemMaster
-                  const displayItems = filtered.slice(0, 15)
-
                   const sizesForType = materialSizes.filter(
                     s => !s.material_type_id || s.material_type_id === line.material_type_id
                   )
@@ -609,8 +617,8 @@ export default function NewTransferPage() {
 
         <div className="flex gap-3">
           <button type="submit" disabled={loading}
-            className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Saving...' : '✓ Create Transfer'}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            {loading ? 'Saving...' : (<><Check className="h-4 w-4" /> Create Transfer</>)}
           </button>
           <button type="button" onClick={() => router.back()}
             className="rounded-lg border border-gray-300 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
@@ -643,7 +651,7 @@ export default function NewTransferPage() {
               type="button"
               onMouseDown={e => { e.preventDefault(); setOpenDropdown(null) }}
               className="text-gray-300 hover:text-gray-500 text-xs px-1"
-            >✕</button>
+            ><X className="h-3.5 w-3.5" /></button>
           </div>
           <ul className="max-h-64 overflow-y-auto">
             {(() => {

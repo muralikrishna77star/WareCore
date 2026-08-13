@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { X, Save, RefreshCw, Upload, Hourglass, TriangleAlert, FileText, FolderOpen, DatabaseBackup } from 'lucide-react'
+import { StatCard } from '@/components/StatCard'
 import {
   createAndDownloadBackup,
   exportTableToCSV,
@@ -9,6 +11,14 @@ import {
   deleteBackupById,
   restoreBackup,
 } from '@/lib/backup/backup.client'
+import type { BackupData } from '@/lib/backup/backup.service'
+
+// Shape of an uploaded backup JSON file (same envelope backup.client.ts's
+// createAndDownloadBackup() writes: { backup: <metadata>, data: <tables> }).
+interface RestoreFilePayload {
+  backup?: { timestamp?: string; [key: string]: unknown }
+  data: BackupData
+}
 
 const TABLES = [
   'companies', 'warehouses', 'suppliers', 'customers',
@@ -43,14 +53,12 @@ export function BackupManager() {
 
   // Restore state
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
-  const [restoreFileData, setRestoreFileData] = useState<any>(null)
+  const [restoreFileData, setRestoreFileData] = useState<RestoreFilePayload | null>(null)
   const [restoreTables, setRestoreTables] = useState<string[]>([])
   const [truncateFirst, setTruncateFirst] = useState(false)
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { loadBackups() }, [])
 
   const loadBackups = async () => {
     try {
@@ -63,6 +71,10 @@ export function BackupManager() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    Promise.resolve().then(() => { loadBackups() })
+  }, [])
 
   const showMsg = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
     setMessage({ text, type })
@@ -204,16 +216,22 @@ export function BackupManager() {
       {message && (
         <div className={`rounded-lg border px-4 py-3 text-sm flex items-start justify-between gap-3 ${msgBg}`}>
           <span>{message.text}</span>
-          <button onClick={() => setMessage(null)} className="shrink-0 opacity-60 hover:opacity-100">✕</button>
+          <button onClick={() => setMessage(null)} className="shrink-0 opacity-60 hover:opacity-100"><X className="h-4 w-4" /></button>
         </div>
       )}
 
       {/* Tabs */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="flex border-b border-gray-200">
-          <button className={tabCls('backup')} onClick={() => setActiveTab('backup')}>💾 Create Backup</button>
-          <button className={tabCls('restore')} onClick={() => setActiveTab('restore')}>🔄 Restore</button>
-          <button className={tabCls('export')} onClick={() => setActiveTab('export')}>📤 Export CSV</button>
+          <button className={tabCls('backup')} onClick={() => setActiveTab('backup')}>
+            <span className="inline-flex items-center gap-1.5"><Save className="h-4 w-4" /> Create Backup</span>
+          </button>
+          <button className={tabCls('restore')} onClick={() => setActiveTab('restore')}>
+            <span className="inline-flex items-center gap-1.5"><RefreshCw className="h-4 w-4" /> Restore</span>
+          </button>
+          <button className={tabCls('export')} onClick={() => setActiveTab('export')}>
+            <span className="inline-flex items-center gap-1.5"><Upload className="h-4 w-4" /> Export CSV</span>
+          </button>
         </div>
 
         <div className="p-6">
@@ -273,12 +291,21 @@ export function BackupManager() {
                 disabled={loading || selectedTables.length === 0}
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? '⏳ Creating…' : '💾 Create & Download Backup'}
+                {loading ? (
+                  <><Hourglass className="h-4 w-4" /> Creating…</>
+                ) : (
+                  <><Save className="h-4 w-4" /> Create &amp; Download Backup</>
+                )}
               </button>
 
               {/* Backup history */}
               {backups.length > 0 && (
                 <div>
+                  <div className="mb-3 flex flex-wrap gap-3">
+                    <StatCard icon={DatabaseBackup} iconBg="bg-blue-100" iconColor="text-blue-600"
+                      value={String(backups.length)} label={backups.length === 1 ? 'backup on record' : 'backups on record'}
+                      caption={`Last: ${new Date(backups[0].timestamp).toLocaleDateString('en-IN')}`} />
+                  </div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Backups</h3>
                   <div className="space-y-2">
                     {backups.slice(0, 5).map((b) => (
@@ -287,7 +314,7 @@ export function BackupManager() {
                           <span className="font-medium text-gray-900">{b.name || 'Unnamed backup'}</span>
                           <span className="ml-3 text-gray-400">{new Date(b.timestamp).toLocaleString('en-IN')}</span>
                           <span className="ml-3 text-gray-400">{b.tables?.length ?? 0} tables · {b.totalRows?.toLocaleString() ?? 0} rows</span>
-                          {b.notes && <span className="ml-3 text-gray-400 italic">"{b.notes}"</span>}
+                          {b.notes && <span className="ml-3 text-gray-400 italic">&quot;{b.notes}&quot;</span>}
                         </div>
                         <button
                           onClick={() => handleDeleteBackup(b.id)}
@@ -307,8 +334,8 @@ export function BackupManager() {
           {activeTab === 'restore' && (
             <div className="space-y-5">
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <strong>⚠️ Warning:</strong> Restoring will overwrite existing data in the selected tables.
-                Use "Truncate before restore" only if you want to completely replace a table's contents.
+                <span className="inline-flex items-center gap-1"><TriangleAlert className="inline h-3.5 w-3.5" /> <strong>Warning:</strong></span> Restoring will overwrite existing data in the selected tables.
+                Use &quot;Truncate before restore&quot; only if you want to completely replace a table&apos;s contents.
                 Always create a fresh backup before restoring.
               </div>
 
@@ -321,12 +348,12 @@ export function BackupManager() {
                 >
                   {restoreFile ? (
                     <div>
-                      <p className="text-sm font-medium text-gray-900">📄 {restoreFile.name}</p>
+                      <p className="flex items-center justify-center gap-1.5 text-sm font-medium text-gray-900"><FileText className="h-4 w-4 shrink-0" /> {restoreFile.name}</p>
                       <p className="text-xs text-gray-500 mt-1">{(restoreFile.size / 1024).toFixed(1)} KB — click to change</p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-3xl mb-2">📂</p>
+                      <FolderOpen className="mx-auto mb-2 h-10 w-10 text-gray-400" />
                       <p className="text-sm font-medium text-gray-700">Click to select a WareCore backup file</p>
                       <p className="text-xs text-gray-400 mt-1">JSON format only</p>
                     </div>
@@ -401,7 +428,11 @@ export function BackupManager() {
                   disabled={restoreLoading || restoreTables.length === 0}
                   className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                  {restoreLoading ? '⏳ Restoring…' : `🔄 Restore ${restoreTables.length} Tables`}
+                  {restoreLoading ? (
+                    <><Hourglass className="h-4 w-4" /> Restoring…</>
+                  ) : (
+                    <><RefreshCw className="h-4 w-4" /> Restore {restoreTables.length} Tables</>
+                  )}
                 </button>
               )}
 
@@ -454,7 +485,7 @@ export function BackupManager() {
                       disabled={loading}
                       className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:border-blue-400 disabled:opacity-50 transition-colors text-left"
                     >
-                      📄 {table}
+                      <span className="inline-flex items-center gap-1"><FileText className="inline h-3.5 w-3.5" /> {table}</span>
                     </button>
                   ))}
                 </div>
@@ -486,7 +517,11 @@ export function BackupManager() {
                   disabled={loading || selectedTables.length === 0}
                   className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                  {loading ? '⏳ Exporting…' : `📤 Export ${selectedTables.length} Tables as CSV`}
+                  {loading ? (
+                    <><Hourglass className="h-4 w-4" /> Exporting…</>
+                  ) : (
+                    <><Upload className="h-4 w-4" /> Export {selectedTables.length} Tables as CSV</>
+                  )}
                 </button>
               </div>
             </div>

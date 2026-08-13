@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft, Users } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { CUSTOMERS_LIST_QUERY, UPDATE_CUSTOMER_MUTATION, DELETE_CUSTOMER_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
 
 type Customer = { id: string; name: string; contact_person?: string; phone?: string; email?: string; city?: string; state?: string; gstin?: string; is_active: boolean }
-
-const blank = (): Customer => ({ id: '', name: '', contact_person: '', phone: '', email: '', city: '', state: '', gstin: '', is_active: true })
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -23,7 +22,7 @@ export default function CustomersPage() {
     return !q || [c.name, c.contact_person, c.phone, c.city, c.state, c.gstin].some((v) => v?.toLowerCase().includes(q))
   })
 
-  const load = () => hasuraFetch(CUSTOMERS_LIST_QUERY).then(r => { setCustomers((r.data as any)?.customers ?? []); setLoading(false) })
+  const load = () => hasuraFetch<{ customers: Customer[] }>(CUSTOMERS_LIST_QUERY).then(r => { setCustomers(r.data?.customers ?? []); setLoading(false) })
   useEffect(() => { load() }, [])
 
   const save = async () => {
@@ -52,7 +51,7 @@ export default function CustomersPage() {
           <p className="mt-1 text-sm text-gray-500">{loading ? 'Loading…' : `${customers.length} customers`}</p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">← Admin</Link>
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="h-4 w-4" /> Admin</Link>
           <Link href="/admin/customers/new" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">+ Add Customer</Link>
         </div>
       </div>
@@ -61,7 +60,7 @@ export default function CustomersPage() {
 
       <div className="rounded-xl border bg-white overflow-hidden">
         {customers.length === 0 && !loading ? (
-          <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">👥</p><p className="text-gray-500">No customers yet.</p></div>
+          <div className="p-12 text-center"><Users className="mx-auto h-10 w-10 text-gray-400 mb-3" /><p className="text-gray-500">No customers yet.</p></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center"><p className="text-gray-500">No customers match your search.</p></div>
         ) : (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft, Building2 } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { COMPANIES_QUERY, UPDATE_COMPANY_MUTATION, DELETE_COMPANY_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
@@ -21,7 +22,7 @@ export default function CompaniesPage() {
     return !q || [c.name, c.code, c.short_name, c.city, c.state, c.gstin].some((v) => v?.toLowerCase().includes(q))
   })
 
-  const load = () => hasuraFetch(COMPANIES_QUERY).then(r => { setCompanies((r.data as any)?.companies ?? []); setLoading(false) })
+  const load = () => hasuraFetch<{ companies: Company[] }>(COMPANIES_QUERY).then(r => { setCompanies(r.data?.companies ?? []); setLoading(false) })
   useEffect(() => { load() }, [])
 
   const save = async () => {
@@ -49,7 +50,7 @@ export default function CompaniesPage() {
           <p className="mt-1 text-sm text-gray-500">{loading ? 'Loading…' : `${companies.length} companies`}</p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">← Admin</Link>
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"><ArrowLeft className="h-4 w-4" /> Admin</Link>
           <Link href="/admin/companies/new" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">+ Add Company</Link>
         </div>
       </div>
@@ -58,7 +59,7 @@ export default function CompaniesPage() {
 
       <div className="rounded-xl border bg-white overflow-hidden">
         {companies.length === 0 && !loading ? (
-          <div className="p-12 text-center"><p className="text-gray-400 text-4xl mb-3">🏢</p><p className="text-gray-500">No companies yet.</p></div>
+          <div className="p-12 text-center"><Building2 className="mx-auto h-10 w-10 text-gray-400 mb-3" /><p className="text-gray-500">No companies yet.</p></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center"><p className="text-gray-500">No companies match your search.</p></div>
         ) : (

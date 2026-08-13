@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Trash2 } from 'lucide-react'
 
 export default function PurgeBillButton({ billId }: { billId: string }) {
   const router = useRouter()
@@ -37,7 +38,7 @@ export default function PurgeBillButton({ billId }: { billId: string }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
         <div className="flex items-start gap-3 mb-4">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-lg">
-            🗑
+            <Trash2 className="h-5 w-5" strokeWidth={2} />
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900">Purge Cancelled Bill</h2>

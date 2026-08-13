@@ -17,6 +17,7 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -52,6 +53,68 @@ type ItemOption = ComboOption & {
   material_size_id: string | null
 }
 
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+interface Warehouse {
+  id: string
+  name: string
+  company_id: string
+}
+
+interface Supplier {
+  id: string
+  name: string
+}
+
+interface MaterialType {
+  id: string
+  description: string
+}
+
+interface MaterialSize {
+  id: string
+  material_type_id: string | null
+  size_label: string
+}
+
+interface ItemMasterRow {
+  id: string
+  item_code: string
+  item_name: string
+  material_type_id: string
+  material_size_id: string | null
+  size_label?: string | null
+  material_sizes?: { size_label: string } | null
+}
+
+interface StockLedgerMovement {
+  id: string
+  entry_type: string
+  quantity: number | string
+  entry_date: string
+  reference_number: string | null
+  reference_type: string | null
+  // Note: MOVEMENTS_REPORT_QUERY does not select `reference_id` — always
+  // undefined at runtime (pre-existing, out of scope here).
+  reference_id?: string | null
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  size_label: string | null
+  notes: string | null
+  material_type_id: string | null
+  material_size_id: string | null
+  warehouse_id: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  material_types: { description: string | null; unit?: string | null } | null
+  material_sizes: { size_label: string | null } | null
+  runningBalance?: number
+}
+
 export default async function MovementsReportPage({
   searchParams,
 }: {
@@ -82,19 +145,19 @@ export default async function MovementsReportPage({
     hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
   ])
 
-  const companies: any[] = compResult.companies ?? []
-  const allWarehouses: any[] = whResult.warehouses ?? []
+  const companies = (compResult.companies ?? []) as Company[]
+  const allWarehouses = (whResult.warehouses ?? []) as Warehouse[]
   const warehouses = params.company
-    ? allWarehouses.filter((w: any) => w.company_id === params.company)
+    ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
-  const suppliers: any[] = supResult.suppliers ?? []
-  const materialTypes: any[] = matTypeResult.material_types ?? []
-  const allSizes: any[] = matSizeResult.material_sizes ?? []
+  const suppliers = (supResult.suppliers ?? []) as Supplier[]
+  const materialTypes = (matTypeResult.material_types ?? []) as MaterialType[]
+  const allSizes = (matSizeResult.material_sizes ?? []) as MaterialSize[]
   const sizes = params.material_type
-    ? allSizes.filter((s: any) => !s.material_type_id || s.material_type_id === params.material_type)
+    ? allSizes.filter((s) => !s.material_type_id || s.material_type_id === params.material_type)
     : allSizes
 
-  const itemRows: any[] = itemResult.item_master ?? []
+  const itemRows = (itemResult.item_master ?? []) as ItemMasterRow[]
   const itemOptions: ItemOption[] = itemRows.map((i) => {
     const size = i.material_sizes?.size_label || i.size_label
     return {
@@ -134,8 +197,8 @@ export default async function MovementsReportPage({
       hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
     ])
     const refIds = [
-      ...(billIdsResult.purchase_bills ?? []).map((b: any) => b.id),
-      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: any) => o.id),
+      ...(billIdsResult.purchase_bills ?? []).map((b: { id: string }) => b.id),
+      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: { id: string }) => o.id),
     ]
     if (refIds.length === 0) {
       noResults = true
@@ -147,13 +210,14 @@ export default async function MovementsReportPage({
   const result = noResults
     ? { stock_ledger: [] }
     : await hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: { _and: conditions } })
+  const resultMovements = (result.stock_ledger ?? []) as StockLedgerMovement[]
 
-  const totalIn = result.stock_ledger
-    ?.filter((m: any) => entryTypeConfig[m.entry_type]?.isIn)
-    .reduce((s: number, m: any) => s + Number(m.quantity || 0), 0) ?? 0
-  const totalOut = result.stock_ledger
-    ?.filter((m: any) => entryTypeConfig[m.entry_type] && !entryTypeConfig[m.entry_type].isIn)
-    .reduce((s: number, m: any) => s + Math.abs(Number(m.quantity || 0)), 0) ?? 0
+  const totalIn = resultMovements
+    .filter((m) => entryTypeConfig[m.entry_type]?.isIn)
+    .reduce((s, m) => s + Number(m.quantity || 0), 0)
+  const totalOut = resultMovements
+    .filter((m) => entryTypeConfig[m.entry_type] && !entryTypeConfig[m.entry_type].isIn)
+    .reduce((s, m) => s + Math.abs(Number(m.quantity || 0)), 0)
 
   // Running Balance, per stock key (item + size + warehouse) — this report
   // spans many different items/warehouses at once, so a single running
@@ -164,8 +228,8 @@ export default async function MovementsReportPage({
   // Sorted by key first (stable sort preserves the query's own
   // entry_date/created_at order within each key) so the running total
   // reads correctly top-to-bottom within each item block.
-  const stockKeyFor = (m: any) => `${m.material_type_id ?? ''}|${m.material_size_id ?? ''}|${m.warehouse_id ?? ''}`
-  const movements: any[] = [...(result.stock_ledger ?? [])].sort((a, b) => stockKeyFor(a).localeCompare(stockKeyFor(b)))
+  const stockKeyFor = (m: StockLedgerMovement) => `${m.material_type_id ?? ''}|${m.material_size_id ?? ''}|${m.warehouse_id ?? ''}`
+  const movements = [...resultMovements].sort((a, b) => stockKeyFor(a).localeCompare(stockKeyFor(b)))
   const runningByKey = new Map<string, number>()
   for (const m of movements) {
     const key = stockKeyFor(m)
@@ -178,20 +242,20 @@ export default async function MovementsReportPage({
   // (m.purchase_line_id), same as Job Work Report and Vendor Movements — not
   // an average. Value keeps the ledger quantity's sign (positive = in,
   // negative = out) rather than hiding or flipping negative movements.
-  const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m: any) => m.purchase_line_id))
-  const rateFor = (m: any): number | null => (m.purchase_line_id ? movementRateMap.get(m.purchase_line_id) ?? null : null)
-  const valueFor = (m: any): number | null => {
+  const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m) => m.purchase_line_id))
+  const rateFor = (m: StockLedgerMovement): number | null => (m.purchase_line_id ? movementRateMap.get(m.purchase_line_id) ?? null : null)
+  const valueFor = (m: StockLedgerMovement): number | null => {
     const rate = rateFor(m)
     return rate != null ? Number(m.quantity) * rate : null
   }
   const totalValue = movements.reduce((s, m) => s + (valueFor(m) ?? 0), 0)
 
   const exportMeta = {
-    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
     fromDate,
     toDate,
     filterLine: [
-      `Warehouse: ${warehouses.find((w: any) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+      `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
       `Item: ${selectedItem?.label || 'All Items'}`,
       `Entry Type: ${params.entry_type ? entryTypeConfig[params.entry_type]?.label ?? params.entry_type : 'All'}`,
     ].join('   |   '),
@@ -215,7 +279,7 @@ export default async function MovementsReportPage({
       { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
       { header: 'Reference', key: 'reference', width: 16, align: 'left' },
     ],
-    rows: movements.map((m: any, idx: number) => {
+    rows: movements.map((m, idx: number) => {
       const rate = rateFor(m)
       const value = valueFor(m)
       return {
@@ -253,7 +317,7 @@ export default async function MovementsReportPage({
             />
           )}
           <PrintButton />
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -269,14 +333,14 @@ export default async function MovementsReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Companies</option>
-              {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
             <select name="warehouse" defaultValue={params.warehouse || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Warehouses</option>
-              {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
           <div>
@@ -292,7 +356,7 @@ export default async function MovementsReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Material Type</label>
             <select name="material_type" defaultValue={params.material_type || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Material Types</option>
-              {materialTypes.map((mt: any) => (
+              {materialTypes.map((mt) => (
                 <option key={mt.id} value={mt.id}>{mt.description}</option>
               ))}
             </select>
@@ -301,7 +365,7 @@ export default async function MovementsReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Size</label>
             <select name="size" defaultValue={params.size || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Sizes</option>
-              {sizes.map((s: any) => (
+              {sizes.map((s) => (
                 <option key={s.id} value={s.id}>{s.size_label}</option>
               ))}
             </select>
@@ -320,7 +384,7 @@ export default async function MovementsReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Supplier</label>
             <select name="vendor" defaultValue={params.vendor || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Suppliers</option>
-              {suppliers.map((s: any) => (
+              {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -384,7 +448,7 @@ export default async function MovementsReportPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {movements.map((m: any) => {
+                {movements.map((m) => {
                   const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
                   const isIn = cfg.isIn
                   const rate = rateFor(m)
@@ -404,8 +468,8 @@ export default async function MovementsReportPage({
                       <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-700' : 'text-red-600'}`}>
                         {isIn ? '+' : '-'}{Math.abs(Number(m.quantity)).toFixed(3)}
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium bg-indigo-50/40 ${m.runningBalance < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
-                        {Number(m.runningBalance).toFixed(3)}
+                      <td className={`px-4 py-3 text-right font-medium bg-indigo-50/40 ${(m.runningBalance ?? 0) < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
+                        {Number(m.runningBalance ?? 0).toFixed(3)}
                       </td>
                       <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate != null ? fmtC(rate) : '—'}</td>
                       <td className={`px-4 py-3 text-right font-medium bg-teal-50/40 ${value != null && value < 0 ? 'text-red-600' : 'text-teal-800'}`}>

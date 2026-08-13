@@ -31,7 +31,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 })
   }
 
-  const checkJson = await hasuraFetchEnvelope(GET_USER_QUERY, { id })
+  const checkJson = await hasuraFetchEnvelope<{ user_profiles_by_pk: { id: string; role: string } | null }>(GET_USER_QUERY, { id })
   const target = checkJson?.data?.user_profiles_by_pk
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
@@ -40,7 +40,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Only a Developer can delete another Developer account' }, { status: 403 })
   }
 
-  const json = await hasuraFetchEnvelope(DELETE_USER_MUTATION, { id })
+  const json = await hasuraFetchEnvelope<{ delete_user_profiles_by_pk: { id: string; full_name: string } | null }>(DELETE_USER_MUTATION, { id })
   if (json.errors) {
     return NextResponse.json({ error: json.errors[0]?.message ?? 'Failed to delete user' }, { status: 500 })
   }

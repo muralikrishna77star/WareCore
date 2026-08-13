@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { Truck } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_ORDERS_QUERY, DISPATCH_ORDERS_MAX_CREATED_QUERY, ACTIVE_CUSTOMERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
 import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
-import DispatchTable from './DispatchTable'
+import DispatchTable, { type DispatchOrderRow as DispatchOrderListRow } from './DispatchTable'
 import { ListingFilters } from '@/components/ListingFilters'
 import { ListingSummary } from '@/components/ListingSummary'
 
@@ -33,16 +34,16 @@ export default async function DispatchPage({
     hasuraQuery(ACTIVE_CUSTOMERS_QUERY),
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
   ])
-  const orders = ordersResult.dispatch_orders ?? []
+  const orders: DispatchOrderListRow[] = ordersResult.dispatch_orders ?? []
   const customers: { id: string; name: string }[] = customersResult.customers ?? []
   const itemOptions: { id: string; item_code: string; item_name: string }[] = itemsResult.item_master ?? []
 
   const totalQuantity = orders.reduce(
-    (s: number, o: any) => s + (o.dispatch_items ?? []).reduce((s2: number, i: any) => s2 + Number(i.quantity || 0), 0),
+    (s: number, o: DispatchOrderListRow) => s + (o.dispatch_items ?? []).reduce((s2: number, i) => s2 + Number(i.quantity || 0), 0),
     0
   )
   const totalAmount = orders.reduce(
-    (s: number, o: any) => s + (o.dispatch_items ?? []).reduce((s2: number, i: any) => s2 + Number(i.amount || 0), 0),
+    (s: number, o: DispatchOrderListRow) => s + (o.dispatch_items ?? []).reduce((s2: number, i) => s2 + Number(i.amount || 0), 0),
     0
   )
 
@@ -69,7 +70,7 @@ export default async function DispatchPage({
         </div>
       </div>
 
-      <ListingSummary count={orders.length} countLabel="sale" totalQuantity={totalQuantity} totalAmount={totalAmount} />
+      <ListingSummary count={orders.length} countLabel="sale" countIcon={Truck} totalQuantity={totalQuantity} totalAmount={totalAmount} />
 
       <ListingFilters
         basePath="/dispatch"
@@ -87,7 +88,7 @@ export default async function DispatchPage({
         <div className="overflow-auto max-h-[70vh]">
           {!orders || orders.length === 0 ? (
             <div className="p-12 text-center">
-              <p className="text-gray-400 text-4xl mb-3">🚚</p>
+              <Truck className="h-10 w-10 text-gray-400 mb-3" strokeWidth={1.5} />
               <p className="text-gray-500">No sale entries in the selected range.</p>
             </div>
           ) : (

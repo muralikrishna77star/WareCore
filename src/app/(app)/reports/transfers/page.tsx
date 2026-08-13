@@ -6,6 +6,7 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -19,6 +20,46 @@ const statusColors: Record<string, string> = {
   in_transit: 'bg-blue-100 text-blue-800',
   completed: 'bg-green-100 text-green-800',
   cancelled: 'bg-red-100 text-red-800',
+}
+
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+interface TransferItem {
+  quantity: number | string
+  size_label: string | null
+  material_types: { description: string | null } | null
+  material_sizes: { size_label: string | null } | null
+}
+
+interface Transfer {
+  id: string
+  transfer_date: string
+  status: string | null
+  notes?: string | null
+  companies_from: { name: string; code?: string | null } | null
+  companies_to: { name: string; code?: string | null } | null
+  warehouses_from: { name: string } | null
+  warehouses_to: { name: string } | null
+  transfer_items: TransferItem[]
+}
+
+interface LedgerRow {
+  id: string
+  entry_type: string
+  quantity: number | string
+  entry_date: string
+  reference_number: string | null
+  purchase_line_id: string | null
+  size_label: string | null
+  notes: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  material_types: { description: string | null } | null
+  material_sizes: { size_label: string | null } | null
 }
 
 export default async function TransfersReportPage({
@@ -44,27 +85,27 @@ export default async function TransfersReportPage({
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
   ])
 
-  const transfers: any[] = result.transfers ?? []
-  const companies: any[] = compResult.companies ?? []
+  const transfers = (result.transfers ?? []) as Transfer[]
+  const companies = (compResult.companies ?? []) as Company[]
 
   const totalQty = transfers.reduce((s, t) => {
-    return s + (t.transfer_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity || 0), 0)
+    return s + (t.transfer_items ?? []).reduce((si: number, i) => si + Number(i.quantity || 0), 0)
   }, 0)
 
   // Ledger Detail: the actual TRANSFER_OUT/TRANSFER_IN stock_ledger rows
   // these transfers produced — real transaction-level traceability. No
   // running balance: mixed items/warehouses have no single meaningful one.
-  const transferIds = transfers.map((t: any) => t.id)
+  const transferIds = transfers.map((t) => t.id)
   const ledgerResult = transferIds.length > 0
     ? await hasuraQuery(MOVEMENTS_REPORT_QUERY, {
         where: { _and: [{ reference_type: { _eq: 'transfer' } }, { reference_id: { _in: transferIds } }] },
       })
     : { stock_ledger: [] }
-  const ledgerRows: any[] = ledgerResult.stock_ledger ?? []
-  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m: any) => m.purchase_line_id))
+  const ledgerRows = (ledgerResult.stock_ledger ?? []) as LedgerRow[]
+  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m) => m.purchase_line_id))
 
   const exportMeta = {
-    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
     fromDate,
     toDate,
     filterLine: `Status: ${params.status ? params.status.replace('_', ' ') : 'All'}`,
@@ -85,7 +126,10 @@ export default async function TransfersReportPage({
       { header: 'Qty (T)', key: 'qty', width: 12, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Status', key: 'status', width: 14, align: 'center' },
     ],
-    rows: transfers.flatMap((t: any) => {
+    rows: transfers.flatMap((t): Array<{
+      date: string; fromCompany: string; fromWarehouse: string; toCompany: string; toWarehouse: string
+      material: string; size: string; qty: number | null; status: string
+    }> => {
       const items = t.transfer_items ?? []
       const base = {
         date: t.transfer_date,
@@ -98,7 +142,7 @@ export default async function TransfersReportPage({
       if (items.length === 0) {
         return [{ ...base, material: '', size: '', qty: null, status }]
       }
-      return items.map((item: any) => ({
+      return items.map((item) => ({
         ...base,
         material: item.material_types?.description || '',
         size: item.material_sizes?.size_label ?? item.size_label ?? '',
@@ -127,7 +171,7 @@ export default async function TransfersReportPage({
       { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
       { header: 'Remarks', key: 'remarks', width: 24, align: 'left' },
     ],
-    rows: ledgerRows.map((m: any, idx: number) => {
+    rows: ledgerRows.map((m, idx: number) => {
       const qty = Number(m.quantity)
       const rate = m.purchase_line_id ? ledgerRateMap.get(m.purchase_line_id) ?? null : null
       return {
@@ -167,7 +211,7 @@ export default async function TransfersReportPage({
             />
           )}
           <PrintButton />
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -183,7 +227,7 @@ export default async function TransfersReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Company (From or To)</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Companies</option>
-              {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
@@ -245,10 +289,10 @@ export default async function TransfersReportPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {transfers.map((t: any) => {
+                {transfers.map((t) => {
                   const items = t.transfer_items ?? []
-                  const rows = items.length === 0 ? [null] : items
-                  return rows.map((item: any, idx: number) => (
+                  const rows: (TransferItem | null)[] = items.length === 0 ? [null] : items
+                  return rows.map((item, idx: number) => (
                     <tr key={`${t.id}-${idx}`} className="hover:bg-gray-50">
                       {idx === 0 && (
                         <>
@@ -270,7 +314,7 @@ export default async function TransfersReportPage({
                       )}
                       {idx === 0 && (
                         <td className="px-4 py-3" rowSpan={rows.length}>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[t.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[t.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
                             {t.status?.replace('_', ' ')}
                           </span>
                         </td>

@@ -79,6 +79,31 @@ function sourceDestinationFor(
   }
 }
 
+function SortableTh({
+  column,
+  label,
+  align,
+  sortHrefs,
+  activeSort,
+  activeDir,
+}: {
+  column: string
+  label: string
+  align?: 'right'
+  sortHrefs: Record<string, string>
+  activeSort: string
+  activeDir: 'asc' | 'desc'
+}) {
+  return (
+    <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
+      <a href={sortHrefs[column]} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
+        {label}
+        <span className="text-[10px]">{activeSort === column ? (activeDir === 'desc' ? '▼' : '▲') : ''}</span>
+      </a>
+    </th>
+  )
+}
+
 export default function VendorMovementsTable({
   rows,
   sortHrefs,
@@ -101,15 +126,6 @@ export default function VendorMovementsTable({
     })
   }
 
-  const SortableTh = ({ column, label, align }: { column: string; label: string; align?: 'right' }) => (
-    <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
-      <a href={sortHrefs[column]} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
-        {label}
-        <span className="text-[10px]">{activeSort === column ? (activeDir === 'desc' ? '▼' : '▲') : ''}</span>
-      </a>
-    </th>
-  )
-
   if (rows.length === 0) {
     return <p className="p-8 text-center text-gray-500 text-sm">No vendor movements found for the selected period.</p>
   }
@@ -119,14 +135,14 @@ export default function VendorMovementsTable({
       <thead className="sticky top-0 z-10">
         <tr className="bg-gray-50 text-left border-b">
           <th className="px-2 py-3 w-8" />
-          <SortableTh column="vendor" label="Vendor" />
-          <SortableTh column="company" label="Company" />
-          <SortableTh column="item" label="Item" />
-          <SortableTh column="size" label="Size" />
-          <SortableTh column="job_work_out" label="Job Work Out" align="right" />
-          <SortableTh column="direct_sales" label="Direct Sales" align="right" />
-          <SortableTh column="returns" label="Returns" align="right" />
-          <SortableTh column="balance" label="Balance" align="right" />
+          <SortableTh column="vendor" label="Vendor" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="company" label="Company" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="item" label="Item" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="size" label="Size" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="job_work_out" label="Job Work Out" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="direct_sales" label="Direct Sales" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="returns" label="Returns" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="balance" label="Balance" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-left whitespace-nowrap">Purchase Date</th>
           <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-right">Rate</th>
           <th className="px-4 py-3 text-xs font-medium text-amber-700 bg-amber-50 uppercase text-right">Valuation</th>

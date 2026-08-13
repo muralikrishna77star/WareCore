@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check } from 'lucide-react'
 
 export default function SubmitBillButton({ billId, hasWarehouse }: { billId: string; hasWarehouse: boolean }) {
   const router = useRouter()
@@ -28,9 +29,9 @@ export default function SubmitBillButton({ billId, hasWarehouse }: { billId: str
       <button
         onClick={handleSubmit}
         disabled={loading}
-        className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+        className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
       >
-        {loading ? 'Submitting…' : '✓ Submit Bill'}
+        {loading ? 'Submitting…' : (<><Check className="h-4 w-4" /> Submit Bill</>)}
       </button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

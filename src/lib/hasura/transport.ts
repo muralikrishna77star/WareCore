@@ -10,7 +10,7 @@ const LOCAL_MODE = process.env.LOCAL_MODE === 'true'
  * direct `fetch(HASURA_URL, ...)` call site should go through this instead,
  * so the desktop/web split stays a single env-driven branch.
  */
-export async function hasuraFetchEnvelope<T = any>(
+export async function hasuraFetchEnvelope<T = unknown>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<GraphQLEnvelope<T>> {

@@ -16,7 +16,7 @@ export interface GraphQLEnvelope<T = any> {
  * dispatches each root field to the matching compiler, and returns the same
  * { data, errors } envelope a real Hasura response would.
  */
-export async function executeGraphQL<T = any>(
+export async function executeGraphQL<T = unknown>(
   query: string,
   variables: Record<string, unknown> = {}
 ): Promise<GraphQLEnvelope<T>> {

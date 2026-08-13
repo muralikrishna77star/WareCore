@@ -6,6 +6,7 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -19,6 +20,59 @@ const statusColors: Record<string, string> = {
   dispatched: 'bg-blue-100 text-blue-800',
   delivered: 'bg-green-100 text-green-800',
   cancelled: 'bg-red-100 text-red-800',
+}
+
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+interface Warehouse {
+  id: string
+  name: string
+  company_id: string
+}
+
+interface DispatchItem {
+  quantity: number | string
+  rate: number | string | null
+  amount: number | string | null
+  size_label: string | null
+  material_types: { description: string | null } | null
+  material_sizes: { size_label: string | null } | null
+}
+
+interface DispatchOrder {
+  id: string
+  dispatch_date: string
+  vehicle_number: string | null
+  driver_name?: string | null
+  invoice_number: string | null
+  notes?: string | null
+  sale_ref_id?: string | null
+  // Note: DISPATCH_REPORT_QUERY does not currently select `status` — this
+  // field is always undefined at runtime (pre-existing, out of scope here).
+  status?: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  customers: { name: string } | null
+  dispatch_items: DispatchItem[]
+}
+
+interface LedgerRow {
+  id: string
+  entry_type: string
+  quantity: number | string
+  entry_date: string
+  reference_number: string | null
+  purchase_line_id: string | null
+  size_label: string | null
+  notes: string | null
+  companies: { name: string; code?: string | null } | null
+  warehouses: { name: string } | null
+  material_types: { description: string | null } | null
+  material_sizes: { size_label: string | null } | null
 }
 
 export default async function DispatchReportPage({
@@ -46,38 +100,38 @@ export default async function DispatchReportPage({
     hasuraQuery(ACTIVE_WAREHOUSES_QUERY),
   ])
 
-  const orders: any[] = result.dispatch_orders ?? []
-  const companies: any[] = compResult.companies ?? []
-  const allWarehouses: any[] = whResult.warehouses ?? []
+  const orders = (result.dispatch_orders ?? []) as DispatchOrder[]
+  const companies = (compResult.companies ?? []) as Company[]
+  const allWarehouses = (whResult.warehouses ?? []) as Warehouse[]
   const warehouses = params.company
-    ? allWarehouses.filter((w: any) => w.company_id === params.company)
+    ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
 
   const totalQty = orders.reduce((s, o) => {
-    return s + (o.dispatch_items ?? []).reduce((si: number, i: any) => si + Number(i.quantity || 0), 0)
+    return s + (o.dispatch_items ?? []).reduce((si: number, i) => si + Number(i.quantity || 0), 0)
   }, 0)
   const totalAmt = orders.reduce((s, o) => {
-    return s + (o.dispatch_items ?? []).reduce((si: number, i: any) => si + Number(i.amount || 0), 0)
+    return s + (o.dispatch_items ?? []).reduce((si: number, i) => si + Number(i.amount || 0), 0)
   }, 0)
 
   // Ledger Detail: the actual SALE_OUT/SALE_CANCEL stock_ledger rows these
   // dispatches produced — real transaction-level traceability. No running
   // balance: mixed items/warehouses have no single meaningful one.
-  const orderIds = orders.map((o: any) => o.id)
+  const orderIds = orders.map((o) => o.id)
   const ledgerResult = orderIds.length > 0
     ? await hasuraQuery(MOVEMENTS_REPORT_QUERY, {
         where: { _and: [{ reference_type: { _eq: 'dispatch' } }, { reference_id: { _in: orderIds } }] },
       })
     : { stock_ledger: [] }
-  const ledgerRows: any[] = ledgerResult.stock_ledger ?? []
-  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m: any) => m.purchase_line_id))
+  const ledgerRows = (ledgerResult.stock_ledger ?? []) as LedgerRow[]
+  const ledgerRateMap = await fetchPurchaseLineRateMap(ledgerRows.map((m) => m.purchase_line_id))
 
   const exportMeta = {
-    companyName: companies.find((c: any) => c.id === params.company)?.name || 'All Companies',
+    companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
     fromDate,
     toDate,
     filterLine: [
-      `Warehouse: ${warehouses.find((w: any) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
+      `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
       `Status: ${params.status ? params.status.replace(/_/g, ' ') : 'All'}`,
     ].join('   |   '),
     generatedBy: '',
@@ -100,7 +154,10 @@ export default async function DispatchReportPage({
       { header: 'Amount (₹)', key: 'amount', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
       { header: 'Status', key: 'status', width: 14, align: 'center' },
     ],
-    rows: orders.flatMap((o: any) => {
+    rows: orders.flatMap((o): Array<{
+      date: string; invoiceNo: string; company: string; warehouse: string; customer: string; vehicle: string
+      material: string; size: string; qty: number | null; rate: number | null; amount: number | null; status: string
+    }> => {
       const items = o.dispatch_items ?? []
       const base = {
         date: o.dispatch_date,
@@ -114,7 +171,7 @@ export default async function DispatchReportPage({
       if (items.length === 0) {
         return [{ ...base, material: '', size: '', qty: null, rate: null, amount: null, status }]
       }
-      return items.map((item: any) => ({
+      return items.map((item) => ({
         ...base,
         material: item.material_types?.description || '',
         size: item.material_sizes?.size_label ?? item.size_label ?? '',
@@ -145,7 +202,7 @@ export default async function DispatchReportPage({
       { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
       { header: 'Remarks', key: 'remarks', width: 24, align: 'left' },
     ],
-    rows: ledgerRows.map((m: any, idx: number) => {
+    rows: ledgerRows.map((m, idx: number) => {
       const qty = Number(m.quantity)
       const rate = m.purchase_line_id ? ledgerRateMap.get(m.purchase_line_id) ?? null : null
       return {
@@ -185,7 +242,7 @@ export default async function DispatchReportPage({
             />
           )}
           <PrintButton />
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -201,14 +258,14 @@ export default async function DispatchReportPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Companies</option>
-              {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
             <select name="warehouse" defaultValue={params.warehouse || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
               <option value="">All Warehouses</option>
-              {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
           <div>
@@ -277,10 +334,10 @@ export default async function DispatchReportPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {orders.map((o: any) => {
+                {orders.map((o) => {
                   const items = o.dispatch_items ?? []
-                  const rows = items.length === 0 ? [null] : items
-                  return rows.map((item: any, idx: number) => (
+                  const rows: (DispatchItem | null)[] = items.length === 0 ? [null] : items
+                  return rows.map((item, idx: number) => (
                     <tr key={`${o.id}-${idx}`} className="hover:bg-gray-50">
                       {idx === 0 && (
                         <>
@@ -305,7 +362,7 @@ export default async function DispatchReportPage({
                       )}
                       {idx === 0 && (
                         <td className="px-4 py-3" rowSpan={rows.length}>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[o.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[o.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
                             {o.status?.replace(/_/g, ' ')}
                           </span>
                         </td>

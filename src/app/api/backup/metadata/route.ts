@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
 import { listBackups, getBackup, deleteBackup } from '@/lib/backup/backup.service'
 
+const ALLOWED_ROLES = new Set(['admin', 'developer'])
+
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication
+    // Verify authentication (admin only)
     const session = await verifySessionCookie(request)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.has(session.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -40,6 +45,9 @@ export async function DELETE(request: NextRequest) {
     const session = await verifySessionCookie(request)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.has(session.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

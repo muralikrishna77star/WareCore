@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { TriangleAlert } from 'lucide-react'
 import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
@@ -16,11 +17,31 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-800',
 }
 
+export type JobWorkOrderItem = {
+  quantity_sent: number
+  quantity_received: number | null
+  quantity_transferred_out: number | null
+  size_label: string | null
+}
+
+export type JobWorkOrderRow = {
+  id: string
+  reference_number: string | null
+  dispatch_date: string
+  expected_return_date: string | null
+  actual_return_date: string | null
+  status: string
+  notes: string | null
+  companies: { name: string; code: string } | null
+  suppliers: { name: string } | null
+  job_work_items: JobWorkOrderItem[]
+}
+
 type Column = {
   key: string
   label: string
   align?: 'left' | 'right'
-  filterValue: (o: any) => string
+  filterValue: (o: JobWorkOrderRow) => string
 }
 
 const columns: Column[] = [
@@ -59,7 +80,7 @@ export default function JobWorkTable({
   itemValue,
   emptyMessage,
 }: {
-  orders: any[]
+  orders: JobWorkOrderRow[]
   fromDate?: string
   toDate?: string
   basePath: string
@@ -131,7 +152,7 @@ export default function JobWorkTable({
     )
   }, [orders, filters])
 
-  const exportRows = filtered.map((o: any) => {
+  const exportRows = filtered.map((o) => {
     const items = o.job_work_items ?? []
     return {
       'Transaction Date': formatDate(o.dispatch_date),
@@ -284,11 +305,11 @@ export default function JobWorkTable({
             </td>
           </tr>
         )}
-        {filtered.map((o: any) => {
+        {filtered.map((o) => {
           const items = o.job_work_items ?? []
-          const totalQty = items.reduce((s: number, i: any) => s + Number(i.quantity_sent), 0)
-          const totalReturned = items.reduce((s: number, i: any) => s + Number(i.quantity_received || 0), 0)
-          const totalTransferred = items.reduce((s: number, i: any) => s + Number(i.quantity_transferred_out || 0), 0)
+          const totalQty = items.reduce((s, i) => s + Number(i.quantity_sent), 0)
+          const totalReturned = items.reduce((s, i) => s + Number(i.quantity_received || 0), 0)
+          const totalTransferred = items.reduce((s, i) => s + Number(i.quantity_transferred_out || 0), 0)
           const isOverdue = o.expected_return_date && !o.actual_return_date && new Date(o.expected_return_date) < new Date()
 
           return (
@@ -316,7 +337,11 @@ export default function JobWorkTable({
               </td>
               <td className={`px-6 py-3 whitespace-nowrap ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
                 {o.expected_return_date ? formatDate(o.expected_return_date) : '—'}
-                {isOverdue && <span className="ml-1 text-xs">⚠ Overdue</span>}
+                {isOverdue && (
+                  <span className="ml-1 inline-flex items-center gap-1 text-xs">
+                    <TriangleAlert className="inline h-3.5 w-3.5" /> Overdue
+                  </span>
+                )}
               </td>
               <td className="px-6 py-3">
                 <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[o.status] || 'bg-gray-100 text-gray-700'}`}>

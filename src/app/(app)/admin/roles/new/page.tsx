@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { CREATE_CUSTOM_ROLE_MUTATION, INSERT_ROLE_PERMISSIONS_MUTATION } from '@/lib/hasura/queries'
 import { SCREEN_GROUPS, ALL_SCREENS, initialPermissions } from '@/lib/screens'
@@ -25,7 +26,9 @@ export default function NewRolePage() {
 
   // Auto-generate code from name unless user has manually edited it
   useEffect(() => {
-    if (!codeManuallyEdited) setRoleCode(toCode(roleName))
+    Promise.resolve().then(() => {
+      if (!codeManuallyEdited) setRoleCode(toCode(roleName))
+    })
   }, [roleName, codeManuallyEdited])
 
   // ── Per-cell toggle ───────────────────────────────────────────────────────
@@ -74,7 +77,7 @@ export default function NewRolePage() {
     setLoading(true)
 
     // 1. Create the role
-    const { data: roleData, error: roleErr } = await hasuraFetch<any>(CREATE_CUSTOM_ROLE_MUTATION, {
+    const { data: roleData, error: roleErr } = await hasuraFetch<{ insert_custom_roles_one: { id: string; role_name: string; role_code: string } }>(CREATE_CUSTOM_ROLE_MUTATION, {
       role_name: roleName.trim(),
       role_code: roleCode.trim(),
       description: description.trim() || null,
@@ -305,7 +308,7 @@ export default function NewRolePage() {
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Saving...' : '✓ Save Role'}
+            {loading ? 'Saving...' : <><Check className="h-4 w-4" /> Save Role</>}
           </button>
           <button
             type="button"

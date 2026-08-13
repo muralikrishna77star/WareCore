@@ -35,8 +35,15 @@ export interface BackupMetadata {
   notes?: string
 }
 
+// A backed-up row's column values: run_sql (web/Hasura) always returns text,
+// but the LOCAL_MODE executor and previously-restored JSON files can carry
+// real JSON types (numbers, booleans, null, nested arrays) — restoreFromBackup
+// below branches on all of these when re-serializing to SQL literals.
+export type BackupRowValue = string | number | boolean | null | BackupRowValue[]
+export type BackupRow = Record<string, BackupRowValue>
+
 export interface BackupData {
-  [table: string]: any[]
+  [table: string]: BackupRow[]
 }
 
 export interface RestoreOptions {
@@ -53,12 +60,16 @@ async function runSQL(sql: string): Promise<{ result: string[][] }> {
   return hasuraRunSql(sql)
 }
 
-/** Convert Hasura result rows (array-of-arrays with header row) to objects */
-function toObjects(result: string[][]): Record<string, any>[] {
+/**
+ * Convert Hasura result rows (array-of-arrays with header row) to objects.
+ * Every cell is really a raw SQL-text string at this point; callers assert
+ * the row shape they expect via T (e.g. a specific backup_history row).
+ */
+function toObjects<T = Record<string, string>>(result: string[][]): T[] {
   if (!result || result.length < 2) return []
   const headers = result[0]
   return result.slice(1).map(row =>
-    Object.fromEntries(headers.map((h, i) => [h, row[i]]))
+    Object.fromEntries(headers.map((h, i) => [h, row[i]])) as T
   )
 }
 
@@ -134,6 +145,34 @@ export async function saveBackupMetadata(metadata: BackupMetadata): Promise<void
   await runSQL(sql)
 }
 
+// Raw backup_history columns as they come back from run_sql — `tables` is a
+// Postgres TEXT[] rendered as its text literal (e.g. "{a,b}"), not a JSON
+// array; BackupMetadata.tables expects a real string[], so it's asserted
+// below same as the pre-existing (previously untyped) behavior.
+interface BackupHistoryRow {
+  id: string
+  name: string
+  timestamp: string
+  tables: string
+  total_rows: string
+  backup_path: string
+  created_by: string
+  notes: string | null
+}
+
+function toBackupMetadata(r: BackupHistoryRow): BackupMetadata {
+  return {
+    id: r.id,
+    name: r.name,
+    timestamp: r.timestamp,
+    tables: (r.tables as unknown as string[]) ?? [],
+    totalRows: Number(r.total_rows ?? 0),
+    backupPath: r.backup_path,
+    createdBy: r.created_by,
+    notes: r.notes ?? undefined,
+  }
+}
+
 export async function listBackups(): Promise<BackupMetadata[]> {
   const { result } = await runSQL(
     `SELECT id, name, timestamp, tables, total_rows, backup_path, created_by, notes
@@ -141,16 +180,7 @@ export async function listBackups(): Promise<BackupMetadata[]> {
      WHERE deleted_at IS NULL
      ORDER BY timestamp DESC`
   )
-  return toObjects(result).map(r => ({
-    id: r.id,
-    name: r.name,
-    timestamp: r.timestamp,
-    tables: r.tables ?? [],
-    totalRows: Number(r.total_rows ?? 0),
-    backupPath: r.backup_path,
-    createdBy: r.created_by,
-    notes: r.notes ?? undefined,
-  }))
+  return toObjects<BackupHistoryRow>(result).map(toBackupMetadata)
 }
 
 export async function getBackup(backupId: string): Promise<BackupMetadata | null> {
@@ -158,19 +188,9 @@ export async function getBackup(backupId: string): Promise<BackupMetadata | null
     `SELECT id, name, timestamp, tables, total_rows, backup_path, created_by, notes
      FROM backup_history WHERE id = '${esc(backupId)}' LIMIT 1`
   )
-  const rows = toObjects(result)
+  const rows = toObjects<BackupHistoryRow>(result)
   if (!rows.length) return null
-  const r = rows[0]
-  return {
-    id: r.id,
-    name: r.name,
-    timestamp: r.timestamp,
-    tables: r.tables ?? [],
-    totalRows: Number(r.total_rows ?? 0),
-    backupPath: r.backup_path,
-    createdBy: r.created_by,
-    notes: r.notes ?? undefined,
-  }
+  return toBackupMetadata(rows[0])
 }
 
 export async function deleteBackup(backupId: string): Promise<void> {
@@ -232,7 +252,7 @@ export async function getPointInTimeBackup(
   return getAllTableData(tables, timestamp)
 }
 
-export function dataToCSV(data: any[], tableName: string): string {
+export function dataToCSV(data: BackupRow[], tableName: string): string {
   if (!data.length) return `"Table: ${tableName}"\n"No data found"`
   const headers = Object.keys(data[0])
   return [

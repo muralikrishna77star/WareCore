@@ -18,6 +18,40 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 type Field = { label: string; value: string }
 type Item = { name: string; size?: string; quantity: string; unit?: string; rate?: string; amount?: string }
 
+interface PurchaseBillItemRow {
+  item_name?: string | null
+  material_types?: { description?: string | null } | null
+  size_label?: string | null
+  quantity: number | string
+  rate?: number | string | null
+  amount?: number | string | null
+}
+
+interface DispatchItemRow {
+  item_name?: string | null
+  material_types?: { description?: string | null } | null
+  size_label?: string | null
+  quantity: number | string
+  rate?: number | string | null
+  amount?: number | string | null
+}
+
+interface JobWorkItemRow {
+  item_name?: string | null
+  material_types?: { description?: string | null } | null
+  size_label?: string | null
+  quantity_sent: number | string
+  quantity_received: number | string
+}
+
+interface TransferItemRow {
+  item_name?: string | null
+  material_types?: { description?: string | null } | null
+  material_sizes?: { size_label?: string | null } | null
+  size_label?: string | null
+  quantity: number | string
+}
+
 const fmtQ = (n: unknown) => Number(n || 0).toFixed(3)
 const fmtAmt = (n: unknown) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('en-IN') : '—')
@@ -29,7 +63,7 @@ async function loadPurchaseBill(id: string) {
   ])
   const bill = billRes.purchase_bills_by_pk
   if (!bill) return null
-  const items: Item[] = (itemsRes.purchase_bill_items ?? []).map((i: any) => ({
+  const items: Item[] = (itemsRes.purchase_bill_items ?? []).map((i: PurchaseBillItemRow) => ({
     name: i.item_name || i.material_types?.description || '—',
     size: i.size_label,
     quantity: fmtQ(i.quantity),
@@ -59,7 +93,7 @@ async function loadDispatch(id: string) {
   ])
   const order = orderRes.dispatch_orders_by_pk
   if (!order) return null
-  const items: Item[] = (itemsRes.dispatch_items ?? []).map((i: any) => ({
+  const items: Item[] = (itemsRes.dispatch_items ?? []).map((i: DispatchItemRow) => ({
     name: i.item_name || i.material_types?.description || '—',
     size: i.size_label,
     quantity: fmtQ(i.quantity),
@@ -67,7 +101,7 @@ async function loadDispatch(id: string) {
     amount: i.amount != null ? fmtAmt(i.amount) : undefined,
   }))
   const totalQuantity = items.reduce((s, i) => s + Number(i.quantity), 0)
-  const totalAmount = (itemsRes.dispatch_items ?? []).reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+  const totalAmount = (itemsRes.dispatch_items ?? []).reduce((s: number, i: DispatchItemRow) => s + Number(i.amount || 0), 0)
   const fields: Field[] = [
     { label: 'Customer', value: order.customers?.name || '—' },
     { label: 'Date', value: fmtDate(order.dispatch_date) },
@@ -92,12 +126,12 @@ async function loadJobWork(id: string) {
   ])
   const order = orderRes.job_work_orders_by_pk
   if (!order) return null
-  const items: Item[] = (itemsRes.job_work_items ?? []).map((i: any) => ({
+  const items: Item[] = (itemsRes.job_work_items ?? []).map((i: JobWorkItemRow) => ({
     name: i.item_name || i.material_types?.description || '—',
     size: i.size_label,
     quantity: `${fmtQ(i.quantity_sent)} sent / ${fmtQ(i.quantity_received)} returned`,
   }))
-  const totalSent = (itemsRes.job_work_items ?? []).reduce((s: number, i: any) => s + Number(i.quantity_sent || 0), 0)
+  const totalSent = (itemsRes.job_work_items ?? []).reduce((s: number, i: JobWorkItemRow) => s + Number(i.quantity_sent || 0), 0)
   const fields: Field[] = [
     { label: 'Vendor', value: order.suppliers?.name || '—' },
     { label: 'Dispatch Date', value: fmtDate(order.dispatch_date) },
@@ -121,7 +155,7 @@ async function loadTransfer(id: string) {
   ])
   const transfer = transferRes.transfers_by_pk
   if (!transfer) return null
-  const items: Item[] = (itemsRes.transfer_items ?? []).map((i: any) => ({
+  const items: Item[] = (itemsRes.transfer_items ?? []).map((i: TransferItemRow) => ({
     name: i.item_name || i.material_types?.description || '—',
     size: i.size_label || i.material_sizes?.size_label,
     quantity: fmtQ(i.quantity),

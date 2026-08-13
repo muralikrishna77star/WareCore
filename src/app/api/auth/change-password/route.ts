@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Fetch current hash
-  const getJson = await hasuraFetchEnvelope(GET_USER_HASH_QUERY, { id: session.userId })
+  const getJson = await hasuraFetchEnvelope<{ user_profiles_by_pk: { id: string; password_hash: string } | null }>(
+    GET_USER_HASH_QUERY,
+    { id: session.userId }
+  )
   const user = getJson?.data?.user_profiles_by_pk
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -62,7 +65,10 @@ export async function POST(request: NextRequest) {
 
   const new_hash = await bcrypt.hash(new_password, 12)
 
-  const updateJson = await hasuraFetchEnvelope(UPDATE_PASSWORD_MUTATION, { id: session.userId, password_hash: new_hash })
+  const updateJson = await hasuraFetchEnvelope<{ update_user_profiles_by_pk: { id: string } | null }>(
+    UPDATE_PASSWORD_MUTATION,
+    { id: session.userId, password_hash: new_hash }
+  )
   if (updateJson.errors) {
     return NextResponse.json({ error: updateJson.errors[0]?.message ?? 'Failed to update password' }, { status: 500 })
   }

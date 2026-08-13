@@ -178,7 +178,6 @@ export async function getItemLedger(
   const item = itemResult.item_master?.[0]
   if (!item) throw new Error(`Item ${itemId} not found`)
 
-  const materialDesc = item.material_types?.description || '?'
   const size = item.material_sizes?.size_label || item.size_label
   const itemLabel = `${item.item_code} — ${item.item_name}${size ? ` (${size})` : ''}`
   const unit = item.material_types?.unit || item.unit

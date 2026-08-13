@@ -4,6 +4,9 @@ import { createBackup, saveBackupMetadata } from '@/lib/backup/backup.service'
 
 export const maxDuration = 60 // Allow up to 60 seconds for backup creation
 
+// Full-database export — matches the other backup routes' admin/developer gate.
+const ALLOWED_ROLES = new Set(['admin', 'developer'])
+
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication
@@ -11,12 +14,15 @@ export async function POST(request: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!ALLOWED_ROLES.has(session.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
 
     const body = await request.json()
     const { tables, name, notes } = body
 
     // Create backup
-    const { filename, metadata, backupData } = await createBackup(
+    const { metadata, backupData } = await createBackup(
       tables || undefined,
       name
     )

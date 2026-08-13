@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
 
+import { Package, Building2, Warehouse, Layers, TriangleAlert } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { CURRENT_STOCK_QUERY } from '@/lib/hasura/queries'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { StatCard } from '@/components/StatCard'
 
 export default async function InventoryPage() {
   const result = await hasuraQuery(CURRENT_STOCK_QUERY)
@@ -23,13 +25,22 @@ export default async function InventoryPage() {
   }
 
   const grouped: Record<string, { company: string; code: string; rows: StockRow[] }> = {}
+  const warehouseIds = new Set<string>()
+  const materialTypeIds = new Set<string>()
+  let totalStock = 0
+  let negativeLineCount = 0
   for (const row of stock as StockRow[]) {
     if (Number(row.current_stock) === 0) continue
     if (!grouped[row.company_id]) {
       grouped[row.company_id] = { company: row.company_name, code: row.company_code, rows: [] }
     }
     grouped[row.company_id].rows.push(row)
+    warehouseIds.add(row.warehouse_id)
+    materialTypeIds.add(row.material_type_id)
+    totalStock += Number(row.current_stock)
+    if (Number(row.current_stock) < 0) negativeLineCount++
   }
+  const companyCount = Object.keys(grouped).length
 
   const asOfDate = new Date().toISOString().split('T')[0]
   const exportRows = (stock as StockRow[])
@@ -60,19 +71,39 @@ export default async function InventoryPage() {
         )}
       </div>
 
-      {Object.keys(grouped).length === 0 ? (
+      {companyCount > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <StatCard icon={Package} iconBg="bg-blue-100" iconColor="text-blue-600"
+            value={`${totalStock.toFixed(3)} tons`} label="Total Stock" />
+          <StatCard icon={Building2} iconBg="bg-teal-100" iconColor="text-teal-600"
+            value={String(companyCount)} label={companyCount === 1 ? 'Company' : 'Companies'} />
+          <StatCard icon={Warehouse} iconBg="bg-orange-100" iconColor="text-orange-600"
+            value={String(warehouseIds.size)} label={warehouseIds.size === 1 ? 'Warehouse' : 'Warehouses'} />
+          <StatCard icon={Layers} iconBg="bg-purple-100" iconColor="text-purple-600"
+            value={String(materialTypeIds.size)} label="Material Types" />
+          {negativeLineCount > 0 && (
+            <StatCard icon={TriangleAlert} iconBg="bg-red-100" iconColor="text-red-600"
+              value={String(negativeLineCount)} label={negativeLineCount === 1 ? 'Negative Stock Line' : 'Negative Stock Lines'} />
+          )}
+        </div>
+      )}
+
+      {companyCount === 0 ? (
         <div className="rounded-xl border bg-white p-12 text-center">
-          <p className="text-gray-400 text-4xl mb-3">📦</p>
+          <Package className="mx-auto h-10 w-10 text-gray-400 mb-3" />
           <p className="text-gray-500">No stock found. Add purchase bills to populate inventory.</p>
         </div>
       ) : (
         Object.entries(grouped).map(([companyId, { company, code, rows }]) => (
           <div key={companyId} className="rounded-xl border bg-white overflow-hidden">
             <div className="px-6 py-4 bg-gray-50 border-b flex items-center gap-3">
-              <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
-                {code}
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100">
+                <Building2 className="h-4 w-4 text-blue-600" strokeWidth={2} />
               </span>
               <h2 className="font-semibold text-gray-900">{company}</h2>
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                {code}
+              </span>
               <span className="text-sm text-gray-500 ml-auto">
                 Total: {rows.reduce((s, r) => s + Number(r.current_stock), 0).toFixed(3)} tons
               </span>

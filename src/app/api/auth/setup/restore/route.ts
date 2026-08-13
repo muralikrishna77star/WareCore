@@ -17,7 +17,7 @@ const COUNT_USERS_QUERY = `
  * existing online account/data instead of creating a fresh admin.
  */
 export async function POST(request: NextRequest) {
-  const countJson = await hasuraFetchEnvelope(COUNT_USERS_QUERY)
+  const countJson = await hasuraFetchEnvelope<{ user_profiles_aggregate: { aggregate: { count: number } } }>(COUNT_USERS_QUERY)
   const count = countJson?.data?.user_profiles_aggregate?.aggregate?.count ?? 0
   if (count > 0) {
     return NextResponse.json({ error: 'Setup has already been completed' }, { status: 403 })

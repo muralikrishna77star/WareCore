@@ -7,7 +7,6 @@ import {
   VENDOR_JOB_WORK_TRANSFERS_QUERY,
   JOB_WORK_ORDERS_VENDOR_INFO_QUERY,
   DISPATCH_ORDERS_VENDOR_INFO_QUERY,
-  JOB_WORK_ORDER_IDS_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
@@ -18,6 +17,7 @@ import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -62,6 +62,86 @@ type ItemOption = ComboOption & {
 // JOB_WORK_RETURN_IN ledger entries.
 const TRANSACTION_TYPE_OPTIONS = ['Job Work Out', 'Direct Sale', 'Return', 'Transfer Out', 'Transfer In'] as const
 type TransactionTypeFilter = (typeof TRANSACTION_TYPE_OPTIONS)[number]
+
+interface Company {
+  id: string
+  name: string
+  code?: string | null
+}
+
+interface Supplier {
+  id: string
+  name: string
+}
+
+interface ItemMasterRow {
+  id: string
+  item_code: string
+  item_name: string
+  material_type_id: string
+  material_size_id: string | null
+  size_label?: string | null
+  material_sizes?: { size_label: string } | null
+}
+
+interface VendorLedgerRow {
+  id: string
+  entry_type: string
+  quantity: number | string
+  entry_date: string
+  created_at: string
+  reference_id: string | null
+  reference_number: string | null
+  notes: string | null
+  company_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  companies: { id: string; name: string; code?: string | null } | null
+  material_types: { description: string | null; unit?: string | null } | null
+  material_sizes: { size_label: string | null } | null
+}
+
+interface VendorJobWorkTransfer {
+  transfer_number: string
+  from_job_work_order_id: string | null
+  to_job_work_order_id: string | null
+  from_vendor: { name: string } | null
+  to_vendor: { name: string } | null
+  job_work_transfer_items: {
+    purchase_line_id: string | null
+    sub_purchase_line_id: string | null
+    quantity_transferred: number | string
+  }[]
+}
+
+interface JobWorkItemBalanceRow {
+  quantity_sent: number | string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+  material_types: { description: string | null; unit?: string | null } | null
+  material_sizes: { size_label: string | null } | null
+  job_work_orders: {
+    vendor_id: string | null
+    dispatch_date: string
+    status: string
+    suppliers: { name: string } | null
+    companies: { name: string } | null
+  } | null
+}
+
+// Common subset of fields ensureGroup() needs, satisfied by both
+// VendorLedgerRow (stock_ledger rows) and JobWorkItemBalanceRow
+// (job_work_items rows) — the two heterogeneous row shapes it's called with.
+interface GroupSourceRow {
+  material_type_id: string
+  material_size_id?: string | null
+  material_types?: { description: string | null; unit?: string | null } | null
+  material_sizes?: { size_label: string | null } | null
+  size_label?: string | null
+}
 
 type GroupRow = {
   key: string
@@ -115,9 +195,9 @@ export default async function VendorMovementsPage({
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
   ])
 
-  const companies: any[] = compResult.companies ?? []
-  const suppliers: any[] = supResult.suppliers ?? []
-  const itemRows: any[] = itemResult.item_master ?? []
+  const companies = (compResult.companies ?? []) as Company[]
+  const suppliers = (supResult.suppliers ?? []) as Supplier[]
+  const itemRows = (itemResult.item_master ?? []) as ItemMasterRow[]
   const itemOptions: ItemOption[] = itemRows.map((i) => {
     const size = i.material_sizes?.size_label || i.size_label
     return {
@@ -220,11 +300,11 @@ export default async function VendorMovementsPage({
     hasuraQuery(VENDOR_JOB_WORK_TRANSFERS_QUERY),
   ])
 
-  const periodJobWork: any[] = periodJobWorkResult.stock_ledger ?? []
-  const cumulativeJobWork: any[] = cumulativeJobWorkResult.stock_ledger ?? []
-  const periodSales: any[] = periodSaleResult.stock_ledger ?? []
-  const periodTransfers: any[] = periodTransfersResult.stock_ledger ?? []
-  const jobWorkItemBalances: any[] = jobWorkItemBalanceResult.job_work_items ?? []
+  const periodJobWork = (periodJobWorkResult.stock_ledger ?? []) as VendorLedgerRow[]
+  const cumulativeJobWork = (cumulativeJobWorkResult.stock_ledger ?? []) as VendorLedgerRow[]
+  const periodSales = (periodSaleResult.stock_ledger ?? []) as VendorLedgerRow[]
+  const periodTransfers = (periodTransfersResult.stock_ledger ?? []) as VendorLedgerRow[]
+  const jobWorkItemBalances = (jobWorkItemBalanceResult.job_work_items ?? []) as JobWorkItemBalanceRow[]
 
   // Counterparty vendor lookup for a JOB_WORK_TRANSFER_OUT/IN ledger row —
   // the ledger row only carries one side of the movement (the order it's
@@ -235,7 +315,7 @@ export default async function VendorMovementsPage({
   // the user always come from the ledger row itself, never from here).
   const transferOutCounterparty = new Map<string, { vendorName: string; transferNumber: string }>()
   const transferInCounterparty = new Map<string, { vendorName: string; transferNumber: string }>()
-  for (const t of (transferAuditResult.job_work_transfers ?? []) as any[]) {
+  for (const t of (transferAuditResult.job_work_transfers ?? []) as VendorJobWorkTransfer[]) {
     for (const item of t.job_work_transfer_items ?? []) {
       const lineId = item.sub_purchase_line_id || item.purchase_line_id
       if (!lineId) continue
@@ -322,7 +402,7 @@ export default async function VendorMovementsPage({
   const groupKey = (vendorId: string, materialTypeId: string, materialSizeId: string | null) =>
     `${vendorId}|${materialTypeId}|${materialSizeId ?? ''}`
 
-  const ensureGroup = (vendorId: string, vendorName: string, companyName: string, m: any): GroupRow => {
+  const ensureGroup = (vendorId: string, vendorName: string, companyName: string, m: GroupSourceRow): GroupRow => {
     const key = groupKey(vendorId, m.material_type_id, m.material_size_id ?? null)
     let g = groups.get(key)
     if (!g) {
@@ -366,7 +446,7 @@ export default async function VendorMovementsPage({
   }
   const periodReturnInByKey = new Map<string, number>()
   for (const m of periodJobWork) {
-    const info = jwoInfoById.get(m.reference_id)
+    const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     if (!jobWorkEntryAllowed(m.entry_type)) continue
@@ -403,7 +483,7 @@ export default async function VendorMovementsPage({
     return false
   }
   for (const m of periodTransfers) {
-    const info = jwoInfoById.get(m.reference_id)
+    const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     if (!transferEntryAllowed(m.entry_type)) continue
@@ -439,7 +519,7 @@ export default async function VendorMovementsPage({
   // to the vendor that held the material.
   for (const m of periodSales) {
     if (typeFilter && typeFilter !== 'Direct Sale') continue
-    const dispatch = dispatchInfoById.get(m.reference_id)
+    const dispatch = m.reference_id ? dispatchInfoById.get(m.reference_id) : undefined
     if (!dispatch?.is_vendor_direct || !dispatch.source_job_work_order_id) continue
     const info = jwoInfoById.get(dispatch.source_job_work_order_id)
     if (!info) continue
@@ -493,7 +573,7 @@ export default async function VendorMovementsPage({
     cumulativeOutByKey.set(key, (cumulativeOutByKey.get(key) ?? 0) + Number(item.quantity_sent ?? 0))
   }
   for (const m of cumulativeJobWork) {
-    const info = jwoInfoById.get(m.reference_id)
+    const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
@@ -699,7 +779,7 @@ export default async function VendorMovementsPage({
             />
           )}
           <PrintButton />
-          <Link href="/reports" className="text-sm text-blue-600 hover:underline">← Reports</Link>
+          <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Reports</Link>
         </div>
       </div>
 
@@ -715,14 +795,14 @@ export default async function VendorMovementsPage({
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
               <option value="">All Companies</option>
-              {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
             <select name="vendor" defaultValue={params.vendor || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
               <option value="">All Vendors</option>
-              {suppliers.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div className="min-w-[14rem]">

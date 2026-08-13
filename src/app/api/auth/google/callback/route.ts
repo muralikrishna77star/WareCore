@@ -73,8 +73,15 @@ async function getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo | 
   return res.json()
 }
 
-async function findUserByEmail(email: string) {
-  const json = await hasuraFetchEnvelope(FIND_USER_BY_EMAIL, { email })
+interface UserProfile {
+  id: string
+  full_name: string
+  email: string
+  role: string
+}
+
+async function findUserByEmail(email: string): Promise<UserProfile | null> {
+  const json = await hasuraFetchEnvelope<{ user_profiles: UserProfile[] }>(FIND_USER_BY_EMAIL, { email })
   return json?.data?.user_profiles?.[0] ?? null
 }
 

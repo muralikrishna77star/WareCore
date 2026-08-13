@@ -4,23 +4,44 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft, ArrowRight, ClipboardList } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { ITEM_MASTERS_QUERY, ACTIVE_MATERIAL_TYPES_QUERY } from '@/lib/hasura/queries'
 
+interface ItemMasterRow {
+  id: string
+  item_code: string
+  item_name: string
+  material_type_id: string
+  material_size_id?: string
+  size_label?: string
+  unit: string
+  is_active: boolean
+  material_types?: { id: string; code: string; description: string }
+  material_sizes?: { id: string; size_label: string }
+}
+
+interface MaterialTypeOption {
+  id: string
+  code: string
+  description: string
+  unit: string
+}
+
 export default function ItemMastersPage() {
-  const [items, setItems] = useState<any[]>([])
-  const [materialTypes, setMaterialTypes] = useState<any[]>([])
+  const [items, setItems] = useState<ItemMasterRow[]>([])
+  const [materialTypes, setMaterialTypes] = useState<MaterialTypeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState('')
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     Promise.all([
-      hasuraFetch(ITEM_MASTERS_QUERY),
-      hasuraFetch(ACTIVE_MATERIAL_TYPES_QUERY),
+      hasuraFetch<{ item_master: ItemMasterRow[] }>(ITEM_MASTERS_QUERY),
+      hasuraFetch<{ material_types: MaterialTypeOption[] }>(ACTIVE_MATERIAL_TYPES_QUERY),
     ]).then(([itemsRes, typesRes]) => {
-      setItems((itemsRes.data as any)?.item_master ?? [])
-      setMaterialTypes((typesRes.data as any)?.material_types ?? [])
+      setItems(itemsRes.data?.item_master ?? [])
+      setMaterialTypes(typesRes.data?.material_types ?? [])
       setLoading(false)
     })
   }, [])
@@ -44,8 +65,8 @@ export default function ItemMastersPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Link href="/admin" className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-            ← Admin
+          <Link href="/admin" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+            <ArrowLeft className="h-4 w-4" /> Admin
           </Link>
           <Link href="/admin/items/new"
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
@@ -59,7 +80,7 @@ export default function ItemMastersPage() {
         <select value={filterType} onChange={e => setFilterType(e.target.value)}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
           <option value="">All Material Types</option>
-          {materialTypes.map((mt: any) => (
+          {materialTypes.map((mt) => (
             <option key={mt.id} value={mt.id}>{mt.code} — {mt.description}</option>
           ))}
         </select>
@@ -79,11 +100,11 @@ export default function ItemMastersPage() {
           <div className="p-12 text-center text-gray-400 text-sm">Loading items…</div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
-            <p className="text-gray-400 text-4xl mb-3">📋</p>
+            <ClipboardList className="mx-auto h-10 w-10 text-gray-400 mb-3" />
             <p className="text-gray-500">{items.length === 0 ? 'No items have been created yet.' : 'No items match the filter.'}</p>
             {items.length === 0 && (
-              <Link href="/admin/items/new" className="mt-4 inline-block text-blue-600 hover:underline text-sm">
-                Add your first item →
+              <Link href="/admin/items/new" className="mt-4 inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
+                Add your first item <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             )}
           </div>
@@ -102,7 +123,7 @@ export default function ItemMastersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((item: any) => (
+                {filtered.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-mono font-medium text-gray-900">{item.item_code}</td>
                     <td className="px-5 py-3 text-gray-800">{item.item_name}</td>

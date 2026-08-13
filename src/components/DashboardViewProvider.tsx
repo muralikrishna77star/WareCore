@@ -21,12 +21,18 @@ export function useDashboardView(): Ctx {
 }
 
 export function DashboardViewProvider({ children }: { children: ReactNode }) {
-  // First paint is always 'existing' (matches server render, avoids hydration
-  // mismatch); any stored Classic/Modern preference is applied right after mount.
-  const [view, setViewState] = useState<DashboardView>('existing')
+  // First paint is always 'modern' (matches server render, avoids hydration
+  // mismatch); any stored Classic preference is applied right after mount.
+  const [view, setViewState] = useState<DashboardView>('modern')
 
   useEffect(() => {
-    setViewState(readStoredDashboardView())
+    let cancelled = false
+    Promise.resolve().then(() => {
+      if (!cancelled) setViewState(readStoredDashboardView())
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const setView = (next: DashboardView) => {

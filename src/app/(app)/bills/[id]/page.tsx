@@ -2,12 +2,25 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
 import CancelBillButton from './CancelBillButton'
 import SubmitBillButton from './SubmitBillButton'
 import PurgeBillButton from './PurgeBillButton'
+
+interface BillLineItem {
+  id: string
+  purchase_line_id?: string | null
+  item_name?: string | null
+  material_types?: { description?: string | null } | null
+  size_label?: string | null
+  quantity: number | string
+  rate?: number | string | null
+  amount?: number | string | null
+  unit?: string | null
+}
 
 export default async function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -18,7 +31,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
   ])
   const bill = billResult.purchase_bills_by_pk
   if (!bill) notFound()
-  const items = itemsResult.purchase_bill_items ?? []
+  const items: BillLineItem[] = itemsResult.purchase_bill_items ?? []
 
   let createdByName: string | null = null
   if (bill.created_by) {
@@ -26,8 +39,8 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
     createdByName = creatorResult.user_profiles_by_pk?.full_name ?? null
   }
 
-  const totalAmount = items.reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0)
-  const totalQty = items.reduce((sum: number, i: any) => sum + (Number(i.quantity) || 0), 0)
+  const totalAmount = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
+  const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
 
   const isCancelled = bill.status === 'cancelled'
   const isDraft = bill.status === 'draft'
@@ -37,7 +50,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
   let dispatchedLineCount = 0
   if (!isCancelled) {
     const purchaseLineIds = items
-      .map((i: any) => i.purchase_line_id)
+      .map((i) => i.purchase_line_id)
       .filter(Boolean) as string[]
 
     if (purchaseLineIds.length > 0) {
@@ -60,8 +73,8 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/bills" className="text-[0.9375rem] text-blue-600 hover:underline mb-1 block">
-            ← Back to Bills
+          <Link href="/bills" className="text-[0.9375rem] text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
+            <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Bills
           </Link>
           <h1 className={`text-[1.4375rem] font-bold ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
             Bill #{bill.bill_number}
@@ -174,14 +187,14 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                     No line items recorded.
                   </td>
                 </tr>
-              ) : items.map((item: any, idx: number) => (
+              ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-[0.9375rem] font-mono text-blue-700">
                     {item.purchase_line_id ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-[0.9375rem] font-medium text-gray-900">
-                    {item.item_name ?? item.material_types?.name ?? '—'}
+                    {item.item_name ?? item.material_types?.description ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-700">
                     {item.size_label ?? '—'}

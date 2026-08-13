@@ -2,6 +2,10 @@ export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
 import {
+  Building2, Factory, Store, Users, Package, Ruler, ClipboardList, Receipt,
+  User, KeyRound, CircleCheck, CircleX,
+} from 'lucide-react'
+import {
   COMPANIES_QUERY,
   WAREHOUSES_QUERY,
   SUPPLIERS_QUERY,
@@ -14,6 +18,17 @@ import {
   CUSTOM_ROLES_QUERY,
 } from '@/lib/hasura/queries'
 import CollapsibleSection from './CollapsibleSection'
+
+interface CompanyRow { name: string; code: string; is_active: boolean }
+interface WarehouseRow { name: string; is_active: boolean; companies?: { name: string } }
+interface SupplierRow { name: string; contact_person?: string; gstin?: string }
+interface CustomerRow { name: string; contact_person?: string; gstin?: string }
+interface MaterialTypeRow { code: string; description: string; unit: string }
+interface MaterialSizeRow { size_label: string; thickness?: number | null; width?: number | null }
+interface ItemMasterRow { item_code: string; item_name: string; material_types?: { description: string } }
+interface TaxRateRow { name: string; cgst_rate: number; sgst_rate: number; tds_rate: number; tcs_rate: number; applicable_to: string }
+interface UserProfileRow { full_name?: string; role?: string; companies?: { name: string } }
+interface CustomRoleRow { role_name: string; role_code: string; is_active: boolean }
 
 export default async function AdminPage() {
   const queryResults = await Promise.allSettled([
@@ -42,16 +57,26 @@ export default async function AdminPage() {
     customRolesRes,
   ] = queryResults
 
-  const companies = companiesRes.status === 'fulfilled' ? (companiesRes.value as any).companies ?? [] : []
-  const warehouses = warehousesRes.status === 'fulfilled' ? (warehousesRes.value as any).warehouses ?? [] : []
-  const suppliers = suppliersRes.status === 'fulfilled' ? (suppliersRes.value as any).suppliers ?? [] : []
-  const customers = customersRes.status === 'fulfilled' ? (customersRes.value as any).customers ?? [] : []
-  const materialTypes = materialTypesRes.status === 'fulfilled' ? (materialTypesRes.value as any).material_types ?? [] : []
-  const materialSizes = materialSizesRes.status === 'fulfilled' ? (materialSizesRes.value as any).material_sizes ?? [] : []
-  const itemMasters = itemMastersRes.status === 'fulfilled' ? (itemMastersRes.value as any).item_master ?? [] : []
-  const taxRates = taxRatesRes.status === 'fulfilled' ? (taxRatesRes.value as any).tax_rates ?? [] : []
-  const users = usersRes.status === 'fulfilled' ? (usersRes.value as any).user_profiles ?? [] : []
-  const customRoles = customRolesRes.status === 'fulfilled' ? (customRolesRes.value as any).custom_roles ?? [] : []
+  const companies = companiesRes.status === 'fulfilled' ? (companiesRes.value as { companies: CompanyRow[] }).companies ?? [] : []
+  const warehouses = warehousesRes.status === 'fulfilled' ? (warehousesRes.value as { warehouses: WarehouseRow[] }).warehouses ?? [] : []
+  const suppliers = suppliersRes.status === 'fulfilled' ? (suppliersRes.value as { suppliers: SupplierRow[] }).suppliers ?? [] : []
+  const customers = customersRes.status === 'fulfilled' ? (customersRes.value as { customers: CustomerRow[] }).customers ?? [] : []
+  const materialTypes = materialTypesRes.status === 'fulfilled' ? (materialTypesRes.value as { material_types: MaterialTypeRow[] }).material_types ?? [] : []
+  const materialSizes = materialSizesRes.status === 'fulfilled' ? (materialSizesRes.value as { material_sizes: MaterialSizeRow[] }).material_sizes ?? [] : []
+  const itemMasters = itemMastersRes.status === 'fulfilled' ? (itemMastersRes.value as { item_master: ItemMasterRow[] }).item_master ?? [] : []
+  const taxRates = taxRatesRes.status === 'fulfilled' ? (taxRatesRes.value as { tax_rates: TaxRateRow[] }).tax_rates ?? [] : []
+  const users = usersRes.status === 'fulfilled' ? (usersRes.value as { user_profiles: UserProfileRow[] }).user_profiles ?? [] : []
+  const customRoles = customRolesRes.status === 'fulfilled' ? (customRolesRes.value as { custom_roles: CustomRoleRow[] }).custom_roles ?? [] : []
+
+  const statusBadge = (active: boolean) => (
+    <span className="inline-flex items-center gap-1">
+      {active ? (
+        <><CircleCheck className="inline h-3.5 w-3.5 text-green-600" /> Active</>
+      ) : (
+        <><CircleX className="inline h-3.5 w-3.5 text-red-600" /> Inactive</>
+      )}
+    </span>
+  )
 
   const formatReason = (reason: unknown) => {
     if (reason instanceof Error) return reason.message
@@ -65,52 +90,52 @@ export default async function AdminPage() {
 
   const sections = [
     {
-      title: 'Companies', icon: '🏢',
+      title: 'Companies', icon: <Building2 className="h-5 w-5 text-blue-600" strokeWidth={2} />, iconBg: 'bg-blue-100',
       addHref: '/admin/companies/new', href: '/admin/companies',
       columns: ['Name', 'Code', 'Status'],
-      rows: companies.map((c: any) => [c.name, c.code, c.is_active ? '✅ Active' : '❌ Inactive']),
+      rows: companies.map((c) => [c.name, c.code, statusBadge(c.is_active)]),
     },
     {
-      title: 'Warehouses', icon: '🏭',
+      title: 'Warehouses', icon: <Factory className="h-5 w-5 text-orange-600" strokeWidth={2} />, iconBg: 'bg-orange-100',
       addHref: '/admin/warehouses/new', href: '/admin/warehouses',
       columns: ['Name', 'Company', 'Status'],
-      rows: warehouses.map((w: any) => [w.name, w.companies?.name || '—', w.is_active ? '✅ Active' : '❌ Inactive']),
+      rows: warehouses.map((w) => [w.name, w.companies?.name || '—', statusBadge(w.is_active)]),
     },
     {
-      title: 'Suppliers', icon: '🏪',
+      title: 'Suppliers', icon: <Store className="h-5 w-5 text-purple-600" strokeWidth={2} />, iconBg: 'bg-purple-100',
       addHref: '/admin/suppliers/new', href: '/admin/suppliers',
       columns: ['Name', 'Contact', 'GST'],
-      rows: suppliers.map((s: any) => [s.name, s.contact_person || '—', s.gstin || '—']),
+      rows: suppliers.map((s) => [s.name, s.contact_person || '—', s.gstin || '—']),
     },
     {
-      title: 'Customers', icon: '👥',
+      title: 'Customers', icon: <Users className="h-5 w-5 text-teal-600" strokeWidth={2} />, iconBg: 'bg-teal-100',
       addHref: '/admin/customers/new', href: '/admin/customers',
       columns: ['Name', 'Contact', 'GST'],
-      rows: customers.map((c: any) => [c.name, c.contact_person || '—', c.gstin || '—']),
+      rows: customers.map((c) => [c.name, c.contact_person || '—', c.gstin || '—']),
     },
     {
-      title: 'Material Types', icon: '📦',
+      title: 'Material Types', icon: <Package className="h-5 w-5 text-green-600" strokeWidth={2} />, iconBg: 'bg-green-100',
       addHref: '/admin/materials/new', href: '/admin/materials',
       columns: ['Code', 'Name', 'Unit'],
-      rows: materialTypes.map((m: any) => [m.code, m.description, m.unit]),
+      rows: materialTypes.map((m) => [m.code, m.description, m.unit]),
     },
     {
-      title: 'Material Sizes', icon: '📐',
+      title: 'Material Sizes', icon: <Ruler className="h-5 w-5 text-cyan-600" strokeWidth={2} />, iconBg: 'bg-cyan-100',
       addHref: '/admin/sizes/new', href: '/admin/sizes',
       columns: ['Label', 'Thickness', 'Width'],
-      rows: materialSizes.map((s: any) => [s.size_label, s.thickness?.toString() || '—', s.width?.toString() || '—']),
+      rows: materialSizes.map((s) => [s.size_label, s.thickness?.toString() || '—', s.width?.toString() || '—']),
     },
     {
-      title: 'Item Master', icon: '📋',
+      title: 'Item Master', icon: <ClipboardList className="h-5 w-5 text-indigo-600" strokeWidth={2} />, iconBg: 'bg-indigo-100',
       addHref: '/admin/items/new', href: '/admin/items',
       columns: ['Code', 'Name', 'Material Type'],
-      rows: itemMasters.map((item: any) => [item.item_code, item.item_name, item.material_types?.description || '—']),
+      rows: itemMasters.map((item) => [item.item_code, item.item_name, item.material_types?.description || '—']),
     },
     {
-      title: 'Tax Rates', icon: '🧾',
+      title: 'Tax Rates', icon: <Receipt className="h-5 w-5 text-amber-600" strokeWidth={2} />, iconBg: 'bg-amber-100',
       addHref: '/admin/tax-rates/new', href: '/admin/tax-rates',
       columns: ['Name', 'CGST%', 'SGST%', 'TDS%', 'TCS%', 'Applies To'],
-      rows: taxRates.map((t: any) => [
+      rows: taxRates.map((t) => [
         t.name,
         `${Number(t.cgst_rate).toFixed(2)}%`,
         `${Number(t.sgst_rate).toFixed(2)}%`,
@@ -120,16 +145,16 @@ export default async function AdminPage() {
       ]),
     },
     {
-      title: 'Users', icon: '👤',
+      title: 'Users', icon: <User className="h-5 w-5 text-pink-600" strokeWidth={2} />, iconBg: 'bg-pink-100',
       addHref: '/admin/users/new', href: '/admin/users',
       columns: ['Name', 'Role', 'Company'],
-      rows: users.map((u: any) => [u.full_name || '—', u.role?.replace(/_/g, ' ') || '—', u.companies?.name || 'All']),
+      rows: users.map((u) => [u.full_name || '—', u.role?.replace(/_/g, ' ') || '—', u.companies?.name || 'All']),
     },
     {
-      title: 'Roles & Permissions', icon: '🔐',
+      title: 'Roles & Permissions', icon: <KeyRound className="h-5 w-5 text-red-600" strokeWidth={2} />, iconBg: 'bg-red-100',
       addHref: '/admin/roles/new', href: '/admin/roles',
       columns: ['Role Name', 'Code', 'Status'],
-      rows: customRoles.map((r: any) => [r.role_name, r.role_code, r.is_active ? '✅ Active' : '❌ Inactive']),
+      rows: customRoles.map((r) => [r.role_name, r.role_code, statusBadge(r.is_active)]),
     },
   ]
 
@@ -153,9 +178,9 @@ export default async function AdminPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {sections.map((s) => (
-          <CollapsibleSection key={s.title} title={s.title} icon={s.icon}
+          <CollapsibleSection key={s.title} title={s.title} icon={s.icon} iconBg={s.iconBg}
             addHref={s.addHref} href={s.href} columns={s.columns} rows={s.rows} />
         ))}
       </div>

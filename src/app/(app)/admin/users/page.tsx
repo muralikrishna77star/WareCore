@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { formatDateTime } from '@/lib/utils'
 
@@ -52,17 +53,19 @@ export default function AdminUsersPage() {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    loadUsers()
-  }, [])
-
   async function loadUsers() {
     setLoading(true)
-    const { data, error: err } = await hasuraFetch(USERS_QUERY)
+    const { data, error: err } = await hasuraFetch<{ user_profiles: User[] }>(USERS_QUERY)
     if (err) { setError(err.message); setLoading(false); return }
-    setUsers((data as any)?.user_profiles ?? [])
+    setUsers(data?.user_profiles ?? [])
     setLoading(false)
   }
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      loadUsers()
+    })
+  }, [])
 
   async function handleDelete(id: string) {
     setDeletingId(id)
@@ -188,7 +191,7 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="text-right">
-        <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-700">← Back to Admin</Link>
+        <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"><ArrowLeft className="h-4 w-4" /> Back to Admin</Link>
       </div>
 
       {/* Confirm Delete Dialog */}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Coins, Banknote, CircleArrowDown, CircleArrowUp, Scale, BookOpen } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import {
   ACTIVE_COMPANIES_QUERY,
@@ -61,24 +62,26 @@ export default function AccountsPage() {
     const loadMasterData = async () => {
       const [companiesRes, suppliersRes, customersRes, purchaseBillsRes, dispatchOrdersRes, entriesRes] =
         await Promise.all([
-          hasuraFetch(ACTIVE_COMPANIES_QUERY),
-          hasuraFetch(ACTIVE_SUPPLIERS_QUERY),
-          hasuraFetch(ACTIVE_CUSTOMERS_QUERY),
-          hasuraFetch(PURCHASE_BILLS_QUERY),
-          hasuraFetch(DISPATCH_ORDERS_QUERY),
-          hasuraFetch(FINANCIAL_ENTRIES_QUERY),
+          hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
+          hasuraFetch<{ suppliers: Supplier[] }>(ACTIVE_SUPPLIERS_QUERY),
+          hasuraFetch<{ customers: Customer[] }>(ACTIVE_CUSTOMERS_QUERY),
+          hasuraFetch<{ purchase_bills: PurchaseBill[] }>(PURCHASE_BILLS_QUERY),
+          hasuraFetch<{ dispatch_orders: DispatchOrder[] }>(DISPATCH_ORDERS_QUERY),
+          hasuraFetch<{ financial_entries: FinancialEntry[] }>(FINANCIAL_ENTRIES_QUERY),
         ])
 
-      setCompanies((companiesRes.data as any)?.companies ?? [])
-      setSuppliers((suppliersRes.data as any)?.suppliers ?? [])
-      setCustomers((customersRes.data as any)?.customers ?? [])
-      setPurchaseBills((purchaseBillsRes.data as any)?.purchase_bills ?? [])
-      setDispatchOrders((dispatchOrdersRes.data as any)?.dispatch_orders ?? [])
-      setFinancialEntries((entriesRes.data as any)?.financial_entries ?? [])
+      setCompanies(companiesRes.data?.companies ?? [])
+      setSuppliers(suppliersRes.data?.suppliers ?? [])
+      setCustomers(customersRes.data?.customers ?? [])
+      setPurchaseBills(purchaseBillsRes.data?.purchase_bills ?? [])
+      setDispatchOrders(dispatchOrdersRes.data?.dispatch_orders ?? [])
+      setFinancialEntries(entriesRes.data?.financial_entries ?? [])
       setMasterDataLoading(false)
 
-      const loadedCompanies = (companiesRes.data as any)?.companies ?? []
-      if (!companyId && loadedCompanies.length > 0) setCompanyId(loadedCompanies[0].id)
+      const loadedCompanies = companiesRes.data?.companies ?? []
+      // Runs once on mount: companyId is always '' (its initial value) here,
+      // so this always auto-selects the first company on first load.
+      if (loadedCompanies.length > 0) setCompanyId(loadedCompanies[0].id)
     }
     loadMasterData()
   }, [])
@@ -126,17 +129,21 @@ export default function AccountsPage() {
   }
 
   useEffect(() => {
-    if (!selectedPurchaseBillId) { setPurchaseBillItems([]); setSelectedPurchaseLineId(''); return }
-    setSelectedPurchaseLineId('')
-    hasuraFetch<any>(PURCHASE_BILL_ITEMS_QUERY, { bill_id: selectedPurchaseBillId })
-      .then((r) => setPurchaseBillItems((r.data as any)?.purchase_bill_items ?? []))
+    Promise.resolve().then(() => {
+      if (!selectedPurchaseBillId) { setPurchaseBillItems([]); setSelectedPurchaseLineId(''); return }
+      setSelectedPurchaseLineId('')
+      hasuraFetch<{ purchase_bill_items: PurchaseBillItem[] }>(PURCHASE_BILL_ITEMS_QUERY, { bill_id: selectedPurchaseBillId })
+        .then((r) => setPurchaseBillItems(r.data?.purchase_bill_items ?? []))
+    })
   }, [selectedPurchaseBillId])
 
   useEffect(() => {
-    if (!selectedDispatchOrderId) { setDispatchItems([]); setSelectedSubPurchaseLineId(''); return }
-    setSelectedSubPurchaseLineId('')
-    hasuraFetch<any>(DISPATCH_ITEMS_QUERY, { dispatch_order_id: selectedDispatchOrderId })
-      .then((r) => setDispatchItems((r.data as any)?.dispatch_items ?? []))
+    Promise.resolve().then(() => {
+      if (!selectedDispatchOrderId) { setDispatchItems([]); setSelectedSubPurchaseLineId(''); return }
+      setSelectedSubPurchaseLineId('')
+      hasuraFetch<{ dispatch_items: DispatchItem[] }>(DISPATCH_ITEMS_QUERY, { dispatch_order_id: selectedDispatchOrderId })
+        .then((r) => setDispatchItems(r.data?.dispatch_items ?? []))
+    })
   }, [selectedDispatchOrderId])
 
   const handleSubmit = async () => {
@@ -150,7 +157,7 @@ export default function AccountsPage() {
     if (!parsedAmount || parsedAmount <= 0) { setError('Please enter a valid amount.'); return }
 
     setLoading(true)
-    const response = await hasuraFetch(CREATE_FINANCIAL_ENTRY_MUTATION, {
+    const response = await hasuraFetch<{ insert_financial_entries_one: FinancialEntry }>(CREATE_FINANCIAL_ENTRY_MUTATION, {
       company_id: companyId,
       supplier_id: entryType === 'PAYMENT' ? supplierId : null,
       customer_id: entryType === 'RECEIPT' ? customerId : null,
@@ -168,7 +175,7 @@ export default function AccountsPage() {
     setLoading(false)
 
     if (response.error) { setError(response.error.message); return }
-    const created = (response.data as any)?.insert_financial_entries_one
+    const created = response.data?.insert_financial_entries_one
     if (created) { setFinancialEntries((prev) => [created, ...prev]); clearForm() }
   }
 
@@ -187,8 +194,10 @@ export default function AccountsPage() {
       {/* ── TOP: Payments & Receipts entry form ─────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-800">
-            {entryType === 'RECEIPT' ? '💰 Receipt from Customer' : '💸 Payment to Supplier'}
+          <h2 className="inline-flex items-center gap-1.5 text-base font-semibold text-gray-800">
+            {entryType === 'RECEIPT'
+              ? <><Coins className="h-4 w-4" /> Receipt from Customer</>
+              : <><Banknote className="h-4 w-4" /> Payment to Supplier</>}
           </h2>
           {/* Type toggle */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm font-medium">
@@ -303,18 +312,27 @@ export default function AccountsPage() {
       {/* ── MID: Ledger Summary ─────────────────────────────────────────── */}
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 mb-2">
+            <CircleArrowDown className="h-4 w-4 text-emerald-600" strokeWidth={2} />
+          </span>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total Receipts</p>
           <p className="mt-2 text-2xl font-bold text-emerald-600">₹{totalReceipts.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <p className="mt-1 text-xs text-gray-400">{financialEntries.filter((e) => e.entry_type === 'RECEIPT').length} entries</p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 mb-2">
+            <CircleArrowUp className="h-4 w-4 text-rose-600" strokeWidth={2} />
+          </span>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total Payments</p>
           <p className="mt-2 text-2xl font-bold text-rose-600">₹{totalPayments.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <p className="mt-1 text-xs text-gray-400">{financialEntries.filter((e) => e.entry_type === 'PAYMENT').length} entries</p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg mb-2 ${netBalance >= 0 ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+            <Scale className={`h-4 w-4 ${netBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`} strokeWidth={2} />
+          </span>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Net Balance</p>
           <p className={`mt-2 text-2xl font-bold ${netBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             ₹{Math.abs(netBalance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -390,6 +408,7 @@ export default function AccountsPage() {
               {filteredJournal.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">
+                    <BookOpen className="mx-auto h-10 w-10 text-gray-300 mb-3" />
                     {financialEntries.length === 0
                       ? 'No journal entries yet. Use the form above to record a receipt or payment.'
                       : 'No entries match the selected date range.'}
@@ -407,8 +426,10 @@ export default function AccountsPage() {
                         {new Date(entry.entry_date).toLocaleDateString('en-IN')}
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isReceipt ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                          {isReceipt ? '↓ Receipt' : '↑ Payment'}
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${isReceipt ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                          {isReceipt
+                            ? <><CircleArrowDown className="inline h-3.5 w-3.5" /> Receipt</>
+                            : <><CircleArrowUp className="inline h-3.5 w-3.5" /> Payment</>}
                         </span>
                       </td>
                       <td className="px-5 py-3 font-medium text-gray-900 whitespace-nowrap">{party || '—'}</td>

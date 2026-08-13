@@ -58,7 +58,9 @@ export default function BillsImportPage() {
     }
   }
 
-  useEffect(() => { loadBatches() }, [])
+  useEffect(() => {
+    Promise.resolve().then(() => { loadBatches() })
+  }, [])
 
   const upload = async (file: File, confirmDuplicate: boolean) => {
     setUploading(true)

@@ -1,12 +1,35 @@
 'use client'
 
+import { ArrowUpRight } from 'lucide-react'
 import { getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { useRecordPreview } from '@/components/RecordPreviewProvider'
 
+interface JobWorkReturnOrder {
+  status: string
+}
+
+interface JobWorkReturnItem {
+  id: string
+  purchase_line_id: string | null
+  job_line_id: string | null
+  item_name: string | null
+  size_label: string | null
+  quantity_sent: number
+  quantity_transferred_out: number | null
+  unit: string | null
+  material_types: { description: string } | null
+  material_sizes: { size_label: string } | null
+}
+
+interface JobWorkReturnOutputItem {
+  source_job_line_id: string | null
+  quantity: number
+}
+
 interface JobWorkReturnClientProps {
-  order: any
-  items: any[]
-  outputItems: any[]
+  order: JobWorkReturnOrder
+  items: JobWorkReturnItem[]
+  outputItems: JobWorkReturnOutputItem[]
 }
 
 export default function JobWorkReturnClient({ order, items, outputItems }: JobWorkReturnClientProps) {
@@ -52,7 +75,7 @@ export default function JobWorkReturnClient({ order, items, outputItems }: JobWo
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items.map((item: any, idx: number) => (
+              {items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-mono text-blue-700">
@@ -71,10 +94,10 @@ export default function JobWorkReturnClient({ order, items, outputItems }: JobWo
                       <button
                         type="button"
                         onClick={() => openList('job_work_transfers_for_item', { itemId: item.id })}
-                        className="text-[10px] text-purple-600 font-normal underline decoration-dotted hover:text-purple-800"
+                        className="inline-flex items-center gap-0.5 text-[10px] text-purple-600 font-normal underline decoration-dotted hover:text-purple-800"
                         title="View which job(s) this was transferred to"
                       >
-                        {Number(item.quantity_transferred_out).toFixed(3)} transferred out ↗
+                        {Number(item.quantity_transferred_out).toFixed(3)} transferred out <ArrowUpRight className="h-3 w-3" />
                       </button>
                     )}
                   </td>

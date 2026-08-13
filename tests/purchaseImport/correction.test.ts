@@ -97,7 +97,7 @@ describe('row correction', () => {
     const badRow = row(snapshot, { company: 'Wrong Name' })
     const rowId = await stageOneRow(snapshot, badRow)
 
-    let { rows: before } = await client.query(`SELECT is_valid FROM purchase_import_rows WHERE id = $1`, [rowId])
+    const { rows: before } = await client.query(`SELECT is_valid FROM purchase_import_rows WHERE id = $1`, [rowId])
     expect(before[0].is_valid).toBe(false)
 
     const resolution = await applyCorrection(rowId, snapshot, 'company', snapshot.companies[0].name)
@@ -114,7 +114,7 @@ describe('row correction', () => {
     const rowId = await stageOneRow(snapshot, goodRow)
 
     await client.query(`UPDATE purchase_import_rows SET reviewed = true, reviewed_by = NULL, reviewed_at = NOW() WHERE id = $1`, [rowId])
-    let { rows: reviewed } = await client.query(`SELECT reviewed FROM purchase_import_rows WHERE id = $1`, [rowId])
+    const { rows: reviewed } = await client.query(`SELECT reviewed FROM purchase_import_rows WHERE id = $1`, [rowId])
     expect(reviewed[0].reviewed).toBe(true)
 
     // Correct something harmless (Line Notes) — even a no-op-ish edit must

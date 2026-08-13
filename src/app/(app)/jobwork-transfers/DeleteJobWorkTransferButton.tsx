@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { TriangleAlert } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 type Preview = {
@@ -84,8 +85,8 @@ export default function DeleteJobWorkTransferButton({ transferId }: { transferId
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start gap-3 mb-4">
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-lg">
-            ⚠
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+            <TriangleAlert className="h-5 w-5" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-gray-900">Delete Vendor Transfer</h2>

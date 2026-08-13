@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 import AutocompleteSelect from '@/components/AutocompleteSelect'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import {
@@ -34,7 +35,7 @@ function FieldLabel({ text, onRefresh, refreshing }: { text: string; onRefresh: 
     <label className="block text-xs font-medium text-gray-500 mb-1">
       {text}
       <button type="button" onClick={onRefresh} title={`Refresh ${text.toLowerCase()}`} className="ml-1 text-gray-400 hover:text-blue-500 align-middle">
-        {refreshing ? '…' : '↻'}
+        {refreshing ? '…' : <RefreshCw className="h-3.5 w-3.5 inline" />}
       </button>
     </label>
   )

@@ -19,9 +19,72 @@ const fmtAmt = (n: unknown) => `₹${Number(n || 0).toLocaleString('en-IN', { mi
 const CATEGORIES = ['purchase_bills', 'transfers_pending', 'job_work_active', 'dispatches', 'stock', 'job_work_transfers_for_item'] as const
 type Category = (typeof CATEGORIES)[number]
 
+interface PurchaseBillRow {
+  id: string
+  bill_number: string
+  bill_date: string
+  status: string
+  total_amount: number | string | null
+  suppliers?: { name?: string | null } | null
+}
+
+interface TransferRow {
+  id: string
+  transfer_date: string
+  status: string
+  from_warehouse?: { name?: string | null } | null
+  to_warehouse?: { name?: string | null } | null
+}
+
+interface JobWorkOrderRow {
+  id: string
+  reference_number: string
+  dispatch_date: string
+  status: string
+  suppliers?: { name?: string | null } | null
+}
+
+interface DispatchItemRow {
+  amount: number | string | null
+}
+
+interface DispatchOrderRow {
+  id: string
+  dispatch_date: string
+  status: string
+  invoice_number?: string | null
+  sale_ref_id?: string | null
+  customers?: { name?: string | null } | null
+  dispatch_items?: DispatchItemRow[]
+}
+
+interface StockRow {
+  material_type_name: string
+  size_label: string | null
+  company_name: string
+  warehouse_name: string
+  current_stock: number | string
+  unit: string | null
+}
+
+interface JobWorkTransferItemRow {
+  id: string
+  item_name?: string | null
+  purchase_line_id?: string | null
+  quantity_transferred: number | string
+  unit: string | null
+  job_work_transfer?: {
+    id: string
+    transfer_date: string
+    transfer_number: string
+    to_vendor?: { name?: string | null } | null
+    to_job_work_order?: { id: string; reference_number: string } | null
+  } | null
+}
+
 async function loadPurchaseBills() {
   const result = await hasuraQuery(PURCHASE_BILLS_QUERY, { where: {} })
-  const rows = (result.purchase_bills ?? []).slice(0, 25).map((b: any) => ({
+  const rows = (result.purchase_bills ?? []).slice(0, 25).map((b: PurchaseBillRow) => ({
     id: b.id,
     type: 'purchase_bill' as const,
     label: b.bill_number,
@@ -35,7 +98,7 @@ async function loadPurchaseBills() {
 
 async function loadPendingTransfers() {
   const result = await hasuraQuery(TRANSFERS_QUERY, { where: { status: { _eq: 'pending' } } })
-  const rows = (result.transfers ?? []).slice(0, 25).map((t: any) => ({
+  const rows = (result.transfers ?? []).slice(0, 25).map((t: TransferRow) => ({
     id: t.id,
     type: 'transfer' as const,
     label: formatDate(t.transfer_date),
@@ -49,7 +112,7 @@ async function loadPendingTransfers() {
 
 async function loadActiveJobWork() {
   const result = await hasuraQuery(JOB_WORK_ORDERS_QUERY, { where: { status: { _in: ['dispatched', 'partial_return'] } } })
-  const rows = (result.job_work_orders ?? []).slice(0, 25).map((o: any) => ({
+  const rows = (result.job_work_orders ?? []).slice(0, 25).map((o: JobWorkOrderRow) => ({
     id: o.id,
     type: 'job_work' as const,
     label: o.reference_number,
@@ -63,8 +126,8 @@ async function loadActiveJobWork() {
 
 async function loadDispatches() {
   const result = await hasuraQuery(DISPATCH_ORDERS_QUERY, { where: { status: { _neq: 'cancelled' } } })
-  const rows = (result.dispatch_orders ?? []).slice(0, 25).map((o: any) => {
-    const amount = (o.dispatch_items ?? []).reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+  const rows = (result.dispatch_orders ?? []).slice(0, 25).map((o: DispatchOrderRow) => {
+    const amount = (o.dispatch_items ?? []).reduce((s: number, i: DispatchItemRow) => s + Number(i.amount || 0), 0)
     return {
       id: o.id,
       type: 'dispatch' as const,
@@ -80,7 +143,7 @@ async function loadDispatches() {
 
 async function loadStock() {
   const result = await hasuraQuery(CURRENT_STOCK_QUERY)
-  const rows = (result.v_current_stock ?? []).slice(0, 40).map((s: any, idx: number) => ({
+  const rows = (result.v_current_stock ?? []).slice(0, 40).map((s: StockRow, idx: number) => ({
     id: `stock-${idx}`,
     type: null,
     label: `${s.material_type_name}${s.size_label ? ` (${s.size_label})` : ''}`,
@@ -94,14 +157,14 @@ async function loadStock() {
 
 async function loadJobWorkTransfersForItem(itemId: string) {
   const result = await hasuraQuery(JOB_WORK_TRANSFERS_FOR_ITEM_QUERY, { item_id: itemId })
-  const transferItems: any[] = result.job_work_transfer_items ?? []
-  const rows = transferItems.map((ti: any) => {
+  const transferItems: JobWorkTransferItemRow[] = result.job_work_transfer_items ?? []
+  const rows = transferItems.map((ti: JobWorkTransferItemRow) => {
     const destOrder = ti.job_work_transfer?.to_job_work_order
     return {
       id: destOrder?.id || ti.job_work_transfer?.id,
       type: destOrder ? ('job_work' as const) : null,
       label: destOrder?.reference_number || ti.job_work_transfer?.transfer_number || '—',
-      date: formatDate(ti.job_work_transfer?.transfer_date),
+      date: ti.job_work_transfer?.transfer_date ? formatDate(ti.job_work_transfer.transfer_date) : '—',
       party: ti.job_work_transfer?.to_vendor?.name || '—',
       amount: `${fmtQ(ti.quantity_transferred)} ${ti.unit || ''}`.trim(),
       status: '',

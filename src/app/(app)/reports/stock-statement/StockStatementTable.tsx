@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from 'react'
 import Link from 'next/link'
+import { TriangleAlert, ArrowRight } from 'lucide-react'
 
 export type BreakdownEntry = { name: string; qty: number }
 
@@ -172,11 +173,11 @@ export default function StockStatementTable({
                 <td className="px-4 py-3 text-right text-red-700 bg-red-50/40">{item.otherOut !== 0 ? fmtQ(item.otherOut) : '—'}</td>
                 <td className={`px-4 py-3 text-right font-bold bg-gray-100/60 ${item.stockAtWarehouse < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                   {item.stockAtWarehouseHref ? <Link href={item.stockAtWarehouseHref} className="hover:underline">{fmtQ(item.stockAtWarehouse)}</Link> : fmtQ(item.stockAtWarehouse)}
-                  {item.stockAtWarehouse < 0 && <span title="Negative stock — data-quality warning" className="ml-1">⚠️</span>}
+                  {item.stockAtWarehouse < 0 && <span title="Negative stock — data-quality warning" className="ml-1 inline-block"><TriangleAlert className="inline h-3.5 w-3.5" /></span>}
                 </td>
                 <td className={`px-4 py-3 text-right font-bold bg-amber-50/60 ${item.stockAtVendor < 0 ? 'text-red-600' : 'text-amber-800'}`}>
                   {fmtQ(item.stockAtVendor)}
-                  {item.stockAtVendor < 0 && <span title="Negative stock — data-quality warning" className="ml-1">⚠️</span>}
+                  {item.stockAtVendor < 0 && <span title="Negative stock — data-quality warning" className="ml-1 inline-block"><TriangleAlert className="inline h-3.5 w-3.5" /></span>}
                 </td>
                 <td className={`px-4 py-3 text-right font-bold bg-indigo-50/60 ${item.totalAvailable < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
                   {fmtQ(item.totalAvailable)}
@@ -195,9 +196,9 @@ export default function StockStatementTable({
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onViewTransactions(item.key, item.itemName) }}
-                        className="mb-3 text-xs font-medium text-blue-600 hover:underline"
+                        className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
                       >
-                        View Transactions for this item →
+                        View Transactions for this item <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     )}
                     {item.warehouseBreakdown.length === 0 && item.vendorBreakdown.length === 0 ? (

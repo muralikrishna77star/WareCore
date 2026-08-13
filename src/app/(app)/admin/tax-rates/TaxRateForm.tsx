@@ -91,7 +91,7 @@ export default function TaxRateForm({ existing }: Props) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className={labelCls}>Applicable To</label>
-          <select value={applicableTo} onChange={(e) => setApplicableTo(e.target.value as any)} className={inputCls}>
+          <select value={applicableTo} onChange={(e) => setApplicableTo(e.target.value as 'BOTH' | 'PURCHASE' | 'SALES')} className={inputCls}>
             <option value="BOTH">Purchase & Sales</option>
             <option value="PURCHASE">Purchase Only</option>
             <option value="SALES">Sales Only</option>

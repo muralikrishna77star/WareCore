@@ -2,26 +2,52 @@ export const dynamic = 'force-dynamic'
 
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_CANCELLATION_BY_ID_QUERY } from '@/lib/hasura/queries'
 
+interface PurchaseCancellationItem {
+  id: string
+  purchase_line_id: string | null
+  item_name: string | null
+  material_type_name: string | null
+  size_label: string | null
+  quantity: number
+  rate: number | null
+  amount: number | null
+}
+
+interface PurchaseCancellationDetail {
+  id: string
+  bill_number: string
+  bill_date: string
+  notes: string | null
+  company_name: string | null
+  warehouse_name: string | null
+  supplier_name: string | null
+  cancelled_at: string | null
+  cancelled_notes: string | null
+  purged_at: string
+  purchase_cancellation_items: PurchaseCancellationItem[]
+}
+
 export default async function PurchaseCancellationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const result = await hasuraQuery(PURCHASE_CANCELLATION_BY_ID_QUERY, { id })
-  const record = result.purchase_cancellations_by_pk
+  const record: PurchaseCancellationDetail | null = result.purchase_cancellations_by_pk
   if (!record) notFound()
 
   const items = record.purchase_cancellation_items ?? []
-  const totalQty = items.reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0)
-  const totalAmt = items.reduce((s: number, i: any) => s + (Number(i.amount) || 0), 0)
+  const totalQty = items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+  const totalAmt = items.reduce((s, i) => s + (Number(i.amount) || 0), 0)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <Link href="/purchase-cancellations" className="text-[0.9375rem] text-blue-600 hover:underline mb-1 block">
-            ← Purchase Cancellations
+          <Link href="/purchase-cancellations" className="text-[0.9375rem] text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
+            <ArrowLeft className="h-4 w-4 shrink-0" /> Purchase Cancellations
           </Link>
           <h1 className="text-[1.4375rem] font-bold text-gray-400 line-through">Bill #{record.bill_number}</h1>
         </div>
@@ -79,7 +105,7 @@ export default async function PurchaseCancellationDetailPage({ params }: { param
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 ? (
                 <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400">No line items.</td></tr>
-              ) : items.map((item: any, idx: number) => (
+              ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-[0.8125rem] font-mono text-gray-500">{item.purchase_line_id || '—'}</td>
@@ -105,8 +131,8 @@ export default async function PurchaseCancellationDetailPage({ params }: { param
       </div>
 
       <Link href="/purchase-cancellations"
-        className="px-4 py-2 bg-white text-gray-700 text-[0.9375rem] font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
-        ← Back to Cancellations
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-gray-700 text-[0.9375rem] font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
+        <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Cancellations
       </Link>
     </div>
   )

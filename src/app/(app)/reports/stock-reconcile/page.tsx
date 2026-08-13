@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
@@ -80,10 +81,10 @@ export default function StockReconcilePage() {
     setResult(null)
     try {
       const res = await fetch('/api/stock/reconcile', { method: 'POST' })
-      let data: any
+      let data: { error?: string; reconciled?: number } = {}
       try { data = await res.json() } catch { data = {} }
       if (!res.ok) { setError(data.error || `Server error (${res.status})`); return }
-      setResult(data)
+      setResult({ reconciled: data.reconciled ?? 0 })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error')
     } finally {
@@ -146,8 +147,8 @@ export default function StockReconcilePage() {
           <h1 className="text-2xl font-bold text-gray-900">Stock Reconciliation</h1>
           <p className="mt-1 text-sm text-gray-500">Fix phantom stock entries caused by bill edits</p>
         </div>
-        <Link href="/reports/stock-statement" className="text-sm text-blue-600 hover:underline">
-          ← Stock Statement
+        <Link href="/reports/stock-statement" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">
+          <ArrowLeft className="h-4 w-4" /> Stock Statement
         </Link>
       </div>
 
@@ -156,8 +157,8 @@ export default function StockReconcilePage() {
         <Link href="/data-integrity" className="underline font-medium">Data Integrity</Link> for comprehensive,
         read-only validation across purchases, sales, transfers, and job work, with a persistent exception
         history and no direct writes. The tools below remain available for the specific phantom-purchase-line
-        check they were built for, but "Run Reconciliation" below writes directly to the stock ledger —
-        it is not the same as "Verify" underneath it, which only reads.
+        check they were built for, but &quot;Run Reconciliation&quot; below writes directly to the stock ledger —
+        it is not the same as &quot;Verify&quot; underneath it, which only reads.
       </div>
 
       <div className="rounded-xl border bg-white p-6 space-y-4">
@@ -381,8 +382,8 @@ export default function StockReconcilePage() {
                       <td className="px-4 py-2 text-right">{fmt(r.qty)}</td>
                       <td className="px-4 py-2 whitespace-nowrap">{r.cancelledDate}</td>
                       <td className="px-4 py-2 text-right">
-                        <Link href={r.url} className="text-blue-600 hover:underline whitespace-nowrap">
-                          View cancellation →
+                        <Link href={r.url} className="inline-flex items-center gap-1 text-blue-600 hover:underline whitespace-nowrap">
+                          View cancellation <ArrowRight className="h-4 w-4" />
                         </Link>
                       </td>
                     </tr>

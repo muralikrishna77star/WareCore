@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { TriangleAlert } from 'lucide-react'
 
 export interface MasterDataCheck {
   label: string        // e.g. "Companies"
@@ -25,7 +26,7 @@ export default function MissingMasterDataBanner({ checks, loading }: Props) {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
       <div className="flex gap-3">
-        <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+        <TriangleAlert className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-amber-800">
             Master data required before creating this transaction

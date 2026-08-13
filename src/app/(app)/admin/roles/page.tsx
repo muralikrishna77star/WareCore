@@ -5,11 +5,20 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { CUSTOM_ROLES_QUERY } from '@/lib/hasura/queries'
 import RolesTable from './RolesTable'
 
+interface CustomRole {
+  id: string
+  role_name: string
+  role_code: string
+  description?: string | null
+  is_active: boolean
+  created_at?: string | null
+}
+
 export default async function RolesPage() {
-  let roles: any[] = []
+  let roles: CustomRole[] = []
   try {
     const data = await hasuraQuery(CUSTOM_ROLES_QUERY)
-    roles = (data as any)?.custom_roles ?? []
+    roles = (data?.custom_roles ?? []) as CustomRole[]
   } catch {
     // table not yet migrated
   }

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const result = await hasuraRequest(FIND_USER_BY_TOKEN, { token })
+  const result = await hasuraRequest<{ user_profiles: { id: string }[] }>(FIND_USER_BY_TOKEN, { token })
   const user = result?.data?.user_profiles?.[0]
 
   if (!user) {

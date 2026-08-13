@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
 
+import { RefreshCw, Layers, CircleArrowDown, CircleArrowUp, ArrowLeftRight } from 'lucide-react'
 import { formatDate, getEntryTypeLabel, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
+import { StatCard } from '@/components/StatCard'
 import {
   STOCK_LEDGER_FILTERED_QUERY,
   STOCK_LEDGER_OPENING_BALANCE_QUERY,
@@ -60,9 +62,84 @@ const jobWorkStatusLabel = (status: string) => getJobWorkOrderStatusLabel(status
 const jobWorkStatusColor = (status: string) =>
   jobWorkStatusOptions.find((s) => s.value === status)?.color ?? 'bg-gray-100 text-gray-700'
 
+function SortableTh({
+  column,
+  label,
+  align,
+  activeSort,
+  activeDir,
+  sortHref,
+}: {
+  column: string
+  label: string
+  align?: 'right'
+  activeSort: string | null
+  activeDir: 'asc' | 'desc'
+  sortHref: (column: string) => string
+}) {
+  return (
+    <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
+      <a href={sortHref(column)} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
+        {label}
+        <span className="text-[10px]">{activeSort === column ? (activeDir === 'desc' ? '▼' : '▲') : ''}</span>
+      </a>
+    </th>
+  )
+}
+
 type ItemOption = ComboOption & {
   material_type_id: string
   material_size_id: string | null
+}
+
+interface CompanyOption {
+  id: string
+  name: string
+  code: string
+  short_name: string | null
+}
+
+interface WarehouseOption {
+  id: string
+  name: string
+  company_id: string
+}
+
+interface SupplierOption {
+  id: string
+  name: string
+}
+
+interface ItemMasterRow {
+  id: string
+  item_code: string
+  item_name: string
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+  material_types: { description: string } | null
+  material_sizes: { size_label: string } | null
+}
+
+interface StockLedgerRow {
+  id: string
+  entry_type: string
+  quantity: number
+  entry_date: string
+  reference_number: string | null
+  reference_type: string | null
+  reference_id: string | null
+  purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  size_label: string | null
+  notes: string | null
+  material_type_id: string | null
+  material_size_id: string | null
+  created_at: string
+  companies: { id: string; name: string; code: string } | null
+  warehouses: { id: string; name: string } | null
+  material_types: { description: string; unit: string } | null
+  material_sizes: { size_label: string } | null
 }
 
 export default async function MovementsPage({
@@ -93,14 +170,14 @@ export default async function MovementsPage({
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
   ])
 
-  const companies: any[] = compResult.companies ?? []
-  const allWarehouses: any[] = whResult.warehouses ?? []
+  const companies: CompanyOption[] = compResult.companies ?? []
+  const allWarehouses: WarehouseOption[] = whResult.warehouses ?? []
   const warehouses = params.company
-    ? allWarehouses.filter((w: any) => w.company_id === params.company)
+    ? allWarehouses.filter((w) => w.company_id === params.company)
     : allWarehouses
-  const suppliers: any[] = supResult.suppliers ?? []
+  const suppliers: SupplierOption[] = supResult.suppliers ?? []
 
-  const itemRows: any[] = itemResult.item_master ?? []
+  const itemRows: ItemMasterRow[] = itemResult.item_master ?? []
   const itemOptions: ItemOption[] = itemRows.map((i) => {
     const size = i.material_sizes?.size_label || i.size_label
     return {
@@ -144,8 +221,8 @@ export default async function MovementsPage({
       hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
     ])
     const refIds = [
-      ...(billIdsResult.purchase_bills ?? []).map((b: any) => b.id),
-      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: any) => o.id),
+      ...(billIdsResult.purchase_bills ?? []).map((b: { id: string }) => b.id),
+      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: { id: string }) => o.id),
     ]
     if (refIds.length === 0) {
       noResults = true
@@ -158,7 +235,7 @@ export default async function MovementsPage({
     const statusOrdersResult = await hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, {
       where: { status: { _eq: params.job_work_status } },
     })
-    const refIds = (statusOrdersResult.job_work_orders ?? []).map((o: any) => o.id)
+    const refIds = (statusOrdersResult.job_work_orders ?? []).map((o: { id: string }) => o.id)
     if (refIds.length === 0) {
       noResults = true
     } else {
@@ -172,11 +249,11 @@ export default async function MovementsPage({
   const movResult = noResults
     ? { stock_ledger: [] }
     : await hasuraQuery(STOCK_LEDGER_FILTERED_QUERY, { where })
-  const movements: any[] = movResult.stock_ledger ?? []
+  const movements: StockLedgerRow[] = movResult.stock_ledger ?? []
 
   // Running balance is computed per (company, warehouse, material_type, material_size)
   // group, since stock balance only makes sense within one such combination.
-  const groupKey = (m: any) =>
+  const groupKey = (m: StockLedgerRow) =>
     `${m.companies?.id ?? ''}|${m.warehouses?.id ?? ''}|${m.material_type_id ?? ''}|${m.material_size_id ?? ''}`
 
   const groupsByKey = new Map<string, { company_id: string; warehouse_id: string; material_type_id: string; material_size_id: string | null }>()
@@ -189,6 +266,21 @@ export default async function MovementsPage({
         material_type_id: m.material_type_id,
         material_size_id: m.material_size_id ?? null,
       })
+    }
+  }
+
+  // In/Out totals only make sense to combine across rows that share one unit —
+  // most movements in practice are all "MT", but the data model allows mixed
+  // units, so only show a combined total when the current result set is uniform.
+  const unitsInView = new Set(movements.map((m) => m.material_types?.unit).filter(Boolean))
+  const uniformUnit = unitsInView.size === 1 ? Array.from(unitsInView)[0] : null
+  let totalIn = 0
+  let totalOut = 0
+  if (uniformUnit) {
+    for (const m of movements) {
+      const qty = Number(m.quantity)
+      if (qty > 0) totalIn += qty
+      else totalOut += Math.abs(qty)
     }
   }
 
@@ -252,12 +344,12 @@ export default async function MovementsPage({
     jobWorkInfoById.set(o.id, { vendor: o.suppliers?.name, status: o.status })
   }
 
-  const vendorFor = (row: any): string | null => {
+  const vendorFor = (row: StockLedgerRow): string | null => {
     if (row.reference_type === 'purchase_bill' && row.reference_id) return vendorByBillId.get(row.reference_id) || null
     if (row.reference_type === 'job_work' && row.reference_id) return jobWorkInfoById.get(row.reference_id)?.vendor || null
     return null
   }
-  const jobWorkStatusFor = (row: any): string | null => {
+  const jobWorkStatusFor = (row: StockLedgerRow): string | null => {
     if (row.reference_type === 'job_work' && row.reference_id) return jobWorkInfoById.get(row.reference_id)?.status || null
     return null
   }
@@ -265,7 +357,7 @@ export default async function MovementsPage({
   // Column sorting. Balance/vendor/job-work-status sort keys reuse the lookups
   // above, so this must run after they're built; the chronological order used
   // to compute `balanceById` is independent of this display order.
-  const sortGetters: Record<string, (m: any) => string | number> = {
+  const sortGetters: Record<string, (m: StockLedgerRow) => string | number> = {
     date: (m) => `${m.entry_date}T${m.created_at}`,
     type: (m) => getEntryTypeLabel(m.entry_type),
     company: (m) => m.companies?.code || '',
@@ -309,8 +401,8 @@ export default async function MovementsPage({
     return `/movements?${next.toString()}`
   }
 
-  const mainMovementRateMap = await fetchPurchaseLineRateMap(displayedMovements.map((m: any) => m.purchase_line_id))
-  const exportRows = displayedMovements.map((m: any) => ({
+  const mainMovementRateMap = await fetchPurchaseLineRateMap(displayedMovements.map((m) => m.purchase_line_id))
+  const exportRows = displayedMovements.map((m) => ({
     'Transaction Date': formatDate(m.entry_date),
     'Type': getEntryTypeLabel(m.entry_type),
     'Company': m.companies?.code || '',
@@ -326,15 +418,6 @@ export default async function MovementsPage({
     'Notes': m.notes || '',
   }))
 
-  const SortableTh = ({ column, label, align }: { column: string; label: string; align?: 'right' }) => (
-    <th className={`px-4 py-3 text-xs font-medium text-gray-500 uppercase ${align === 'right' ? 'text-right' : ''}`}>
-      <a href={sortHref(column)} className={`inline-flex items-center gap-1 hover:text-gray-800 ${activeSort === column ? 'text-gray-800' : ''}`}>
-        {label}
-        <span className="text-[10px]">{activeSort === column ? (activeDir === 'desc' ? '▼' : '▲') : ''}</span>
-      </a>
-    </th>
-  )
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -346,6 +429,23 @@ export default async function MovementsPage({
           <ExportExcelButton rows={exportRows} filename={`stock-movements_${fromDate}_to_${toDate}`} sheetName="Movements" />
         )}
       </div>
+
+      {movements.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <StatCard icon={RefreshCw} iconBg="bg-blue-100" iconColor="text-blue-600"
+            value={String(movements.length)} label={movements.length === 1 ? 'movement' : 'movements'} />
+          <StatCard icon={Layers} iconBg="bg-purple-100" iconColor="text-purple-600"
+            value={String(groupsByKey.size)} label={groupsByKey.size === 1 ? 'item/size affected' : 'items/sizes affected'} />
+          {uniformUnit && (
+            <>
+              <StatCard icon={CircleArrowDown} iconBg="bg-green-100" iconColor="text-green-600"
+                value={`${totalIn.toFixed(3)} ${uniformUnit}`} label="Total In" />
+              <StatCard icon={CircleArrowUp} iconBg="bg-red-100" iconColor="text-red-600"
+                value={`${totalOut.toFixed(3)} ${uniformUnit}`} label="Total Out" />
+            </>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <form className="bg-white rounded-xl border p-4">
@@ -371,7 +471,7 @@ export default async function MovementsPage({
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Warehouses</option>
-              {warehouses.map((w: any) => (
+              {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
@@ -407,7 +507,7 @@ export default async function MovementsPage({
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Vendors</option>
-              {suppliers.map((s: any) => (
+              {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -459,28 +559,29 @@ export default async function MovementsPage({
         <div className="overflow-auto max-h-[70vh]">
           {movements.length === 0 ? (
             <div className="p-12 text-center">
+              <ArrowLeftRight className="mx-auto h-10 w-10 text-gray-400 mb-3" />
               <p className="text-gray-500">No movements found.</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <SortableTh column="date" label="Date" />
-                  <SortableTh column="type" label="Type" />
-                  <SortableTh column="company" label="Company" />
-                  <SortableTh column="warehouse" label="Warehouse" />
-                  <SortableTh column="item" label="Item" />
-                  <SortableTh column="size" label="Size" />
-                  <SortableTh column="quantity" label="Quantity" align="right" />
-                  <SortableTh column="balance" label="Balance" align="right" />
-                  <SortableTh column="vendor" label="Vendor" />
-                  <SortableTh column="job_work_status" label="Job Work Status" />
-                  <SortableTh column="reference" label="Reference" />
-                  <SortableTh column="notes" label="Notes" />
+                  <SortableTh column="date" label="Date" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="type" label="Type" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="company" label="Company" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="warehouse" label="Warehouse" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="item" label="Item" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="size" label="Size" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="quantity" label="Quantity" align="right" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="balance" label="Balance" align="right" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="vendor" label="Vendor" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="job_work_status" label="Job Work Status" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="reference" label="Reference" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
+                  <SortableTh column="notes" label="Notes" activeSort={activeSort} activeDir={activeDir} sortHref={sortHref} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {displayedMovements.map((m: any) => {
+                {displayedMovements.map((m) => {
                   const isIn = Number(m.quantity) > 0
                   const vendor = vendorFor(m)
                   const jwStatus = jobWorkStatusFor(m)

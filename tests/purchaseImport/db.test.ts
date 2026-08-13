@@ -11,6 +11,15 @@
 import { describe, expect, it } from 'vitest'
 import { parseStagingRow } from '../../src/lib/purchaseImport/db'
 
+// parseStagingRow() is typed to take Record<string, string> (matching real
+// Hasura run_sql, which stringifies every cell), but this test deliberately
+// feeds it LOCAL_MODE/runSqlLocal's native-boolean shape too (see comment
+// above) — that's a real shape the function must tolerate at runtime even
+// though it's outside its declared parameter type, hence the cast below.
+function asRawRow(row: Record<string, unknown>): Record<string, string> {
+  return row as unknown as Record<string, string>
+}
+
 function baseRawRow(overrides: Record<string, unknown>) {
   return {
     id: 'row-1',
@@ -31,16 +40,16 @@ function baseRawRow(overrides: Record<string, unknown>) {
 
 describe('parseStagingRow boolean parsing', () => {
   it('parses real-Hasura-style string booleans', () => {
-    expect(parseStagingRow(baseRawRow({ is_valid: 'true', reviewed: 'true' }) as any).is_valid).toBe(true)
-    expect(parseStagingRow(baseRawRow({ is_valid: 'true', reviewed: 'true' }) as any).reviewed).toBe(true)
-    expect(parseStagingRow(baseRawRow({ is_valid: 'false', reviewed: 'false' }) as any).is_valid).toBe(false)
-    expect(parseStagingRow(baseRawRow({ is_valid: 'false', reviewed: 'false' }) as any).reviewed).toBe(false)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: 'true', reviewed: 'true' }))).is_valid).toBe(true)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: 'true', reviewed: 'true' }))).reviewed).toBe(true)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: 'false', reviewed: 'false' }))).is_valid).toBe(false)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: 'false', reviewed: 'false' }))).reviewed).toBe(false)
   })
 
   it('parses LOCAL_MODE/runSqlLocal-style native booleans', () => {
-    expect(parseStagingRow(baseRawRow({ is_valid: true, reviewed: true }) as any).is_valid).toBe(true)
-    expect(parseStagingRow(baseRawRow({ is_valid: true, reviewed: true }) as any).reviewed).toBe(true)
-    expect(parseStagingRow(baseRawRow({ is_valid: false, reviewed: false }) as any).is_valid).toBe(false)
-    expect(parseStagingRow(baseRawRow({ is_valid: false, reviewed: false }) as any).reviewed).toBe(false)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: true, reviewed: true }))).is_valid).toBe(true)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: true, reviewed: true }))).reviewed).toBe(true)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: false, reviewed: false }))).is_valid).toBe(false)
+    expect(parseStagingRow(asRawRow(baseRawRow({ is_valid: false, reviewed: false }))).reviewed).toBe(false)
   })
 })

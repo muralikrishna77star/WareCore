@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { ArrowRight } from 'lucide-react'
 
 export default function SetupPage() {
   const router = useRouter()
@@ -109,8 +110,8 @@ export default function SetupPage() {
         <div className="max-w-sm w-full bg-white rounded-2xl shadow-lg p-8 text-center">
           <h1 className="text-xl font-bold text-gray-900 mb-2">Setup already complete</h1>
           <p className="text-sm text-gray-500 mb-6">This database already has an admin account.</p>
-          <a href="/login" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-            Go to login →
+          <a href="/login" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-500">
+            Go to login <ArrowRight className="h-4 w-4" />
           </a>
         </div>
       </div>

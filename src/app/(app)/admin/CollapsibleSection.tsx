@@ -1,23 +1,28 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 
 interface Props {
   title: string
-  icon: string
+  icon: ReactNode
+  iconBg: string
   addHref: string
   href: string
   columns: string[]
-  rows: string[][]
+  rows: ReactNode[][]
 }
 
-export default function CollapsibleSection({ title, icon, addHref, href, columns, rows }: Props) {
+export default function CollapsibleSection({ title, icon, iconBg, addHref, href, columns, rows }: Props) {
   return (
     <div className="group rounded-xl border border-gray-200 bg-white overflow-hidden transition-shadow duration-200 hover:shadow-md">
       {/* Header — always visible */}
       <div className="px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="text-2xl leading-none shrink-0">{icon}</span>
+          <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl shrink-0 ${iconBg}`}>
+            {icon}
+          </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-semibold text-gray-900 text-sm truncate">{title}</h2>
@@ -32,7 +37,9 @@ export default function CollapsibleSection({ title, icon, addHref, href, columns
               href={href}
               className="text-xs text-blue-500 mt-0.5 hidden group-hover:block hover:underline leading-none"
             >
-              View all →
+              <span className="inline-flex items-center gap-1">
+                View all <ArrowRight className="h-3.5 w-3.5" />
+              </span>
             </Link>
           </div>
         </div>

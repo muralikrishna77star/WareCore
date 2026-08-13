@@ -48,26 +48,32 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
   )
 
   useEffect(() => {
-    if (selectedMaterialType) setUnit(selectedMaterialType.unit || 'MT')
+    Promise.resolve().then(() => {
+      if (selectedMaterialType) setUnit(selectedMaterialType.unit || 'MT')
+    })
   }, [selectedMaterialType])
 
   useEffect(() => {
-    if (!materialTypeId) setMaterialSizeId('')
+    Promise.resolve().then(() => {
+      if (!materialTypeId) setMaterialSizeId('')
+    })
   }, [materialTypeId])
 
   // Generate item code from material type code
   useEffect(() => {
-    if (!selectedMaterialType?.code) { setItemCode(''); return }
-    const prefix = selectedMaterialType.code.trim().toUpperCase()
-    const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const sequence = existingItems.reduce((max, item) => {
-      if (!item.item_code?.startsWith(prefix)) return max
-      const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
-      if (!match) return max
-      const n = Number(match[1])
-      return Number.isFinite(n) ? Math.max(max, n) : max
-    }, 0)
-    setItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    Promise.resolve().then(() => {
+      if (!selectedMaterialType?.code) { setItemCode(''); return }
+      const prefix = selectedMaterialType.code.trim().toUpperCase()
+      const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const sequence = existingItems.reduce((max, item) => {
+        if (!item.item_code?.startsWith(prefix)) return max
+        const match = item.item_code.match(new RegExp(`^${safePrefix}(\\d+)$`))
+        if (!match) return max
+        const n = Number(match[1])
+        return Number.isFinite(n) ? Math.max(max, n) : max
+      }, 0)
+      setItemCode(`${prefix}${String(sequence + 1).padStart(5, '0')}`)
+    })
   }, [selectedMaterialType, existingItems])
 
   async function handleSubmit(event: React.FormEvent) {
@@ -135,7 +141,9 @@ export default function AdminItemMasterForm({ materialTypes, materialSizes, exis
   }
 
   useEffect(() => {
-    if (showNewSizeForm && materialTypeId && !newSizeMaterialTypeId) setNewSizeMaterialTypeId(materialTypeId)
+    Promise.resolve().then(() => {
+      if (showNewSizeForm && materialTypeId && !newSizeMaterialTypeId) setNewSizeMaterialTypeId(materialTypeId)
+    })
   }, [showNewSizeForm, materialTypeId, newSizeMaterialTypeId])
 
   return (

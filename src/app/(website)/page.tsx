@@ -1,4 +1,8 @@
 import Link from 'next/link'
+import {
+  ArrowRight, ClipboardList, Package, ArrowLeftRight, Factory, Truck,
+  TrendingUp, ShieldCheck, Smartphone, Cloud, type LucideIcon,
+} from 'lucide-react'
 
 export default function HomePage() {
   return (
@@ -14,8 +18,8 @@ export default function HomePage() {
             Centralized inventory tracking, inter-company transfers, job work management, and dispatch — for steel processing businesses.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/login" className="inline-flex items-center justify-center rounded-xl bg-white text-blue-700 font-semibold px-8 py-3 hover:bg-blue-50 transition-colors">
-              Staff Login →
+            <Link href="/login" className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white text-blue-700 font-semibold px-8 py-3 hover:bg-blue-50 transition-colors">
+              Staff Login <ArrowRight className="h-4 w-4" />
             </Link>
             <a href="#features" className="inline-flex items-center justify-center rounded-xl border border-blue-400 text-white font-semibold px-8 py-3 hover:bg-blue-700 transition-colors">
               Learn More
@@ -32,19 +36,23 @@ export default function HomePage() {
             Purpose-built for steel processing companies managing multiple entities and warehouses.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { icon: '📋', title: 'Bill Entry', desc: 'Record inward purchase bills with line-item material details, quantities, and rates.' },
-              { icon: '📦', title: 'Live Inventory', desc: 'Real-time stock levels per company, warehouse, material type, and size.' },
-              { icon: '↔️', title: 'Transfers', desc: 'Move material between sister companies and warehouses with full audit trail.' },
-              { icon: '🏭', title: 'Job Work', desc: 'Track material sent for slitting, shearing, and other processing with return tracking.' },
-              { icon: '🚚', title: 'Dispatch', desc: 'Manage sales dispatches with vehicle tracking and auto stock deduction.' },
-              { icon: '📈', title: 'Reports', desc: 'Comprehensive reports on stock, movements, and business performance.' },
-              { icon: '🔒', title: 'Role-based Access', desc: 'Fine-grained permissions: Admin, Company Manager, Warehouse Manager, and more.' },
-              { icon: '📱', title: 'Mobile Ready', desc: 'Works on phone and tablet. Install as an app on Android and iOS.' },
-              { icon: '☁️', title: 'Cloud Hosted', desc: 'Hosted on Vercel and Supabase. Always available, always backed up.' },
-            ].map((f) => (
+            {(
+              [
+                { icon: ClipboardList, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', title: 'Bill Entry', desc: 'Record inward purchase bills with line-item material details, quantities, and rates.' },
+                { icon: Package, iconBg: 'bg-green-100', iconColor: 'text-green-600', title: 'Live Inventory', desc: 'Real-time stock levels per company, warehouse, material type, and size.' },
+                { icon: ArrowLeftRight, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600', title: 'Transfers', desc: 'Move material between sister companies and warehouses with full audit trail.' },
+                { icon: Factory, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', title: 'Job Work', desc: 'Track material sent for slitting, shearing, and other processing with return tracking.' },
+                { icon: Truck, iconBg: 'bg-red-100', iconColor: 'text-red-600', title: 'Dispatch', desc: 'Manage sales dispatches with vehicle tracking and auto stock deduction.' },
+                { icon: TrendingUp, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', title: 'Reports', desc: 'Comprehensive reports on stock, movements, and business performance.' },
+                { icon: ShieldCheck, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', title: 'Role-based Access', desc: 'Fine-grained permissions: Admin, Company Manager, Warehouse Manager, and more.' },
+                { icon: Smartphone, iconBg: 'bg-cyan-100', iconColor: 'text-cyan-600', title: 'Mobile Ready', desc: 'Works on phone and tablet. Install as an app on Android and iOS.' },
+                { icon: Cloud, iconBg: 'bg-sky-100', iconColor: 'text-sky-600', title: 'Cloud Hosted', desc: 'Hosted on Vercel and Supabase. Always available, always backed up.' },
+              ] satisfies { icon: LucideIcon; iconBg: string; iconColor: string; title: string; desc: string }[]
+            ).map((f) => (
               <div key={f.title} className="bg-white rounded-xl border p-6 hover:shadow-md transition-shadow">
-                <div className="text-3xl mb-3">{f.icon}</div>
+                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl mb-3 ${f.iconBg}`}>
+                  <f.icon className={`h-5 w-5 ${f.iconColor}`} strokeWidth={2} />
+                </span>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">{f.title}</h3>
                 <p className="text-gray-500 text-sm">{f.desc}</p>
               </div>

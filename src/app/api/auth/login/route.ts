@@ -24,7 +24,7 @@ interface UserProfile {
 }
 
 async function findUserByEmail(email: string): Promise<UserProfile | null> {
-  const json = await hasuraFetchEnvelope(FIND_USER_QUERY, { email })
+  const json = await hasuraFetchEnvelope<{ user_profiles: UserProfile[] }>(FIND_USER_QUERY, { email })
   return json?.data?.user_profiles?.[0] ?? null
 }
 

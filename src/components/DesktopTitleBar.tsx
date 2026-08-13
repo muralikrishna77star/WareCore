@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import { APP_VERSION } from '@/lib/version'
 
 /** Only renders in the desktop (embedded Postgres) build — invisible on the
@@ -62,7 +63,7 @@ export function DesktopTitleBar() {
         disabled={closing}
         className="inline-flex items-center gap-1 rounded-md bg-red-600/90 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-red-600 disabled:opacity-50"
       >
-        ✕ {closing ? 'Closing…' : 'Close'}
+        <X className="h-4 w-4" /> {closing ? 'Closing…' : 'Close'}
       </button>
     </div>
   )

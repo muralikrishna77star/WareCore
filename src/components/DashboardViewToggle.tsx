@@ -5,7 +5,6 @@ import { type DashboardView } from '@/lib/dashboardViewPreference'
 import { useDashboardView } from '@/components/DashboardViewProvider'
 
 const VIEW_OPTIONS: { value: DashboardView; label: string }[] = [
-  { value: 'existing', label: 'Existing' },
   { value: 'classic', label: 'Classic' },
   { value: 'modern', label: 'Modern' },
 ]

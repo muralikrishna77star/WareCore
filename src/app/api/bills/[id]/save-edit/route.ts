@@ -5,6 +5,28 @@ import { hasuraQuery, hasuraRunSql } from '@/lib/hasura/server'
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+interface NewBillItem {
+  purchase_line_id: string | null
+  item_name: string | null
+  item_master_id: string | null
+  material_type_id: string | null
+  material_size_id: string | null
+  size_label: string | null
+  quantity: number
+  rate: number | null
+  amount: number | null
+  notes: string | null
+  tax_rate_id: string | null
+  taxable_value: number | null
+  cgst_rate: number | null
+  cgst_amount: number | null
+  sgst_rate: number | null
+  sgst_amount: number | null
+  tds_rate: number | null
+  tds_amount: number | null
+  total_with_tax: number | null
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -17,21 +39,30 @@ export async function POST(
   if (!UUID_RE.test(billId)) return NextResponse.json({ error: 'Invalid bill ID' }, { status: 400 })
 
   const body = await request.json()
-  const { company_id, warehouse_id, supplier_id, bill_number, bill_date, notes, free_item_ids, new_items } = body
+  const { company_id, warehouse_id, supplier_id, bill_number, bill_date, notes, free_item_ids, new_items } = body as {
+    company_id?: string | null
+    warehouse_id?: string | null
+    supplier_id?: string | null
+    bill_number: string
+    bill_date: string
+    notes?: string | null
+    free_item_ids?: unknown[]
+    new_items?: NewBillItem[]
+  }
 
   // Validate bill is active
   const check = await hasuraQuery(
     `query CheckBill($id: uuid!) { purchase_bills_by_pk(id: $id) { status } }`,
     { id: billId }
   )
-  const bill = (check as any).purchase_bills_by_pk
+  const bill = check.purchase_bills_by_pk
   if (!bill) return NextResponse.json({ error: 'Bill not found' }, { status: 404 })
   if (bill.status !== 'active') return NextResponse.json({ error: 'Only active bills can be edited this way' }, { status: 400 })
 
   // Delete the free items being removed/replaced (must be valid UUIDs). The
   // tr_bill_item_deleted trigger fires PURCHASE_CANCEL for each row automatically —
   // do not also call reverse_purchase_item() here, or the reversal is double-counted.
-  const validFreeIds: string[] = (free_item_ids ?? []).filter((id: unknown) => typeof id === 'string' && UUID_RE.test(id))
+  const validFreeIds: string[] = (free_item_ids ?? []).filter((id: unknown): id is string => typeof id === 'string' && UUID_RE.test(id))
   if (validFreeIds.length) {
     const idList = validFreeIds.map(id => `'${id}'`).join(',')
     await hasuraRunSql(`DELETE FROM purchase_bill_items WHERE id IN (${idList}) AND bill_id = '${billId}'`)
@@ -59,7 +90,7 @@ export async function POST(
       `mutation InsertItems($objects: [purchase_bill_items_insert_input!]!) {
         insert_purchase_bill_items(objects: $objects) { affected_rows }
       }`,
-      { objects: new_items.map((item: any) => ({ ...item, bill_id: billId })) }
+      { objects: new_items.map((item: NewBillItem) => ({ ...item, bill_id: billId })) }
     )
   }
 
