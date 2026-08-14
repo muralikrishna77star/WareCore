@@ -41,6 +41,22 @@ const STATUS_COLOR: Record<string, string> = {
   CANCELLED: 'bg-gray-100 text-gray-500',
 }
 
+function formatDisplayDate(date: string | null | undefined): string {
+  if (!date) return '—'
+  const parsed = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return date
+  return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function getItemDisplay(row: StagingRow): string {
+  const code = row.resolved_field_ids?.materialTypeCode ?? row.current_data.materialType
+  const name = row.resolved_field_ids?.materialTypeLabel ?? row.current_data.materialType
+  const size = row.current_data.size
+  const parts = [code, name].filter(Boolean)
+  if (size) parts.push(size)
+  return parts.length ? parts.join(' • ') : '—'
+}
+
 export default function BatchReviewPage() {
   const { batchId } = useParams<{ batchId: string }>()
   const router = useRouter()
@@ -181,6 +197,7 @@ export default function BatchReviewPage() {
     if (filter === 'unreviewed') return !r.reviewed
     return true
   })
+  const importedBills = importResult?.bills ?? []
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -272,8 +289,9 @@ export default function BatchReviewPage() {
           <thead>
             <tr className="text-xs uppercase text-gray-500 border-b bg-gray-50">
               <th className="px-4 py-2 text-left">Row</th>
-              <th className="px-4 py-2 text-left">Company / Warehouse / Supplier</th>
-              <th className="px-4 py-2 text-left">Material</th>
+              <th className="px-4 py-2 text-left">Purchase Ref</th>
+              <th className="px-4 py-2 text-left">Item Code / Name</th>
+              <th className="px-4 py-2 text-left">Purchase Date</th>
               <th className="px-4 py-2 text-right">Qty</th>
               <th className="px-4 py-2 text-right">Rate</th>
               <th className="px-4 py-2 text-left">Status</th>
@@ -288,10 +306,9 @@ export default function BatchReviewPage() {
                   onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}
                 >
                   <td className="px-4 py-2 font-mono text-xs text-gray-400">{row.row_number}</td>
-                  <td className="px-4 py-2 text-gray-700">
-                    {row.resolved_field_ids?.companyLabel ?? row.current_data.company} / {row.resolved_field_ids?.warehouseLabel ?? row.current_data.warehouse} / {row.resolved_field_ids?.supplierLabel ?? row.current_data.supplier}
-                  </td>
-                  <td className="px-4 py-2 text-gray-700">{row.resolved_field_ids?.materialTypeLabel ?? row.current_data.materialType}{row.current_data.size ? ` - ${row.current_data.size}` : ''}</td>
+                  <td className="px-4 py-2 text-gray-700">{row.current_data.billRef || '—'}</td>
+                  <td className="px-4 py-2 text-gray-700">{getItemDisplay(row)}</td>
+                  <td className="px-4 py-2 text-gray-700">{formatDisplayDate(row.current_data.billDate)}</td>
                   <td className="px-4 py-2 text-right">{row.current_data.quantity ?? '—'}</td>
                   <td className="px-4 py-2 text-right">{row.current_data.rate ?? '—'}</td>
                   <td className="px-4 py-2">
@@ -316,11 +333,27 @@ export default function BatchReviewPage() {
                 </tr>
                 {expandedRowId === row.id && (
                   <tr>
-                    <td colSpan={7} className="p-0">
+                    <td colSpan={8} className="p-0">
                       {batch.status === 'STAGED' ? (
                         <RowEditor batchId={batchId} row={row} masterData={masterData} onChanged={loadBatch} onRefreshMasterData={refreshMasterField} />
                       ) : (
-                        <div className="border-t bg-gray-50 p-4 text-sm text-gray-500">This batch is {batch.status.toLowerCase()} — rows can no longer be edited.</div>
+                        <div className="border-t bg-gray-50 p-4 text-sm text-gray-700 space-y-2">
+                          <p className="font-medium text-gray-800">This batch is imported — full purchase details can be viewed below.</p>
+                          {importedBills.length > 0 ? (
+                            <ul className="space-y-1">
+                              {importedBills.map((b) => (
+                                <li key={b.id}>
+                                  <Link href={`/bills/${b.id}`} className="font-medium text-blue-600 underline hover:no-underline">
+                                    {b.billNumber}
+                                  </Link>
+                                  {' '}— {b.companyLabel} / {b.warehouseLabel} / {b.supplierLabel}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-gray-500">Rows are read-only after import. Use the Bills list to open the imported purchase.</p>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
