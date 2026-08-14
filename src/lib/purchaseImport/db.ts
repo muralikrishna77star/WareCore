@@ -49,6 +49,7 @@ export interface StagingRowRecord {
   correction_history: { at: string; by: string | null; changes: Record<string, { old: unknown; new: unknown }> }[]
   created_at: string
   updated_at: string
+  purchase_bill_id: string | null
 }
 
 export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
@@ -67,5 +68,6 @@ export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
     correction_history: JSON.parse(raw.correction_history ?? '[]'),
     created_at: raw.created_at,
     updated_at: raw.updated_at,
+    purchase_bill_id: raw.purchase_bill_id || null,
   }
 }

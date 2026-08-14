@@ -182,6 +182,17 @@ export default function BatchReviewPage() {
     return true
   })
 
+  // Import resolves lines against material_type/material_size only (no
+  // item_master FK captured on the line itself) — this is a display-only
+  // lookup for an Item Code that happens to already exist for that combo.
+  const itemCodeFor = (row: StagingRow): string | null => {
+    const typeId = row.resolved_field_ids?.materialTypeId
+    if (!typeId) return null
+    const sizeId = row.resolved_field_ids?.materialSizeId ?? null
+    const match = masterData.items.find((i) => i.material_type_id === typeId && i.material_size_id === sizeId)
+    return match?.item_code ?? null
+  }
+
   return (
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -272,7 +283,10 @@ export default function BatchReviewPage() {
           <thead>
             <tr className="text-xs uppercase text-gray-500 border-b bg-gray-50">
               <th className="px-4 py-2 text-left">Row</th>
+              <th className="px-4 py-2 text-left">Purchase Ref</th>
+              <th className="px-4 py-2 text-left">Purchase Date</th>
               <th className="px-4 py-2 text-left">Company / Warehouse / Supplier</th>
+              <th className="px-4 py-2 text-left">Item Code</th>
               <th className="px-4 py-2 text-left">Material</th>
               <th className="px-4 py-2 text-right">Qty</th>
               <th className="px-4 py-2 text-right">Rate</th>
@@ -288,9 +302,12 @@ export default function BatchReviewPage() {
                   onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}
                 >
                   <td className="px-4 py-2 font-mono text-xs text-gray-400">{row.row_number}</td>
+                  <td className="px-4 py-2 text-gray-700">{row.current_data.billRef || '—'}</td>
+                  <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{row.current_data.billDate || '—'}</td>
                   <td className="px-4 py-2 text-gray-700">
                     {row.resolved_field_ids?.companyLabel ?? row.current_data.company} / {row.resolved_field_ids?.warehouseLabel ?? row.current_data.warehouse} / {row.resolved_field_ids?.supplierLabel ?? row.current_data.supplier}
                   </td>
+                  <td className="px-4 py-2 font-mono text-xs text-gray-500">{itemCodeFor(row) ?? '—'}</td>
                   <td className="px-4 py-2 text-gray-700">{row.resolved_field_ids?.materialTypeLabel ?? row.current_data.materialType}{row.current_data.size ? ` - ${row.current_data.size}` : ''}</td>
                   <td className="px-4 py-2 text-right">{row.current_data.quantity ?? '—'}</td>
                   <td className="px-4 py-2 text-right">{row.current_data.rate ?? '—'}</td>
@@ -309,6 +326,15 @@ export default function BatchReviewPage() {
                       >
                         {row.reviewed ? 'Reviewed' : 'Mark reviewed'}
                       </button>
+                    ) : row.purchase_bill_id ? (
+                      <Link
+                        href={`/bills/${row.purchase_bill_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200"
+                        title="Open the full purchase bill this row was imported into"
+                      >
+                        View Purchase →
+                      </Link>
                     ) : (
                       <span className="text-xs text-gray-400">{row.reviewed ? 'Reviewed' : '—'}</span>
                     )}
@@ -316,9 +342,16 @@ export default function BatchReviewPage() {
                 </tr>
                 {expandedRowId === row.id && (
                   <tr>
-                    <td colSpan={7} className="p-0">
+                    <td colSpan={10} className="p-0">
                       {batch.status === 'STAGED' ? (
                         <RowEditor batchId={batchId} row={row} masterData={masterData} onChanged={loadBatch} onRefreshMasterData={refreshMasterField} />
+                      ) : row.purchase_bill_id ? (
+                        <div className="border-t bg-gray-50 p-4 text-sm text-gray-600">
+                          This batch is {batch.status.toLowerCase()} — rows can no longer be edited.{' '}
+                          <Link href={`/bills/${row.purchase_bill_id}`} className="text-blue-600 underline hover:no-underline">
+                            View the full purchase bill this row was imported into →
+                          </Link>
+                        </div>
                       ) : (
                         <div className="border-t bg-gray-50 p-4 text-sm text-gray-500">This batch is {batch.status.toLowerCase()} — rows can no longer be edited.</div>
                       )}

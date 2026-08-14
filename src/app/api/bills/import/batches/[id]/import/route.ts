@@ -80,10 +80,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       UPDATE purchase_import_batches SET status = 'IMPORTED', imported_at = NOW(), imported_by = '${session.userId}'::uuid
       WHERE id = '${id}'::uuid AND status = 'STAGED';
     `
-    // Bills + batch status flip in the SAME atomic script — "bills exist"
-    // and "batch marked imported" can never disagree, and a failure
-    // anywhere rolls back the whole thing including the status flip.
-    await hasuraRunSql(`${insertScript}\n${batchUpdateSql}`)
+    // Link every staging row to the real bill its line became, via each
+    // ResolvedLine's rowNumber (traced straight back to the staging
+    // row_number by resolveImport) — lets the review screen offer a "View
+    // Purchase" link into the actual bill once imported, instead of only
+    // ever showing the frozen staging snapshot.
+    const rowLinkSql = billsWithIds
+      .map((b) => {
+        const rowNumbers = b.lines.map((l) => l.rowNumber).join(',')
+        return `UPDATE purchase_import_rows SET purchase_bill_id = '${b.id}'::uuid WHERE batch_id = '${id}'::uuid AND row_number = ANY(ARRAY[${rowNumbers}]);`
+      })
+      .join('\n')
+    // Bills + row links + batch status flip in the SAME atomic script —
+    // "bills exist", "rows link to them", and "batch marked imported" can
+    // never disagree, and a failure anywhere rolls back the whole thing.
+    await hasuraRunSql(`${insertScript}\n${rowLinkSql}\n${batchUpdateSql}`)
 
     return NextResponse.json({
       bills: billsWithIds.map((b) => ({
