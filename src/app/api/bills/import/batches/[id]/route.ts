@@ -22,7 +22,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const batches = rowsToObjects(batchResult)
     if (!batches.length) return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
 
-    const rowsResult = await hasuraRunSql(`SELECT * FROM purchase_import_rows WHERE batch_id = '${id}'::uuid ORDER BY row_number`)
+    const rowsResult = await hasuraRunSql(`
+      SELECT pir.*, pb.bill_number AS purchase_bill_number
+      FROM purchase_import_rows pir
+      LEFT JOIN purchase_bills pb ON pb.id = pir.purchase_bill_id
+      WHERE pir.batch_id = '${id}'::uuid
+      ORDER BY pir.row_number
+    `)
     const rows = rowsToObjects(rowsResult).map(parseStagingRow)
 
     const duplicateEntries: DuplicateCheckEntry[] = rows

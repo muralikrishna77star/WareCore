@@ -302,7 +302,7 @@ export default function BatchReviewPage() {
                   onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}
                 >
                   <td className="px-4 py-2 font-mono text-xs text-gray-400">{row.row_number}</td>
-                  <td className="px-4 py-2 text-gray-700">{row.current_data.billRef || '—'}</td>
+                  <td className="px-4 py-2 text-gray-700">{row.purchase_bill_number || row.current_data.billRef || '—'}</td>
                   <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{row.current_data.billDate || '—'}</td>
                   <td className="px-4 py-2 text-gray-700">
                     {row.resolved_field_ids?.companyLabel ?? row.current_data.company} / {row.resolved_field_ids?.warehouseLabel ?? row.current_data.warehouse} / {row.resolved_field_ids?.supplierLabel ?? row.current_data.supplier}

@@ -50,6 +50,7 @@ export interface StagingRowRecord {
   created_at: string
   updated_at: string
   purchase_bill_id: string | null
+  purchase_bill_number: string | null
 }
 
 export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
@@ -69,5 +70,6 @@ export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
     created_at: raw.created_at,
     updated_at: raw.updated_at,
     purchase_bill_id: raw.purchase_bill_id || null,
+    purchase_bill_number: raw.purchase_bill_number || null,
   }
 }

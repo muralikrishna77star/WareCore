@@ -21,6 +21,7 @@ export interface StagingRow {
   is_valid: boolean
   reviewed: boolean
   purchase_bill_id: string | null
+  purchase_bill_number: string | null
 }
 
 function errorFor(errors: RowError[], column: string): string | undefined {
