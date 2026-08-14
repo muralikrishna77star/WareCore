@@ -301,7 +301,10 @@ export default function BatchReviewPage() {
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}
                 >
-                  <td className="px-4 py-2 font-mono text-xs text-gray-400">{row.row_number}</td>
+                  {/* row_number is the literal Excel row (header = row 1), kept as-is
+                      in error/duplicate messages so it maps to the source file — here
+                      it's shown as a plain 1-based count of data rows. */}
+                  <td className="px-4 py-2 font-mono text-xs text-gray-400">{row.row_number - 1}</td>
                   <td className="px-4 py-2 text-gray-700">{row.purchase_bill_number || row.current_data.billRef || '—'}</td>
                   <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{row.current_data.billDate || '—'}</td>
                   <td className="px-4 py-2 text-gray-700">
