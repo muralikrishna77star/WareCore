@@ -1,8 +1,8 @@
 // Builds the atomic multi-statement INSERT script for a commit — pulled out
 // of the API route so it can be tested directly (Next.js route.ts files may
 // only export HTTP method handlers, not arbitrary helpers).
-import { sqlUuidOrNull, sqlDate, sqlTextOrNull } from '@/lib/dataIntegrity/sqlSafe'
-import type { ResolvedBill } from './types'
+import { sqlUuidOrNull, sqlDate, sqlText, sqlTextOrNull } from '@/lib/dataIntegrity/sqlSafe'
+import type { NewItemMaster, ResolvedBill } from './types'
 
 export function sqlNumber(n: number): string {
   if (!Number.isFinite(n)) throw new Error(`Non-finite number reached SQL builder: ${n}`)
@@ -55,4 +55,20 @@ export function buildInsertScript(bills: (ResolvedBill & { id: string })[], crea
   `
 
   return `${billsSql}\n${itemsSql}`
+}
+
+// Item Master rows the commit needs to create first, for material/size
+// combos that don't have one yet (see resolveNewItems() in resolve.ts) —
+// run before buildInsertScript() in the same atomic script so a purchase
+// never posts against a combo whose Item didn't make it in.
+export function buildNewItemsInsertScript(newItems: NewItemMaster[]): string {
+  if (newItems.length === 0) return ''
+  const rows = newItems
+    .map((i) => `(${sqlText(i.itemCode)}, ${sqlText(i.itemName)}, ${sqlUuidOrNull(i.materialTypeId)}, ${sqlUuidOrNull(i.materialSizeId)}, ${sqlTextOrNull(i.sizeLabel)}, ${sqlText(i.unit)}, true)`)
+    .join(',\n    ')
+  return `
+    INSERT INTO item_master (item_code, item_name, material_type_id, material_size_id, size_label, unit, is_active)
+    VALUES
+    ${rows};
+  `
 }

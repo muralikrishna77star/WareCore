@@ -2,7 +2,7 @@
 // grouping, tax calc, and ID assignment against a hand-built fake master
 // data snapshot. No database needed.
 import { describe, expect, it } from 'vitest'
-import { resolveImport, resolveRowIndependent, findDuplicateLines } from '../../src/lib/purchaseImport/resolve'
+import { resolveImport, resolveRowIndependent, findDuplicateLines, resolveNewItems } from '../../src/lib/purchaseImport/resolve'
 import type { MasterDataSnapshot, ParsedRow } from '../../src/lib/purchaseImport/types'
 
 const SNAPSHOT: MasterDataSnapshot = {
@@ -14,6 +14,7 @@ const SNAPSHOT: MasterDataSnapshot = {
   taxRates: [{ id: 'tax-1', name: 'GST 18%', cgst_rate: 9, sgst_rate: 9, tds_rate: 0 }],
   existingBillNumbers: [],
   existingLineIds: [],
+  itemMaster: [],
 }
 
 function row(overrides: Partial<ParsedRow> = {}, rowNumber = 2): ParsedRow {
@@ -202,5 +203,63 @@ describe('findDuplicateLines()', () => {
       { rowNumber: 3, companyId: 'c1', warehouseId: 'w1', supplierId: 's1', billDate: '2024-05-01', billRef: '', materialTypeId: 'mt-1', materialSizeId: 'size-1', quantity: 10, rate: 55000 },
     ])
     expect(errors).toHaveLength(0)
+  })
+})
+
+describe('resolveNewItems()', () => {
+  // A second size under the same CR material type, plus a second material
+  // type entirely — to exercise both "two new combos under one prefix get
+  // sequential codes" and "a second prefix starts its own sequence at 1".
+  const MULTI_SNAPSHOT: MasterDataSnapshot = {
+    ...SNAPSHOT,
+    materialTypes: [...SNAPSHOT.materialTypes, { id: 'mt-2', code: 'GI', description: 'GI Coil', unit: 'tons' }],
+    materialSizes: [...SNAPSHOT.materialSizes, { id: 'size-2', material_type_id: 'mt-1', size_label: '0.80x1220' }],
+  }
+
+  it('creates exactly one new item for a material/size combo with no existing Item Master row, deduped across repeated lines', () => {
+    const { bills } = resolveImport(
+      [row({ quantity: 10 }, 2), row({ quantity: 5 }, 3)], // same material/size, two separate lines
+      SNAPSHOT
+    )
+    const newItems = resolveNewItems(bills, { ...SNAPSHOT, itemMaster: [] })
+    expect(newItems).toHaveLength(1)
+    expect(newItems[0]).toMatchObject({
+      itemCode: 'CR00001',
+      itemName: 'CR Coil - 1.40x1080',
+      materialTypeId: 'mt-1',
+      materialSizeId: 'size-1',
+      unit: 'tons',
+    })
+  })
+
+  it('creates nothing when an Item Master row already exists for the combo', () => {
+    const { bills } = resolveImport([row()], SNAPSHOT)
+    const newItems = resolveNewItems(bills, {
+      ...SNAPSHOT,
+      itemMaster: [{ id: 'item-1', item_code: 'CR00099', material_type_id: 'mt-1', material_size_id: 'size-1' }],
+    })
+    expect(newItems).toHaveLength(0)
+  })
+
+  it('allocates sequential codes per material-type prefix across multiple new combos in one file, continuing past existing codes', () => {
+    const { bills } = resolveImport(
+      [
+        row({ size: '1.40x1080' }, 2), // mt-1/size-1 (new)
+        row({ size: '0.80x1220' }, 3), // mt-1/size-2 (new)
+        row({ materialType: 'GI', size: '' }, 4), // mt-2, no size (new)
+      ],
+      MULTI_SNAPSHOT
+    )
+    const newItems = resolveNewItems(bills, {
+      ...MULTI_SNAPSHOT,
+      // An existing CR00003 already on the books — the next CR combo must
+      // skip past it, not restart from CR00001.
+      itemMaster: [{ id: 'item-1', item_code: 'CR00003', material_type_id: 'mt-1', material_size_id: 'some-other-size' }],
+    })
+    expect(newItems).toHaveLength(3)
+    const byCombo = (materialSizeId: string | null) => newItems.find((i) => i.materialTypeId === (materialSizeId === null ? 'mt-2' : 'mt-1') && i.materialSizeId === materialSizeId)
+    expect(byCombo('size-1')?.itemCode).toBe('CR00004')
+    expect(byCombo('size-2')?.itemCode).toBe('CR00005')
+    expect(byCombo(null)?.itemCode).toBe('GI00001')
   })
 })

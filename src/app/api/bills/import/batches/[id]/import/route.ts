@@ -6,9 +6,9 @@ import { UUID_RE } from '@/lib/dataIntegrity/auth'
 import { sqlTextOrNull } from '@/lib/dataIntegrity/sqlSafe'
 import { ALLOWED_ROLES } from '@/lib/purchaseImport/auth'
 import { rowsToObjects, parseStagingRow, sqlJsonb, sqlBool } from '@/lib/purchaseImport/db'
-import { resolveImport, resolveRowIndependent } from '@/lib/purchaseImport/resolve'
+import { resolveImport, resolveRowIndependent, resolveNewItems } from '@/lib/purchaseImport/resolve'
 import { fetchMasterDataSnapshot } from '@/lib/purchaseImport/fetchSnapshot'
-import { buildInsertScript } from '@/lib/purchaseImport/buildInsertScript'
+import { buildInsertScript, buildNewItemsInsertScript } from '@/lib/purchaseImport/buildInsertScript'
 
 // Final commit. Requires the batch STAGED and EVERY row valid+reviewed —
 // all-or-nothing, no partial import. Re-resolves everything fresh against
@@ -74,6 +74,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: message, rowNumbers: [...affectedRowNumbers] }, { status: 409 })
     }
 
+    // Item Master rows for any purchased material/size combo that doesn't
+    // have one yet — otherwise the purchase posts to stock_ledger fine but
+    // stays permanently unreachable from the Item Stock Ledger report's
+    // item picker. Computed from the SAME freshSnapshot used to resolve the
+    // bills, so "which combos are new" can't drift from what was actually
+    // just resolved.
+    const newItems = resolveNewItems(bills, freshSnapshot)
+    const newItemsScript = buildNewItemsInsertScript(newItems)
+
     const billsWithIds = bills.map((b) => ({ ...b, id: randomUUID() }))
     const insertScript = buildInsertScript(billsWithIds, session.userId)
     const batchUpdateSql = `
@@ -91,10 +100,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return `UPDATE purchase_import_rows SET purchase_bill_id = '${b.id}'::uuid WHERE batch_id = '${id}'::uuid AND row_number = ANY(ARRAY[${rowNumbers}]);`
       })
       .join('\n')
-    // Bills + row links + batch status flip in the SAME atomic script —
-    // "bills exist", "rows link to them", and "batch marked imported" can
-    // never disagree, and a failure anywhere rolls back the whole thing.
-    await hasuraRunSql(`${insertScript}\n${rowLinkSql}\n${batchUpdateSql}`)
+    // New items + bills + row links + batch status flip in the SAME atomic
+    // script — "items exist", "bills exist", "rows link to them", and
+    // "batch marked imported" can never disagree, and a failure anywhere
+    // rolls back the whole thing.
+    await hasuraRunSql(`${newItemsScript}\n${insertScript}\n${rowLinkSql}\n${batchUpdateSql}`)
 
     return NextResponse.json({
       bills: billsWithIds.map((b) => ({
@@ -107,6 +117,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       totalLines: billsWithIds.reduce((s, b) => s + b.lines.length, 0),
       totalQuantity: Number(billsWithIds.reduce((s, b) => s + b.totalQuantity, 0).toFixed(3)),
       totalAmount: Number(billsWithIds.reduce((s, b) => s + b.totalAmount, 0).toFixed(2)),
+      newItemsCreated: newItems.map((i) => ({ itemCode: i.itemCode, itemName: i.itemName })),
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Import failed — nothing was committed.'

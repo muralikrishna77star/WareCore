@@ -40,6 +40,7 @@ async function seedMasterData(code: string) {
     taxRates: [],
     existingBillNumbers: [],
     existingLineIds: [],
+    itemMaster: [],
   }
   return snapshot
 }

@@ -92,4 +92,19 @@ export interface MasterDataSnapshot {
   taxRates: { id: string; name: string; cgst_rate: number; sgst_rate: number; tds_rate: number }[]
   existingBillNumbers: string[]
   existingLineIds: string[]
+  // Every active Item Master row's identity, so the commit step can tell
+  // which purchased material/size combos have no Item yet and allocate new
+  // codes for them (see resolveNewItems() in resolve.ts).
+  itemMaster: { id: string; item_code: string; material_type_id: string; material_size_id: string | null }[]
+}
+
+// One Item Master row the import needs to create because a purchased
+// material/size combo had no existing Item — see resolveNewItems().
+export interface NewItemMaster {
+  itemCode: string
+  itemName: string
+  materialTypeId: string
+  materialSizeId: string | null
+  sizeLabel: string | null
+  unit: string
 }

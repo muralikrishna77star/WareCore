@@ -50,6 +50,7 @@ async function seedMasterData(code: string) {
     taxRates: [],
     existingBillNumbers: [],
     existingLineIds: [],
+    itemMaster: [],
   }
   return { company, warehouse, supplier, materialType, size, snapshot }
 }

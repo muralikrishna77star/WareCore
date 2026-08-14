@@ -38,3 +38,15 @@ export function generatePurchaseLineId(groupCode: string, mmyy: string, allLineI
   const count = allLineIds.filter((id) => id && id.startsWith(prefix)).length
   return `${prefix}${String(count + 1).padStart(4, '0')}`
 }
+
+// Item Master code format: {MaterialTypeCode}{NNNNN} (e.g. "CR00171") — same
+// algorithm as the manual "+ Add Item" form (AdminItemMasterForm.tsx), moved
+// here so the bulk import can allocate identical, collision-free codes for
+// items it creates automatically when a purchased material/size combo has
+// no Item Master row yet.
+export function generateItemCode(materialTypeCode: string, existingItemCodes: string[]): string {
+  const prefix = materialTypeCode.trim().toUpperCase()
+  const safePrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const seq = computeNextSeq(existingItemCodes, new RegExp(`^${safePrefix}(\\d+)$`))
+  return `${prefix}${String(seq + 1).padStart(5, '0')}`
+}

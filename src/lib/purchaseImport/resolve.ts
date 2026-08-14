@@ -19,8 +19,8 @@
 // tests/purchaseImport/resolve.test.ts's "no drift" test, which asserts
 // exactly that.
 import { calculateLineTax } from '@/lib/purchaseTax'
-import { generatePurchaseId, generatePurchaseLineId, getMMYY } from '@/lib/purchaseIds'
-import type { MasterDataSnapshot, ParsedRow, ResolvedBill, ResolvedLine, RowError } from './types'
+import { generatePurchaseId, generatePurchaseLineId, generateItemCode, getMMYY } from '@/lib/purchaseIds'
+import type { MasterDataSnapshot, NewItemMaster, ParsedRow, ResolvedBill, ResolvedLine, RowError } from './types'
 
 function norm(s: string): string {
   return s.trim().toLowerCase()
@@ -379,6 +379,58 @@ export function resolveImport(rows: ParsedRow[], snapshot: MasterDataSnapshot): 
   }
 
   return { bills, errors: [] }
+}
+
+// ─── resolveNewItems(): Item Master auto-creation for the commit step ───────
+// Company/Warehouse/Supplier/Material Type/Size matching above is
+// deliberately exact-only with no auto-creation (see file header) — that
+// policy is about not silently inventing a record from what might be a
+// typo. This is a different situation: materialTypeId/materialSizeId are
+// already exact, validated matches by the time resolveImport() succeeds:
+// there is no ambiguity to accidentally paper over, only a genuinely
+// missing Item Master row for a real, already-confirmed material/size
+// combination — the review screen has no item_master FK to correct against
+// in the first place (see ParsedRow/ResolvedLine — no itemCode field).
+// Without this, purchases post fine to stock_ledger by material/size, but
+// stay permanently unreachable from any Item Master-driven screen (the
+// Item Stock Ledger report's item picker) since nothing ever creates the
+// Item.
+//
+// Dedupes by material_type_id + material_size_id across every line in
+// every bill (many lines can share one combo) and allocates codes with the
+// same per-prefix sequence algorithm as the manual "+ Add Item" form
+// (generateItemCode), advancing the in-memory running list so two new
+// items sharing a material type in the same file never collide.
+export function resolveNewItems(bills: ResolvedBill[], snapshot: MasterDataSnapshot): NewItemMaster[] {
+  const existingCodes = snapshot.itemMaster.map((i) => i.item_code)
+  const existingCombos = new Set(snapshot.itemMaster.map((i) => `${i.material_type_id}|${i.material_size_id ?? ''}`))
+  const seenThisImport = new Set<string>()
+  const newItems: NewItemMaster[] = []
+
+  for (const bill of bills) {
+    for (const line of bill.lines) {
+      const comboKey = `${line.materialTypeId}|${line.materialSizeId ?? ''}`
+      if (existingCombos.has(comboKey) || seenThisImport.has(comboKey)) continue
+      seenThisImport.add(comboKey)
+
+      const materialType = snapshot.materialTypes.find((m) => m.id === line.materialTypeId)
+      if (!materialType) continue // Can't happen — resolveImport() already validated this line.
+
+      const itemCode = generateItemCode(materialType.code, existingCodes)
+      existingCodes.push(itemCode) // so the next new item under the same prefix advances past it
+
+      newItems.push({
+        itemCode,
+        itemName: line.itemName,
+        materialTypeId: line.materialTypeId,
+        materialSizeId: line.materialSizeId,
+        sizeLabel: line.sizeLabel,
+        unit: materialType.unit,
+      })
+    }
+  }
+
+  return newItems
 }
 
 // ─── findDuplicateLines(): standalone, reusable cross-row duplicate check ───

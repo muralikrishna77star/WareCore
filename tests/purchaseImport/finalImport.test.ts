@@ -8,8 +8,8 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import pg from 'pg'
 import { startTestDb } from '../../scripts/test/testDb.mjs'
-import { resolveImport, resolveRowIndependent } from '../../src/lib/purchaseImport/resolve'
-import { buildInsertScript } from '../../src/lib/purchaseImport/buildInsertScript'
+import { resolveImport, resolveRowIndependent, resolveNewItems } from '../../src/lib/purchaseImport/resolve'
+import { buildInsertScript, buildNewItemsInsertScript } from '../../src/lib/purchaseImport/buildInsertScript'
 import { buildStageInsertScript, type StagedRowInput } from '../../src/lib/purchaseImport/buildStageInsertScript'
 import type { MasterDataSnapshot, ParsedRow } from '../../src/lib/purchaseImport/types'
 
@@ -43,6 +43,7 @@ async function seedMasterData(code: string) {
     taxRates: [],
     existingBillNumbers: [],
     existingLineIds: [],
+    itemMaster: [],
   }
   return { company, warehouse, supplier, materialType, snapshot }
 }
@@ -124,6 +125,45 @@ describe('final import — atomicity holds across bills AND the batch status fli
     const { rows: batchRows } = await client.query(`SELECT status, imported_at FROM purchase_import_batches WHERE id = $1`, [batchId])
     expect(batchRows[0].status).toBe('STAGED') // the appended UPDATE rolled back too — proves it was in the SAME atomic script
     expect(batchRows[0].imported_at).toBeNull()
+  })
+})
+
+describe('final import — auto-creates missing Item Master rows', () => {
+  it('creates a real item_master row (against the actual DB schema) for a material/size combo purchased with no existing Item', async () => {
+    const { snapshot, materialType } = await seedMasterData('FIN4')
+    // Distinct bill month from the other tests in this file (which all use
+    // 2024-04/05) — generatePurchaseLineId's prefix is 2-letter-code + MMYY,
+    // and every FINn code here starts with "FI", so reusing a month already
+    // committed by an earlier test in this shared DB would collide on
+    // purchase_bill_items' real UNIQUE(purchase_line_id) constraint.
+    const batchId = await stageReadyBatch(snapshot, [row(snapshot, { size: '', billDate: '2024-09-15', billDateRaw: '2024-09-15' })])
+
+    const { rows: staged } = await client.query(`SELECT current_data FROM purchase_import_rows WHERE batch_id = $1`, [batchId])
+    const parsedRows: ParsedRow[] = staged.map((r) => r.current_data)
+    const { bills, errors } = resolveImport(parsedRows, snapshot)
+    expect(errors).toHaveLength(0)
+
+    const newItems = resolveNewItems(bills, snapshot)
+    expect(newItems).toHaveLength(1)
+    expect(newItems[0].itemCode).toBe('FIN400001')
+
+    const newItemsScript = buildNewItemsInsertScript(newItems)
+    const billsWithIds = bills.map((b) => ({ ...b, id: randomUUID() }))
+    const insertScript = buildInsertScript(billsWithIds, null)
+    await client.query(`${newItemsScript}\n${insertScript}`)
+
+    const { rows: itemRows } = await client.query(
+      `SELECT item_code, item_name, material_type_id, material_size_id, unit, is_active FROM item_master WHERE material_type_id = $1`,
+      [materialType.id]
+    )
+    expect(itemRows).toHaveLength(1)
+    expect(itemRows[0]).toMatchObject({
+      item_code: 'FIN400001', material_type_id: materialType.id, material_size_id: null, unit: 'tons', is_active: true,
+    })
+  })
+
+  it('creates nothing when the batch has no rows for a new material/size combo (buildNewItemsInsertScript on an empty list is a no-op)', () => {
+    expect(buildNewItemsInsertScript([])).toBe('')
   })
 })
 

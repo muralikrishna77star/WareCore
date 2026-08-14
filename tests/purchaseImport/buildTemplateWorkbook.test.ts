@@ -16,7 +16,7 @@ import type { MasterDataSnapshot } from '../../src/lib/purchaseImport/types'
 
 const EMPTY_SNAPSHOT: MasterDataSnapshot = {
   companies: [], warehouses: [], suppliers: [], materialTypes: [], materialSizes: [], taxRates: [],
-  existingBillNumbers: [], existingLineIds: [],
+  existingBillNumbers: [], existingLineIds: [], itemMaster: [],
 }
 
 describe('buildTemplateWorkbook() + parseWorkbook() round-trip', () => {
