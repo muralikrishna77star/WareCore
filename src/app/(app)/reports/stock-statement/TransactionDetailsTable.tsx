@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { X, TriangleAlert } from 'lucide-react'
 import type { TransactionDetailRow } from '@/lib/exportStockStatementExcel'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -65,6 +67,25 @@ export default function TransactionDetailsTable({
     }
   }, [filtered])
 
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    date: (t) => t.date,
+    type: (t) => t.typeLabel,
+    movement: (t) => t.stockMovement ?? '',
+    document: (t) => t.documentNumber ?? '',
+    warehouse: (t) => t.warehouseName ?? '',
+    party: (t) => t.vendorName || t.customerName || '',
+    item: (t) => t.itemName,
+    inward: (t) => t.inwardQty,
+    outward: (t) => t.outwardQty,
+    whChange: (t) => t.warehouseChange,
+    vendorChange: (t) => t.vendorChange,
+    whBalance: (t) => t.warehouseBalance,
+    vendorBalance: (t) => t.vendorBalance,
+    rate: (t) => t.rate,
+    value: (t) => t.value,
+    createdBy: (t) => t.createdBy ?? '',
+  })
+
   return (
     <div>
       <div className="px-4 py-2 border-b bg-gray-50 flex flex-wrap items-center gap-2">
@@ -120,26 +141,26 @@ export default function TransactionDetailsTable({
         <table className="w-full text-xs whitespace-nowrap">
           <thead className="sticky top-0 z-10">
             <tr className="border-b text-[11px] font-semibold uppercase">
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Date</th>
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Type</th>
-              <th className="px-2 py-2 text-center text-gray-600 bg-white">Movement</th>
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Document</th>
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Warehouse</th>
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Vendor / Customer</th>
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Item</th>
-              <th className="px-2 py-2 text-right text-green-700 bg-green-50">Inward</th>
-              <th className="px-2 py-2 text-right text-red-700 bg-red-50">Outward</th>
-              <th className="px-2 py-2 text-right text-blue-700 bg-blue-50">Wh Change</th>
-              <th className="px-2 py-2 text-right text-amber-700 bg-amber-50">Vendor Change</th>
-              <th className="px-2 py-2 text-right text-gray-800 bg-gray-100">Wh Balance</th>
-              <th className="px-2 py-2 text-right text-amber-800 bg-amber-50">Vendor Balance</th>
-              <th className="px-2 py-2 text-right text-teal-700 bg-teal-50">Rate</th>
-              <th className="px-2 py-2 text-right text-teal-700 bg-teal-50">Value</th>
-              <th className="px-2 py-2 text-left text-gray-600 bg-white">Created By</th>
+              <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Type" sortKey="type" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Movement" sortKey="movement" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="center" className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Document" sortKey="document" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Warehouse" sortKey="warehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Vendor / Customer" sortKey="party" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Item" sortKey="item" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+              <SortableTh label="Inward" sortKey="inward" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-green-700 bg-green-50" />
+              <SortableTh label="Outward" sortKey="outward" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-red-700 bg-red-50" />
+              <SortableTh label="Wh Change" sortKey="whChange" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-blue-700 bg-blue-50" />
+              <SortableTh label="Vendor Change" sortKey="vendorChange" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-amber-700 bg-amber-50" />
+              <SortableTh label="Wh Balance" sortKey="whBalance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-gray-800 bg-gray-100" />
+              <SortableTh label="Vendor Balance" sortKey="vendorBalance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-amber-800 bg-amber-50" />
+              <SortableTh label="Rate" sortKey="rate" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-teal-700 bg-teal-50" />
+              <SortableTh label="Value" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-teal-700 bg-teal-50" />
+              <SortableTh label="Created By" sortKey="createdBy" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.map((t, idx) => (
+            {sortedRows.map((t, idx) => (
               <tr key={idx} className={t.isOpeningRow ? 'bg-blue-50/50 italic' : 'hover:bg-gray-50'}>
                 <td className="px-2 py-2">{fmtDate(t.date)}</td>
                 <td className="px-2 py-2 font-medium text-gray-900">{t.typeLabel}</td>

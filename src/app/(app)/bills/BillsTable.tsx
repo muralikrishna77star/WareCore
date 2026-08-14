@@ -4,24 +4,27 @@ import { useMemo, useState } from 'react'
 import { formatDate } from '@/lib/utils'
 import BillRow, { type PurchaseBillListItem } from './BillRow'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type Column = {
   key: string
   label: string
   align?: 'right'
   filterValue: (bill: PurchaseBillListItem) => string
+  sortValue: (bill: PurchaseBillListItem) => string | number | null
 }
 
 const columns: Column[] = [
-  { key: 'bill_number', label: 'Bill No.', filterValue: (b) => b.bill_number || '' },
-  { key: 'date', label: 'Date', filterValue: (b) => formatDate(b.bill_date) },
-  { key: 'supplier', label: 'Supplier', filterValue: (b) => b.suppliers?.name || '' },
-  { key: 'company', label: 'Company', filterValue: (b) => b.companies?.name || '' },
-  { key: 'warehouse', label: 'Warehouse', filterValue: (b) => b.warehouses?.name || '' },
-  { key: 'quantity', label: 'Quantity', align: 'right', filterValue: (b) => String(Number(b.total_quantity || 0)) },
-  { key: 'amount', label: 'Amount', align: 'right', filterValue: (b) => String(Number(b.total_amount || 0)) },
-  { key: 'status', label: 'Status', filterValue: (b) => (b.status === 'cancelled' ? 'Cancelled' : b.status === 'draft' ? 'Draft' : 'Active') },
-  { key: 'notes', label: 'Notes', filterValue: (b) => b.notes || '' },
+  { key: 'bill_number', label: 'Bill No.', filterValue: (b) => b.bill_number || '', sortValue: (b) => b.bill_number || '' },
+  { key: 'date', label: 'Date', filterValue: (b) => formatDate(b.bill_date), sortValue: (b) => b.bill_date },
+  { key: 'supplier', label: 'Supplier', filterValue: (b) => b.suppliers?.name || '', sortValue: (b) => b.suppliers?.name || '' },
+  { key: 'company', label: 'Company', filterValue: (b) => b.companies?.name || '', sortValue: (b) => b.companies?.name || '' },
+  { key: 'warehouse', label: 'Warehouse', filterValue: (b) => b.warehouses?.name || '', sortValue: (b) => b.warehouses?.name || '' },
+  { key: 'quantity', label: 'Quantity', align: 'right', filterValue: (b) => String(Number(b.total_quantity || 0)), sortValue: (b) => Number(b.total_quantity || 0) },
+  { key: 'amount', label: 'Amount', align: 'right', filterValue: (b) => String(Number(b.total_amount || 0)), sortValue: (b) => Number(b.total_amount || 0) },
+  { key: 'status', label: 'Status', filterValue: (b) => (b.status === 'cancelled' ? 'Cancelled' : b.status === 'draft' ? 'Draft' : 'Active'), sortValue: (b) => b.status || '' },
+  { key: 'notes', label: 'Notes', filterValue: (b) => b.notes || '', sortValue: (b) => b.notes || '' },
 ]
 
 export default function BillsTable({
@@ -49,7 +52,13 @@ export default function BillsTable({
     )
   }, [bills, filters])
 
-  const exportRows = filtered.map((b) => {
+  const sortAccessors = useMemo(
+    () => Object.fromEntries(columns.map((c) => [c.key, c.sortValue])),
+    []
+  )
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, sortAccessors)
+
+  const exportRows = sortedRows.map((b) => {
     const qty = Number(b.total_quantity || 0)
     const amount = Number(b.total_amount || 0)
     return {
@@ -81,9 +90,16 @@ export default function BillsTable({
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr className="text-left border-b">
           {columns.map((col) => (
-            <th key={col.key} className={`px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase ${col.align === 'right' ? 'text-right' : ''}`}>
-              {col.label}
-            </th>
+            <SortableTh
+              key={col.key}
+              label={col.label}
+              sortKey={col.key}
+              activeKey={sortKey}
+              dir={sortDir}
+              onSort={toggleSort}
+              align={col.align}
+              className="!px-6 !py-3 !text-[0.6875rem]"
+            />
           ))}
           <th className="px-6 py-3 text-[0.6875rem] font-medium text-gray-500 uppercase">Actions</th>
         </tr>
@@ -103,14 +119,14 @@ export default function BillsTable({
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
-        {filtered.length === 0 && (
+        {sortedRows.length === 0 && (
           <tr>
             <td colSpan={columns.length + 1} className="px-6 py-12 text-center text-gray-500">
               No purchase bills match your search.
             </td>
           </tr>
         )}
-        {filtered.map((bill) => (
+        {sortedRows.map((bill) => (
           <BillRow key={bill.id} bill={bill} highlight={highlight} />
         ))}
       </tbody>

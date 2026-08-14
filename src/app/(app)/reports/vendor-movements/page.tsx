@@ -618,6 +618,9 @@ export default async function VendorMovementsPage({
     direct_sales: (g) => g.directSales,
     returns: (g) => g.returns,
     balance: (g) => g.balance,
+    purchase_date: (g) => g.purchaseDate ?? '',
+    rate: (g) => g.rate ?? 0,
+    valuation: (g) => (g.rate ? g.balance * g.rate : 0),
   }
   const activeSort = params.sort && sortGetters[params.sort] ? params.sort : 'vendor'
   const activeDir = params.dir === 'desc' ? 'desc' : 'asc'
@@ -652,7 +655,7 @@ export default async function VendorMovementsPage({
     return `/reports/vendor-movements?${next.toString()}`
   }
   const sortHrefs = Object.fromEntries(
-    ['vendor', 'company', 'item', 'size', 'job_work_out', 'direct_sales', 'returns', 'balance'].map((c) => [c, sortHref(c)])
+    ['vendor', 'company', 'item', 'size', 'job_work_out', 'direct_sales', 'returns', 'balance', 'purchase_date', 'rate', 'valuation'].map((c) => [c, sortHref(c)])
   )
 
   const tableRows = rows.map((g) => ({

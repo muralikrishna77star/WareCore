@@ -18,8 +18,8 @@ import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { MovementsRows } from './MovementsRows'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -432,54 +432,7 @@ export default async function MovementsReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No movements found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Company</th>
-                  <th className="px-4 py-3 text-left">Warehouse</th>
-                  <th className="px-4 py-3 text-left">Material</th>
-                  <th className="px-4 py-3 text-left">Size</th>
-                  <th className="px-4 py-3 text-right">Qty (T)</th>
-                  <th className="px-4 py-3 text-right text-indigo-700 bg-indigo-50" title="Resets per item + warehouse; a period movement total, not an absolute stock position">Running Balance</th>
-                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Rate</th>
-                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Value</th>
-                  <th className="px-4 py-3 text-left">Reference</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {movements.map((m) => {
-                  const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
-                  const isIn = cfg.isIn
-                  const rate = rateFor(m)
-                  const value = valueFor(m)
-                  return (
-                    <tr key={m.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-600">{formatDate(m.entry_date)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cfg.color}`}>
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">{m.companies?.name}</td>
-                      <td className="px-4 py-3 text-gray-500">{m.warehouses?.name}</td>
-                      <td className="px-4 py-3 font-medium">{m.material_types?.description}</td>
-                      <td className="px-4 py-3 text-gray-500">{m.material_sizes?.size_label ?? m.size_label ?? '—'}</td>
-                      <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-700' : 'text-red-600'}`}>
-                        {isIn ? '+' : '-'}{Math.abs(Number(m.quantity)).toFixed(3)}
-                      </td>
-                      <td className={`px-4 py-3 text-right font-medium bg-indigo-50/40 ${(m.runningBalance ?? 0) < 0 ? 'text-red-600' : 'text-indigo-800'}`}>
-                        {Number(m.runningBalance ?? 0).toFixed(3)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate != null ? fmtC(rate) : '—'}</td>
-                      <td className={`px-4 py-3 text-right font-medium bg-teal-50/40 ${value != null && value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
-                        {value != null ? fmtC(value) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{m.reference_id ?? '—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
+              <MovementsRows movements={movements} rateFor={rateFor} valueFor={valueFor} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={6}>Net Movement</td>

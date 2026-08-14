@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowRight, CircleCheck, TriangleAlert, OctagonAlert, CircleAlert, Info } from 'lucide-react'
 import { hasuraRunSql } from '@/lib/hasura/server'
 import { StatCard } from '@/components/StatCard'
+import { OpenByRuleRows } from './OpenByRuleRows'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -111,22 +112,7 @@ export default async function DataIntegrityDashboardPage() {
           <Link href="/data-integrity/exceptions?openOnly=1" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">View all <ArrowRight className="h-3.5 w-3.5" /></Link>
         </div>
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-              <th className="px-4 py-2 text-left">Rule</th>
-              <th className="px-4 py-2 text-left">Category</th>
-              <th className="px-4 py-2 text-right">Open</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {openByRule.map((r) => (
-              <tr key={r.rule_code} className={Number(r.n) > 0 ? '' : 'text-gray-400'}>
-                <td className="px-4 py-2">{r.rule_code} — {r.rule_name}</td>
-                <td className="px-4 py-2">{r.category}</td>
-                <td className="px-4 py-2 text-right font-medium">{r.n}</td>
-              </tr>
-            ))}
-          </tbody>
+          <OpenByRuleRows openByRule={openByRule} />
         </table>
         <p className="px-4 py-2 text-xs text-gray-400 border-t">
           Negative-stock items: {ruleCount('REC-005')} · Duplicate events: {ruleCount('REC-001')} ·

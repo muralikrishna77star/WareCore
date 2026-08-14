@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { ArrowRight, Receipt } from 'lucide-react'
 import SearchInput from '@/components/SearchInput'
 import type { TaxRate } from '@/types'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 // Extracted from the (server-component) page so a search box can filter
 // client-side without turning the whole page's data fetch into a client
@@ -16,6 +18,17 @@ export default function TaxRatesTable({ taxRates }: { taxRates: TaxRate[] }) {
   const filtered = taxRates.filter((tr) => {
     const q = search.toLowerCase()
     return !q || [tr.name, tr.applicable_to].some((v) => v?.toLowerCase().includes(q))
+  })
+
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    name: (r) => r.name,
+    cgst_rate: (r) => Number(r.cgst_rate),
+    sgst_rate: (r) => Number(r.sgst_rate),
+    gst_total: (r) => Number(r.cgst_rate) + Number(r.sgst_rate),
+    tds_rate: (r) => Number(r.tds_rate),
+    tcs_rate: (r) => Number(r.tcs_rate),
+    applicable_to: (r) => r.applicable_to,
+    is_active: (r) => (r.is_active ? 1 : 0),
   })
 
   return (
@@ -38,19 +51,19 @@ export default function TaxRatesTable({ taxRates }: { taxRates: TaxRate[] }) {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase text-right">CGST %</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase text-right">SGST %</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase text-right">GST Total %</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase text-right">TDS %</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase text-right">TCS %</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Applies To</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <SortableTh label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="CGST %" sortKey="cgst_rate" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-5" />
+                  <SortableTh label="SGST %" sortKey="sgst_rate" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-5" />
+                  <SortableTh label="GST Total %" sortKey="gst_total" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-5" />
+                  <SortableTh label="TDS %" sortKey="tds_rate" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-5" />
+                  <SortableTh label="TCS %" sortKey="tcs_rate" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-5" />
+                  <SortableTh label="Applies To" sortKey="applicable_to" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((tr) => (
+                {sortedRows.map((tr) => (
                   <tr key={tr.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{tr.name}</td>
                     <td className="px-5 py-3 text-right text-gray-700">{Number(tr.cgst_rate).toFixed(2)}%</td>

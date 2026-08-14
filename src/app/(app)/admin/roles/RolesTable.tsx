@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import SearchInput from '@/components/SearchInput'
 import { formatDateTime } from '@/lib/utils'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 interface CustomRole {
   id: string
@@ -25,6 +27,14 @@ export default function RolesTable({ roles }: { roles: CustomRole[] }) {
     return !q || [role.role_name, role.role_code, role.description].some((v) => v?.toLowerCase().includes(q))
   })
 
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    role_name: (r) => r.role_name,
+    role_code: (r) => r.role_code,
+    description: (r) => r.description,
+    is_active: (r) => (r.is_active ? 1 : 0),
+    created_at: (r) => (r.created_at ? new Date(r.created_at).getTime() : null),
+  })
+
   return (
     <>
       <SearchInput value={search} onChange={setSearch} placeholder="Search by role name, code or description…" />
@@ -43,16 +53,16 @@ export default function RolesTable({ roles }: { roles: CustomRole[] }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Role Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Code</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Description</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">Created</th>
+                <SortableTh label="Role Name" sortKey="role_name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="tracking-wide" />
+                <SortableTh label="Code" sortKey="role_code" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="tracking-wide" />
+                <SortableTh label="Description" sortKey="description" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="tracking-wide" />
+                <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="tracking-wide" />
+                <SortableTh label="Created" sortKey="created_at" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="tracking-wide" />
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.map((role) => (
+              {sortedRows.map((role) => (
                 <tr key={role.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 font-medium text-gray-900">{role.role_name}</td>
                   <td className="px-4 py-3">

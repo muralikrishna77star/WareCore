@@ -6,6 +6,8 @@ import { ArrowLeft, Package } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { MATERIAL_TYPES_QUERY, UPDATE_MATERIAL_TYPE_MUTATION, DELETE_MATERIAL_TYPE_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type MaterialType = { id: string; code: string; description: string; unit: string; is_active: boolean }
 
@@ -22,6 +24,13 @@ export default function MaterialTypesPage() {
   const filtered = types.filter((t) => {
     const q = search.toLowerCase()
     return !q || [t.code, t.description, t.unit].some((v) => v?.toLowerCase().includes(q))
+  })
+
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    code: (t) => t.code,
+    description: (t) => t.description,
+    unit: (t) => t.unit,
+    is_active: (t) => (t.is_active ? 1 : 0),
   })
 
   const load = () => hasuraFetch<{ material_types: MaterialType[] }>(MATERIAL_TYPES_QUERY).then(r => { setTypes(r.data?.material_types ?? []); setLoading(false) })
@@ -74,15 +83,15 @@ export default function MaterialTypesPage() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Code</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Description</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Unit</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <SortableTh label="Code" sortKey="code" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Description" sortKey="description" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Unit" sortKey="unit" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map(t => (
+                {sortedRows.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-mono font-semibold text-blue-700">{t.code}</td>
                     <td className="px-5 py-3 text-gray-800">{t.description}</td>

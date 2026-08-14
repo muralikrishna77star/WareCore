@@ -7,19 +7,12 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { DispatchReportRows } from './DispatchReportRows'
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   SALE_OUT: 'Sale / Dispatch',
   SALE_CANCEL: 'Sale Cancelled',
-}
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  dispatched: 'bg-blue-100 text-blue-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
 }
 
 interface Company {
@@ -317,60 +310,7 @@ export default async function DispatchReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No dispatch orders found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Invoice No.</th>
-                  <th className="px-4 py-3 text-left">Company</th>
-                  <th className="px-4 py-3 text-left">Warehouse</th>
-                  <th className="px-4 py-3 text-left">Customer</th>
-                  <th className="px-4 py-3 text-left">Vehicle</th>
-                  <th className="px-4 py-3 text-left">Material</th>
-                  <th className="px-4 py-3 text-left">Size</th>
-                  <th className="px-4 py-3 text-right">Qty (T)</th>
-                  <th className="px-4 py-3 text-right">Rate</th>
-                  <th className="px-4 py-3 text-right">Amount (₹)</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {orders.map((o) => {
-                  const items = o.dispatch_items ?? []
-                  const rows: (DispatchItem | null)[] = items.length === 0 ? [null] : items
-                  return rows.map((item, idx: number) => (
-                    <tr key={`${o.id}-${idx}`} className="hover:bg-gray-50">
-                      {idx === 0 && (
-                        <>
-                          <td className="px-4 py-3 text-gray-600" rowSpan={rows.length}>{formatDate(o.dispatch_date)}</td>
-                          <td className="px-4 py-3 font-medium text-orange-700" rowSpan={rows.length}>{o.invoice_number ?? '—'}</td>
-                          <td className="px-4 py-3" rowSpan={rows.length}>{o.companies?.name}</td>
-                          <td className="px-4 py-3 text-gray-500" rowSpan={rows.length}>{o.warehouses?.name}</td>
-                          <td className="px-4 py-3" rowSpan={rows.length}>{o.customers?.name}</td>
-                          <td className="px-4 py-3 text-gray-500" rowSpan={rows.length}>{o.vehicle_number ?? '—'}</td>
-                        </>
-                      )}
-                      {item ? (
-                        <>
-                          <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
-                          <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                          <td className="px-4 py-3 text-right">{Number(item.quantity).toFixed(3)}</td>
-                          <td className="px-4 py-3 text-right">{item.rate ? `₹${Number(item.rate).toLocaleString('en-IN')}` : '—'}</td>
-                          <td className="px-4 py-3 text-right">{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : '—'}</td>
-                        </>
-                      ) : (
-                        <td className="px-4 py-3 text-gray-400" colSpan={5}>No items</td>
-                      )}
-                      {idx === 0 && (
-                        <td className="px-4 py-3" rowSpan={rows.length}>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[o.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {o.status?.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                })}
-              </tbody>
+              <DispatchReportRows orders={orders} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={8}>Total</td>

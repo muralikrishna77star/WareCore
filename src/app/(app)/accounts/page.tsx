@@ -24,6 +24,8 @@ import type {
   DispatchItem,
   FinancialEntry,
 } from '@/types'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 const paymentModes = ['Cash', 'Bank', 'UPI', 'Other'] as const
 const defaultDate = new Date().toISOString().split('T')[0]
@@ -114,6 +116,22 @@ export default function AccountsPage() {
       return true
     })
   }, [financialEntries, filterFrom, filterTo])
+
+  const partyFor = (entry: FinancialEntry) =>
+    entry.entry_type === 'RECEIPT'
+      ? customers.find((c) => c.id === entry.customer_id)?.name ?? ''
+      : suppliers.find((s) => s.id === entry.supplier_id)?.name ?? ''
+
+  const { sortedRows: sortedJournal, sortKey: journalSortKey, sortDir: journalSortDir, toggleSort: toggleJournalSort } = useTableSort(filteredJournal, {
+    date: (e) => e.entry_date,
+    type: (e) => e.entry_type,
+    party: (e) => partyFor(e),
+    reference: (e) => e.reference_number ?? '',
+    line_id: (e) => e.purchase_line_id ?? '',
+    sub_line_id: (e) => e.sub_purchase_line_id ?? '',
+    mode: (e) => e.payment_mode ?? '',
+    amount: (e) => Number(e.amount),
+  })
 
   const clearForm = () => {
     setSupplierId('')
@@ -394,18 +412,18 @@ export default function AccountsPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Date</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Type</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Party</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Reference</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Line ID</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Sub-Line ID</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Mode</th>
-                <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap text-right">Amount</th>
+                <SortableTh label="Date" sortKey="date" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Type" sortKey="type" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Party" sortKey="party" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Reference" sortKey="reference" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Line ID" sortKey="line_id" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Sub-Line ID" sortKey="sub_line_id" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Mode" sortKey="mode" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} className="!px-5 tracking-wide whitespace-nowrap" />
+                <SortableTh label="Amount" sortKey="amount" activeKey={journalSortKey} dir={journalSortDir} onSort={toggleJournalSort} align="right" className="!px-5 tracking-wide whitespace-nowrap" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredJournal.length === 0 ? (
+              {sortedJournal.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">
                     <BookOpen className="mx-auto h-10 w-10 text-gray-300 mb-3" />
@@ -415,7 +433,7 @@ export default function AccountsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredJournal.map((entry) => {
+                sortedJournal.map((entry) => {
                   const party = entry.entry_type === 'RECEIPT'
                     ? customers.find((c) => c.id === entry.customer_id)?.name
                     : suppliers.find((s) => s.id === entry.supplier_id)?.name

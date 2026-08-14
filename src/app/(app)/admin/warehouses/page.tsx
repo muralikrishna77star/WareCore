@@ -6,6 +6,8 @@ import { ArrowLeft, Factory } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { WAREHOUSES_QUERY, ACTIVE_COMPANIES_QUERY, UPDATE_WAREHOUSE_MUTATION, DELETE_WAREHOUSE_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type Warehouse = { id: string; name: string; company_id?: string; address?: string; city?: string; state?: string; is_active: boolean; companies?: { id: string; name: string } }
 type Company = { id: string; name: string }
@@ -28,6 +30,13 @@ export default function WarehousesPage() {
   const filtered = warehouses.filter((w) => {
     const q = search.toLowerCase()
     return !q || [w.name, w.companies?.name, w.city, w.state].some((v) => v?.toLowerCase().includes(q))
+  })
+
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    name: (w) => w.name,
+    company: (w) => w.companies?.name || '',
+    location: (w) => [w.city, w.state].filter(Boolean).join(', '),
+    is_active: (w) => (w.is_active ? 1 : 0),
   })
 
   const load = () => Promise.all([
@@ -102,15 +111,15 @@ export default function WarehousesPage() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">City / State</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <SortableTh label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Company" sortKey="company" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="City / State" sortKey="location" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map(w => (
+                {sortedRows.map(w => (
                   <tr key={w.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{w.name}</td>
                     <td className="px-5 py-3 text-gray-600">{w.companies?.name || '—'}</td>

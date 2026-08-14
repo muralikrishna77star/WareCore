@@ -8,6 +8,8 @@ import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -42,13 +44,14 @@ type Column = {
   label: string
   align?: 'left' | 'right'
   filterValue: (o: JobWorkOrderRow) => string
+  sortValue: (o: JobWorkOrderRow) => string | number | null
 }
 
 const columns: Column[] = [
-  { key: 'dispatch_date', label: 'Dispatch Date', filterValue: (o) => formatDate(o.dispatch_date) },
-  { key: 'reference', label: 'Reference', filterValue: (o) => o.reference_number || '' },
-  { key: 'company', label: 'Company', filterValue: (o) => o.companies?.code || '' },
-  { key: 'vendor', label: 'Vendor', filterValue: (o) => o.suppliers?.name || '' },
+  { key: 'dispatch_date', label: 'Dispatch Date', filterValue: (o) => formatDate(o.dispatch_date), sortValue: (o) => o.dispatch_date },
+  { key: 'reference', label: 'Reference', filterValue: (o) => o.reference_number || '', sortValue: (o) => o.reference_number || '' },
+  { key: 'company', label: 'Company', filterValue: (o) => o.companies?.code || '', sortValue: (o) => o.companies?.code || '' },
+  { key: 'vendor', label: 'Vendor', filterValue: (o) => o.suppliers?.name || '', sortValue: (o) => o.suppliers?.name || '' },
   {
     key: 'items',
     label: 'Items',
@@ -56,14 +59,16 @@ const columns: Column[] = [
       const items = o.job_work_items ?? []
       return `${items.length} items`
     },
+    sortValue: (o) => (o.job_work_items ?? []).length,
   },
   {
     key: 'expected_return',
     label: 'Expected Return',
     filterValue: (o) => (o.expected_return_date ? formatDate(o.expected_return_date) : ''),
+    sortValue: (o) => o.expected_return_date,
   },
-  { key: 'status', label: 'Status', filterValue: (o) => getJobWorkOrderStatusLabel(o.status) },
-  { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '' },
+  { key: 'status', label: 'Status', filterValue: (o) => getJobWorkOrderStatusLabel(o.status), sortValue: (o) => o.status },
+  { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '', sortValue: (o) => o.notes || '' },
 ]
 
 type PartyOption = { id: string; name: string }
@@ -152,7 +157,10 @@ export default function JobWorkTable({
     )
   }, [orders, filters])
 
-  const exportRows = filtered.map((o) => {
+  const sortAccessors = useMemo(() => Object.fromEntries(columns.map((c) => [c.key, c.sortValue])), [])
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, sortAccessors)
+
+  const exportRows = sortedRows.map((o) => {
     const items = o.job_work_items ?? []
     return {
       'Transaction Date': formatDate(o.dispatch_date),
@@ -182,9 +190,7 @@ export default function JobWorkTable({
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr className="text-left border-b">
           {columns.map((col) => (
-            <th key={col.key} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${col.align === 'right' ? 'text-right' : ''}`}>
-              {col.label}
-            </th>
+            <SortableTh key={col.key} label={col.label} sortKey={col.key} activeKey={sortKey} dir={sortDir} onSort={toggleSort} align={col.align} className="!px-6 !py-3" />
           ))}
           <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
         </tr>
@@ -298,14 +304,14 @@ export default function JobWorkTable({
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
-        {filtered.length === 0 && (
+        {sortedRows.length === 0 && (
           <tr>
             <td colSpan={columns.length + 1} className="px-6 py-12 text-center text-gray-500">
               {orders.length === 0 ? (emptyMessage || 'No job work orders in the selected range.') : 'No job work orders match your search.'}
             </td>
           </tr>
         )}
-        {filtered.map((o) => {
+        {sortedRows.map((o) => {
           const items = o.job_work_items ?? []
           const totalQty = items.reduce((s, i) => s + Number(i.quantity_sent), 0)
           const totalReturned = items.reduce((s, i) => s + Number(i.quantity_received || 0), 0)

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { isReferenceType } from '@/lib/reference'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
@@ -50,9 +52,26 @@ export type LedgerRow = {
 
 const fmtQ = (n: number) => n.toFixed(3)
 
-export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canManage: boolean }) {
+export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]; canManage: boolean }) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Balance/Vendor Balance are running totals that only mean what they say
+  // in true chronological order — sorting by any other column still shows
+  // each row's own already-computed balance, just reordered for display
+  // (same tradeoff as stock-statement's Transaction Details table).
+  const { sortedRows: rows, sortKey, sortDir, toggleSort } = useTableSort(allRows, {
+    date: (r) => r.entry_date,
+    type: (r) => (r.isVendorDirectSale ? 'Vendor Direct Sale' : entryTypeConfig[r.entry_type]?.label ?? r.entry_type),
+    reference: (r) => r.reference_number ?? '',
+    company: (r) => r.companies?.name ?? '',
+    warehouse: (r) => r.warehouses?.name ?? '',
+    in: (r) => { const q = Number(r.quantity); return q > 0 ? q : null },
+    out: (r) => { const q = Number(r.quantity); return q < 0 ? Math.abs(q) : null },
+    balance: (r) => r.balance,
+    vendor_balance: (r) => r.vendorBalance,
+    vendor: (r) => r.vendorName ?? '',
+    notes: (r) => r.notes ?? '',
+  })
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
 
@@ -106,6 +125,22 @@ export function ItemLedgerRows({ rows, canManage }: { rows: LedgerRow[]; canMana
 
   return (
     <>
+      <thead className="sticky top-0 z-10">
+        <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
+          {canManage && <th className="px-2 py-3" />}
+          <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Type" sortKey="type" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Reference" sortKey="reference" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Company" sortKey="company" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Warehouse" sortKey="warehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="In" sortKey="in" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!normal-case" />
+          <SortableTh label="Out" sortKey="out" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!normal-case" />
+          <SortableTh label="Balance" sortKey="balance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!normal-case" />
+          <SortableTh label="Balance at Vendor" sortKey="vendor_balance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!normal-case" />
+          <SortableTh label="Vendor" sortKey="vendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Notes" sortKey="notes" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+        </tr>
+      </thead>
       {canManage && selected.size > 0 && (
         <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-amber-50 px-4 py-2">
           <p className="text-sm text-amber-900">

@@ -7,8 +7,8 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { JobWorkReportRows } from './JobWorkReportRows'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -27,14 +27,6 @@ const LEDGER_STOCK_MOVEMENT: Record<string, 'INWARD' | 'OUTWARD' | 'TRANSFER'> =
   JOB_WORK_OUTPUT_IN: 'INWARD',
   JOB_WORK_TRANSFER_OUT: 'TRANSFER',
   JOB_WORK_TRANSFER_IN: 'TRANSFER',
-}
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  dispatched: 'bg-blue-100 text-blue-800',
-  partially_returned: 'bg-orange-100 text-orange-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
 }
 
 interface Company {
@@ -347,72 +339,7 @@ export default async function JobWorkReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No job work orders found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                  <th className="px-4 py-3 text-left">Ref No.</th>
-                  <th className="px-4 py-3 text-left">Dispatch Date</th>
-                  <th className="px-4 py-3 text-left">Exp. Return</th>
-                  <th className="px-4 py-3 text-left">Company</th>
-                  <th className="px-4 py-3 text-left">Supplier</th>
-                  <th className="px-4 py-3 text-left">Material</th>
-                  <th className="px-4 py-3 text-left">Size</th>
-                  <th className="px-4 py-3 text-right">Sent (T)</th>
-                  <th className="px-4 py-3 text-right">Received (T)</th>
-                  <th className="px-4 py-3 text-right">Pending (T)</th>
-                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Rate</th>
-                  <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Sent Value</th>
-                  <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">Pending Value</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {orders.map((o) => {
-                  const items = o.job_work_items ?? []
-                  const rows: (JobWorkItem | null)[] = items.length === 0 ? [null] : items
-                  return rows.map((item, idx: number) => (
-                    <tr key={`${o.id}-${idx}`} className="hover:bg-gray-50">
-                      {idx === 0 && (
-                        <>
-                          <td className="px-4 py-3 font-medium text-purple-700" rowSpan={rows.length}>{o.reference_number}</td>
-                          <td className="px-4 py-3 text-gray-600" rowSpan={rows.length}>{formatDate(o.dispatch_date)}</td>
-                          <td className="px-4 py-3 text-gray-500" rowSpan={rows.length}>{o.expected_return_date ? formatDate(o.expected_return_date) : '—'}</td>
-                          <td className="px-4 py-3" rowSpan={rows.length}>{o.companies?.name}</td>
-                          <td className="px-4 py-3" rowSpan={rows.length}>{o.suppliers?.name}</td>
-                        </>
-                      )}
-                      {item ? (
-                        (() => {
-                          const sent = Number(item.quantity_sent || 0)
-                          const received = Number(item.quantity_received || 0)
-                          const pending = sent - received - Number(item.quantity_transferred_out || 0)
-                          const rate = rateFor(item)
-                          return (
-                            <>
-                              <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
-                              <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                              <td className="px-4 py-3 text-right">{sent.toFixed(3)}</td>
-                              <td className="px-4 py-3 text-right text-green-700">{received.toFixed(3)}</td>
-                              <td className="px-4 py-3 text-right text-yellow-700">{pending.toFixed(3)}</td>
-                              <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate ? fmtC(rate) : '—'}</td>
-                              <td className="px-4 py-3 text-right text-teal-700 bg-teal-50/40">{rate ? fmtC(sent * rate) : '—'}</td>
-                              <td className="px-4 py-3 text-right text-amber-700 bg-amber-50/40">{rate ? fmtC(pending * rate) : '—'}</td>
-                            </>
-                          )
-                        })()
-                      ) : (
-                        <td className="px-4 py-3 text-gray-400" colSpan={8}>No items</td>
-                      )}
-                      {idx === 0 && (
-                        <td className="px-4 py-3" rowSpan={rows.length}>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[o.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {o.status?.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                })}
-              </tbody>
+              <JobWorkReportRows orders={orders} rateFor={rateFor} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={7}>Total</td>

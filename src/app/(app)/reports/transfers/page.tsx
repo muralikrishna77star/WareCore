@@ -7,19 +7,12 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { TransfersReportRows } from './TransfersReportRows'
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   TRANSFER_OUT: 'Transfer Out',
   TRANSFER_IN: 'Transfer In',
-}
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_transit: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
 }
 
 interface Company {
@@ -275,54 +268,7 @@ export default async function TransfersReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No transfers found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">From Company</th>
-                  <th className="px-4 py-3 text-left">From Warehouse</th>
-                  <th className="px-4 py-3 text-left">To Company</th>
-                  <th className="px-4 py-3 text-left">To Warehouse</th>
-                  <th className="px-4 py-3 text-left">Material</th>
-                  <th className="px-4 py-3 text-left">Size</th>
-                  <th className="px-4 py-3 text-right">Qty (T)</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {transfers.map((t) => {
-                  const items = t.transfer_items ?? []
-                  const rows: (TransferItem | null)[] = items.length === 0 ? [null] : items
-                  return rows.map((item, idx: number) => (
-                    <tr key={`${t.id}-${idx}`} className="hover:bg-gray-50">
-                      {idx === 0 && (
-                        <>
-                          <td className="px-4 py-3 text-gray-600" rowSpan={rows.length}>{formatDate(t.transfer_date)}</td>
-                          <td className="px-4 py-3" rowSpan={rows.length}>{t.companies_from?.name}</td>
-                          <td className="px-4 py-3 text-gray-500" rowSpan={rows.length}>{t.warehouses_from?.name}</td>
-                          <td className="px-4 py-3" rowSpan={rows.length}>{t.companies_to?.name}</td>
-                          <td className="px-4 py-3 text-gray-500" rowSpan={rows.length}>{t.warehouses_to?.name}</td>
-                        </>
-                      )}
-                      {item ? (
-                        <>
-                          <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
-                          <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                          <td className="px-4 py-3 text-right">{Number(item.quantity).toFixed(3)}</td>
-                        </>
-                      ) : (
-                        <td className="px-4 py-3 text-gray-400" colSpan={3}>No items</td>
-                      )}
-                      {idx === 0 && (
-                        <td className="px-4 py-3" rowSpan={rows.length}>
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[t.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
-                            {t.status?.replace('_', ' ')}
-                          </span>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                })}
-              </tbody>
+              <TransfersReportRows transfers={transfers} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={7}>Total</td>

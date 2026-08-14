@@ -143,9 +143,9 @@ export default function VendorMovementsTable({
           <SortableTh column="direct_sales" label="Direct Sales" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="returns" label="Returns" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="balance" label="Balance" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
-          <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-left whitespace-nowrap">Purchase Date</th>
-          <th className="px-4 py-3 text-xs font-medium text-teal-700 bg-teal-50 uppercase text-right">Rate</th>
-          <th className="px-4 py-3 text-xs font-medium text-amber-700 bg-amber-50 uppercase text-right">Valuation</th>
+          <SortableTh column="purchase_date" label="Purchase Date" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="rate" label="Rate" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="valuation" label="Valuation" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">

@@ -5,6 +5,7 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { CURRENT_STOCK_QUERY } from '@/lib/hasura/queries'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { StatCard } from '@/components/StatCard'
+import { InventoryCompanyRows } from './InventoryCompanyRows'
 
 export default async function InventoryPage() {
   const result = await hasuraQuery(CURRENT_STOCK_QUERY)
@@ -110,28 +111,7 @@ export default async function InventoryPage() {
             </div>
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b text-left bg-gray-50">
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Warehouse</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Material</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Stock</th>
-                    <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Unit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {rows.map((row, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 text-gray-700">{row.warehouse_name}</td>
-                      <td className="px-6 py-3 font-medium text-gray-900">{row.material_type_name}</td>
-                      <td className="px-6 py-3 text-gray-600">{row.size_label || '—'}</td>
-                      <td className={`px-6 py-3 text-right font-semibold ${Number(row.current_stock) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                        {Number(row.current_stock).toFixed(3)}
-                      </td>
-                      <td className="px-6 py-3 text-gray-500">{row.unit}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                <InventoryCompanyRows rows={rows} />
               </table>
             </div>
           </div>

@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type JobWorkItem = {
   id: string
@@ -88,6 +90,19 @@ export default function VendorDirectSaleBrowseTable({
     })
   }, [orders, vendorId, itemId, jobWorkId, fromDate, toDate])
 
+  const sortAccessors = useMemo(
+    () => ({
+      job_work: (o: JobWorkOrder) => o.reference_number ?? o.id,
+      vendor: (o: JobWorkOrder) => o.suppliers?.name ?? '',
+      company: (o: JobWorkOrder) => o.companies?.name ?? '',
+      dispatch_date: (o: JobWorkOrder) => o.dispatch_date,
+      pending: (o: JobWorkOrder) =>
+        o.job_work_items.filter((i) => pendingQty(i) > 0.0005).reduce((s, i) => s + pendingQty(i), 0),
+    }),
+    []
+  )
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, sortAccessors)
+
   const hasFilters = !!(vendorId || itemId || jobWorkId || fromDate || toDate)
   const clearAll = () => {
     setVendorId('')
@@ -166,16 +181,16 @@ export default function VendorDirectSaleBrowseTable({
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr className="text-left border-b">
-              <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Job Work</th>
-              <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Vendor</th>
-              <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
-              <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Dispatch Date</th>
-              <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Pending Items</th>
+              <SortableTh label="Job Work" sortKey="job_work" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+              <SortableTh label="Vendor" sortKey="vendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+              <SortableTh label="Company" sortKey="company" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+              <SortableTh label="Dispatch Date" sortKey="dispatch_date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+              <SortableTh label="Pending Items" sortKey="pending" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
               <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {filtered.length === 0 && (
+            {sortedRows.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                   {orders.length === 0
@@ -184,7 +199,7 @@ export default function VendorDirectSaleBrowseTable({
                 </td>
               </tr>
             )}
-            {filtered.map((o) => {
+            {sortedRows.map((o) => {
               const pendingItems = o.job_work_items.filter((i) => pendingQty(i) > 0.0005)
               return (
                 <tr key={o.id} className="hover:bg-gray-50">

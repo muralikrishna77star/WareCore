@@ -655,22 +655,6 @@ export default async function ItemStockLedgerPage({
             </div>
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                    {canManage && <th className="px-2 py-3" />}
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Type</th>
-                    <th className="px-4 py-3 text-left">Reference</th>
-                    <th className="px-4 py-3 text-left">Company</th>
-                    <th className="px-4 py-3 text-left">Warehouse</th>
-                    <th className="px-4 py-3 text-right">In</th>
-                    <th className="px-4 py-3 text-right">Out</th>
-                    <th className="px-4 py-3 text-right">Balance</th>
-                    <th className="px-4 py-3 text-right">Balance at Vendor</th>
-                    <th className="px-4 py-3 text-left">Vendor</th>
-                    <th className="px-4 py-3 text-left">Notes</th>
-                  </tr>
-                </thead>
                 <tbody className="divide-y divide-gray-100">
                   <tr className="bg-blue-50/50 font-medium">
                     <td className="px-4 py-3 text-gray-600" colSpan={canManage ? 8 : 7}>Opening Balance as of {fromDate}</td>
@@ -691,7 +675,7 @@ export default async function ItemStockLedgerPage({
                     </tr>
                   )}
                 </tbody>
-                {displayRows.length > 0 && <ItemLedgerRows rows={displayRows} canManage={canManage} />}
+                <ItemLedgerRows rows={displayRows} canManage={canManage} />
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
                     <td className="px-4 py-3 text-gray-700" colSpan={canManage ? 6 : 5}>Closing Balance as of {toDate}</td>

@@ -3,6 +3,8 @@
 import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { TriangleAlert, ArrowRight } from 'lucide-react'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 export type BreakdownEntry = { name: string; qty: number }
 
@@ -115,39 +117,59 @@ export default function StockStatementTable({
     })
   }
 
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(rows, {
+    itemName: (r) => r.itemName,
+    unit: (r) => r.unit,
+    openingWarehouse: (r) => r.openingWarehouse,
+    openingVendor: (r) => r.openingVendor,
+    purchaseIn: (r) => r.purchaseIn,
+    jwOut: (r) => r.jwOut,
+    transferIn: (r) => r.transferIn,
+    jwReturn: (r) => r.jwReturn,
+    otherIn: (r) => r.otherIn,
+    dispatch: (r) => r.dispatch,
+    transferOut: (r) => r.transferOut,
+    otherOut: (r) => r.otherOut,
+    stockAtWarehouse: (r) => r.stockAtWarehouse,
+    stockAtVendor: (r) => r.stockAtVendor,
+    totalAvailable: (r) => r.totalAvailable,
+    rate: (r) => r.rate,
+    value: (r) => r.value,
+  })
+
   return (
     <table className="w-full text-sm whitespace-nowrap">
       <thead className="sticky top-0 z-10">
         <tr className="border-b text-xs font-semibold uppercase">
           <th className="px-2 py-3 w-8 bg-white" />
-          <th className="px-4 py-3 text-left text-gray-600 bg-white">Item Name</th>
-          <th className="px-4 py-3 text-left text-gray-400 bg-white">Unit</th>
+          <SortableTh label="Item Name" sortKey="itemName" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-4 !py-3 !text-gray-600 bg-white" />
+          <SortableTh label="Unit" sortKey="unit" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-4 !py-3 !text-gray-400 bg-white" />
           {/* Opening */}
-          <th className="px-4 py-3 text-right text-blue-700 bg-blue-50">Opening (Wh)</th>
-          <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">Opening (Vendor)</th>
+          <SortableTh label="Opening (Wh)" sortKey="openingWarehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-blue-700 bg-blue-50" />
+          <SortableTh label="Opening (Vendor)" sortKey="openingVendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-amber-700 bg-amber-50" />
           {/* IN columns */}
-          <th className="px-4 py-3 text-right text-green-700 bg-green-50">Purchase In</th>
+          <SortableTh label="Purchase In" sortKey="purchaseIn" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-green-700 bg-green-50" />
           {/* Job Work Out sits right after Purchase In — mirrors the purchase → sent-for-job-work flow */}
-          <th className="px-4 py-3 text-right text-red-700 bg-red-50">Job Work Out</th>
-          <th className="px-4 py-3 text-right text-green-700 bg-green-50">Transfer In</th>
-          <th className="px-4 py-3 text-right text-green-700 bg-green-50">JW Return</th>
-          <th className="px-4 py-3 text-right text-green-700 bg-green-50">Other In</th>
+          <SortableTh label="Job Work Out" sortKey="jwOut" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-red-700 bg-red-50" />
+          <SortableTh label="Transfer In" sortKey="transferIn" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-green-700 bg-green-50" />
+          <SortableTh label="JW Return" sortKey="jwReturn" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-green-700 bg-green-50" />
+          <SortableTh label="Other In" sortKey="otherIn" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-green-700 bg-green-50" />
           {/* OUT columns */}
-          <th className="px-4 py-3 text-right text-red-700 bg-red-50">Dispatch</th>
-          <th className="px-4 py-3 text-right text-red-700 bg-red-50">Transfer Out</th>
-          <th className="px-4 py-3 text-right text-red-700 bg-red-50">Other Out</th>
+          <SortableTh label="Dispatch" sortKey="dispatch" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-red-700 bg-red-50" />
+          <SortableTh label="Transfer Out" sortKey="transferOut" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-red-700 bg-red-50" />
+          <SortableTh label="Other Out" sortKey="otherOut" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-red-700 bg-red-50" />
           {/* Closing, as on To Date */}
-          <th className="px-4 py-3 text-right text-gray-800 bg-gray-100">Stock at Warehouse</th>
-          <th className="px-4 py-3 text-right text-amber-700 bg-amber-50">Stock at Vendor</th>
-          <th className="px-4 py-3 text-right text-indigo-700 bg-indigo-50">Total Available</th>
+          <SortableTh label="Stock at Warehouse" sortKey="stockAtWarehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-gray-800 bg-gray-100" />
+          <SortableTh label="Stock at Vendor" sortKey="stockAtVendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-amber-700 bg-amber-50" />
+          <SortableTh label="Total Available" sortKey="totalAvailable" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-indigo-700 bg-indigo-50" />
           {/* Valuation */}
-          <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Avg Rate</th>
-          <th className="px-4 py-3 text-right text-teal-700 bg-teal-50">Value</th>
+          <SortableTh label="Avg Rate" sortKey="rate" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-teal-700 bg-teal-50" />
+          <SortableTh label="Value" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-4 !py-3 !text-teal-700 bg-teal-50" />
         </tr>
       </thead>
 
       <tbody className="divide-y divide-gray-100">
-        {rows.map((item) => {
+        {sortedRows.map((item) => {
           const isOpen = expanded.has(item.key)
           return (
             <Fragment key={item.key}>

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 export interface DispatchItemRow {
   quantity: number | string
@@ -31,20 +33,24 @@ type Column = {
   align?: 'right'
   searchable?: boolean
   filterValue?: (o: DispatchOrderRow) => string
+  sortValue?: (o: DispatchOrderRow) => string | number | null
 }
 
+const rowQty = (o: DispatchOrderRow) => (o.dispatch_items ?? []).reduce((s, i) => s + Number(i.quantity), 0)
+const rowAmount = (o: DispatchOrderRow) => (o.dispatch_items ?? []).reduce((s, i) => s + Number(i.amount || 0), 0)
+
 const columns: Column[] = [
-  { key: 'date', label: 'Date', filterValue: (o) => formatDate(o.dispatch_date) },
-  { key: 'invoice', label: 'Invoice Number', filterValue: (o) => o.invoice_number || '' },
-  { key: 'company', label: 'Company', filterValue: (o) => o.companies?.code || '' },
-  { key: 'customer', label: 'Customer', filterValue: (o) => o.customers?.name || '' },
-  { key: 'sale_ref', label: 'Sale Ref ID', filterValue: (o) => o.sale_ref_id || '' },
-  { key: 'vehicle', label: 'Vehicle', filterValue: (o) => o.vehicle_number || '' },
-  { key: 'qty', label: 'Qty', align: 'right', searchable: false },
-  { key: 'amount', label: 'Amount', align: 'right', searchable: false },
-  { key: 'type', label: 'Type', filterValue: (o) => (o.is_vendor_direct ? 'From Vendor' : 'Warehouse') },
-  { key: 'status', label: 'Status', filterValue: (o) => (o.status === 'cancelled' ? 'Cancelled' : o.status === 'draft' ? 'Draft' : 'Active') },
-  { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '' },
+  { key: 'date', label: 'Date', filterValue: (o) => formatDate(o.dispatch_date), sortValue: (o) => o.dispatch_date },
+  { key: 'invoice', label: 'Invoice Number', filterValue: (o) => o.invoice_number || '', sortValue: (o) => o.invoice_number || '' },
+  { key: 'company', label: 'Company', filterValue: (o) => o.companies?.code || '', sortValue: (o) => o.companies?.code || '' },
+  { key: 'customer', label: 'Customer', filterValue: (o) => o.customers?.name || '', sortValue: (o) => o.customers?.name || '' },
+  { key: 'sale_ref', label: 'Sale Ref ID', filterValue: (o) => o.sale_ref_id || '', sortValue: (o) => o.sale_ref_id || '' },
+  { key: 'vehicle', label: 'Vehicle', filterValue: (o) => o.vehicle_number || '', sortValue: (o) => o.vehicle_number || '' },
+  { key: 'qty', label: 'Qty', align: 'right', searchable: false, sortValue: rowQty },
+  { key: 'amount', label: 'Amount', align: 'right', searchable: false, sortValue: rowAmount },
+  { key: 'type', label: 'Type', filterValue: (o) => (o.is_vendor_direct ? 'From Vendor' : 'Warehouse'), sortValue: (o) => (o.is_vendor_direct ? 1 : 0) },
+  { key: 'status', label: 'Status', filterValue: (o) => (o.status === 'cancelled' ? 'Cancelled' : o.status === 'draft' ? 'Draft' : 'Active'), sortValue: (o) => o.status },
+  { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '', sortValue: (o) => o.notes || '' },
   { key: 'actions', label: 'Actions', searchable: false },
 ]
 
@@ -71,7 +77,13 @@ export default function DispatchTable({
     )
   }, [orders, filters])
 
-  const exportRows = filtered.map((o) => {
+  const sortAccessors = useMemo(() => {
+    const entries = columns.filter((c) => c.sortValue).map((c) => [c.key, c.sortValue!] as const)
+    return Object.fromEntries(entries)
+  }, [])
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, sortAccessors)
+
+  const exportRows = sortedRows.map((o) => {
     const dispItems = o.dispatch_items ?? []
     const totalQty = dispItems.reduce((s: number, i) => s + Number(i.quantity), 0)
     const totalAmt = dispItems.reduce((s: number, i) => s + Number(i.amount || 0), 0)
@@ -105,11 +117,15 @@ export default function DispatchTable({
     <table className="w-full text-sm">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr className="text-left border-b">
-          {columns.map((col) => (
-            <th key={col.key} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${col.align === 'right' ? 'text-right' : ''}`}>
-              {col.label}
-            </th>
-          ))}
+          {columns.map((col) =>
+            col.sortValue ? (
+              <SortableTh key={col.key} label={col.label} sortKey={col.key} activeKey={sortKey} dir={sortDir} onSort={toggleSort} align={col.align} className="!px-6 !py-3" />
+            ) : (
+              <th key={col.key} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase ${col.align === 'right' ? 'text-right' : ''}`}>
+                {col.label}
+              </th>
+            )
+          )}
         </tr>
         <tr className="border-b bg-white">
           {columns.map((col) => (
@@ -128,14 +144,14 @@ export default function DispatchTable({
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-100">
-        {filtered.length === 0 && (
+        {sortedRows.length === 0 && (
           <tr>
             <td colSpan={columns.length} className="px-6 py-12 text-center text-gray-500">
               No sale entries match your search.
             </td>
           </tr>
         )}
-        {filtered.map((o) => {
+        {sortedRows.map((o) => {
           const dispItems = o.dispatch_items ?? []
           const totalQty = dispItems.reduce((s: number, i) => s + Number(i.quantity), 0)
           const totalAmt = dispItems.reduce((s: number, i) => s + Number(i.amount || 0), 0)

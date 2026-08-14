@@ -6,6 +6,8 @@ import { ArrowLeft } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { MATERIAL_SIZES_QUERY, ACTIVE_MATERIAL_TYPES_QUERY, UPDATE_MATERIAL_SIZE_MUTATION, DELETE_MATERIAL_SIZE_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type Size = { id: string; size_label: string; material_type_id: string; thickness?: number | null; width?: number | null; is_active: boolean; material_types?: { code: string; description: string } }
 type MT = { id: string; code: string; description: string }
@@ -22,6 +24,14 @@ export default function SizesPage() {
   const filtered = sizes.filter((s) => {
     const q = search.toLowerCase()
     return !q || [s.size_label, s.material_types?.code, s.material_types?.description].some((v) => v?.toLowerCase().includes(q))
+  })
+
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    size_label: (s) => s.size_label,
+    material_type: (s) => s.material_types?.description || s.material_types?.code || '',
+    thickness: (s) => s.thickness ?? null,
+    width: (s) => s.width ?? null,
+    is_active: (s) => (s.is_active ? 1 : 0),
   })
 
   const load = () => Promise.all([
@@ -74,11 +84,11 @@ export default function SizesPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b">
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Size Label</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Material Type</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Thickness</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Width</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Status</th>
+                <SortableTh label="Size Label" sortKey="size_label" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Material Type" sortKey="material_type" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Thickness" sortKey="thickness" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Width" sortKey="width" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
                 <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Actions</th>
               </tr>
             </thead>
@@ -88,7 +98,7 @@ export default function SizesPage() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-400">No sizes match your search.</td></tr>
               ) : (
-                filtered.map(s => (
+                sortedRows.map(s => (
                   <tr key={s.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 font-medium text-gray-900">{s.size_label}</td>
                     <td className="px-6 py-3 text-gray-600">

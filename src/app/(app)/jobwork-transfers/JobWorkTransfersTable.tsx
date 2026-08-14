@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import DeleteJobWorkTransferButton from './DeleteJobWorkTransferButton'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 interface JobWorkTransferItem {
   id: string
@@ -61,11 +63,39 @@ const COLUMNS = [
   { key: 'reason', label: 'Reason' },
 ] as const
 
+// Sorting reorders whole transfers (each transfer's item lines stay
+// contiguous, since they share rowSpan-merged cells below) — a per-item
+// column like "Item" sorts transfers by their first item line.
+function recordSortValue(t: JobWorkTransferRecord, key: string): string | number | null {
+  const first = t.job_work_transfer_items?.[0] ?? null
+  switch (key) {
+    case 'transferNo': return t.transfer_number || ''
+    case 'date': return t.transfer_date
+    case 'from': return `${t.from_vendor?.name || ''} ${t.from_job_work_order?.reference_number || ''}`
+    case 'to': return `${t.to_vendor?.name || ''} ${t.to_job_work_order?.reference_number || ''}`
+    case 'purchaseLine': return first?.purchase_line_id || ''
+    case 'item': return first?.item_name || ''
+    case 'size': return first?.size_label || ''
+    case 'reason': return t.reason || ''
+    case 'qty': return (t.job_work_transfer_items ?? []).reduce((s, i) => s + Number(i.quantity_transferred), 0)
+    default: return null
+  }
+}
+
 export default function JobWorkTransfersTable({ records, canDelete }: { records: JobWorkTransferRecord[]; canDelete: boolean }) {
   const [filters, setFilters] = useState<Record<string, string>>({})
 
+  const sortAccessors = useMemo(
+    () =>
+      Object.fromEntries(
+        [...COLUMNS.map((c) => c.key), 'qty'].map((key) => [key, (t: JobWorkTransferRecord) => recordSortValue(t, key)])
+      ),
+    []
+  )
+  const { sortedRows: sortedRecords, sortKey, sortDir, toggleSort } = useTableSort(records, sortAccessors)
+
   const flatRows: FlatRow[] = useMemo(() => {
-    return records.flatMap((t) => {
+    return sortedRecords.flatMap((t) => {
       const items = t.job_work_transfer_items ?? []
       const base = {
         transferId: t.id,
@@ -91,7 +121,7 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
         unit: it?.unit || '',
       }))
     })
-  }, [records])
+  }, [sortedRecords])
 
   const filtered = useMemo(() => {
     const active = Object.entries(filters).filter(([, v]) => v.trim() !== '')
@@ -141,9 +171,9 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
         <thead className="sticky top-0 z-10 bg-gray-50">
           <tr className="text-left border-b">
             {COLUMNS.map((col) => (
-              <th key={col.key} className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">{col.label}</th>
+              <SortableTh key={col.key} label={col.label} sortKey={col.key} activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2" />
             ))}
-            <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+            <SortableTh label="Qty" sortKey="qty" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2" />
             {canDelete && <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Actions</th>}
           </tr>
           <tr className="border-b bg-white">

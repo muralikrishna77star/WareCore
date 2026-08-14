@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { ArrowLeft, ArrowRight, ClipboardList } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { ITEM_MASTERS_QUERY, ACTIVE_MATERIAL_TYPES_QUERY } from '@/lib/hasura/queries'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 interface ItemMasterRow {
   id: string
@@ -53,6 +55,15 @@ export default function ItemMastersPage() {
       item.item_code?.toLowerCase().includes(q) ||
       item.item_name?.toLowerCase().includes(q)
     return matchesType && matchesSearch
+  })
+
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    item_code: (i) => i.item_code,
+    item_name: (i) => i.item_name,
+    material_type: (i) => i.material_types?.description || i.material_types?.code || '',
+    size: (i) => i.material_sizes?.size_label || i.size_label || '',
+    unit: (i) => i.unit || '',
+    is_active: (i) => (i.is_active ? 1 : 0),
   })
 
   return (
@@ -113,17 +124,17 @@ export default function ItemMastersPage() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Item Code</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Item Name</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Material Type</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Size</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Unit</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <SortableTh label="Item Code" sortKey="item_code" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Item Name" sortKey="item_name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Material Type" sortKey="material_type" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Size" sortKey="size" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Unit" sortKey="unit" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((item) => (
+                {sortedRows.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-mono font-medium text-gray-900">{item.item_code}</td>
                     <td className="px-5 py-3 text-gray-800">{item.item_name}</td>

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type TotalRow = {
   category: string
@@ -156,6 +158,35 @@ export default function StockReconcilePage() {
 
   const fmt = (n: number) => n.toFixed(3)
 
+  const totalsSort = useTableSort(totals ?? [], {
+    category: (r) => categoryLabels[r.category] || r.category,
+    sourceQty: (r) => r.sourceQty,
+    ledgerQty: (r) => r.ledgerQty,
+    diff: (r) => r.diff,
+    status: (r) => (r.matches ? 'Match' : cancellationCategories.has(r.category) || r.fullyExplained ? 'Info' : 'Mismatch'),
+  })
+  const explainedSort = useTableSort(explainedRecords ?? [], {
+    category: (r) => categoryLabels[r.category] || r.category,
+    reference: (r) => r.referenceNumber ?? '',
+    qty: (r) => r.qty,
+    cancelled_date: (r) => r.cancelledDate,
+  })
+  const staleSort = useTableSort(staleRecords ?? [], {
+    date: (r) => r.entryDate,
+    type: (r) => r.entryType,
+    reference: (r) => r.referenceNumber ?? '',
+    material: (r) => `${r.materialCode ?? ''}${r.sizeLabel ? ` (${r.sizeLabel})` : ''}`,
+    qty: (r) => r.quantity,
+  })
+  const duplicatesSort = useTableSort(duplicateGroups ?? [], {
+    reference: (g) => g.referenceNumber ?? '',
+    type: (g) => g.entryType,
+    line: (g) => `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
+    rows: (g) => g.rowCount,
+    net_qty: (g) => g.netQty,
+    latest_date: (g) => g.latestEntryDate,
+  })
+
   // ── Item-by-item reconciliation: walks every active item's opening ->
   // transactions -> closing balance for a date range, in visible batches,
   // marking each item valid or flagging it as it's checked. ──────────────
@@ -171,7 +202,16 @@ export default function StockReconcilePage() {
 
   const validCount = itemResults.filter((r) => r.valid).length
   const mismatchCount = itemResults.length - validCount
-  const visibleResults = showOnlyIssues ? itemResults.filter((r) => !r.valid) : itemResults
+  const preSortResults = showOnlyIssues ? itemResults.filter((r) => !r.valid) : itemResults
+  const itemResultsSort = useTableSort(preSortResults, {
+    item: (r) => r.itemCode,
+    opening: (r) => r.openingBalance,
+    closing: (r) => r.closingBalance,
+    vendor_closing: (r) => r.vendorClosingBalance,
+    vendor_expected: (r) => r.vendorExpected,
+    status: (r) => (r.valid ? 1 : 0),
+  })
+  const visibleResults = itemResultsSort.sortedRows
 
   const runItemReconcile = async () => {
     setItemRunning(true)
@@ -367,15 +407,15 @@ export default function StockReconcilePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b text-left">
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Category</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Source Total</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Ledger Total</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Diff</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <SortableTh label="Category" sortKey="category" activeKey={totalsSort.sortKey} dir={totalsSort.sortDir} onSort={totalsSort.toggleSort} />
+                    <SortableTh label="Source Total" sortKey="sourceQty" activeKey={totalsSort.sortKey} dir={totalsSort.sortDir} onSort={totalsSort.toggleSort} align="right" />
+                    <SortableTh label="Ledger Total" sortKey="ledgerQty" activeKey={totalsSort.sortKey} dir={totalsSort.sortDir} onSort={totalsSort.toggleSort} align="right" />
+                    <SortableTh label="Diff" sortKey="diff" activeKey={totalsSort.sortKey} dir={totalsSort.sortDir} onSort={totalsSort.toggleSort} align="right" />
+                    <SortableTh label="Status" sortKey="status" activeKey={totalsSort.sortKey} dir={totalsSort.sortDir} onSort={totalsSort.toggleSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {totals.map((row) => {
+                  {totalsSort.sortedRows.map((row) => {
                     const isInfoOnly = !row.matches && (cancellationCategories.has(row.category) || row.fullyExplained)
                     return (
                       <tr key={row.category}>
@@ -433,15 +473,15 @@ export default function StockReconcilePage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50">
                   <tr className="border-b text-left">
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Category</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Reference</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Qty</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Cancelled On</th>
+                    <SortableTh label="Category" sortKey="category" activeKey={explainedSort.sortKey} dir={explainedSort.sortDir} onSort={explainedSort.toggleSort} />
+                    <SortableTh label="Reference" sortKey="reference" activeKey={explainedSort.sortKey} dir={explainedSort.sortDir} onSort={explainedSort.toggleSort} />
+                    <SortableTh label="Qty" sortKey="qty" activeKey={explainedSort.sortKey} dir={explainedSort.sortDir} onSort={explainedSort.toggleSort} align="right" />
+                    <SortableTh label="Cancelled On" sortKey="cancelled_date" activeKey={explainedSort.sortKey} dir={explainedSort.sortDir} onSort={explainedSort.toggleSort} />
                     <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {explainedRecords.map((r) => (
+                  {explainedSort.sortedRows.map((r) => (
                     <tr key={r.cancellationId}>
                       <td className="px-4 py-2">{categoryLabels[r.category] || r.category}</td>
                       <td className="px-4 py-2 font-mono text-xs">{r.referenceNumber || '—'}</td>
@@ -510,15 +550,15 @@ export default function StockReconcilePage() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-gray-50">
                       <tr className="border-b text-left">
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Type</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Reference</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Material</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Qty</th>
+                        <SortableTh label="Date" sortKey="date" activeKey={staleSort.sortKey} dir={staleSort.sortDir} onSort={staleSort.toggleSort} />
+                        <SortableTh label="Type" sortKey="type" activeKey={staleSort.sortKey} dir={staleSort.sortDir} onSort={staleSort.toggleSort} />
+                        <SortableTh label="Reference" sortKey="reference" activeKey={staleSort.sortKey} dir={staleSort.sortDir} onSort={staleSort.toggleSort} />
+                        <SortableTh label="Material" sortKey="material" activeKey={staleSort.sortKey} dir={staleSort.sortDir} onSort={staleSort.toggleSort} />
+                        <SortableTh label="Qty" sortKey="qty" activeKey={staleSort.sortKey} dir={staleSort.sortDir} onSort={staleSort.toggleSort} align="right" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {staleRecords.map((r) => (
+                      {staleSort.sortedRows.map((r) => (
                         <tr key={r.id}>
                           <td className="px-4 py-2 whitespace-nowrap">{r.entryDate}</td>
                           <td className="px-4 py-2">{r.entryType}</td>
@@ -588,16 +628,16 @@ export default function StockReconcilePage() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-gray-50">
                       <tr className="border-b text-left">
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Reference</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Type</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Line</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Rows</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Net Qty</th>
-                        <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Latest</th>
+                        <SortableTh label="Reference" sortKey="reference" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
+                        <SortableTh label="Type" sortKey="type" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
+                        <SortableTh label="Line" sortKey="line" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
+                        <SortableTh label="Rows" sortKey="rows" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} align="right" />
+                        <SortableTh label="Net Qty" sortKey="net_qty" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} align="right" />
+                        <SortableTh label="Latest" sortKey="latest_date" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {duplicateGroups.map((g, i) => (
+                      {duplicatesSort.sortedRows.map((g, i) => (
                         <tr key={i}>
                           <td className="px-4 py-2 font-mono text-xs">{g.referenceNumber || '—'}</td>
                           <td className="px-4 py-2">{g.entryType}</td>
@@ -715,12 +755,12 @@ export default function StockReconcilePage() {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50">
                   <tr className="border-b text-left">
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Item</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Opening</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Closing</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Vendor Closing</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Vendor Expected</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <SortableTh label="Item" sortKey="item" activeKey={itemResultsSort.sortKey} dir={itemResultsSort.sortDir} onSort={itemResultsSort.toggleSort} />
+                    <SortableTh label="Opening" sortKey="opening" activeKey={itemResultsSort.sortKey} dir={itemResultsSort.sortDir} onSort={itemResultsSort.toggleSort} align="right" />
+                    <SortableTh label="Closing" sortKey="closing" activeKey={itemResultsSort.sortKey} dir={itemResultsSort.sortDir} onSort={itemResultsSort.toggleSort} align="right" />
+                    <SortableTh label="Vendor Closing" sortKey="vendor_closing" activeKey={itemResultsSort.sortKey} dir={itemResultsSort.sortDir} onSort={itemResultsSort.toggleSort} align="right" />
+                    <SortableTh label="Vendor Expected" sortKey="vendor_expected" activeKey={itemResultsSort.sortKey} dir={itemResultsSort.sortDir} onSort={itemResultsSort.toggleSort} align="right" />
+                    <SortableTh label="Status" sortKey="status" activeKey={itemResultsSort.sortKey} dir={itemResultsSort.sortDir} onSort={itemResultsSort.toggleSort} />
                     <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase" />
                   </tr>
                 </thead>

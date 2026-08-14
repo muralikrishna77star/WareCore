@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { formatDateTime } from '@/lib/utils'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 const USERS_QUERY = `
   query GetAdminUserProfiles {
@@ -90,6 +92,16 @@ export default function AdminUsersPage() {
     u.role?.toLowerCase().includes(search.toLowerCase())
   )
 
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    name: (u) => u.full_name || '',
+    email: (u) => u.email || '',
+    role: (u) => ROLE_LABELS[u.role] ?? u.role,
+    company: (u) => u.companies?.name ?? '',
+    warehouse: (u) => u.warehouses?.name ?? '',
+    is_active: (u) => (u.is_active ? 1 : 0),
+    created_at: (u) => (u.created_at ? new Date(u.created_at).getTime() : null),
+  })
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -129,13 +141,13 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Email</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Role</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Company</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Warehouse</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Joined</th>
+              <SortableTh label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
+              <SortableTh label="Email" sortKey="email" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
+              <SortableTh label="Role" sortKey="role" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
+              <SortableTh label="Company" sortKey="company" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
+              <SortableTh label="Warehouse" sortKey="warehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
+              <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
+              <SortableTh label="Joined" sortKey="created_at" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!font-semibold tracking-wide" />
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -144,13 +156,13 @@ export default function AdminUsersPage() {
               <tr>
                 <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">Loading users…</td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : sortedRows.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
                   {search ? 'No users match your search.' : 'No users found.'}
                 </td>
               </tr>
-            ) : filtered.map(user => (
+            ) : sortedRows.map(user => (
               <tr key={user.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {user.full_name || <span className="text-gray-400 italic">—</span>}

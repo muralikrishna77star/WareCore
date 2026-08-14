@@ -7,6 +7,7 @@ import {
   ChartColumn, Calendar, Receipt, ArrowLeftRight, RefreshCw, Factory, Truck,
   Wrench, BookOpen, Compass, HardHat, type LucideIcon,
 } from 'lucide-react'
+import { InventoryByCompanyRows, StockAtVendorsRows } from './ReportsIndexTables'
 
 interface CurrentStockRow {
   company_name: string
@@ -138,31 +139,7 @@ export default async function ReportsPage() {
             <p className="p-6 text-sm text-gray-500">No inventory data yet.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Company</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Material (Size)</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Stock (Tons)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {Object.entries(inventoryByCompany).flatMap(([company, { code, materials }]) =>
-                  Object.entries(materials).map(([material, qty], idx) => (
-                    <tr key={`${company}-${material}`} className="hover:bg-gray-50">
-                      <td className="px-6 py-3">
-                        {idx === 0 ? (
-                          <div>
-                            <p className="font-medium text-gray-900">{company}</p>
-                            <p className="text-xs text-gray-500">{code}</p>
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-3 text-gray-700">{material}</td>
-                      <td className="px-6 py-3 text-right font-semibold text-gray-900">{qty.toFixed(3)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+              <InventoryByCompanyRows inventoryByCompany={inventoryByCompany} />
             </table>
           )}
         </div>
@@ -176,24 +153,7 @@ export default async function ReportsPage() {
           </div>
           <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Vendor</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Material</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-left">Size</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase text-right">Pending (Tons)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {jwRows.map((row, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 font-medium text-gray-900">{row.vendor_name}</td>
-                    <td className="px-6 py-3 text-gray-700">{row.material_type_name}</td>
-                    <td className="px-6 py-3 text-gray-500">{row.size_label || '—'}</td>
-                    <td className="px-6 py-3 text-right font-semibold text-orange-700">{Number(row.pending_quantity).toFixed(3)}</td>
-                  </tr>
-                ))}
-              </tbody>
+              <StockAtVendorsRows jwRows={jwRows} />
             </table>
           </div>
         </div>

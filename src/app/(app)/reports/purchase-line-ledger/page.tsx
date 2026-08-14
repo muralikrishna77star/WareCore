@@ -6,9 +6,9 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
+import { PurchaseLineLedgerRows } from './PurchaseLineLedgerRows'
 import Link from 'next/link'
 import { ArrowLeft, Search, CircleHelp } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
@@ -25,14 +25,6 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   JOB_WORK_CANCEL: { label: 'Job Work Cancelled', color: 'bg-gray-100 text-gray-700' },
   ADJUSTMENT_IN: { label: 'Adjustment In', color: 'bg-gray-100 text-gray-800' },
   ADJUSTMENT_OUT: { label: 'Adjustment Out', color: 'bg-gray-100 text-gray-800' },
-}
-
-// Maps stock_ledger.reference_type to the detail page for that record
-const referenceBasePath: Record<string, string> = {
-  purchase_bill: '/bills',
-  dispatch: '/dispatch',
-  job_work: '/jobwork',
-  transfer: '/transfers',
 }
 
 type LedgerEntry = {
@@ -276,68 +268,7 @@ export default async function PurchaseLineLedgerPage({
             </div>
             <div className="overflow-auto max-h-[80vh]">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b bg-gray-50 text-[11px] uppercase text-gray-500">
-                    <th className="px-2 py-1.5 text-left">Date</th>
-                    <th className="px-2 py-1.5 text-left">Type</th>
-                    <th className="px-2 py-1.5 text-left">Item</th>
-                    <th className="px-2 py-1.5 text-left">Reference</th>
-                    <th className="px-2 py-1.5 text-left">Linked Line ID</th>
-                    <th className="px-2 py-1.5 text-left">Company</th>
-                    <th className="px-2 py-1.5 text-left">Warehouse</th>
-                    <th className="px-2 py-1.5 text-right">In</th>
-                    <th className="px-2 py-1.5 text-right">Out</th>
-                    <th className="px-2 py-1.5 text-right">Balance</th>
-                    <th className="px-2 py-1.5 text-left">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {rows.map((row) => {
-                    const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
-                    const qty = Number(row.quantity)
-                    const basePath = row.reference_type ? referenceBasePath[row.reference_type] : undefined
-                    return (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{formatDate(row.entry_date)}</td>
-                        <td className="px-2 py-1">
-                          <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${cfg.color}`}>
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1 text-gray-700 whitespace-nowrap">
-                          {itemLabelFor(row)}
-                          {(row.material_sizes?.size_label || row.size_label) && (
-                            <span className="ml-1 text-[11px] text-gray-400">({row.material_sizes?.size_label || row.size_label})</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-1 text-gray-500 text-[11px] whitespace-nowrap">
-                          {basePath && row.reference_id ? (
-                            <Link href={`${basePath}/${row.reference_id}`} className="text-blue-600 hover:underline">
-                              {row.reference_number || '—'}
-                            </Link>
-                          ) : (
-                            row.reference_number || '—'
-                          )}
-                        </td>
-                        <td className="px-2 py-1">
-                          {row.sub_purchase_line_id ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              {row.sub_purchase_line_id}
-                            </span>
-                          ) : <span className="text-[11px] text-gray-300">—</span>}
-                        </td>
-                        <td className="px-2 py-1 text-gray-700">{row.companies?.name || '—'}</td>
-                        <td className="px-2 py-1 text-gray-500">{row.warehouses?.name || '—'}</td>
-                        <td className="px-2 py-1 text-right text-green-700 font-medium">{qty > 0 ? fmtQ(qty) : ''}</td>
-                        <td className="px-2 py-1 text-right text-red-600 font-medium">{qty < 0 ? fmtQ(Math.abs(qty)) : ''}</td>
-                        <td className={`px-2 py-1 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                          {fmtQ(row.balance)}
-                        </td>
-                        <td className="px-2 py-1 text-gray-500 text-[11px]">{row.notes || '—'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
+                <PurchaseLineLedgerRows rows={rows} itemLabelFor={itemLabelFor} />
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-xs">
                     <td className="px-2 py-1.5 text-gray-700" colSpan={7}>Current Balance</td>

@@ -6,6 +6,8 @@ import { ArrowLeft, Building2 } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { COMPANIES_QUERY, UPDATE_COMPANY_MUTATION, DELETE_COMPANY_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 type Company = { id: string; name: string; code: string; short_name?: string; address?: string; city?: string; state?: string; pincode?: string; phone?: string; email?: string; gstin?: string; is_active: boolean }
 
@@ -20,6 +22,15 @@ export default function CompaniesPage() {
   const filtered = companies.filter((c) => {
     const q = search.toLowerCase()
     return !q || [c.name, c.code, c.short_name, c.city, c.state, c.gstin].some((v) => v?.toLowerCase().includes(q))
+  })
+
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, {
+    name: (c) => c.name,
+    code: (c) => c.code,
+    short_name: (c) => c.short_name || '',
+    location: (c) => [c.city, c.state].filter(Boolean).join(', '),
+    gstin: (c) => c.gstin || '',
+    is_active: (c) => (c.is_active ? 1 : 0),
   })
 
   const load = () => hasuraFetch<{ companies: Company[] }>(COMPANIES_QUERY).then(r => { setCompanies(r.data?.companies ?? []); setLoading(false) })
@@ -67,17 +78,17 @@ export default function CompaniesPage() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Code</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Short Name</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">City / State</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">GSTIN</th>
-                  <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <SortableTh label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Code" sortKey="code" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Short Name" sortKey="short_name" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="City / State" sortKey="location" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="GSTIN" sortKey="gstin" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
+                  <SortableTh label="Status" sortKey="is_active" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-5" />
                   <th className="px-5 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map(c => (
+                {sortedRows.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 font-medium text-gray-900">{c.name}</td>
                     <td className="px-5 py-3 font-mono text-gray-700">{c.code}</td>

@@ -2,6 +2,8 @@
 
 import { Fragment, useState } from 'react'
 import { formatDate } from '@/lib/utils'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 export type Transaction = {
   id: string
@@ -40,8 +42,25 @@ const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDig
 
 const DETAIL_COLSPAN = 14
 
+const sortAccessors: Record<string, (d: DayGroup) => string | number> = {
+  date: (d) => d.date,
+  count: (d) => d.count,
+  openingWarehouse: (d) => d.openingWarehouse,
+  openingVendor: (d) => d.openingVendor,
+  purchases: (d) => d.purchases,
+  sales: (d) => d.sales,
+  transferIn: (d) => d.transferIn,
+  transferOut: (d) => d.transferOut,
+  jobWorkOut: (d) => d.jobWorkOut,
+  jobReturns: (d) => d.jobReturns,
+  closingWarehouse: (d) => d.closingWarehouse,
+  closingVendor: (d) => d.closingVendor,
+  value: (d) => d.value,
+}
+
 export default function DaywiseStockStatementTable({ groups }: { groups: DayGroup[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const { sortedRows: sortedGroups, sortKey, sortDir, toggleSort } = useTableSort(groups, sortAccessors, { key: 'date' })
 
   const toggle = (date: string) => {
     setExpanded((prev) => {
@@ -67,23 +86,23 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
         <thead className="sticky top-0 z-10">
           <tr className="border-b text-[11px] font-semibold uppercase">
             <th className="px-1 py-2 w-6 bg-white" />
-            <th className="px-2 py-2 text-left text-gray-600 bg-white">Date</th>
-            <th className="px-2 py-2 text-right text-gray-400 bg-white">Txns</th>
-            <th className="px-2 py-2 text-right text-blue-700 bg-blue-50">Opening Wh</th>
-            <th className="px-2 py-2 text-right text-purple-700 bg-purple-50">Opening Vd</th>
-            <th className="px-2 py-2 text-right text-green-700 bg-green-50">Purchases</th>
-            <th className="px-2 py-2 text-right text-red-700 bg-red-50">Sales</th>
-            <th className="px-2 py-2 text-right text-blue-700 bg-blue-50">Transfer In</th>
-            <th className="px-2 py-2 text-right text-orange-700 bg-orange-50">Transfer Out</th>
-            <th className="px-2 py-2 text-right text-purple-700 bg-purple-50">JW Out</th>
-            <th className="px-2 py-2 text-right text-teal-700 bg-teal-50">JW Return</th>
-            <th className="px-2 py-2 text-right text-gray-800 bg-gray-100">Closing Wh</th>
-            <th className="px-2 py-2 text-right text-purple-800 bg-purple-50">Closing Vd</th>
-            <th className="px-2 py-2 text-right text-teal-700 bg-teal-50">Value</th>
+            <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2 !text-gray-600 bg-white" />
+            <SortableTh label="Txns" sortKey="count" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-gray-400 bg-white" />
+            <SortableTh label="Opening Wh" sortKey="openingWarehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-blue-700 bg-blue-50" />
+            <SortableTh label="Opening Vd" sortKey="openingVendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-purple-700 bg-purple-50" />
+            <SortableTh label="Purchases" sortKey="purchases" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-green-700 bg-green-50" />
+            <SortableTh label="Sales" sortKey="sales" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-red-700 bg-red-50" />
+            <SortableTh label="Transfer In" sortKey="transferIn" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-blue-700 bg-blue-50" />
+            <SortableTh label="Transfer Out" sortKey="transferOut" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-orange-700 bg-orange-50" />
+            <SortableTh label="JW Out" sortKey="jobWorkOut" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-purple-700 bg-purple-50" />
+            <SortableTh label="JW Return" sortKey="jobReturns" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-teal-700 bg-teal-50" />
+            <SortableTh label="Closing Wh" sortKey="closingWarehouse" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-gray-800 bg-gray-100" />
+            <SortableTh label="Closing Vd" sortKey="closingVendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-purple-800 bg-purple-50" />
+            <SortableTh label="Value" sortKey="value" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2 !text-teal-700 bg-teal-50" />
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {groups.map((day) => {
+          {sortedGroups.map((day) => {
             const isOpen = expanded.has(day.date)
             return (
               <Fragment key={day.date}>

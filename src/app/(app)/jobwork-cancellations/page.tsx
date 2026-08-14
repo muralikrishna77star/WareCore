@@ -7,6 +7,7 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_CANCELLATIONS_QUERY } from '@/lib/hasura/queries'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { StatCard } from '@/components/StatCard'
+import { JobWorkCancellationsRows } from './JobWorkCancellationsRows'
 
 interface JobWorkCancellationRow {
   id: string
@@ -67,41 +68,7 @@ export default async function JobWorkCancellationsPage() {
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 text-left border-b">
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Reference No.</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Dispatch Date</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Company</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Warehouse</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status at Cancellation</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Cancelled</th>
-                  <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {records.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 font-mono text-xs text-gray-500 line-through whitespace-nowrap">{r.reference_number || '—'}</td>
-                    <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDate(r.dispatch_date)}</td>
-                    <td className="px-6 py-3 text-gray-700">{r.vendor_name || '—'}</td>
-                    <td className="px-6 py-3 text-gray-700">{r.company_name || '—'}</td>
-                    <td className="px-6 py-3 text-gray-600">{r.warehouse_name || '—'}</td>
-                    <td className="px-6 py-3">
-                      <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize bg-gray-100 text-gray-700">
-                        {r.status?.replace('_', ' ') || '—'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-gray-500 text-xs whitespace-nowrap">{r.cancelled_at ? formatDate(r.cancelled_at) : '—'}</td>
-                    <td className="px-6 py-3">
-                      <Link href={`/jobwork-cancellations/${r.id}`}
-                        className="text-blue-600 hover:text-blue-800 text-xs font-medium whitespace-nowrap">
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              <JobWorkCancellationsRows records={records} />
             </table>
           )}
         </div>

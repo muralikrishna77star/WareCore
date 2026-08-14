@@ -6,6 +6,8 @@ import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -110,7 +112,19 @@ export default function TransfersTable({
     })
   }, [transfers, fromFilter, toFilter, statusFilter])
 
-  const exportRows = filtered.map((t: Transfer) => {
+  const sortAccessors = useMemo(
+    () => ({
+      date: (t: Transfer) => t.transfer_date,
+      from: (t: Transfer) => `${t.from_company?.code || ''} ${t.from_warehouse?.name || ''}`,
+      to: (t: Transfer) => `${t.to_company?.code || ''} ${t.to_warehouse?.name || ''}`,
+      items: (t: Transfer) => (t.transfer_items ?? []).reduce((s, i) => s + Number(i.quantity), 0),
+      status: (t: Transfer) => t.status,
+    }),
+    []
+  )
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(filtered, sortAccessors)
+
+  const exportRows = sortedRows.map((t: Transfer) => {
     const items = t.transfer_items ?? []
     const totalQty = items.reduce((s: number, i: TransferItem) => s + Number(i.quantity), 0)
     return {
@@ -140,11 +154,11 @@ export default function TransfersTable({
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50">
           <tr className="text-left border-b">
-            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Date</th>
-            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">From</th>
-            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">To</th>
-            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Items</th>
-            <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+            <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+            <SortableTh label="From" sortKey="from" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+            <SortableTh label="To" sortKey="to" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+            <SortableTh label="Items" sortKey="items" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
+            <SortableTh label="Status" sortKey="status" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-6 !py-3" />
             <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
           </tr>
           <tr className="border-b bg-white">
@@ -225,14 +239,14 @@ export default function TransfersTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {filtered.length === 0 && (
+          {sortedRows.length === 0 && (
             <tr>
               <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                 {transfers.length === 0 ? (emptyMessage || 'No transfers in the selected range.') : 'No transfers match your search.'}
               </td>
             </tr>
           )}
-          {filtered.map((t: Transfer) => {
+          {sortedRows.map((t: Transfer) => {
             const items = t.transfer_items ?? []
             const totalQty = items.reduce((s: number, i: TransferItem) => s + Number(i.quantity), 0)
 

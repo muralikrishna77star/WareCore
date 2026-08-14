@@ -7,8 +7,8 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { BillingReportRows } from './BillingReportRows'
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   PURCHASE_IN: 'Purchase In',
@@ -288,55 +288,7 @@ export default async function BillingReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No bills found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="border-b bg-gray-50 text-xs uppercase text-gray-500">
-                  <th className="px-4 py-3 text-left">Bill No.</th>
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Supplier</th>
-                  <th className="px-4 py-3 text-left">Company</th>
-                  <th className="px-4 py-3 text-left">Warehouse</th>
-                  <th className="px-4 py-3 text-left">Material</th>
-                  <th className="px-4 py-3 text-left">Size</th>
-                  <th className="px-4 py-3 text-right">Qty (T)</th>
-                  <th className="px-4 py-3 text-right">Rate</th>
-                  <th className="px-4 py-3 text-right">Amount (₹)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {bills.map((bill) => {
-                  const items = bill.purchase_bill_items ?? []
-                  if (items.length === 0) {
-                    return (
-                      <tr key={bill.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-blue-700">{bill.bill_number}</td>
-                        <td className="px-4 py-3 text-gray-600">{formatDate(bill.bill_date)}</td>
-                        <td className="px-4 py-3">{bill.suppliers?.name}</td>
-                        <td className="px-4 py-3">{bill.companies?.name}</td>
-                        <td className="px-4 py-3">{bill.warehouses?.name}</td>
-                        <td className="px-4 py-3 text-gray-400" colSpan={4}>No items</td>
-                      </tr>
-                    )
-                  }
-                  return items.map((item, idx: number) => (
-                    <tr key={`${bill.id}-${idx}`} className="hover:bg-gray-50">
-                      {idx === 0 && (
-                        <>
-                          <td className="px-4 py-3 font-medium text-blue-700" rowSpan={items.length}>{bill.bill_number}</td>
-                          <td className="px-4 py-3 text-gray-600" rowSpan={items.length}>{formatDate(bill.bill_date)}</td>
-                          <td className="px-4 py-3" rowSpan={items.length}>{bill.suppliers?.name}</td>
-                          <td className="px-4 py-3" rowSpan={items.length}>{bill.companies?.name}</td>
-                          <td className="px-4 py-3" rowSpan={items.length}>{bill.warehouses?.name}</td>
-                        </>
-                      )}
-                      <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
-                      <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                      <td className="px-4 py-3 text-right">{Number(item.quantity).toFixed(3)}</td>
-                      <td className="px-4 py-3 text-right">{item.rate ? `₹${Number(item.rate).toLocaleString('en-IN')}` : '—'}</td>
-                      <td className="px-4 py-3 text-right">{item.amount ? `₹${Number(item.amount).toLocaleString('en-IN')}` : '—'}</td>
-                    </tr>
-                  ))
-                })}
-              </tbody>
+              <BillingReportRows bills={bills} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={7}>Total</td>
