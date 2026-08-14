@@ -51,10 +51,17 @@ export async function GET(request: NextRequest) {
 
     const sql = `
       WITH target_items AS (
-        SELECT id, item_code, item_name, material_type_id, material_size_id, size_label, unit
-        FROM item_master
-        WHERE is_active = true
-        ORDER BY item_code
+        -- Only items with at least one stock_ledger row on or before 'to' —
+        -- catalog entries never purchased/used yet have nothing to
+        -- reconcile and would just be noise in the results list.
+        SELECT DISTINCT im.id, im.item_code, im.item_name, im.material_type_id, im.material_size_id, im.size_label, im.unit
+        FROM item_master im
+        JOIN stock_ledger sl
+          ON sl.material_type_id = im.material_type_id
+         AND sl.material_size_id IS NOT DISTINCT FROM im.material_size_id
+        WHERE im.is_active = true
+          AND sl.entry_date <= '${to}'
+        ORDER BY im.item_code
         LIMIT ${limit} OFFSET ${offset}
       ),
       ledger AS (
@@ -143,7 +150,15 @@ export async function GET(request: NextRequest) {
       ORDER BY ti.item_code
     `
 
-    const countSql = `SELECT COUNT(*) FROM item_master WHERE is_active = true`
+    const countSql = `
+      SELECT COUNT(DISTINCT im.id)
+      FROM item_master im
+      JOIN stock_ledger sl
+        ON sl.material_type_id = im.material_type_id
+       AND sl.material_size_id IS NOT DISTINCT FROM im.material_size_id
+      WHERE im.is_active = true
+        AND sl.entry_date <= '${to}'
+    `
 
     const [rowsRes, countRes] = await Promise.all([hasuraRunSql(sql), hasuraRunSql(countSql)])
     const totalCount = Number(parseRows(countRes)[0]?.[0] ?? 0)

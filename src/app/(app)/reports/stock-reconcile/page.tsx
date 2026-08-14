@@ -620,7 +620,8 @@ export default function StockReconcilePage() {
         <div>
           <h2 className="font-semibold text-gray-900 mb-1">Item-by-Item Reconciliation</h2>
           <p className="text-sm text-gray-600">
-            For every active item: takes its opening stock at the start date, applies every ledger
+            For every active item that has at least one stock ledger entry (items never purchased or
+            used are skipped): takes its opening stock at the start date, applies every ledger
             transaction up to the end date, and checks the resulting balance never dips negative and —
             when the end date is today — agrees with the vendor-held quantity computed independently from
             job work records. Processes items in visible batches; each one is marked Valid or flagged as it
