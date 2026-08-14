@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
@@ -45,6 +45,22 @@ type DuplicateGroup = {
   netQty: number
   latestEntryDate: string
   rate: number | null
+}
+type ItemReconcileResult = {
+  id: string
+  itemCode: string
+  itemName: string
+  unit: string
+  openingBalance: number
+  closingBalance: number
+  vendorOpeningBalance: number
+  vendorClosingBalance: number
+  vendorExpected: number | null
+  minBalance: number
+  minVendorBalance: number
+  txnCount: number
+  valid: boolean
+  reasons: string[]
 }
 
 const categoryLabels: Record<string, string> = {
@@ -139,6 +155,56 @@ export default function StockReconcilePage() {
   }
 
   const fmt = (n: number) => n.toFixed(3)
+
+  // ── Item-by-item reconciliation: walks every active item's opening ->
+  // transactions -> closing balance for a date range, in visible batches,
+  // marking each item valid or flagging it as it's checked. ──────────────
+  const [itemFrom, setItemFrom] = useState(`${currentYear}-01-01`)
+  const [itemTo, setItemTo] = useState(todayStr())
+  const [itemRunning, setItemRunning] = useState(false)
+  const [itemError, setItemError] = useState('')
+  const [itemResults, setItemResults] = useState<ItemReconcileResult[]>([])
+  const [itemProgress, setItemProgress] = useState({ done: 0, total: 0 })
+  const [itemCurrentBatch, setItemCurrentBatch] = useState('')
+  const [showOnlyIssues, setShowOnlyIssues] = useState(false)
+  const itemStopRef = useRef(false)
+
+  const validCount = itemResults.filter((r) => r.valid).length
+  const mismatchCount = itemResults.length - validCount
+  const visibleResults = showOnlyIssues ? itemResults.filter((r) => !r.valid) : itemResults
+
+  const runItemReconcile = async () => {
+    setItemRunning(true)
+    setItemError('')
+    setItemResults([])
+    setItemProgress({ done: 0, total: 0 })
+    itemStopRef.current = false
+    const limit = 100
+    let offset = 0
+    let total = Infinity
+    try {
+      while (offset < total) {
+        if (itemStopRef.current) break
+        const res = await fetch(`/api/stock/reconcile-items?from=${itemFrom}&to=${itemTo}&offset=${offset}&limit=${limit}`)
+        const data = await res.json()
+        if (!res.ok) { setItemError(data.error || `Server error (${res.status})`); break }
+        const batch: ItemReconcileResult[] = data.items ?? []
+        total = data.totalCount ?? 0
+        if (batch.length === 0) break
+        setItemCurrentBatch(`${batch[0].itemCode} – ${batch[batch.length - 1].itemCode}`)
+        setItemResults((prev) => [...prev, ...batch])
+        offset += batch.length
+        setItemProgress({ done: offset, total })
+      }
+    } catch (err) {
+      setItemError(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setItemRunning(false)
+      setItemCurrentBatch('')
+    }
+  }
+
+  const stopItemReconcile = () => { itemStopRef.current = true }
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -546,6 +612,140 @@ export default function StockReconcilePage() {
                 </div>
               </>
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border bg-white p-6 space-y-4">
+        <div>
+          <h2 className="font-semibold text-gray-900 mb-1">Item-by-Item Reconciliation</h2>
+          <p className="text-sm text-gray-600">
+            For every active item: takes its opening stock at the start date, applies every ledger
+            transaction up to the end date, and checks the resulting balance never dips negative and —
+            when the end date is today — agrees with the vendor-held quantity computed independently from
+            job work records. Processes items in visible batches; each one is marked Valid or flagged as it
+            completes. Read-only — makes no changes.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3 border-t pt-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
+            <input
+              type="date"
+              value={itemFrom}
+              onChange={(e) => setItemFrom(e.target.value)}
+              disabled={itemRunning}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
+            <input
+              type="date"
+              value={itemTo}
+              onChange={(e) => setItemTo(e.target.value)}
+              disabled={itemRunning}
+              className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none disabled:bg-gray-100"
+            />
+          </div>
+          {!itemRunning ? (
+            <button
+              type="button"
+              onClick={runItemReconcile}
+              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
+            >
+              Run Reconciliation
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={stopItemReconcile}
+              className="rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+            >
+              Stop
+            </button>
+          )}
+          {itemResults.length > 0 && (
+            <label className="inline-flex items-center gap-1.5 text-sm text-gray-600 ml-auto">
+              <input type="checkbox" checked={showOnlyIssues} onChange={(e) => setShowOnlyIssues(e.target.checked)} />
+              Show only issues
+            </label>
+          )}
+        </div>
+
+        {itemError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-sm text-red-700">{itemError}</p>
+          </div>
+        )}
+
+        {(itemRunning || itemResults.length > 0) && (
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 transition-all"
+                    style={{ width: itemProgress.total ? `${Math.min(100, (itemProgress.done / itemProgress.total) * 100)}%` : '0%' }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {itemRunning
+                    ? `Checking ${itemCurrentBatch || '…'} — ${itemProgress.done} of ${itemProgress.total || '…'} items`
+                    : `Checked ${itemProgress.done} of ${itemProgress.total} items`}
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                Valid: {validCount}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                Mismatch: {mismatchCount}
+              </span>
+            </div>
+
+            <div className="overflow-auto max-h-[32rem] rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-gray-50">
+                  <tr className="border-b text-left">
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Item</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Opening</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Closing</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Vendor Closing</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Vendor Expected</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {visibleResults.map((r) => (
+                    <tr key={r.id} className={r.valid ? '' : 'bg-red-50/50'}>
+                      <td className="px-4 py-2">
+                        <div className="font-medium text-gray-900">{r.itemCode}</div>
+                        <div className="text-xs text-gray-500">{r.itemName}</div>
+                      </td>
+                      <td className="px-4 py-2 text-right">{fmt(r.openingBalance)}</td>
+                      <td className="px-4 py-2 text-right">{fmt(r.closingBalance)}</td>
+                      <td className="px-4 py-2 text-right">{fmt(r.vendorClosingBalance)}</td>
+                      <td className="px-4 py-2 text-right text-gray-500">
+                        {r.vendorExpected === null ? '—' : fmt(r.vendorExpected)}
+                      </td>
+                      <td className="px-4 py-2">
+                        {r.valid ? (
+                          <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Valid</span>
+                        ) : (
+                          <div>
+                            <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Mismatch</span>
+                            <ul className="mt-1 text-xs text-red-700 list-disc list-inside">
+                              {r.reasons.map((reason, i) => <li key={i}>{reason}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
