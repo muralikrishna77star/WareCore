@@ -627,6 +627,12 @@ export default function StockReconcilePage() {
             job work records. Processes items in visible batches; each one is marked Valid or flagged as it
             completes. Read-only — makes no changes.
           </p>
+          <p className="text-sm text-gray-500 mt-2">
+            &quot;Review &amp; Fix&quot; on a mismatch opens that item&apos;s Item Stock Ledger, where admin/developer
+            accounts can select the specific offending row(s) and delete them (with a confirmation and a
+            net-effect warning) — there&apos;s no blind auto-fix here, each mismatch has a different real cause
+            and needs a look before anything is changed.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 border-t pt-4">
@@ -715,6 +721,7 @@ export default function StockReconcilePage() {
                     <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Vendor Closing</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase text-right">Vendor Expected</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -741,6 +748,15 @@ export default function StockReconcilePage() {
                             </ul>
                           </div>
                         )}
+                      </td>
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        <Link
+                          href={`/reports/item-ledger?item=${r.id}&from=${itemFrom}&to=${itemTo}`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        >
+                          {r.valid ? 'View Ledger' : 'Review & Fix'} <ArrowRight className="h-3 w-3" />
+                        </Link>
                       </td>
                     </tr>
                   ))}
