@@ -32,6 +32,7 @@ interface JobWorkItemDetail {
   item_name: string | null
   material_types: { description: string } | null
   material_sizes: { size_label: string } | null
+  item_master: { item_code: string | null } | null
 }
 
 interface JobWorkOutputItemDetail {
@@ -44,6 +45,7 @@ interface JobWorkOutputItemDetail {
   received_date: string | null
   material_types: { description: string } | null
   material_sizes: { size_label: string } | null
+  item_master: { item_code: string | null } | null
 }
 
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -159,6 +161,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produced Item</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
@@ -176,6 +179,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                   return (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         {item.item_name ?? item.material_types?.description ?? '—'}
                         {item.size_label && <span className="ml-1 text-gray-400 text-xs">{item.size_label}</span>}

@@ -54,6 +54,7 @@ function generateTransferNumber(existing: string[]) {
 type TransferLine = {
   sourceItemId: string
   itemName: string
+  itemCode: string
   purchaseLineId: string
   subPurchaseLineId: string
   itemMasterId: string
@@ -90,6 +91,7 @@ interface TransferSourceItem {
   material_size_id: string | null
   material_types: { description: string } | null
   material_sizes: { size_label: string } | null
+  item_master: { item_code: string | null } | null
 }
 
 interface SupplierOption {
@@ -144,6 +146,7 @@ export default function JobWorkTransferPage() {
             return {
               sourceItemId: item.id,
               itemName: item.item_name ?? item.material_types?.description ?? '',
+              itemCode: item.item_master?.item_code ?? '',
               purchaseLineId: item.purchase_line_id ?? '',
               subPurchaseLineId: item.sub_purchase_line_id ?? '',
               itemMasterId: item.item_master_id ?? '',
@@ -327,6 +330,7 @@ export default function JobWorkTransferPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b text-left">
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Item Code</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Item</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Purchase Line</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">Size</th>
@@ -340,6 +344,7 @@ export default function JobWorkTransferPage() {
                   const overQty = qty > line.pendingQty
                   return (
                     <tr key={line.sourceItemId} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-xs text-gray-700 whitespace-nowrap">{line.itemCode || '—'}</td>
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{line.itemName || '—'}</td>
                       <td className="px-3 py-2 font-mono text-xs text-blue-700 whitespace-nowrap">{line.purchaseLineId || '—'}</td>
                       <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{line.sizeLabel || '—'}</td>

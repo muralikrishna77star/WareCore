@@ -200,6 +200,7 @@ function InputLineRow({
             onBlur={() => setInputItemOpen(p => ({ ...p, [index]: false }))}
             placeholder="Search item…"
             className={inputFieldCls} />
+          {line.item_code && <div className="text-[10px] font-mono text-blue-600 mt-0.5">{line.item_code}</div>}
           <DropdownPortal anchorRef={anchorRef} open={isOpen} className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => openNewItemDialog(index, 'input', line.material_type_id, line.material_size_id)}
@@ -372,6 +373,7 @@ function OutputLineRow({
             onBlur={() => setOutputItemOpen(p => ({ ...p, [index]: false }))}
             placeholder="Search produced item…"
             className={inputFieldCls} />
+          {line.item_code && <div className="text-[10px] font-mono text-emerald-600 mt-0.5">{line.item_code}</div>}
           <DropdownPortal anchorRef={anchorRef} open={isOpen} className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => openNewItemDialog(index, 'output', line.material_type_id, line.material_size_id)}

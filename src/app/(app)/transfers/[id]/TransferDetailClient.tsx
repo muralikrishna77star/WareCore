@@ -29,6 +29,7 @@ interface TransferItem {
   purchase_line_id?: string | null
   material_types?: { description?: string | null } | null
   material_sizes?: { size_label?: string | null } | null
+  item_master?: { item_code?: string | null } | null
 }
 
 interface TransferDetailClientProps {
@@ -114,6 +115,7 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
@@ -126,6 +128,7 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
             {items.map((item: TransferItem, idx: number) => (
               <tr key={item.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
+                <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">
                   {item.item_name ?? item.material_types?.description ?? '—'}
                 </td>
@@ -141,7 +144,7 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
           </tbody>
           <tfoot className="bg-gray-50 border-t-2 border-gray-200">
             <tr>
-              <td colSpan={5} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Total</td>
+              <td colSpan={6} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Total</td>
               <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">
                 {items.reduce((s: number, i: TransferItem) => s + (Number(i.quantity) || 0), 0).toFixed(3)} MT
               </td>

@@ -15,6 +15,7 @@ interface BillLineItem {
   purchase_line_id?: string | null
   item_name?: string | null
   material_types?: { description?: string | null } | null
+  item_master?: { item_code?: string | null } | null
   size_label?: string | null
   quantity: number | string
   rate?: number | string | null
@@ -173,6 +174,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
               <tr>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">#</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Line ID</th>
+                <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-[0.6875rem] font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
@@ -183,7 +185,7 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-[0.9375rem] text-gray-400">
+                  <td colSpan={8} className="px-6 py-8 text-center text-[0.9375rem] text-gray-400">
                     No line items recorded.
                   </td>
                 </tr>
@@ -192,6 +194,9 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-[0.9375rem] font-mono text-blue-700">
                     {item.purchase_line_id ?? '—'}
+                  </td>
+                  <td className="px-6 py-4 text-[0.9375rem] font-mono text-gray-700">
+                    {item.item_master?.item_code ?? '—'}
                   </td>
                   <td className="px-6 py-4 text-[0.9375rem] font-medium text-gray-900">
                     {item.item_name ?? item.material_types?.description ?? '—'}

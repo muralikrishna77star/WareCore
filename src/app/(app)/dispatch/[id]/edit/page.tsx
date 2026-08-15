@@ -804,6 +804,7 @@ export default function EditDispatchPage() {
                               placeholder="Search item..."
                               className="block w-36 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                             />
+                            {selectedItem?.item_code && <div className="text-[10px] font-mono text-blue-600 mt-0.5">{selectedItem.item_code}</div>}
                             <DropdownPortal anchorRef={line.anchorRef} open={!!itemOpen[line.rowId]} className="w-48 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-48">
                                 {filteredItems.map((im, idx) => (
                                   <button key={im.id} type="button" onMouseDown={(e) => e.preventDefault()}

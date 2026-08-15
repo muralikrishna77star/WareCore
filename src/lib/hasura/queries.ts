@@ -533,6 +533,7 @@ export const PURCHASE_BILL_ITEMS_QUERY = `
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
       id bill_id quantity rate amount notes size_label item_name purchase_line_id
       material_types { description }
+      item_master { item_code }
     }
   }
 `
@@ -682,6 +683,7 @@ export const TRANSFER_ITEMS_QUERY = `
       item_master_id item_name purchase_line_id
       material_types { description }
       material_sizes { size_label }
+      item_master { item_code }
     }
   }
 `
@@ -754,6 +756,7 @@ export const DISPATCH_ITEMS_QUERY = `
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
       id dispatch_order_id item_name purchase_line_id sale_line_id sub_purchase_line_id quantity rate amount notes size_label
       material_types { description }
+      item_master { item_code }
     }
   }
 `
@@ -830,6 +833,7 @@ export const GET_DISPATCH_ORDER_FOR_EDIT_QUERY = `
         material_type_id material_size_id size_label
         quantity rate amount notes tax_rate_id
         taxable_value cgst_rate cgst_amount sgst_rate sgst_amount tcs_rate tcs_amount total_with_tax
+        item_master { item_code }
       }
     }
   }
@@ -1102,6 +1106,7 @@ export const JOB_WORK_ITEMS_QUERY = `
       item_master_id item_name material_type_id material_size_id
       material_types { description }
       material_sizes { size_label }
+      item_master { item_code }
     }
   }
 `
@@ -1117,11 +1122,13 @@ export const GET_JOB_WORK_ORDER_FOR_EDIT_QUERY = `
         item_master_id item_name
         material_type_id material_size_id size_label
         quantity_sent quantity_received quantity_transferred_out received_date unit notes
+        item_master { item_code }
       }
       job_work_output_items(order_by: {created_at: asc}) {
         id item_master_id item_name
         material_type_id material_size_id size_label
         quantity unit source_job_line_id notes received_date
+        item_master { item_code }
       }
     }
   }
@@ -1248,6 +1255,7 @@ export const JOB_WORK_OUTPUT_ITEMS_QUERY = `
       quantity unit source_job_line_id notes received_date
       material_types { description }
       material_sizes { size_label }
+      item_master { item_code }
     }
   }
 `
