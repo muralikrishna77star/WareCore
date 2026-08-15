@@ -81,10 +81,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // bills, so "which combos are new" can't drift from what was actually
     // just resolved.
     const newItems = resolveNewItems(bills, freshSnapshot)
-    const newItemsScript = buildNewItemsInsertScript(newItems)
+    const newItemsWithIds = newItems.map((i) => ({ ...i, id: randomUUID() }))
+    const newItemsScript = buildNewItemsInsertScript(newItemsWithIds)
+
+    // Every purchased material/size combo now resolves to an Item Master id
+    // — either one that already existed, or one just allocated above — so
+    // buildInsertScript() can set purchase_bill_items.item_master_id on
+    // every line. Without this, imported lines post to stock_ledger fine
+    // but stay invisible to anything that requires item_master_id, e.g. Job
+    // Work's "available to send" query.
+    const itemMasterIdByCombo = new Map<string, string>()
+    for (const im of freshSnapshot.itemMaster) itemMasterIdByCombo.set(`${im.material_type_id}|${im.material_size_id ?? ''}`, im.id)
+    for (const ni of newItemsWithIds) itemMasterIdByCombo.set(`${ni.materialTypeId}|${ni.materialSizeId ?? ''}`, ni.id)
 
     const billsWithIds = bills.map((b) => ({ ...b, id: randomUUID() }))
-    const insertScript = buildInsertScript(billsWithIds, session.userId)
+    const insertScript = buildInsertScript(billsWithIds, session.userId, itemMasterIdByCombo)
     const batchUpdateSql = `
       UPDATE purchase_import_batches SET status = 'IMPORTED', imported_at = NOW(), imported_by = '${session.userId}'::uuid
       WHERE id = '${id}'::uuid AND status = 'STAGED';

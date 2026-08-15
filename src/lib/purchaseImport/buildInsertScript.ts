@@ -27,7 +27,18 @@ export function sqlNumber(n: number): string {
 // (see bills/new/page.tsx's CREATE_PURCHASE_BILL_MUTATION call, which omits
 // the variable), so NULL stays a legitimate value; the staging import route
 // passes the importing user's id since it always has one available.
-export function buildInsertScript(bills: (ResolvedBill & { id: string })[], createdBy?: string | null): string {
+// itemMasterIdByCombo maps `${materialTypeId}|${materialSizeId ?? ''}` to the
+// Item Master row that combo resolves to (existing rows from the snapshot,
+// plus any just-created by buildNewItemsInsertScript() in the same commit
+// script) — without it, imported lines post to stock_ledger fine but stay
+// invisible to anything that requires purchase_bill_items.item_master_id,
+// e.g. Job Work's "available to send" query. Defaults to empty so callers
+// that don't care (most existing tests) don't need to pass one.
+export function buildInsertScript(
+  bills: (ResolvedBill & { id: string })[],
+  createdBy?: string | null,
+  itemMasterIdByCombo: Map<string, string> = new Map()
+): string {
   const billRows = bills
     .map((b) => `(${sqlUuidOrNull(b.id)}, ${sqlUuidOrNull(b.companyId)}, ${sqlUuidOrNull(b.warehouseId)}, ${sqlUuidOrNull(b.supplierId)}, ${sqlTextOrNull(b.billNumber)}, ${sqlDate(b.billDate)}, ${sqlNumber(b.totalQuantity)}, ${sqlNumber(b.totalAmount)}, ${sqlTextOrNull(b.notes)}, 'active', ${sqlUuidOrNull(createdBy)})`)
     .join(',\n    ')
@@ -40,13 +51,16 @@ export function buildInsertScript(bills: (ResolvedBill & { id: string })[], crea
 
   const itemRows = bills
     .flatMap((b) =>
-      b.lines.map((l) => `(${sqlUuidOrNull(b.id)}, ${sqlTextOrNull(l.purchaseLineId)}, ${sqlTextOrNull(l.itemName)}, ${sqlUuidOrNull(l.materialTypeId)}, ${sqlUuidOrNull(l.materialSizeId)}, ${sqlTextOrNull(l.sizeLabel)}, ${sqlNumber(l.quantity)}, ${sqlTextOrNull(l.unit)}, ${sqlNumber(l.rate)}, ${sqlNumber(l.amount)}, ${sqlTextOrNull(l.notes)}, ${sqlUuidOrNull(l.taxRateId)}, ${sqlNumber(l.tax.taxable_value)}, ${sqlNumber(l.tax.cgst_rate)}, ${sqlNumber(l.tax.cgst_amount)}, ${sqlNumber(l.tax.sgst_rate)}, ${sqlNumber(l.tax.sgst_amount)}, ${sqlNumber(l.tax.tds_rate)}, ${sqlNumber(l.tax.tds_amount)}, ${sqlNumber(l.tax.total_with_tax)})`)
+      b.lines.map((l) => {
+        const itemMasterId = itemMasterIdByCombo.get(`${l.materialTypeId}|${l.materialSizeId ?? ''}`) ?? null
+        return `(${sqlUuidOrNull(b.id)}, ${sqlUuidOrNull(itemMasterId)}, ${sqlTextOrNull(l.purchaseLineId)}, ${sqlTextOrNull(l.itemName)}, ${sqlUuidOrNull(l.materialTypeId)}, ${sqlUuidOrNull(l.materialSizeId)}, ${sqlTextOrNull(l.sizeLabel)}, ${sqlNumber(l.quantity)}, ${sqlTextOrNull(l.unit)}, ${sqlNumber(l.rate)}, ${sqlNumber(l.amount)}, ${sqlTextOrNull(l.notes)}, ${sqlUuidOrNull(l.taxRateId)}, ${sqlNumber(l.tax.taxable_value)}, ${sqlNumber(l.tax.cgst_rate)}, ${sqlNumber(l.tax.cgst_amount)}, ${sqlNumber(l.tax.sgst_rate)}, ${sqlNumber(l.tax.sgst_amount)}, ${sqlNumber(l.tax.tds_rate)}, ${sqlNumber(l.tax.tds_amount)}, ${sqlNumber(l.tax.total_with_tax)})`
+      })
     )
     .join(',\n    ')
 
   const itemsSql = `
     INSERT INTO purchase_bill_items (
-      bill_id, purchase_line_id, item_name, material_type_id, material_size_id, size_label,
+      bill_id, item_master_id, purchase_line_id, item_name, material_type_id, material_size_id, size_label,
       quantity, unit, rate, amount, notes, tax_rate_id, taxable_value,
       cgst_rate, cgst_amount, sgst_rate, sgst_amount, tds_rate, tds_amount, total_with_tax
     )
@@ -61,13 +75,19 @@ export function buildInsertScript(bills: (ResolvedBill & { id: string })[], crea
 // combos that don't have one yet (see resolveNewItems() in resolve.ts) —
 // run before buildInsertScript() in the same atomic script so a purchase
 // never posts against a combo whose Item didn't make it in.
-export function buildNewItemsInsertScript(newItems: NewItemMaster[]): string {
+// Callers assign each new item's id up front (same pattern as
+// buildInsertScript()'s bills) so the id is known immediately for wiring
+// into purchase_bill_items.item_master_id in the same commit script,
+// without relying on RETURNING (see the file-level comment above about why
+// hasuraRunSql()/run_sql can't be trusted to return anything but the last
+// statement's result).
+export function buildNewItemsInsertScript(newItems: (NewItemMaster & { id: string })[]): string {
   if (newItems.length === 0) return ''
   const rows = newItems
-    .map((i) => `(${sqlText(i.itemCode)}, ${sqlText(i.itemName)}, ${sqlUuidOrNull(i.materialTypeId)}, ${sqlUuidOrNull(i.materialSizeId)}, ${sqlTextOrNull(i.sizeLabel)}, ${sqlText(i.unit)}, true)`)
+    .map((i) => `(${sqlUuidOrNull(i.id)}, ${sqlText(i.itemCode)}, ${sqlText(i.itemName)}, ${sqlUuidOrNull(i.materialTypeId)}, ${sqlUuidOrNull(i.materialSizeId)}, ${sqlTextOrNull(i.sizeLabel)}, ${sqlText(i.unit)}, true)`)
     .join(',\n    ')
   return `
-    INSERT INTO item_master (item_code, item_name, material_type_id, material_size_id, size_label, unit, is_active)
+    INSERT INTO item_master (id, item_code, item_name, material_type_id, material_size_id, size_label, unit, is_active)
     VALUES
     ${rows};
   `

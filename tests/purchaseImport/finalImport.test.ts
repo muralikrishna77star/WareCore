@@ -147,19 +147,53 @@ describe('final import — auto-creates missing Item Master rows', () => {
     expect(newItems).toHaveLength(1)
     expect(newItems[0].itemCode).toBe('FIN400001')
 
-    const newItemsScript = buildNewItemsInsertScript(newItems)
+    const newItemsWithIds = newItems.map((i) => ({ ...i, id: randomUUID() }))
+    const newItemsScript = buildNewItemsInsertScript(newItemsWithIds)
+    const itemMasterIdByCombo = new Map([[`${newItemsWithIds[0].materialTypeId}|`, newItemsWithIds[0].id]])
     const billsWithIds = bills.map((b) => ({ ...b, id: randomUUID() }))
-    const insertScript = buildInsertScript(billsWithIds, null)
+    const insertScript = buildInsertScript(billsWithIds, null, itemMasterIdByCombo)
     await client.query(`${newItemsScript}\n${insertScript}`)
 
     const { rows: itemRows } = await client.query(
-      `SELECT item_code, item_name, material_type_id, material_size_id, unit, is_active FROM item_master WHERE material_type_id = $1`,
+      `SELECT id, item_code, item_name, material_type_id, material_size_id, unit, is_active FROM item_master WHERE material_type_id = $1`,
       [materialType.id]
     )
     expect(itemRows).toHaveLength(1)
     expect(itemRows[0]).toMatchObject({
-      item_code: 'FIN400001', material_type_id: materialType.id, material_size_id: null, unit: 'tons', is_active: true,
+      id: newItemsWithIds[0].id, item_code: 'FIN400001', material_type_id: materialType.id, material_size_id: null, unit: 'tons', is_active: true,
     })
+
+    // The whole point of the fix: the purchase line for this newly-created
+    // combo now carries the new item's id, so it's reachable from anything
+    // requiring purchase_bill_items.item_master_id (e.g. Job Work).
+    const { rows: pbiRows } = await client.query(`SELECT item_master_id FROM purchase_bill_items WHERE bill_id = $1`, [billsWithIds[0].id])
+    expect(pbiRows[0].item_master_id).toBe(newItemsWithIds[0].id)
+  })
+
+  it('wires item_master_id to an EXISTING Item Master row when the material/size combo already has one', async () => {
+    const { snapshot, materialType } = await seedMasterData('FIN5')
+    const { rows: [existingItem] } = await client.query(
+      `INSERT INTO item_master (item_code, item_name, material_type_id, unit, is_active) VALUES ('FIN500001', 'FIN5', $1, 'tons', true) RETURNING id`,
+      [materialType.id]
+    )
+    const snapshotWithItem: MasterDataSnapshot = { ...snapshot, itemMaster: [{ id: existingItem.id, item_code: 'FIN500001', material_type_id: materialType.id, material_size_id: null }] }
+
+    const batchId = await stageReadyBatch(snapshotWithItem, [row(snapshotWithItem, { size: '', billDate: '2024-10-15', billDateRaw: '2024-10-15' })])
+    const { rows: staged } = await client.query(`SELECT current_data FROM purchase_import_rows WHERE batch_id = $1`, [batchId])
+    const parsedRows: ParsedRow[] = staged.map((r) => r.current_data)
+    const { bills, errors } = resolveImport(parsedRows, snapshotWithItem)
+    expect(errors).toHaveLength(0)
+
+    const newItems = resolveNewItems(bills, snapshotWithItem)
+    expect(newItems).toHaveLength(0) // combo already has an Item — nothing new to create
+
+    const itemMasterIdByCombo = new Map([[`${materialType.id}|`, existingItem.id]])
+    const billsWithIds = bills.map((b) => ({ ...b, id: randomUUID() }))
+    const insertScript = buildInsertScript(billsWithIds, null, itemMasterIdByCombo)
+    await client.query(insertScript)
+
+    const { rows: pbiRows } = await client.query(`SELECT item_master_id FROM purchase_bill_items WHERE bill_id = $1`, [billsWithIds[0].id])
+    expect(pbiRows[0].item_master_id).toBe(existingItem.id)
   })
 
   it('creates nothing when the batch has no rows for a new material/size combo (buildNewItemsInsertScript on an empty list is a no-op)', () => {
