@@ -8,8 +8,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Text (body, headings, UI chrome) — Verdana. Numbers/data (quantities,
+     rates, amounts, IDs, item codes — anything styled with font-mono
+     across tables and ledgers) — Century Gothic. Both are system fonts,
+     not Google Fonts, so no next/font loader is involved; declared here
+     directly with reasonable cross-platform fallback stacks. */
+  --font-sans: Verdana, Geneva, sans-serif;
+  --font-mono: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
 }
 
 /* Typography enlargement — one central override of Tailwind's default type
@@ -52,7 +57,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 
 @media print {

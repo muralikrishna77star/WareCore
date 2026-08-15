@@ -1,18 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { DesktopTitleBar } from "@/components/DesktopTitleBar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Verdana (text) and Century Gothic (numbers/data) are both system fonts,
+// not Google Fonts — no next/font loader needed, set directly as CSS
+// variables in globals.css's @theme block instead.
 
 export const metadata: Metadata = {
   title: "WareCore — Warehouse Management",
@@ -49,7 +42,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />

@@ -1,7 +1,6 @@
 'use client'
 
 import { Fragment, useState, useEffect, useRef } from 'react'
-import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -16,12 +15,6 @@ import { Copilot } from '@/components/ai/Copilot'
 import { DashboardViewProvider, useDashboardView } from '@/components/DashboardViewProvider'
 import { DashboardViewToggle } from '@/components/DashboardViewToggle'
 import type { DashboardView } from '@/lib/dashboardViewPreference'
-
-// Sidebar-only font, matching the published visual reference
-// (warecore-app.muralikrishna77star.chatgpt.site) exactly — confirmed via
-// its own computed styles, not guessed. Scoped to the sidebar rather than
-// swapped in app-wide, since the rest of the app is tested against Geist.
-const inter = Inter({ variable: '--font-sidebar', subsets: ['latin'] })
 
 // Chrome styling per dashboard view — same links, hrefs, labels, icons and
 // active-route logic everywhere; only these class strings change.
@@ -196,7 +189,6 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         className={cn(
           'fixed inset-y-0 left-0 z-50 w-64 transform transition-[transform,background-color] duration-200 ease-in-out lg:static lg:translate-x-0',
           chrome.sidebarBg,
-          view === 'modern' && inter.className,
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           isDesktop && 'border-r-2 border-cyan-600/40'
         )}
