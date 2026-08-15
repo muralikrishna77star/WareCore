@@ -37,13 +37,13 @@ const ENTRY_TYPE_LABELS: Record<string, string> = {
   ADJUSTMENT_OUT: 'Adj. Out',
 }
 
-const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon; gradient: string }[] = [
-  { label: 'New Bill', href: '/bills/new', icon: FileText, gradient: 'from-blue-500 to-blue-600' },
-  { label: 'New Transfer', href: '/transfers/new', icon: ArrowLeftRight, gradient: 'from-purple-500 to-purple-600' },
-  { label: 'New Job Work', href: '/jobwork/new', icon: Factory, gradient: 'from-orange-500 to-orange-600' },
-  { label: 'New Dispatch', href: '/dispatch/new', icon: Truck, gradient: 'from-green-500 to-green-600' },
-  { label: 'Inventory', href: '/inventory', icon: Package, gradient: 'from-gray-600 to-gray-700' },
-  { label: 'Reports', href: '/reports', icon: TrendingUp, gradient: 'from-teal-500 to-teal-600' },
+const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon; bg: string }[] = [
+  { label: 'New Bill', href: '/bills/new', icon: FileText, bg: 'bg-blue-600' },
+  { label: 'New Transfer', href: '/transfers/new', icon: ArrowLeftRight, bg: 'bg-purple-600' },
+  { label: 'New Job Work', href: '/jobwork/new', icon: Factory, bg: 'bg-orange-600' },
+  { label: 'New Dispatch', href: '/dispatch/new', icon: Truck, bg: 'bg-green-600' },
+  { label: 'Inventory', href: '/inventory', icon: Package, bg: 'bg-gray-700' },
+  { label: 'Reports', href: '/reports', icon: TrendingUp, bg: 'bg-teal-600' },
 ]
 
 export function ModernDashboard() {
@@ -126,7 +126,7 @@ export function ModernDashboard() {
               <Link
                 key={action.href}
                 href={action.href}
-                className={`flex flex-col items-center justify-center gap-1 rounded-xl bg-gradient-to-br ${action.gradient} px-3 py-4 text-center text-xs font-medium text-white shadow-sm transition-transform hover:scale-[1.03]`}
+                className={`flex flex-col items-center justify-center gap-1 rounded-[7px] ${action.bg} px-3 py-4 text-center text-[11px] font-bold text-white shadow-sm transition-transform hover:scale-[1.03]`}
               >
                 <action.icon className="h-5 w-5" />
                 {action.label}

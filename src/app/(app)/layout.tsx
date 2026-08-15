@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useState, useEffect, useRef } from 'react'
+import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -15,6 +16,12 @@ import { Copilot } from '@/components/ai/Copilot'
 import { DashboardViewProvider, useDashboardView } from '@/components/DashboardViewProvider'
 import { DashboardViewToggle } from '@/components/DashboardViewToggle'
 import type { DashboardView } from '@/lib/dashboardViewPreference'
+
+// Sidebar-only font, matching the published visual reference
+// (warecore-app.muralikrishna77star.chatgpt.site) exactly — confirmed via
+// its own computed styles, not guessed. Scoped to the sidebar rather than
+// swapped in app-wide, since the rest of the app is tested against Geist.
+const inter = Inter({ variable: '--font-sidebar', subsets: ['latin'] })
 
 // Chrome styling per dashboard view — same links, hrefs, labels, icons and
 // active-route logic everywhere; only these class strings change.
@@ -43,10 +50,13 @@ const CHROME: Record<
     mobileNavInactive: 'text-slate-500 hover:text-slate-800',
   },
   modern: {
-    sidebarBg: 'bg-gradient-to-b from-slate-900 to-blue-950',
-    navItemBase: 'flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors',
-    navItemActive: 'bg-blue-600 text-white shadow-md shadow-blue-950/40',
-    navItemInactive: 'text-gray-300 hover:bg-white/10 hover:text-white',
+    // Exact values pulled from the reference site's own computed styles
+    // (see project memory / commit message for the extraction method) —
+    // #102239 sidebar background, #265AD6 active item, #9FB0C2 inactive text.
+    sidebarBg: 'bg-[#102239]',
+    navItemBase: 'flex h-10 items-center gap-3 px-[11px] rounded-[7px] text-[13px] font-[550] transition-colors',
+    navItemActive: 'bg-[#265AD6] text-white',
+    navItemInactive: 'text-[#9FB0C2] hover:bg-white/10 hover:text-white',
     headerClass: 'h-16 bg-white shadow-md border-b border-blue-100',
     mobileNavBg: 'bg-white shadow-[0_-4px_16px_rgba(15,23,42,0.08)]',
     mobileNavActive: 'text-blue-700',
@@ -186,6 +196,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         className={cn(
           'fixed inset-y-0 left-0 z-50 w-64 transform transition-[transform,background-color] duration-200 ease-in-out lg:static lg:translate-x-0',
           chrome.sidebarBg,
+          view === 'modern' && inter.className,
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           isDesktop && 'border-r-2 border-cyan-600/40'
         )}
@@ -193,9 +204,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">W</span>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
+            <img src="/assets/brand/logo-mark.svg" alt="WareCore" className="h-8 w-8" />
             <span className="text-white font-bold text-lg">WareCore</span>
           </div>
           <button
@@ -220,10 +230,10 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
             return (
               <Fragment key={item.href}>
                 {view === 'modern' && index === 0 && (
-                  <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500">Workspace</p>
+                  <p className="px-3 pb-2 text-[9px] font-extrabold uppercase tracking-[1.4px] text-[#72879D]">Workspace</p>
                 )}
                 {view === 'modern' && item.href === '/inventory' && (
-                  <p className="px-3 pb-2 pt-4 text-[11px] font-semibold uppercase tracking-widest text-gray-500">Insights &amp; Setup</p>
+                  <p className="px-3 pb-2 pt-4 text-[9px] font-extrabold uppercase tracking-[1.4px] text-[#72879D]">Insights &amp; Setup</p>
                 )}
                 <Link
                   href={item.href}

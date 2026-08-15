@@ -46,20 +46,22 @@ const REPORT_LINKS: {
   iconColor: string
   hoverBorder: string
   hoverText: string
+  accentBorder: string
+  tintBg: string
   title: string
   description: string
 }[] = [
-  { href: '/reports/stock-statement', icon: ChartColumn, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', hoverBorder: 'hover:border-blue-300', hoverText: 'group-hover:text-blue-700', title: 'Stock Statement', description: 'Opening · Purchases · Transfers · Dispatch · Closing stock' },
-  { href: '/reports/daywise-stock-statement', icon: Calendar, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', hoverBorder: 'hover:border-blue-300', hoverText: 'group-hover:text-blue-700', title: 'Daywise Stock Statement', description: 'Day-by-day summary with every transaction listed underneath' },
-  { href: '/reports/billing', icon: Receipt, iconBg: 'bg-green-100', iconColor: 'text-green-600', hoverBorder: 'hover:border-green-300', hoverText: 'group-hover:text-green-700', title: 'Billing Report', description: 'Purchase bills with supplier, materials, quantities and amounts' },
-  { href: '/reports/transfers', icon: ArrowLeftRight, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600', hoverBorder: 'hover:border-indigo-300', hoverText: 'group-hover:text-indigo-700', title: 'Transfers Report', description: 'Inter-company and inter-warehouse material transfers' },
-  { href: '/reports/movements', icon: RefreshCw, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', hoverBorder: 'hover:border-orange-300', hoverText: 'group-hover:text-orange-700', title: 'Movements Report', description: 'All stock ledger entries: purchase, dispatch, transfers, job work' },
-  { href: '/reports/jobwork', icon: Factory, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', hoverBorder: 'hover:border-purple-300', hoverText: 'group-hover:text-purple-700', title: 'Job Work Report', description: 'Material sent to vendors: sent, received, and pending quantities' },
-  { href: '/reports/dispatch', icon: Truck, iconBg: 'bg-red-100', iconColor: 'text-red-600', hoverBorder: 'hover:border-red-300', hoverText: 'group-hover:text-red-700', title: 'Dispatch Report', description: 'Customer dispatch orders with invoice, vehicle, and item details' },
-  { href: '/reports/stock-reconcile', icon: Wrench, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', hoverBorder: 'hover:border-orange-300', hoverText: 'group-hover:text-orange-700', title: 'Stock Reconciliation', description: 'Detect and fix phantom stock entries from past bill edits' },
-  { href: '/reports/item-ledger', icon: BookOpen, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', hoverBorder: 'hover:border-teal-300', hoverText: 'group-hover:text-teal-700', title: 'Item Stock Ledger', description: 'Opening, movements, and running balance for a single item between two dates' },
-  { href: '/reports/purchase-line-ledger', icon: Compass, iconBg: 'bg-pink-100', iconColor: 'text-pink-600', hoverBorder: 'hover:border-pink-300', hoverText: 'group-hover:text-pink-700', title: 'Purchase Line Movements', description: 'Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns' },
-  { href: '/reports/vendor-movements', icon: HardHat, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', hoverBorder: 'hover:border-amber-300', hoverText: 'group-hover:text-amber-700', title: 'Vendorwise Stock Movement', description: 'Job work out, direct sales, returns and pending balance, by vendor' },
+  { href: '/reports/stock-statement', icon: ChartColumn, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', hoverBorder: 'hover:border-blue-300', hoverText: 'group-hover:text-blue-700', accentBorder: 'border-l-blue-500', tintBg: 'bg-blue-50/40', title: 'Stock Statement', description: 'Opening · Purchases · Transfers · Dispatch · Closing stock' },
+  { href: '/reports/daywise-stock-statement', icon: Calendar, iconBg: 'bg-blue-100', iconColor: 'text-blue-600', hoverBorder: 'hover:border-blue-300', hoverText: 'group-hover:text-blue-700', accentBorder: 'border-l-blue-500', tintBg: 'bg-blue-50/40', title: 'Daywise Stock Statement', description: 'Day-by-day summary with every transaction listed underneath' },
+  { href: '/reports/billing', icon: Receipt, iconBg: 'bg-green-100', iconColor: 'text-green-600', hoverBorder: 'hover:border-green-300', hoverText: 'group-hover:text-green-700', accentBorder: 'border-l-green-500', tintBg: 'bg-green-50/40', title: 'Billing Report', description: 'Purchase bills with supplier, materials, quantities and amounts' },
+  { href: '/reports/transfers', icon: ArrowLeftRight, iconBg: 'bg-indigo-100', iconColor: 'text-indigo-600', hoverBorder: 'hover:border-indigo-300', hoverText: 'group-hover:text-indigo-700', accentBorder: 'border-l-indigo-500', tintBg: 'bg-indigo-50/40', title: 'Transfers Report', description: 'Inter-company and inter-warehouse material transfers' },
+  { href: '/reports/movements', icon: RefreshCw, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', hoverBorder: 'hover:border-orange-300', hoverText: 'group-hover:text-orange-700', accentBorder: 'border-l-orange-500', tintBg: 'bg-orange-50/40', title: 'Movements Report', description: 'All stock ledger entries: purchase, dispatch, transfers, job work' },
+  { href: '/reports/jobwork', icon: Factory, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', hoverBorder: 'hover:border-purple-300', hoverText: 'group-hover:text-purple-700', accentBorder: 'border-l-purple-500', tintBg: 'bg-purple-50/40', title: 'Job Work Report', description: 'Material sent to vendors: sent, received, and pending quantities' },
+  { href: '/reports/dispatch', icon: Truck, iconBg: 'bg-red-100', iconColor: 'text-red-600', hoverBorder: 'hover:border-red-300', hoverText: 'group-hover:text-red-700', accentBorder: 'border-l-red-500', tintBg: 'bg-red-50/40', title: 'Dispatch Report', description: 'Customer dispatch orders with invoice, vehicle, and item details' },
+  { href: '/reports/stock-reconcile', icon: Wrench, iconBg: 'bg-orange-100', iconColor: 'text-orange-600', hoverBorder: 'hover:border-orange-300', hoverText: 'group-hover:text-orange-700', accentBorder: 'border-l-orange-500', tintBg: 'bg-orange-50/40', title: 'Stock Reconciliation', description: 'Detect and fix phantom stock entries from past bill edits' },
+  { href: '/reports/item-ledger', icon: BookOpen, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', hoverBorder: 'hover:border-teal-300', hoverText: 'group-hover:text-teal-700', accentBorder: 'border-l-teal-500', tintBg: 'bg-teal-50/40', title: 'Item Stock Ledger', description: 'Opening, movements, and running balance for a single item between two dates' },
+  { href: '/reports/purchase-line-ledger', icon: Compass, iconBg: 'bg-pink-100', iconColor: 'text-pink-600', hoverBorder: 'hover:border-pink-300', hoverText: 'group-hover:text-pink-700', accentBorder: 'border-l-pink-500', tintBg: 'bg-pink-50/40', title: 'Purchase Line Movements', description: 'Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns' },
+  { href: '/reports/vendor-movements', icon: HardHat, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', hoverBorder: 'hover:border-amber-300', hoverText: 'group-hover:text-amber-700', accentBorder: 'border-l-amber-500', tintBg: 'bg-amber-50/40', title: 'Vendorwise Stock Movement', description: 'Job work out, direct sales, returns and pending balance, by vendor' },
 ]
 
 export default async function ReportsPage() {
@@ -100,7 +102,7 @@ export default async function ReportsPage() {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-start gap-4 rounded-xl border bg-white p-5 ${item.hoverBorder} hover:shadow-sm transition-all group`}
+            className={`flex items-start gap-4 rounded-xl border border-l-4 ${item.accentBorder} ${item.tintBg} p-5 ${item.hoverBorder} hover:shadow-sm transition-all group`}
           >
             <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${item.iconBg}`}>
               <item.icon className={`h-5 w-5 ${item.iconColor}`} strokeWidth={2} />

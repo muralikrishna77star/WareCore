@@ -14,7 +14,15 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
-    pathname.startsWith('/favicon')
+    pathname.startsWith('/favicon') ||
+    // Static assets under public/ — brand/logo images, PWA manifest icons,
+    // manifest.json, and the service worker script all need to load before
+    // a session exists (e.g. the login/setup pages' own logo, or a PWA
+    // install prompt on the login screen).
+    pathname.startsWith('/assets/') ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js'
   )
 }
 

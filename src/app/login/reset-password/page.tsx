@@ -150,9 +150,8 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">W</span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
+          <img src="/assets/brand/logo-mark.svg" alt="WareCore" className="h-12 w-12" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
           Reset your password

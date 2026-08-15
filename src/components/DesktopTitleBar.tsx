@@ -53,7 +53,8 @@ export function DesktopTitleBar() {
   return (
     <div className="fixed inset-x-0 top-0 z-[100] flex h-10 items-center justify-between border-b-2 border-cyan-300 bg-gradient-to-r from-indigo-700 via-blue-600 to-cyan-600 px-3 shadow-sm select-none">
       <div className="flex items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded bg-white/15 text-xs font-bold text-white">W</span>
+        {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
+        <img src="/assets/brand/logo-mark.svg" alt="WareCore" className="h-5 w-5" />
         <span className="text-sm font-semibold text-white">WareCore</span>
         <span className="text-xs text-white/60">v{APP_VERSION} · Desktop</span>
       </div>
