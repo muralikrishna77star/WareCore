@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { Fragment, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -101,6 +101,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const [userFullName, setUserFullName] = useState('')
+  const [userRole, setUserRole] = useState('')
   const [isDesktop, setIsDesktop] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -148,6 +150,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         if (!res.ok) return
         const data = await res.json()
         setUserEmail(data.email || '')
+        setUserFullName(data.fullName || '')
+        setUserRole(data.role || '')
       } catch (error) {
         console.error('Session fetch failed', error)
       }
@@ -210,22 +214,26 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-10rem)]">
-          {view === 'modern' && (
-            <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500">Workspace</p>
-          )}
-          {navItems.map((item) => {
+          {navItems.map((item, index) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
             const Icon = item.icon
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={cn(chrome.navItemBase, isActive ? chrome.navItemActive : chrome.navItemInactive)}
-              >
-                <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
-                {item.title}
-              </Link>
+              <Fragment key={item.href}>
+                {view === 'modern' && index === 0 && (
+                  <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500">Workspace</p>
+                )}
+                {view === 'modern' && item.href === '/inventory' && (
+                  <p className="px-3 pb-2 pt-4 text-[11px] font-semibold uppercase tracking-widest text-gray-500">Insights &amp; Setup</p>
+                )}
+                <Link
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(chrome.navItemBase, isActive ? chrome.navItemActive : chrome.navItemInactive)}
+                >
+                  <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
+                  {item.title}
+                </Link>
+              </Fragment>
             )
           })}
         </nav>
@@ -338,14 +346,17 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                 className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 hover:bg-gray-50 transition-colors"
               >
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">
-                  {userEmail ? userEmail.charAt(0).toUpperCase() : 'U'}
+                  {(userFullName || userEmail) ? (userFullName || userEmail).charAt(0).toUpperCase() : 'U'}
                 </span>
-                <span className="hidden sm:inline-flex truncate max-w-[10rem]">{userEmail || 'User Profile'}</span>
+                <span className="hidden sm:flex flex-col items-start leading-tight">
+                  <span className="truncate max-w-[10rem]">{userFullName || userEmail || 'User Profile'}</span>
+                  {userRole && <span className="text-xs font-normal text-gray-400">User ID: {userRole}</span>}
+                </span>
               </button>
               {profileOpen && (
                 <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
                   <div className="px-4 py-3 border-b border-gray-100">
-                    <p className="text-sm font-semibold text-gray-900">Signed in as</p>
+                    <p className="text-sm font-semibold text-gray-900">{userFullName || 'Signed in as'}</p>
                     <p className="truncate text-sm text-gray-600">{userEmail || 'Unknown user'}</p>
                   </div>
                   <div className="flex flex-col gap-1 p-2">
