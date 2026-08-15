@@ -157,12 +157,21 @@ $$ LANGUAGE plpgsql;
 -- ── 2. Backfill the two ledger rows that went missing while the ─────────────
 --      regression was live (audited against every job_work_transfers row)
 
+-- Both backfills below are guarded by `WHERE EXISTS (... job_work_orders ...
+-- id = <reference_id>)` — these reference_id/company_id/warehouse_id/etc.
+-- values only exist in the hosted production database this repair targeted.
+-- On a fresh database (e.g. the standalone desktop build's own empty
+-- embedded Postgres, which applies every migration from scratch), the
+-- referenced order doesn't exist, so the guard makes this a no-op instead of
+-- an FK violation on stock_ledger.company_id/warehouse_id/etc.
+
 -- JWT-0726-0017: JW-MRQC6HY0-TSUN never got its JOB_WORK_TRANSFER_IN.
 INSERT INTO stock_ledger (
   entry_type, company_id, warehouse_id, material_type_id, material_size_id,
   size_label, quantity, reference_type, reference_id, reference_number,
   notes, entry_date, purchase_line_id, sub_purchase_line_id
-) VALUES (
+)
+SELECT
   'JOB_WORK_TRANSFER_IN',
   '426a22ba-edb6-4947-b637-1ad4aab640b9',
   '9a5e389e-ba6c-4c1b-b79a-0242f5e43ce2',
@@ -177,7 +186,7 @@ INSERT INTO stock_ledger (
   '2024-06-28',
   'CR0624-0003',
   NULL
-);
+WHERE EXISTS (SELECT 1 FROM job_work_orders WHERE id = '04ad9b25-1258-40aa-a800-77b94aa7e40a');
 
 -- JWT-0726-0018: JW-MQGKK6Q0-NI2X never got its JOB_WORK_TRANSFER_OUT
 -- (the case originally flagged from the Item Ledger Report — CR00880's
@@ -186,7 +195,8 @@ INSERT INTO stock_ledger (
   entry_type, company_id, warehouse_id, material_type_id, material_size_id,
   size_label, quantity, reference_type, reference_id, reference_number,
   notes, entry_date, purchase_line_id, sub_purchase_line_id
-) VALUES (
+)
+SELECT
   'JOB_WORK_TRANSFER_OUT',
   '426a22ba-edb6-4947-b637-1ad4aab640b9',
   'f30a7bb1-c547-4d13-bab1-05a3d4b8c221',
@@ -201,4 +211,4 @@ INSERT INTO stock_ledger (
   '2026-07-20',
   'CR0424-0002',
   NULL
-);
+WHERE EXISTS (SELECT 1 FROM job_work_orders WHERE id = 'aa14020c-fd1a-4ecf-b3aa-e5900c866cc4');

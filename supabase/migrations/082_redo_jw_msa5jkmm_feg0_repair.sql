@@ -43,7 +43,10 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM stock_ledger
   WHERE entry_type = 'JOB_WORK_TRANSFER_OUT' AND reference_id = '12963adc-900a-4088-b4ad-fa35b747a3b2'
-);
+)
+-- Guards against an FK violation on a fresh database (e.g. the standalone
+-- desktop build's own empty embedded Postgres) where this order never existed.
+AND EXISTS (SELECT 1 FROM job_work_orders WHERE id = '12963adc-900a-4088-b4ad-fa35b747a3b2');
 
 UPDATE job_work_orders
 SET vendor_id = 'a9281561-a471-4ef5-881c-7db24c02e81c', -- Arun Engineering

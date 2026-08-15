@@ -34,8 +34,10 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
   },
   purchase_bill_items: {
     material_types: { kind: 'object', table: 'material_types', localKey: 'material_type_id' },
+    material_sizes: { kind: 'object', table: 'material_sizes', localKey: 'material_size_id' },
     // Filter-only — used in `where: { purchase_bill: { status: ... } }`, never selected.
     purchase_bill: { kind: 'object', table: 'purchase_bills', localKey: 'bill_id' },
+    item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
   },
   transfers: {
     companies_from: { kind: 'object', table: 'companies', localKey: 'from_company_id' },
@@ -47,6 +49,7 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
   transfer_items: {
     material_types: { kind: 'object', table: 'material_types', localKey: 'material_type_id' },
     material_sizes: { kind: 'object', table: 'material_sizes', localKey: 'material_size_id' },
+    item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
   },
   dispatch_orders: {
     companies: { kind: 'object', table: 'companies', localKey: 'company_id' },
@@ -56,8 +59,10 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
   },
   dispatch_items: {
     material_types: { kind: 'object', table: 'material_types', localKey: 'material_type_id' },
+    material_sizes: { kind: 'object', table: 'material_sizes', localKey: 'material_size_id' },
     // Filter-only — used in `where: { dispatch_order: { status: ... } }`, never selected.
     dispatch_order: { kind: 'object', table: 'dispatch_orders', localKey: 'dispatch_order_id' },
+    item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
   },
   job_work_orders: {
     companies: { kind: 'object', table: 'companies', localKey: 'company_id' },
@@ -71,10 +76,26 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
     material_sizes: { kind: 'object', table: 'material_sizes', localKey: 'material_size_id' },
     // Filter-only — used in `where: { job_work_order: { status: ... } }`, never selected.
     job_work_order: { kind: 'object', table: 'job_work_orders', localKey: 'job_work_order_id' },
+    // Same FK as job_work_order above under a second (plural) relationship
+    // name — VENDOR_JOB_WORK_ITEM_BALANCES_QUERY selects AND filters through
+    // this name specifically, and Hasura already has both names tracked.
+    job_work_orders: { kind: 'object', table: 'job_work_orders', localKey: 'job_work_order_id' },
+    item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
   },
   job_work_output_items: {
     material_types: { kind: 'object', table: 'material_types', localKey: 'material_type_id' },
     material_sizes: { kind: 'object', table: 'material_sizes', localKey: 'material_size_id' },
+    item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
+  },
+  job_work_transfers: {
+    to_vendor: { kind: 'object', table: 'suppliers', localKey: 'to_vendor_id' },
+    to_job_work_order: { kind: 'object', table: 'job_work_orders', localKey: 'to_job_work_order_id' },
+  },
+  job_work_transfer_items: {
+    job_work_transfer: { kind: 'object', table: 'job_work_transfers', localKey: 'job_work_transfer_id' },
+  },
+  job_work_transfer_cancellations: {
+    job_work_transfer_cancellation_items: { kind: 'array', table: 'job_work_transfer_cancellation_items', foreignKey: 'cancellation_id' },
   },
   stock_ledger: {
     companies: { kind: 'object', table: 'companies', localKey: 'company_id' },

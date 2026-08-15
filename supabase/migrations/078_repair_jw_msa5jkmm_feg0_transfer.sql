@@ -57,7 +57,10 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM stock_ledger
   WHERE entry_type = 'JOB_WORK_TRANSFER_OUT' AND reference_id = '12963adc-900a-4088-b4ad-fa35b747a3b2'
-);
+)
+-- Guards against an FK violation on a fresh database (e.g. the standalone
+-- desktop build's own empty embedded Postgres) where this order never existed.
+AND EXISTS (SELECT 1 FROM job_work_orders WHERE id = '12963adc-900a-4088-b4ad-fa35b747a3b2');
 
 INSERT INTO stock_ledger (
   entry_type, company_id, warehouse_id, material_type_id, material_size_id,
@@ -73,7 +76,8 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM stock_ledger
   WHERE entry_type = 'JOB_WORK_TRANSFER_IN' AND reference_id = '4023acca-2a8c-45dd-a272-aafaadd65b32'
-);
+)
+AND EXISTS (SELECT 1 FROM job_work_orders WHERE id = '4023acca-2a8c-45dd-a272-aafaadd65b32');
 
 -- 4. Point the transfer audit row's item links at the current (post-edit)
 --    items instead of the deleted original.

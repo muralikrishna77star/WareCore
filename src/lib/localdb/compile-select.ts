@@ -6,11 +6,25 @@ import { evalArgs, fieldSelections, resultKey } from './ast'
 
 type Row = Record<string, unknown>
 
-function buildOrderBy(orderBy: unknown): string {
+// `table` is required to resolve relationship-qualified order_by, e.g.
+// `order_by: { job_work_transfer: { transfer_date: desc } }` — sorts by a
+// related row's column via a correlated subquery, since the related table
+// isn't joined into the main FROM clause.
+function buildOrderBy(table: string, orderBy: unknown): string {
   if (!orderBy) return ''
   const list = Array.isArray(orderBy) ? orderBy : [orderBy]
   const parts = list.flatMap((o) =>
-    Object.entries(o as Record<string, string>).map(([col, dir]) => `"${col}" ${String(dir).toUpperCase()}`)
+    Object.entries(o as Record<string, unknown>).map(([key, dir]) => {
+      if (dir !== null && typeof dir === 'object') {
+        const rel = RELATIONSHIPS[table]?.[key]
+        if (!rel || rel.kind !== 'object') {
+          throw new Error(`Unsupported relationship order_by "${key}" on table "${table}"`)
+        }
+        const [[relCol, relDir]] = Object.entries(dir as Record<string, string>)
+        return `(SELECT "${relCol}" FROM "${rel.table}" WHERE id = "${table}"."${rel.localKey}") ${String(relDir).toUpperCase()}`
+      }
+      return `"${key}" ${String(dir).toUpperCase()}`
+    })
   )
   return parts.length ? ` ORDER BY ${parts.join(', ')}` : ''
 }
@@ -43,7 +57,7 @@ export async function shapeRow(table: string, row: Row, field: FieldNode, variab
       out[alias] = res.rows[0] ? await shapeRow(rel.table, res.rows[0], sub, variables) : null
     } else {
       const childArgs = evalArgs(sub, variables)
-      const orderSql = buildOrderBy(childArgs.order_by)
+      const orderSql = buildOrderBy(rel.table, childArgs.order_by)
       const limitSql = childArgs.limit != null ? ` LIMIT ${Number(childArgs.limit)}` : ''
       const res = await pool.query(
         `SELECT * FROM "${rel.table}" WHERE "${rel.foreignKey}" = $1${orderSql}${limitSql}`,
@@ -60,7 +74,7 @@ export async function selectMany(table: string, args: Record<string, unknown>, f
   const whereSql = buildWhere(table, args.where, params)
   const distinctOn = args.distinct_on as string[] | undefined
   const distinctSql = distinctOn?.length ? `DISTINCT ON (${distinctOn.map((c) => `"${c}"`).join(', ')}) ` : ''
-  let orderSql = buildOrderBy(args.order_by)
+  let orderSql = buildOrderBy(table, args.order_by)
   if (distinctOn?.length && !orderSql) {
     orderSql = ` ORDER BY ${distinctOn.map((c) => `"${c}"`).join(', ')}`
   }
