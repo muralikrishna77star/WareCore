@@ -86,11 +86,11 @@ export default function HomePage() {
           <div className="bg-white rounded-xl border p-8 space-y-4 text-left">
             <div>
               <p className="text-xs font-medium text-gray-400 uppercase mb-1">Email</p>
-              <p className="text-gray-700">admin@warecore.in</p>
+              <p className="text-gray-700">makfreelancer77@gmail.com</p>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-400 uppercase mb-1">Phone</p>
-              <p className="text-gray-700">+91 98765 43210</p>
+              <p className="text-gray-700">+91 77080 80484</p>
             </div>
           </div>
         </div>
