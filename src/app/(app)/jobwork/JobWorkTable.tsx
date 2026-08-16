@@ -359,7 +359,7 @@ export default function JobWorkTable({
                 <ReferenceLink type="job_work" id={o.id}>
                   View
                 </ReferenceLink>
-                {o.status !== 'cancelled' && o.status !== 'completed' && (
+                {o.status !== 'cancelled' && (
                   <Link href={`/jobwork/${o.id}/edit`} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
                     Edit
                   </Link>

@@ -1131,7 +1131,7 @@ export default function EditJobWorkPage() {
     )
   }
 
-  if (orderStatus === 'cancelled' || orderStatus === 'completed') {
+  if (orderStatus === 'cancelled') {
     return (
       <div className="max-w-[1800px] mx-auto py-12 text-center">
         <p className="text-red-600 font-medium">

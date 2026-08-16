@@ -216,9 +216,9 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       <JobWorkReturnClient order={order} items={items ?? []} outputItems={outputItems} />
 
       <div className="flex gap-3 mt-6">
-        {order.status !== 'cancelled' && order.status !== 'completed' && (
+        {order.status !== 'cancelled' && (
           <Link href={`/jobwork/${order.id}/edit`} className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700">
-            Update Return Quantities
+            Edit Order
           </Link>
         )}
         <Link href="/jobwork/new" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
