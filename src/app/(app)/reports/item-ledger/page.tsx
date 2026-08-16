@@ -422,7 +422,10 @@ export default async function ItemStockLedgerPage({
         jobWorkReferenceNumber: outRow.reference_number,
         jobWorkReferenceType: outRow.reference_type,
         jobWorkReferenceId: outRow.reference_id,
-        vendorName: `${fromVendor} → ${toVendor}`,
+        // Vendor column shows only the current holder — where this row's
+        // balance now sits — not both ends of the move; the full "from → to"
+        // story stays in Notes.
+        vendorName: toVendor,
         balance: laterRow.balance,
         vendorBalance: laterRow.vendorBalance,
         orphaned: false,
