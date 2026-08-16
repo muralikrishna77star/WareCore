@@ -312,6 +312,7 @@ export default async function ItemStockLedgerPage({
   type DisplayRow = (typeof ledgerRows)[number] & {
     mergedIds?: string[]
     isVendorDirectSale?: boolean
+    isJobWorkTransfer?: boolean
     jobWorkReferenceNumber?: string | null
     jobWorkReferenceType?: string | null
     jobWorkReferenceId?: string | null
@@ -343,6 +344,37 @@ export default async function ItemStockLedgerPage({
     // (return or sale) happens to sort first on a same-day tie.
     mergeAtLaterIndex.set(Math.max(i, j), { saleIdx: j, returnIdx: i })
   }
+
+  // Job-work vendor-to-vendor transfers post as two separate ledger rows too
+  // (JOB_WORK_TRANSFER_OUT on the source order + JOB_WORK_TRANSFER_IN on the
+  // destination order), so they net to zero but otherwise read as two
+  // unrelated movements — same problem as the vendor-direct-sale pair above,
+  // same fix: merge into one display-only row. Matched by shared line ID +
+  // entry date + exactly-offsetting quantity (both legs of a transfer always
+  // share one business date, see fn_job_work_item_to_ledger()'s TRANSFER_OUT
+  // date lookup).
+  const mergeTransferAtLaterIndex = new Map<number, { outIdx: number; inIdx: number }>()
+  for (let i = 0; i < ledgerRows.length; i++) {
+    const row = ledgerRows[i]
+    if (row.entry_type !== 'JOB_WORK_TRANSFER_OUT') continue
+    if (consumed.has(i)) continue
+    const lineId = row.sub_purchase_line_id || row.purchase_line_id
+    if (!lineId) continue
+    const qty = Number(row.quantity)
+    const j = ledgerRows.findIndex((r, idx) =>
+      idx !== i &&
+      !consumed.has(idx) &&
+      r.entry_type === 'JOB_WORK_TRANSFER_IN' &&
+      (r.sub_purchase_line_id || r.purchase_line_id) === lineId &&
+      r.entry_date === row.entry_date &&
+      Math.abs(Number(r.quantity) + qty) < 0.0005
+    )
+    if (j === -1) continue
+    consumed.add(i)
+    consumed.add(j)
+    mergeTransferAtLaterIndex.set(Math.max(i, j), { outIdx: i, inIdx: j })
+  }
+
   const displayRows: DisplayRow[] = []
   for (let i = 0; i < ledgerRows.length; i++) {
     const merge = mergeAtLaterIndex.get(i)
@@ -368,6 +400,34 @@ export default async function ItemStockLedgerPage({
         orphaned: false,
         duplicateCount: 1,
         notes: 'Direct from vendor — no warehouse movement',
+      })
+      continue
+    }
+    const transferMerge = mergeTransferAtLaterIndex.get(i)
+    if (transferMerge) {
+      const outRow = ledgerRows[transferMerge.outIdx]
+      const inRow = ledgerRows[transferMerge.inIdx]
+      const laterRow = ledgerRows[i]
+      const fromVendor = outRow.vendorName || '—'
+      const toVendor = inRow.vendorName || '—'
+      displayRows.push({
+        ...inRow,
+        id: `jwt-${outRow.id}-${inRow.id}`,
+        mergedIds: [outRow.id, inRow.id],
+        isJobWorkTransfer: true,
+        entry_type: 'JOB_WORK_TRANSFER',
+        entry_date: laterRow.entry_date,
+        quantity: inRow.quantity,
+        netQuantity: 0,
+        jobWorkReferenceNumber: outRow.reference_number,
+        jobWorkReferenceType: outRow.reference_type,
+        jobWorkReferenceId: outRow.reference_id,
+        vendorName: `${fromVendor} → ${toVendor}`,
+        balance: laterRow.balance,
+        vendorBalance: laterRow.vendorBalance,
+        orphaned: false,
+        duplicateCount: 1,
+        notes: `Transfer from ${fromVendor} to ${toVendor}`,
       })
       continue
     }
@@ -402,6 +462,9 @@ export default async function ItemStockLedgerPage({
     JOB_WORK_RETURN_IN: 'Job Work Return In',
     JOB_WORK_OUTPUT_IN: 'Job Work Output In',
     JOB_WORK_CANCEL: 'Job Work Cancelled',
+    JOB_WORK_TRANSFER_OUT: 'Job Work Transfer Out',
+    JOB_WORK_TRANSFER_IN: 'Job Work Transfer In',
+    JOB_WORK_TRANSFER: 'Job Transfer',
     ADJUSTMENT_IN: 'Adjustment In',
     ADJUSTMENT_OUT: 'Adjustment Out',
   }
@@ -456,9 +519,11 @@ export default async function ItemStockLedgerPage({
             const qty = Number(row.quantity)
             const typeLabel = row.isVendorDirectSale
               ? 'Vendor Direct Sale'
+              : row.isJobWorkTransfer
+              ? 'Job Transfer'
               : ENTRY_TYPE_LABELS[row.entry_type ?? ''] ?? row.entry_type ?? ''
-            const referenceLabel = row.isVendorDirectSale
-              ? `${row.reference_number || ''}${row.jobWorkReferenceNumber ? ` (via ${row.jobWorkReferenceNumber})` : ''}`
+            const referenceLabel = row.isVendorDirectSale || row.isJobWorkTransfer
+              ? `${row.reference_number || ''}${row.jobWorkReferenceNumber ? ` (from ${row.jobWorkReferenceNumber})` : ''}`
               : row.reference_number || ''
             return {
               sno: idx + 1,

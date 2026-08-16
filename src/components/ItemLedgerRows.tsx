@@ -20,6 +20,9 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   JOB_WORK_RETURN_IN: { label: 'Job Work Return In', color: 'bg-teal-100 text-teal-800' },
   JOB_WORK_OUTPUT_IN: { label: 'Job Work Output In', color: 'bg-teal-100 text-teal-800' },
   JOB_WORK_CANCEL: { label: 'Job Work Cancelled', color: 'bg-gray-100 text-gray-700' },
+  JOB_WORK_TRANSFER_OUT: { label: 'Job Work Transfer Out', color: 'bg-orange-100 text-orange-800' },
+  JOB_WORK_TRANSFER_IN: { label: 'Job Work Transfer In', color: 'bg-blue-100 text-blue-800' },
+  JOB_WORK_TRANSFER: { label: 'Job Transfer', color: 'bg-cyan-100 text-cyan-800' },
   ADJUSTMENT_IN: { label: 'Adjustment In', color: 'bg-gray-100 text-gray-800' },
   ADJUSTMENT_OUT: { label: 'Adjustment Out', color: 'bg-gray-100 text-gray-800' },
 }
@@ -43,6 +46,7 @@ export type LedgerRow = {
   duplicateCount: number
   mergedIds?: string[]
   isVendorDirectSale?: boolean
+  isJobWorkTransfer?: boolean
   jobWorkReferenceNumber?: string | null
   jobWorkReferenceType?: string | null
   jobWorkReferenceId?: string | null
@@ -61,7 +65,7 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
   // (same tradeoff as stock-statement's Transaction Details table).
   const { sortedRows: rows, sortKey, sortDir, toggleSort } = useTableSort(allRows, {
     date: (r) => r.entry_date,
-    type: (r) => (r.isVendorDirectSale ? 'Vendor Direct Sale' : entryTypeConfig[r.entry_type]?.label ?? r.entry_type),
+    type: (r) => (r.isVendorDirectSale ? 'Vendor Direct Sale' : r.isJobWorkTransfer ? 'Job Transfer' : entryTypeConfig[r.entry_type]?.label ?? r.entry_type),
     reference: (r) => r.reference_number ?? '',
     company: (r) => r.companies?.name ?? '',
     warehouse: (r) => r.warehouses?.name ?? '',
@@ -173,6 +177,8 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
         {rows.map((row) => {
           const cfg = row.isVendorDirectSale
             ? { label: 'Vendor Direct Sale', color: 'bg-indigo-100 text-indigo-800' }
+            : row.isJobWorkTransfer
+            ? { label: 'Job Transfer', color: 'bg-cyan-100 text-cyan-800' }
             : entryTypeConfig[row.entry_type] ?? { label: row.entry_type, color: 'bg-gray-100 text-gray-800' }
           const qty = Number(row.quantity)
           const lineId = row.sub_purchase_line_id || row.purchase_line_id
@@ -223,9 +229,9 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
                     {lineId}
                   </span>
                 )}
-                {row.isVendorDirectSale && row.jobWorkReferenceNumber && (
+                {(row.isVendorDirectSale || row.isJobWorkTransfer) && row.jobWorkReferenceNumber && (
                   <div className="mt-0.5 text-gray-400">
-                    via{' '}
+                    {row.isJobWorkTransfer ? 'from' : 'via'}{' '}
                     {isReferenceType(row.jobWorkReferenceType) && row.jobWorkReferenceId ? (
                       <ReferenceLink type={row.jobWorkReferenceType} id={row.jobWorkReferenceId} className="text-blue-600 hover:underline">
                         {row.jobWorkReferenceNumber}
