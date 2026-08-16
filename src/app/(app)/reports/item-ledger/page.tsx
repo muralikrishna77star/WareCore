@@ -438,6 +438,21 @@ export default async function ItemStockLedgerPage({
     displayRows.push(ledgerRows[i])
   }
 
+  // Same-day merged events read more naturally with the vendor-to-vendor
+  // move shown before the vendor-direct sale that happened after it — a
+  // stable resort that only reorders same-date pairs of these two types;
+  // every other row (including cross-date ordering) keeps its existing
+  // position. Balance/Vendor Balance stay each row's own already-computed
+  // snapshot (same tradeoff ItemLedgerRows already documents for column
+  // sorting) rather than being recomputed for this display order.
+  const SAME_DAY_TYPE_PRIORITY: Record<string, number> = { JOB_WORK_TRANSFER: 0, VENDOR_DIRECT_SALE: 1 }
+  displayRows.sort((a, b) => {
+    if (a.entry_date !== b.entry_date) return 0
+    const pa = SAME_DAY_TYPE_PRIORITY[a.entry_type ?? ''] ?? 0.5
+    const pb = SAME_DAY_TYPE_PRIORITY[b.entry_type ?? ''] ?? 0.5
+    return pa - pb
+  })
+
   const totalIn = entries
     .filter((e) => Number(e.quantity) > 0)
     .reduce((s, e) => s + Number(e.quantity), 0)
