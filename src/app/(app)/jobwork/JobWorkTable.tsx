@@ -360,6 +360,11 @@ export default function JobWorkTable({
                   View
                 </ReferenceLink>
                 {o.status !== 'cancelled' && (
+                  <Link href={`/jobwork/${o.id}/edit?mode=returns`} className="text-emerald-600 hover:text-emerald-800 text-xs font-medium">
+                    Returns
+                  </Link>
+                )}
+                {o.status !== 'cancelled' && (
                   <Link href={`/jobwork/${o.id}/edit`} className="text-amber-600 hover:text-amber-800 text-xs font-medium">
                     Edit
                   </Link>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
@@ -171,6 +171,7 @@ function InputLineRow({
   canRemove,
   inputFieldCls,
   selectCls,
+  disabled,
 }: {
   line: InputLine
   index: number
@@ -186,6 +187,7 @@ function InputLineRow({
   canRemove: boolean
   inputFieldCls: string
   selectCls: string
+  disabled?: boolean
 }) {
   const anchorRef = useRef<HTMLDivElement | null>(null)
   return (
@@ -195,13 +197,14 @@ function InputLineRow({
         <div className="relative" ref={anchorRef}>
           <input type="text"
             value={itemSearch}
+            disabled={disabled}
             onChange={e => { setInputItemSearch(p => ({ ...p, [index]: e.target.value })); setInputItemOpen(p => ({ ...p, [index]: true })) }}
             onFocus={() => setInputItemOpen(p => ({ ...p, [index]: true }))}
             onBlur={() => setInputItemOpen(p => ({ ...p, [index]: false }))}
             placeholder="Search item…"
-            className={inputFieldCls} />
+            className={`${inputFieldCls} ${disabled ? 'bg-gray-50 text-gray-500' : ''}`} />
           {line.item_code && <div className="text-[10px] font-mono text-blue-600 mt-0.5">{line.item_code}</div>}
-          <DropdownPortal anchorRef={anchorRef} open={isOpen} className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+          <DropdownPortal anchorRef={anchorRef} open={!disabled && isOpen} className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => openNewItemDialog(index, 'input', line.material_type_id, line.material_size_id)}
                 className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
@@ -264,6 +267,7 @@ function InputLineRow({
           ? <span className="text-xs text-red-500">No stock available</span>
           : (
             <select value={line.purchase_line_id}
+              disabled={disabled}
               onChange={e => updateInputLine(index, 'purchase_line_id', e.target.value)}
               className={selectCls + ' font-mono'}>
               <option value="">— Select —</option>
@@ -286,11 +290,12 @@ function InputLineRow({
       {/* Qty Consumed */}
       <td className="px-2 py-2">
         <input type="number" value={line.quantity}
+          disabled={disabled}
           onChange={e => updateInputLine(index, 'quantity', e.target.value)}
           step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
           className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
             line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
-              ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+              ? 'border-red-400 bg-red-50' : disabled ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'}`} />
         {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
           <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
         )}
@@ -309,18 +314,18 @@ function InputLineRow({
 
       {/* Unit */}
       <td className="px-2 py-2">
-        <select value={line.unit} onChange={e => updateInputLine(index, 'unit', e.target.value)} className={selectCls}>
+        <select value={line.unit} disabled={disabled} onChange={e => updateInputLine(index, 'unit', e.target.value)} className={selectCls}>
           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
         </select>
       </td>
 
       {/* Notes */}
       <td className="px-2 py-2">
-        <input type="text" value={line.notes} onChange={e => updateInputLine(index, 'notes', e.target.value)} className={inputFieldCls} />
+        <input type="text" value={line.notes} disabled={disabled} onChange={e => updateInputLine(index, 'notes', e.target.value)} className={inputFieldCls} />
       </td>
 
       <td className="px-2 py-2 text-center">
-        {canRemove && (
+        {canRemove && !disabled && (
           <button type="button" onClick={onRemove}
             className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
         )}
@@ -462,7 +467,15 @@ function OutputLineRow({
 export default function EditJobWorkPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const orderId = params.id as string
+  // "Update Return Quantities" (/jobwork/[id]/edit?mode=returns) restricts
+  // this same form to the Output Materials section only — Company, Vendor,
+  // Warehouse, dates, and Input Materials are locked read-only. Keeps a
+  // single edit form / save-edit codepath instead of duplicating it, while
+  // still giving users a clearly separate, narrower entry point for the
+  // common "just record what came back from the vendor" case.
+  const returnsOnly = searchParams.get('mode') === 'returns'
 
   const [pageLoading, setPageLoading] = useState(true)
   const [orderStatus, setOrderStatus] = useState('')
@@ -1150,11 +1163,15 @@ export default function EditJobWorkPage() {
       </div>
 
       <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-        <p className="text-sm font-semibold text-amber-800">Editing will recalculate stock</p>
+        <p className="text-sm font-semibold text-amber-800">
+          {returnsOnly ? 'Recording Output Materials will recalculate stock' : 'Editing will recalculate stock'}
+        </p>
         <p className="text-xs text-amber-700 mt-0.5">
-          Saving reverses the original stock movements for this order and re-applies them based on the updated items,
+          {returnsOnly
+            ? 'Company, Vendor, Warehouse, dates, and Input Materials are locked in this view — only Output Materials (Produced) can be added, changed, or removed. Qty Returned is calculated from matching Job Line IDs.'
+            : <>Saving reverses the original stock movements for this order and re-applies them based on the updated items,
           including each output row&apos;s Qty Produced and Received Date. Qty Returned is calculated from matching Job Line IDs.
-          {hasTransfers && ' This order has quantity transferred to another vendor — that link will be lost if you save changes here.'}
+          {hasTransfers && ' This order has quantity transferred to another vendor — that link will be lost if you save changes here.'}</>}
         </p>
       </div>
 
@@ -1165,7 +1182,7 @@ export default function EditJobWorkPage() {
           {/* Title bar */}
           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
             <h1 className="text-base font-semibold text-gray-900">
-              Edit Job Work Order
+              {returnsOnly ? 'Update Return Quantities' : 'Edit Job Work Order'}
               {referenceNumber && <span className="ml-2 font-mono text-sm text-gray-500">{referenceNumber}</span>}
             </h1>
             <div className="flex gap-2">
@@ -1175,7 +1192,7 @@ export default function EditJobWorkPage() {
               </button>
               <button type="submit" disabled={loading}
                 className="rounded bg-blue-600 px-5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                {loading ? 'Saving…' : 'Save Changes'}
+                {loading ? 'Saving…' : returnsOnly ? 'Save Return Quantities' : 'Save Changes'}
               </button>
             </div>
           </div>
@@ -1185,7 +1202,7 @@ export default function EditJobWorkPage() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
-                <select value={companyId} onChange={e => {
+                <select value={companyId} disabled={returnsOnly} onChange={e => {
                   const newCompanyId = e.target.value
                   setCompanyId(newCompanyId)
                   if (warehouseId && !warehouses.some(w => w.id === warehouseId && w.company_id === newCompanyId)) {
@@ -1198,34 +1215,34 @@ export default function EditJobWorkPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Vendor / Job Worker</label>
-                <select value={vendorId} onChange={e => setVendorId(e.target.value)} className={selectCls}>
+                <select value={vendorId} disabled={returnsOnly} onChange={e => setVendorId(e.target.value)} className={selectCls}>
                   <option value="">— Select —</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Warehouse</label>
-                <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className={selectCls}>
+                <select value={warehouseId} disabled={returnsOnly} onChange={e => setWarehouseId(e.target.value)} className={selectCls}>
                   <option value="">— Select —</option>
                   {(companyId ? warehouses.filter(w => w.company_id === companyId) : warehouses).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
-                <input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} required className={inputFieldCls} />
+                <input type="date" value={dispatchDate} disabled={returnsOnly} onChange={e => setDispatchDate(e.target.value)} required className={inputFieldCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Expected Return</label>
-                <input type="date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)} className={inputFieldCls} />
+                <input type="date" value={expectedReturnDate} disabled={returnsOnly} onChange={e => setExpectedReturnDate(e.target.value)} className={inputFieldCls} />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Process / Work Description</label>
-                <input type="text" value={workDescription} onChange={e => setWorkDescription(e.target.value)}
+                <input type="text" value={workDescription} disabled={returnsOnly} onChange={e => setWorkDescription(e.target.value)}
                   placeholder="e.g. Coil Slitting, Sheet Cutting" className={inputFieldCls} />
               </div>
               <div className="lg:col-span-1 sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Remarks</label>
-                <input type="text" value={notes} onChange={e => setNotes(e.target.value)} className={inputFieldCls} />
+                <input type="text" value={notes} disabled={returnsOnly} onChange={e => setNotes(e.target.value)} className={inputFieldCls} />
               </div>
             </div>
           </div>
@@ -1236,11 +1253,14 @@ export default function EditJobWorkPage() {
             <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-blue-100">
               <span className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
                 Input Materials <span className="font-normal normal-case text-blue-600">(Consumed — dispatched to vendor)</span>
+                {returnsOnly && <span className="ml-2 font-normal normal-case text-gray-400">(locked)</span>}
               </span>
-              <button type="button" onClick={() => setInputLines(p => [...p, emptyInput()])}
-                className="text-xs font-medium text-blue-700 hover:text-blue-900 border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100">
-                + Add Row
-              </button>
+              {!returnsOnly && (
+                <button type="button" onClick={() => setInputLines(p => [...p, emptyInput()])}
+                  className="text-xs font-medium text-blue-700 hover:text-blue-900 border border-blue-300 rounded px-2 py-0.5 hover:bg-blue-100">
+                  + Add Row
+                </button>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -1282,6 +1302,7 @@ export default function EditJobWorkPage() {
                       canRemove={inputLines.length > 1}
                       inputFieldCls={inputFieldCls}
                       selectCls={selectCls}
+                      disabled={returnsOnly}
                     />
                   ))}
                 </tbody>

@@ -217,8 +217,13 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
 
       <div className="flex gap-3 mt-6">
         {order.status !== 'cancelled' && (
+          <Link href={`/jobwork/${order.id}/edit?mode=returns`} className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700">
+            Update Return Quantities
+          </Link>
+        )}
+        {order.status !== 'cancelled' && (
           <Link href={`/jobwork/${order.id}/edit`} className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700">
-            Edit Order
+            Edit Job Work
           </Link>
         )}
         <Link href="/jobwork/new" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
