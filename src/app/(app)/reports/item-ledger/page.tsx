@@ -317,6 +317,8 @@ export default async function ItemStockLedgerPage({
     jobWorkReferenceType?: string | null
     jobWorkReferenceId?: string | null
     netQuantity?: number
+    warehouseDelta: number
+    vendorDelta: number
   }
   const consumed = new Set<number>()
   const mergeAtLaterIndex = new Map<number, { saleIdx: number; returnIdx: number }>()
@@ -395,8 +397,11 @@ export default async function ItemStockLedgerPage({
         jobWorkReferenceType: returnRow.reference_type,
         jobWorkReferenceId: returnRow.reference_id,
         vendorName: returnRow.vendorName,
-        balance: laterRow.balance,
-        vendorBalance: laterRow.vendorBalance,
+        // Warehouse nets to ~0 (RETURN_IN + SALE_OUT are exact opposites).
+        // Vendor side: only RETURN_IN is a vendor-movement type, so the
+        // sale-in-full closes out exactly that much of what was held there.
+        warehouseDelta: Number(returnRow.quantity) + Number(saleRow.quantity),
+        vendorDelta: -Number(returnRow.quantity),
         orphaned: false,
         duplicateCount: 1,
         notes: 'Direct from vendor — no warehouse movement',
@@ -426,8 +431,11 @@ export default async function ItemStockLedgerPage({
         // balance now sits — not both ends of the move; the full "from → to"
         // story stays in Notes.
         vendorName: toVendor,
-        balance: laterRow.balance,
-        vendorBalance: laterRow.vendorBalance,
+        // A vendor-to-vendor transfer doesn't change the combined at-any-
+        // vendor total (material was already counted when it first left the
+        // warehouse) — both legs' vendor contributions cancel exactly.
+        warehouseDelta: Number(outRow.quantity) + Number(inRow.quantity),
+        vendorDelta: -Number(outRow.quantity) - Number(inRow.quantity),
         orphaned: false,
         duplicateCount: 1,
         notes: `Transfer from ${fromVendor} to ${toVendor}`,
@@ -435,16 +443,20 @@ export default async function ItemStockLedgerPage({
       continue
     }
     if (consumed.has(i)) continue
-    displayRows.push(ledgerRows[i])
+    const soloRow = ledgerRows[i]
+    displayRows.push({
+      ...soloRow,
+      warehouseDelta: Number(soloRow.quantity),
+      vendorDelta: VENDOR_MOVEMENT_TYPES.includes(soloRow.entry_type) ? -Number(soloRow.quantity) : 0,
+    })
   }
 
   // Same-day merged events read more naturally with the vendor-to-vendor
   // move shown before the vendor-direct sale that happened after it — a
   // stable resort that only reorders same-date pairs of these two types;
   // every other row (including cross-date ordering) keeps its existing
-  // position. Balance/Vendor Balance stay each row's own already-computed
-  // snapshot (same tradeoff ItemLedgerRows already documents for column
-  // sorting) rather than being recomputed for this display order.
+  // position. Must run BEFORE the running-balance pass below, since that
+  // pass depends on this being the true final display order.
   const SAME_DAY_TYPE_PRIORITY: Record<string, number> = { JOB_WORK_TRANSFER: 0, VENDOR_DIRECT_SALE: 1 }
   displayRows.sort((a, b) => {
     if (a.entry_date !== b.entry_date) return 0
@@ -452,6 +464,22 @@ export default async function ItemStockLedgerPage({
     const pb = SAME_DAY_TYPE_PRIORITY[b.entry_type ?? ''] ?? 0.5
     return pa - pb
   })
+
+  // Recompute the running Balance / Balance at Vendor columns from scratch
+  // over the FINAL display order (post-merge, post same-day resort above)
+  // instead of reusing each row's raw-query-order snapshot — same-day event
+  // order can legitimately differ from the query's tiebreak order (a
+  // transfer completing before a same-day sale from the new vendor), and
+  // the running totals need to reflect the order actually shown to stay
+  // internally consistent (e.g. a transfer row should read the vendor total
+  // right after the transfer lands, not after a later-processed sale).
+  const finalRunning = { warehouse: openingBalance, vendor: vendorOpeningBalance }
+  for (const row of displayRows) {
+    finalRunning.warehouse += row.warehouseDelta
+    finalRunning.vendor += row.vendorDelta
+    row.balance = finalRunning.warehouse
+    row.vendorBalance = finalRunning.vendor
+  }
 
   const totalIn = entries
     .filter((e) => Number(e.quantity) > 0)
