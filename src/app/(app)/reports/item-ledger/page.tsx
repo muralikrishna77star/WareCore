@@ -6,13 +6,14 @@ import { hasuraQuery, hasuraRunSql } from '@/lib/hasura/server'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import {
   ITEM_STOCK_LEDGER_QUERY,
-  ITEM_STOCK_AT_VENDORS_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
   VENDOR_JOB_WORK_TRANSFERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_MATERIAL_SIZES_QUERY,
+  CURRENT_VENDOR_STOCK_QUERY,
+  SUPPLIER_NAMES_BY_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
@@ -137,7 +138,7 @@ export default async function ItemStockLedgerPage({
   let openingBalance = 0
   let vendorOpeningBalance = 0
   let entries: LedgerEntry[] = []
-  let vendorStock: { vendor_name: string; pending_quantity: number | string; unit: string }[] = []
+  let vendorStock: { vendor_name: string; pending_quantity: number; unit: string }[] = []
 
   if (selectedItem) {
     const baseConditions: Record<string, unknown>[] = [
@@ -178,14 +179,35 @@ export default async function ItemStockLedgerPage({
     vendorOpeningBalance = -Number(result.vendor_opening_agg?.aggregate?.sum?.quantity ?? 0)
     entries = result.entries ?? []
 
-    const selectedSizeLabel = selectedSizeId
-      ? allSizes.find((s) => s.id === selectedSizeId)?.size_label ?? null
-      : null
-    const vendorWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
-    if (selectedSizeLabel) vendorWhere.size_label = { _eq: selectedSizeLabel }
-    if (params.company) vendorWhere.company_id = { _eq: params.company }
-    const vendorResult = await hasuraQuery(ITEM_STOCK_AT_VENDORS_QUERY, { where: vendorWhere })
-    vendorStock = vendorResult.v_stock_at_vendors ?? []
+    const currentVendorStockWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
+    currentVendorStockWhere.material_size_id = selectedSizeId ? { _eq: selectedSizeId } : { _is_null: true }
+    if (params.company) currentVendorStockWhere.company_id = { _eq: params.company }
+    const currentVendorStockResult = await hasuraQuery(CURRENT_VENDOR_STOCK_QUERY, { where: currentVendorStockWhere })
+    const currentVendorStockRows: { vendor_id: string; current_vendor_stock: number | string }[] =
+      currentVendorStockResult.vw_current_vendor_stock ?? []
+
+    const vendorIds = Array.from(new Set(currentVendorStockRows.map((r) => r.vendor_id)))
+    const vendorNameById = new Map<string, string>()
+    if (vendorIds.length) {
+      const supplierResult = await hasuraQuery(SUPPLIER_NAMES_BY_IDS_QUERY, { ids: vendorIds })
+      for (const s of (supplierResult.suppliers ?? []) as { id: string; name: string }[]) {
+        vendorNameById.set(s.id, s.name)
+      }
+    }
+
+    // vw_current_vendor_stock is grouped by company too, so with no company
+    // filter applied the same vendor can appear once per company — sum them
+    // per vendor for display.
+    const vendorStockByVendor = new Map<string, number>()
+    for (const row of currentVendorStockRows) {
+      const name = vendorNameById.get(row.vendor_id) || 'Unknown Vendor'
+      vendorStockByVendor.set(name, (vendorStockByVendor.get(name) ?? 0) + Number(row.current_vendor_stock))
+    }
+    const itemUnit = selectedItem.material_types?.unit || selectedItem.unit || 'tons'
+    vendorStock = Array.from(vendorStockByVendor.entries())
+      .filter(([, qty]) => Math.abs(qty) > 0.0005)
+      .sort((a, b) => b[1] - a[1])
+      .map(([vendor_name, pending_quantity]) => ({ vendor_name, pending_quantity, unit: itemUnit }))
   }
 
   let orphanedRefs = new Set<string>()

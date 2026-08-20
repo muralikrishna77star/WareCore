@@ -1819,6 +1819,33 @@ export const ITEM_STOCK_AT_VENDORS_QUERY = `
   }
 `
 
+// Canonical, ledger-derived per-vendor "currently at vendor" balance (see
+// vw_current_vendor_stock, migrations 087/090) — used instead of
+// v_stock_at_vendors by the Item Stock Ledger report so its "At Vendor (Job
+// Work)" summary always agrees with the same page's own running Balance at
+// Vendor column, both computed from stock_ledger. v_stock_at_vendors is
+// derived independently from job_work_items and can drift from the ledger
+// (see REC-018); it's kept for the other pages that still read it.
+export const CURRENT_VENDOR_STOCK_QUERY = `
+  query GetCurrentVendorStock($where: vw_current_vendor_stock_bool_exp = {}) {
+    vw_current_vendor_stock(where: $where) {
+      vendor_id
+      material_type_id
+      material_size_id
+      current_vendor_stock
+    }
+  }
+`
+
+export const SUPPLIER_NAMES_BY_IDS_QUERY = `
+  query GetSupplierNamesByIds($ids: [uuid!]!) {
+    suppliers(where: {id: {_in: $ids}}) {
+      id
+      name
+    }
+  }
+`
+
 // ─── Purchase Line Movements Report ─────────────────────────────────────────
 
 export const PURCHASE_LINE_LEDGER_QUERY = `
