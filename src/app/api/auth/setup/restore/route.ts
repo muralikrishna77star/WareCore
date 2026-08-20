@@ -43,14 +43,15 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const result = await restoreFromBackup(data, {
-    tables: Object.keys(data),
-    truncateFirst: false,
-  })
+  // No `tables` filter — restore everything the backup has. Order is always
+  // FK-dependency-safe regardless (see restoreOrderFor()'s comment); a
+  // first-run desktop restore is exactly the case that most needs that,
+  // since there's no existing data to make ordering forgiving.
+  const result = await restoreFromBackup(data, { truncateFirst: false })
 
   if (!result.success) {
     return NextResponse.json({ error: result.message }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true, restored: result.restored })
+  return NextResponse.json({ success: true, restored: result.restored, message: result.message, tableResults: result.tableResults })
 }

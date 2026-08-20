@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       success: result.success,
       message: result.message,
       restored: result.restored,
+      tableResults: result.tableResults,
     })
   } catch (error) {
     console.error('Error in POST /api/backup/restore:', error)

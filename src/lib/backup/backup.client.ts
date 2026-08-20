@@ -2,7 +2,7 @@
  * Client-side backup utilities for downloading and managing backups
  */
 
-import type { BackupData, BackupMetadata, BackupRow } from './backup.service'
+import type { BackupData, BackupMetadata, BackupRow, RestoreTableResult } from './backup.service'
 
 export interface DownloadOptions {
   filename?: string
@@ -196,6 +196,13 @@ export async function exportTableToJSON(
 /**
  * Restore from backup
  */
+export interface RestoreResponse {
+  success: boolean
+  message: string
+  restored: number
+  tableResults: Record<string, RestoreTableResult>
+}
+
 export async function restoreBackup(
   backupData: BackupData,
   options?: {
@@ -203,7 +210,7 @@ export async function restoreBackup(
     truncateFirst?: boolean
     pointInTime?: string
   }
-): Promise<void> {
+): Promise<RestoreResponse> {
   try {
     const response = await fetch('/api/backup/restore', {
       method: 'POST',

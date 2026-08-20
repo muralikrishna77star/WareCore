@@ -27,8 +27,32 @@ function copy(src, destRelative, required = true) {
   cpSync(src, join(distDir, destRelative), { recursive: true })
 }
 
-rmSync(distDir, { recursive: true, force: true })
 mkdirSync(distDir, { recursive: true })
+
+// Clear out only the specific build-artifact paths this script itself
+// manages — NEVER the whole distDir wholesale. dist/warecore-data/ is the
+// desktop app's live embedded-Postgres data directory (created by
+// scripts/desktop/start.mjs on first run, not by this script) and sits
+// right next to these artifacts; a blanket rmSync(distDir) here deleted a
+// real running install's entire database with no warning, mid-session,
+// the first time this script was re-run to pick up a code change while
+// the app had actual data in it. Every path below is one this script is
+// about to recreate anyway, so removing just these first is equivalent
+// for staging purposes and leaves everything else in dist/ (warecore-data,
+// any user-added files) alone.
+const managedPaths = [
+  'node-runtime',
+  '.next',
+  'supabase',
+  'scripts',
+  'package.json',
+  'node_modules',
+  '.env.desktop',
+  'Start WareCore.bat',
+]
+for (const p of managedPaths) {
+  rmSync(join(distDir, p), { recursive: true, force: true })
+}
 
 copy(join(__dirname, 'node-runtime'), 'node-runtime')
 copy(join(appDir, '.next', 'standalone'), '.next/standalone')

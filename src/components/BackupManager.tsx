@@ -132,8 +132,21 @@ export function BackupManager() {
     setRestoreLoading(true)
     showMsg('Restoring data — do not close this page…', 'info')
     try {
-      await restoreBackup(restoreFileData.data, { tables: restoreTables, truncateFirst })
-      showMsg(`Restore complete! ${restoreTables.length} tables restored.`, 'success')
+      const result = await restoreBackup(restoreFileData.data, { tables: restoreTables, truncateFirst })
+      const failedTables = Object.entries(result.tableResults).filter(([, r]) => r.failed > 0)
+      if (failedTables.length > 0) {
+        // Surfaced, not swallowed: a restore can partially fail per-table
+        // (e.g. rows referencing something that doesn't exist in this
+        // database) without the overall call throwing — silently reporting
+        // "success" in that case is exactly how a large chunk of restored
+        // data went missing without anyone noticing.
+        const detail = failedTables
+          .map(([table, r]) => `${table}: ${r.failed}/${r.attempted} row(s) failed`)
+          .join('; ')
+        showMsg(`Restore finished with problems — ${detail}. Check the server log for details.`, 'error')
+      } else {
+        showMsg(`Restore complete! ${restoreTables.length} tables restored (${result.restored} rows).`, 'success')
+      }
       setRestoreFile(null)
       setRestoreFileData(null)
       setRestoreTables([])

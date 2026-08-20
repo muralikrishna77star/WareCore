@@ -2,26 +2,67 @@
 
 import { hasuraRunSql } from '@/lib/hasura/server'
 
-const TABLES = [
+// Every table that actually exists in the schema, in FK-dependency order (a
+// parent table always appears before anything that references it — verified
+// against a full information_schema foreign-key graph, not hand-guessed).
+// This list had drifted badly out of date: it still listed 'item_groups'
+// (dropped by migration 022, silently producing an empty backup section for
+// years) and never picked up job_work_output_items, job_work_transfers +
+// their cancellation tables, purchase/dispatch cancellations, purchase
+// import, the Data Integrity module (reconciliation_*/repair_*), custom
+// roles, financial_entries, or the AI Copilot conversation history — a
+// "full backup" was silently missing roughly half the schema's tables.
+// schema_migrations is deliberately excluded: it's migration-runner
+// bookkeeping, not business data, and restoring rows into it on a desktop
+// install could desync it from which migrations that install has actually
+// run.
+export const TABLES = [
   'companies',
   'warehouses',
+  'user_profiles',
+  'custom_roles',
+  'role_permissions',
   'suppliers',
   'customers',
   'material_types',
   'material_sizes',
-  'item_groups',
   'item_master',
-  'user_profiles',
   'tax_rates',
-  'purchase_bills',
-  'purchase_bill_items',
-  'stock_ledger',
-  'transfers',
-  'transfer_items',
+  'ai_conversations',
+  'ai_messages',
+  'backup_history',
+  'backup_logs',
   'job_work_orders',
   'job_work_items',
+  'job_work_output_items',
+  'job_work_cancellations',
+  'job_work_cancellation_items',
+  'job_work_cancellation_output_items',
+  'job_work_transfers',
+  'job_work_transfer_items',
+  'job_work_transfer_cancellations',
+  'job_work_transfer_cancellation_items',
   'dispatch_orders',
   'dispatch_items',
+  'dispatch_cancellations',
+  'dispatch_cancellation_items',
+  'purchase_bills',
+  'purchase_bill_items',
+  'purchase_cancellations',
+  'purchase_cancellation_items',
+  'purchase_import_batches',
+  'purchase_import_rows',
+  'financial_entries',
+  'transfers',
+  'transfer_items',
+  'stock_ledger',
+  'reconciliation_rules',
+  'reconciliation_runs',
+  'reconciliation_exceptions',
+  'reconciliation_exception_rows',
+  'reconciliation_settings',
+  'repair_batches',
+  'repair_audit_rows',
 ]
 
 export interface BackupMetadata {
@@ -44,6 +85,33 @@ export type BackupRow = Record<string, BackupRowValue>
 
 export interface BackupData {
   [table: string]: BackupRow[]
+}
+
+// Picks a safe restore order for whatever tables should be restored:
+// TABLES' own FK-dependency order, filtered down to just the ones wanted —
+// never the order of the backup file's own keys, and never the order a
+// caller-supplied `tables` array happens to list them in. `subset`, when
+// given, is purely a filter (which tables to include) — restoreFromBackup
+// takes it as `options.tables` and must NOT use its array order directly,
+// since that's exactly the bug this function exists to route around:
+// - A JSON object's key order should already match TABLES (see
+//   createBackup/getAllTableData, which build it in that order), but that
+//   assumption silently breaks the moment it doesn't hold (an older backup
+//   file, a hand-edited one, a future TABLES reordering).
+// - BackupManager's restore UI lets an admin pick a subset of tables via
+//   checkboxes and sends them in click order — no relation to dependency
+//   order at all.
+// Either way, restoring FK-dependent tables out of order makes every one
+// of their row inserts fail at once, with no obvious cause from the
+// resulting error. Unrecognized names (e.g. a table since renamed or
+// removed) are appended at the end rather than dropped, so nothing
+// silently vanishes even though their relative order isn't guaranteed safe.
+export function restoreOrderFor(data: BackupData, subset?: string[]): string[] {
+  const present = new Set(Object.keys(data))
+  const wanted = subset ? new Set(subset) : present
+  const known = TABLES.filter((t) => present.has(t) && wanted.has(t))
+  const unknown = Object.keys(data).filter((t) => wanted.has(t) && !TABLES.includes(t))
+  return [...known, ...unknown]
 }
 
 export interface RestoreOptions {
@@ -199,50 +267,110 @@ export async function deleteBackup(backupId: string): Promise<void> {
   )
 }
 
+function rowsToInsertSQL(table: string, rows: BackupRow[]): string {
+  const cols = Object.keys(rows[0]).map(c => `"${c}"`).join(', ')
+  const vals = rows.map(row =>
+    '(' + Object.values(row).map(v => {
+      // Hasura's run_sql endpoint (used for backups taken from the
+      // online/web deployment) returns SQL NULL as the literal string
+      // "NULL", not JSON null — the local desktop executor returns a
+      // real null for the same case. Treat both the same on restore.
+      if (v === null || v === undefined || v === 'NULL') return 'NULL'
+      if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
+      if (typeof v === 'number') return v
+      if (Array.isArray(v)) return `ARRAY[${v.map(x => `'${esc(String(x))}'`).join(', ')}]`
+      return `'${esc(String(v))}'`
+    }).join(', ') + ')'
+  ).join(', ')
+  return `INSERT INTO ${table} (${cols}) VALUES ${vals} ON CONFLICT DO NOTHING`
+}
+
+export interface RestoreTableResult {
+  attempted: number
+  restored: number
+  failed: number
+  sampleErrors: string[]
+}
+
+export interface RestoreResult {
+  success: boolean
+  message: string
+  restored: number
+  tableResults: Record<string, RestoreTableResult>
+}
+
 export async function restoreFromBackup(
   backupData: BackupData,
   options: RestoreOptions = {}
-): Promise<{ success: boolean; message: string; restored: number }> {
-  const tablesToRestore = options.tables || Object.keys(backupData)
+): Promise<RestoreResult> {
+  // options.tables (when given) selects WHICH tables to restore — never
+  // dictates the order they're restored in. See restoreOrderFor()'s comment.
+  const tablesToRestore = restoreOrderFor(backupData, options.tables)
   let restoredCount = 0
+  const tableResults: Record<string, RestoreTableResult> = {}
 
   for (const table of tablesToRestore) {
     const data = backupData[table]
     if (!data?.length) continue
 
-    try {
-      if (options.truncateFirst) {
-        await runSQL(`TRUNCATE TABLE ${table} CASCADE`)
-      }
+    const result: RestoreTableResult = { attempted: data.length, restored: 0, failed: 0, sampleErrors: [] }
+    tableResults[table] = result
 
-      const batchSize = 500
-      for (let i = 0; i < data.length; i += batchSize) {
-        const batch = data.slice(i, i + batchSize)
-        const cols = Object.keys(batch[0]).map(c => `"${c}"`).join(', ')
-        const vals = batch.map(row =>
-          '(' + Object.values(row).map(v => {
-            // Hasura's run_sql endpoint (used for backups taken from the
-            // online/web deployment) returns SQL NULL as the literal string
-            // "NULL", not JSON null — the local desktop executor returns a
-            // real null for the same case. Treat both the same on restore.
-            if (v === null || v === undefined || v === 'NULL') return 'NULL'
-            if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE'
-            if (typeof v === 'number') return v
-            if (Array.isArray(v)) return `ARRAY[${v.map(x => `'${esc(String(x))}'`).join(', ')}]`
-            return `'${esc(String(v))}'`
-          }).join(', ') + ')'
-        ).join(', ')
-        await runSQL(
-          `INSERT INTO ${table} (${cols}) VALUES ${vals} ON CONFLICT DO NOTHING`
-        )
-        restoredCount += batch.length
+    if (options.truncateFirst) {
+      try {
+        await runSQL(`TRUNCATE TABLE ${table} CASCADE`)
+      } catch (err) {
+        result.failed = data.length
+        result.sampleErrors.push(err instanceof Error ? err.message : String(err))
+        console.error(`Restore: error truncating ${table}:`, err)
+        continue
       }
-    } catch (err) {
-      console.error(`Restore: error processing ${table}:`, err)
+    }
+
+    const batchSize = 500
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize)
+      try {
+        await runSQL(rowsToInsertSQL(table, batch))
+        result.restored += batch.length
+        restoredCount += batch.length
+      } catch {
+        // One bad row (a stale/orphaned FK reference, a constraint the
+        // source data no longer satisfies) makes Postgres reject the WHOLE
+        // multi-row INSERT — silently dropping up to `batchSize`
+        // otherwise-good rows along with it. Fall back to inserting this
+        // batch one row at a time so only the actually-bad row(s) are
+        // lost. Found via a desktop restore where a handful of orphaned
+        // material_type_id references in stock_ledger/dispatch_items/
+        // job_work_items silently zeroed out every row in every batch that
+        // happened to contain one — thousands of otherwise-good rows gone,
+        // with only a single swallowed console.error to show for it.
+        for (const row of batch) {
+          try {
+            await runSQL(rowsToInsertSQL(table, [row]))
+            result.restored += 1
+            restoredCount += 1
+          } catch (rowErr) {
+            result.failed += 1
+            if (result.sampleErrors.length < 5) {
+              result.sampleErrors.push(rowErr instanceof Error ? rowErr.message : String(rowErr))
+            }
+          }
+        }
+      }
+    }
+
+    if (result.failed > 0) {
+      console.error(`Restore: ${table} — ${result.restored}/${result.attempted} restored, ${result.failed} row(s) failed:`, result.sampleErrors)
     }
   }
 
-  return { success: restoredCount > 0, message: `Restored ${restoredCount} records`, restored: restoredCount }
+  const totalFailed = Object.values(tableResults).reduce((sum, r) => sum + r.failed, 0)
+  const message = totalFailed > 0
+    ? `Restored ${restoredCount} record(s); ${totalFailed} row(s) across ${Object.values(tableResults).filter(r => r.failed > 0).length} table(s) failed — see tableResults for details`
+    : `Restored ${restoredCount} record(s)`
+
+  return { success: restoredCount > 0, message, restored: restoredCount, tableResults }
 }
 
 export async function getPointInTimeBackup(

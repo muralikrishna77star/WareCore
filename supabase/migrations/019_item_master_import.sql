@@ -13,9 +13,15 @@
 
 BEGIN;
 
--- Step 0: Ensure OTH material type exists (other types CR/GA/GI/HRPO already seeded)
-INSERT INTO material_types (name, unit, description)
-VALUES ('OTH', 'tons', 'Other Materials and Miscellaneous Items')
+-- Step 0: Ensure OTH material type exists (other types CR/GA/GI/HRPO already seeded).
+-- Explicit id (matching production's actual value, and the same one
+-- migration 023 uses later for the same description) so a fresh database
+-- doesn't end up with two different "Other Materials..." rows racing on
+-- different ids depending on which migration's insert wins — see 023's
+-- comment for the full explanation and the backup/restore breakage this
+-- caused. Has no effect on any database this migration already ran on.
+INSERT INTO material_types (id, name, unit, description)
+VALUES ('40215bef-0196-4451-891a-ba9cc6cab35e', 'OTH', 'tons', 'Other Materials and Miscellaneous Items')
 ON CONFLICT (name) DO NOTHING;
 
 -- Step 1: Clear master data (order matters — item_master references both)
