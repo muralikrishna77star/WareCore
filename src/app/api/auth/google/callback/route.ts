@@ -5,11 +5,10 @@ import {
   getGoogleRedirectUri,
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
+  GOOGLE_DESKTOP_CLIENT_ID,
+  GOOGLE_DESKTOP_CLIENT_SECRET,
 } from '@/lib/env'
 import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
-
-const CLIENT_ID = GOOGLE_CLIENT_ID
-const CLIENT_SECRET = GOOGLE_CLIENT_SECRET
 
 const FIND_USER_BY_EMAIL = `
   query FindUserByEmail($email: String!) {
@@ -34,14 +33,19 @@ interface GoogleUserInfo {
   verified_email: boolean
 }
 
-async function exchangeCodeForTokens(code: string, redirectUri: string): Promise<GoogleTokenResponse | null> {
+async function exchangeCodeForTokens(
+  code: string,
+  redirectUri: string,
+  clientId: string,
+  clientSecret: string
+): Promise<GoogleTokenResponse | null> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: CLIENT_ID.trim(),
-      client_secret: CLIENT_SECRET.trim(),
+      client_id: clientId.trim(),
+      client_secret: clientSecret.trim(),
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
@@ -90,7 +94,8 @@ function redirectWithError(error: string, request?: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (process.env.LOCAL_MODE === 'true') {
+  const isDesktop = process.env.LOCAL_MODE === 'true'
+  if (isDesktop && !GOOGLE_DESKTOP_CLIENT_ID) {
     return NextResponse.redirect(`${request.nextUrl.origin}/login?error=google_unavailable_offline`)
   }
 
@@ -114,8 +119,12 @@ export async function GET(request: NextRequest) {
     return redirectWithError('no_code', request)
   }
 
+  // getGoogleRedirectUri() already resolves to this request's own origin
+  // under LOCAL_MODE (see its comment in lib/env.ts).
   const redirectUri = getGoogleRedirectUri(request)
-  const tokens = await exchangeCodeForTokens(code, redirectUri)
+  const clientId = isDesktop ? GOOGLE_DESKTOP_CLIENT_ID : GOOGLE_CLIENT_ID
+  const clientSecret = isDesktop ? GOOGLE_DESKTOP_CLIENT_SECRET : GOOGLE_CLIENT_SECRET
+  const tokens = await exchangeCodeForTokens(code, redirectUri, clientId, clientSecret)
   if (!tokens?.access_token) {
     const googleErr = encodeURIComponent((tokens as { _google_error?: string })?._google_error || 'unknown')
     return NextResponse.redirect(getAppRedirectUrl(`/login?error=token_failed&detail=${googleErr}`, request))

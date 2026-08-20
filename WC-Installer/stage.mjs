@@ -8,7 +8,7 @@
 // WC-Installer/node-runtime/ (see WC-Installer/README.md) — this script does
 // not download it, to avoid fetching binaries as part of a build script.
 
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -51,6 +51,36 @@ copy(join(appDir, 'node_modules', 'pg-protocol'), 'node_modules/pg-protocol')
 copy(join(appDir, 'node_modules', 'pg-types'), 'node_modules/pg-types')
 copy(join(appDir, 'node_modules', 'pgpass'), 'node_modules/pgpass')
 copy(join(appDir, 'node_modules', 'bcryptjs'), 'node_modules/bcryptjs')
+
+// Google Sign-In in the desktop build needs its own OAuth client secret
+// (never the web app's — see GOOGLE_DESKTOP_CLIENT_ID's comment in
+// src/lib/env.ts for why), shipped as a plain file inside the distributable
+// since there's no .env.local on an end user's machine. Read from the
+// staging shell's own env first (e.g. a CI secret), falling back to this
+// repo's .env.local for a local `node WC-Installer/stage.mjs` run. Omitted
+// entirely — not written as an empty file — when neither has it, so
+// start.mjs's "file present" check is the single source of truth for
+// whether this particular build carries the desktop OAuth client.
+function readEnvLocalValue(key) {
+  const envLocalPath = join(appDir, '.env.local')
+  if (!existsSync(envLocalPath)) return ''
+  const line = readFileSync(envLocalPath, 'utf-8')
+    .split('\n')
+    .find((l) => l.startsWith(`${key}=`))
+  return line ? line.slice(key.length + 1).trim() : ''
+}
+
+const googleDesktopClientId = process.env.GOOGLE_DESKTOP_CLIENT_ID || readEnvLocalValue('GOOGLE_DESKTOP_CLIENT_ID')
+const googleDesktopClientSecret = process.env.GOOGLE_DESKTOP_CLIENT_SECRET || readEnvLocalValue('GOOGLE_DESKTOP_CLIENT_SECRET')
+if (googleDesktopClientId && googleDesktopClientSecret) {
+  writeFileSync(
+    join(distDir, '.env.desktop'),
+    `GOOGLE_DESKTOP_CLIENT_ID=${googleDesktopClientId}\nGOOGLE_DESKTOP_CLIENT_SECRET=${googleDesktopClientSecret}\n`
+  )
+  console.log('Included desktop Google Sign-In credentials.')
+} else {
+  console.log('No GOOGLE_DESKTOP_CLIENT_ID/SECRET found — this build will not offer Google Sign-In (password login still works).')
+}
 
 // Launches via the signed node-runtime\node.exe directly — no new unsigned
 // executable is ever created or run, so this isn't blocked by endpoint

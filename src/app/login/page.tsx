@@ -22,11 +22,15 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDesktop, setIsDesktop] = useState(false)
+  const [desktopGoogleAvailable, setDesktopGoogleAvailable] = useState(false)
 
   useEffect(() => {
     fetch('/api/desktop/status')
       .then((res) => res.json())
-      .then((data) => setIsDesktop(!!data.isDesktop))
+      .then((data) => {
+        setIsDesktop(!!data.isDesktop)
+        setDesktopGoogleAvailable(!!data.googleOAuthAvailable)
+      })
       .catch(() => {})
   }, [])
 
@@ -141,7 +145,7 @@ function LoginForm() {
             </div>
           </form>
 
-          {process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true' && !isDesktop && (
+          {(isDesktop ? desktopGoogleAvailable : process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true') && (
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

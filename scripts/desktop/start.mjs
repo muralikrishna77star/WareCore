@@ -32,6 +32,23 @@ const pgDatabase = 'warecore'
 const standaloneServer = join(appDir, '.next', 'standalone', 'server.js')
 const migrationsDir = join(appDir, 'supabase', 'migrations')
 
+// Google Sign-In's desktop OAuth client secret (see WC-Installer/stage.mjs,
+// which writes this file only when the build was staged with one — most
+// distributed builds won't have it, and that's fine: the login page falls
+// back to password-only when GOOGLE_DESKTOP_CLIENT_ID isn't set).
+function loadDesktopEnvFile() {
+  const path = join(appDir, '.env.desktop')
+  if (!existsSync(path)) return {}
+  const vars = {}
+  for (const line of readFileSync(path, 'utf-8').split('\n')) {
+    const eq = line.indexOf('=')
+    if (eq === -1) continue
+    vars[line.slice(0, eq).trim()] = line.slice(eq + 1).trim()
+  }
+  return vars
+}
+const desktopEnv = loadDesktopEnvFile()
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -251,6 +268,7 @@ async function main() {
     cwd: dirname(standaloneServer),
     env: {
       ...process.env,
+      ...desktopEnv,
       DATABASE_URL: connectionString,
       LOCAL_MODE: 'true',
       JWT_SECRET: getOrCreateJwtSecret(),
