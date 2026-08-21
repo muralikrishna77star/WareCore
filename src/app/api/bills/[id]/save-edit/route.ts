@@ -13,6 +13,7 @@ interface NewBillItem {
   material_size_id: string | null
   size_label: string | null
   quantity: number
+  received_quantity: number | null
   rate: number | null
   amount: number | null
   notes: string | null

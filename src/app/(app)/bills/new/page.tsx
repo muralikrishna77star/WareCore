@@ -30,6 +30,7 @@ type LineItem = {
   material_size_id: string
   size_label: string
   quantity: string
+  received_quantity: string
   rate: string
   amount: string
   notes: string
@@ -48,7 +49,7 @@ const emptyLine = (): LineItem => ({
   rowId: Math.random().toString(36).slice(2, 8),
   purchase_line_id: '', item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
-  quantity: '', rate: '', amount: '', notes: '',
+  quantity: '', received_quantity: '', rate: '', amount: '', notes: '',
   tax_rate_id: '', taxable_value: 0,
   cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0,
   tds_rate: 0, tds_amount: 0, total_with_tax: 0,
@@ -454,6 +455,14 @@ export default function NewBillPage() {
         }
       }
 
+      if (field === 'quantity') {
+        // Received Qty tracks Quantity until the user explicitly diverges it
+        // (e.g. weighbridge/underbilling variance) — once they've typed a
+        // different value, stop overwriting it here.
+        if (updated[index].received_quantity === prev[index].quantity) {
+          updated[index].received_quantity = value
+        }
+      }
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
@@ -666,7 +675,9 @@ export default function NewBillPage() {
         purchase_line_id: l.purchase_line_id || null, item_name: l.item_name || null,
         item_master_id: l.item_master_id || null, material_type_id: l.material_type_id || null,
         material_size_id: l.material_size_id || null, size_label: l.size_label || null,
-        quantity: parseFloat(l.quantity) || null, rate: l.rate ? parseFloat(l.rate) : null,
+        quantity: parseFloat(l.quantity) || null,
+        received_quantity: l.received_quantity ? parseFloat(l.received_quantity) : (parseFloat(l.quantity) || null),
+        rate: l.rate ? parseFloat(l.rate) : null,
         amount: l.amount ? parseFloat(l.amount) : null, notes: l.notes || null,
         tax_rate_id: l.tax_rate_id || null, taxable_value: l.taxable_value || null,
         cgst_rate: l.cgst_rate || null, cgst_amount: l.cgst_amount || null,
@@ -925,6 +936,7 @@ export default function NewBillPage() {
                     </button>
                   </th>
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500">Qty</th>
+                  <th className="pb-3 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap" title="Actual weighbridge-received quantity, if different from invoiced Qty">Recv. Qty</th>
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500">Rate (₹)</th>
                   {showTaxColumns && <th className="pb-3 pr-2 text-xs font-medium text-gray-500">Taxable (₹)</th>}
                   <th className="pb-3 pr-2 text-xs font-medium text-gray-500 whitespace-nowrap">
@@ -1036,6 +1048,16 @@ export default function NewBillPage() {
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" required placeholder="0.000"
                           className="block w-20 rounded border border-gray-300 px-2 py-2 text-sm h-9 focus:border-blue-500 focus:outline-none" />
+                      </td>
+                      {/* Received Qty */}
+                      <td className="pr-1 py-2">
+                        <input type="number" value={line.received_quantity} onChange={(e) => updateLine(i, 'received_quantity', e.target.value)}
+                          step="0.001" min="0" placeholder={line.quantity || '0.000'}
+                          title="Actual weighbridge-received quantity, if different from invoiced Qty"
+                          className={`block w-20 rounded border px-2 py-2 text-sm h-9 focus:outline-none ${
+                            line.received_quantity && line.received_quantity !== line.quantity
+                              ? 'border-amber-400 bg-amber-50' : 'border-gray-300 focus:border-blue-500'
+                          }`} />
                       </td>
                       {/* Rate */}
                       <td className="pr-1 py-2">

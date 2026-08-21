@@ -26,8 +26,13 @@ export async function GET(request: NextRequest) {
 
     // ── Category totals: live source table vs stock_ledger, same window ──────
     const totalsSql = `
+      -- Sums purchase_bill_items.received_quantity (what actually drives
+      -- PURCHASE_IN, per migration 105), not purchase_bills.total_quantity
+      -- (the invoiced figure, maintained separately for billing) — those two
+      -- can now legitimately differ by a small weighbridge/underbilling
+      -- variance without that showing up here as a false mismatch.
       SELECT 'purchases' AS category,
-        (SELECT COALESCE(SUM(total_quantity), 0) FROM purchase_bills WHERE status = 'active' AND bill_date BETWEEN '${from}' AND '${to}') AS source_qty,
+        (SELECT COALESCE(SUM(COALESCE(pbi.received_quantity, pbi.quantity)), 0) FROM purchase_bill_items pbi JOIN purchase_bills pb ON pb.id = pbi.bill_id WHERE pb.status = 'active' AND pb.bill_date BETWEEN '${from}' AND '${to}') AS source_qty,
         (SELECT COALESCE(SUM(quantity), 0) FROM stock_ledger WHERE entry_type = 'PURCHASE_IN' AND entry_date BETWEEN '${from}' AND '${to}') AS ledger_qty
       UNION ALL
       SELECT 'sales',

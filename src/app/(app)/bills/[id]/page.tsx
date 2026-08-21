@@ -18,6 +18,7 @@ interface BillLineItem {
   item_master?: { item_code?: string | null } | null
   size_label?: string | null
   quantity: number | string
+  received_quantity?: number | string | null
   rate?: number | string | null
   amount?: number | string | null
   unit?: string | null
@@ -207,6 +208,11 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-900 text-right">
                     {Number(item.quantity).toFixed(3)}
                     <span className="ml-1 text-xs text-gray-400">{item.unit ?? 'MT'}</span>
+                    {item.received_quantity != null && Number(item.received_quantity) !== Number(item.quantity) && (
+                      <span className="block text-xs text-amber-600" title="Actual weighbridge-received quantity">
+                        Recv. {Number(item.received_quantity).toFixed(3)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-[0.9375rem] text-gray-900 text-right">
                     {item.rate ? formatCurrency(Number(item.rate)) : '—'}

@@ -34,6 +34,7 @@ type LineItem = {
   material_size_id: string
   size_label: string
   quantity: string
+  received_quantity: string
   rate: string
   amount: string
   notes: string
@@ -57,6 +58,7 @@ interface EditBillItemRow {
   material_size_id: string | null
   size_label: string | null
   quantity: number | string | null
+  received_quantity: number | string | null
   rate: number | string | null
   amount: number | string | null
   notes: string | null
@@ -103,7 +105,7 @@ const emptyLine = (): LineItem => ({
   dbItemId: '', isLocked: false,
   purchase_line_id: '', item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
-  quantity: '', rate: '', amount: '', notes: '',
+  quantity: '', received_quantity: '', rate: '', amount: '', notes: '',
   tax_rate_id: '', taxable_value: 0,
   cgst_rate: 0, cgst_amount: 0, sgst_rate: 0, sgst_amount: 0,
   tds_rate: 0, tds_amount: 0, total_with_tax: 0,
@@ -353,6 +355,7 @@ export default function EditBillPage() {
           material_size_id: item.material_size_id ?? '',
           size_label: item.size_label ?? '',
           quantity: item.quantity != null ? String(item.quantity) : '',
+          received_quantity: item.received_quantity != null ? String(item.received_quantity) : (item.quantity != null ? String(item.quantity) : ''),
           rate: item.rate != null ? String(item.rate) : '',
           amount: item.amount != null ? String(item.amount) : '',
           notes: item.notes ?? '',
@@ -460,6 +463,11 @@ export default function EditBillPage() {
         updated[index].size_label = sz?.size_label || ''
       }
 
+      if (field === 'quantity') {
+        if (updated[index].received_quantity === prev[index].quantity) {
+          updated[index].received_quantity = value
+        }
+      }
       if (field === 'quantity' || field === 'rate') {
         const qty = parseFloat(field === 'quantity' ? value : updated[index].quantity) || 0
         const rate = parseFloat(field === 'rate' ? value : updated[index].rate) || 0
@@ -698,6 +706,7 @@ export default function EditBillPage() {
         material_size_id: l.material_size_id || null,
         size_label: l.size_label || null,
         quantity: parseFloat(l.quantity),
+        received_quantity: l.received_quantity ? parseFloat(l.received_quantity) : parseFloat(l.quantity),
         rate: l.rate ? parseFloat(l.rate) : null,
         amount: l.amount ? parseFloat(l.amount) : null,
         notes: l.notes || null,
@@ -748,7 +757,9 @@ export default function EditBillPage() {
         purchase_line_id: l.purchase_line_id || null, item_name: l.item_name || null,
         item_master_id: l.item_master_id || null, material_type_id: l.material_type_id || null,
         material_size_id: l.material_size_id || null, size_label: l.size_label || null,
-        quantity: parseFloat(l.quantity), rate: l.rate ? parseFloat(l.rate) : null,
+        quantity: parseFloat(l.quantity),
+        received_quantity: l.received_quantity ? parseFloat(l.received_quantity) : parseFloat(l.quantity),
+        rate: l.rate ? parseFloat(l.rate) : null,
         amount: l.amount ? parseFloat(l.amount) : null, notes: l.notes || null,
         tax_rate_id: l.tax_rate_id || null, taxable_value: l.taxable_value || null,
         cgst_rate: l.cgst_rate || null, cgst_amount: l.cgst_amount || null,
@@ -945,6 +956,7 @@ export default function EditBillPage() {
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Item Code</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Size</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Qty</th>
+                  <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500 whitespace-nowrap" title="Actual weighbridge-received quantity, if different from invoiced Qty">Recv. Qty</th>
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Rate (₹)</th>
                   {showTaxColumns && <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Taxable (₹)</th>}
                   <th className="pb-2 pr-3 text-[0.6875rem] font-medium text-gray-500">Tax Rate</th>
@@ -1079,6 +1091,16 @@ export default function EditBillPage() {
                         <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
                           step="0.001" min="0" placeholder="0.000"
                           className="block w-20 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
+                      </td>
+                      {/* Received Qty */}
+                      <td className="pr-2 py-0">
+                        <input type="number" value={line.received_quantity} onChange={(e) => updateLine(i, 'received_quantity', e.target.value)}
+                          step="0.001" min="0" placeholder={line.quantity || '0.000'}
+                          title="Actual weighbridge-received quantity, if different from invoiced Qty"
+                          className={`block w-20 rounded border px-2 py-px text-[0.8125rem] h-7 focus:outline-none ${
+                            line.received_quantity && line.received_quantity !== line.quantity
+                              ? 'border-amber-400 bg-amber-50' : 'border-gray-300 focus:border-blue-500'
+                          }`} />
                       </td>
                       {/* Rate */}
                       <td className="pr-2 py-0">

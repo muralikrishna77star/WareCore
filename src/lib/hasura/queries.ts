@@ -531,7 +531,7 @@ export const PURCHASE_BILL_BY_ID_QUERY = `
 export const PURCHASE_BILL_ITEMS_QUERY = `
   query GetPurchaseBillItems($bill_id: uuid!) {
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
-      id bill_id quantity rate amount notes size_label item_name purchase_line_id
+      id bill_id quantity received_quantity rate amount notes size_label item_name purchase_line_id
       material_types { description }
       item_master { item_code }
     }
@@ -564,7 +564,7 @@ export const PURCHASE_BILL_FOR_EDIT_QUERY = `
         id purchase_line_id
         item_master_id item_name
         material_type_id material_size_id size_label
-        quantity rate amount notes
+        quantity received_quantity rate amount notes
         tax_rate_id taxable_value
         cgst_rate cgst_amount sgst_rate sgst_amount
         tds_rate tds_amount total_with_tax
