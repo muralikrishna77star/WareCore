@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, Search } from 'lucide-react'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { useTableSort } from '@/lib/useTableSort'
@@ -63,6 +63,19 @@ type ItemReconcileResult = {
   txnCount: number
   valid: boolean
   reasons: string[]
+}
+type DiagnosisFinding = {
+  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive'
+  title: string
+  detail: string
+}
+type DiagnosisResult = {
+  itemCode: string
+  itemName: string
+  closingBalance: number
+  vendorClosingBalance: number
+  vendorExpected: number
+  findings: DiagnosisFinding[]
 }
 
 const categoryLabels: Record<string, string> = {
@@ -199,6 +212,27 @@ export default function StockReconcilePage() {
   const [itemCurrentBatch, setItemCurrentBatch] = useState('')
   const [showOnlyIssues, setShowOnlyIssues] = useState(false)
   const itemStopRef = useRef(false)
+
+  // ── Review & Fix diagnosis panel: detects known root-cause patterns for a
+  // mismatched item (read-only — no writes) so the user can decide what to
+  // do without a manual investigation each time. ──────────────────────────
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
+  const [diagnoses, setDiagnoses] = useState<Record<string, DiagnosisResult | 'loading' | 'error'>>({})
+
+  const toggleDiagnosis = async (id: string) => {
+    if (expandedItemId === id) { setExpandedItemId(null); return }
+    setExpandedItemId(id)
+    if (diagnoses[id]) return
+    setDiagnoses((prev) => ({ ...prev, [id]: 'loading' }))
+    try {
+      const res = await fetch(`/api/stock/reconcile-items/diagnose?id=${id}`)
+      const data = await res.json()
+      if (!res.ok) { setDiagnoses((prev) => ({ ...prev, [id]: 'error' })); return }
+      setDiagnoses((prev) => ({ ...prev, [id]: data as DiagnosisResult }))
+    } catch {
+      setDiagnoses((prev) => ({ ...prev, [id]: 'error' }))
+    }
+  }
 
   const validCount = itemResults.filter((r) => r.valid).length
   const mismatchCount = itemResults.length - validCount
@@ -765,8 +799,12 @@ export default function StockReconcilePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {visibleResults.map((r) => (
-                    <tr key={r.id} className={r.valid ? '' : 'bg-red-50/50'}>
+                  {visibleResults.map((r) => {
+                    const diagnosis = diagnoses[r.id]
+                    const expanded = expandedItemId === r.id
+                    return (
+                    <Fragment key={r.id}>
+                    <tr className={r.valid ? '' : 'bg-red-50/50'}>
                       <td className="px-4 py-2">
                         <div className="font-medium text-gray-900">{r.itemCode}</div>
                         <div className="text-xs text-gray-500">{r.itemName}</div>
@@ -790,16 +828,70 @@ export default function StockReconcilePage() {
                         )}
                       </td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
-                        <Link
-                          href={`/reports/item-ledger?item=${r.id}&from=${itemFrom}&to=${itemTo}`}
-                          target="_blank"
-                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                        >
-                          {r.valid ? 'View Ledger' : 'Review & Fix'} <ArrowRight className="h-3 w-3" />
-                        </Link>
+                        {r.valid ? (
+                          <Link
+                            href={`/reports/item-ledger?item=${r.id}&from=${itemFrom}&to=${itemTo}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            View Ledger <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => toggleDiagnosis(r.id)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                          >
+                            <Search className="h-3 w-3" /> Review & Fix
+                            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    {expanded && (
+                      <tr className="bg-blue-50/40">
+                        <td colSpan={7} className="px-4 py-3">
+                          {diagnosis === 'loading' ? (
+                            <p className="text-xs text-gray-500">Checking known patterns…</p>
+                          ) : diagnosis === 'error' || !diagnosis ? (
+                            <p className="text-xs text-red-600">Couldn&apos;t run diagnosis. Try again, or open the Item Ledger to investigate manually.</p>
+                          ) : diagnosis.findings.length === 0 ? (
+                            <div className="text-xs text-gray-600">
+                              <p>No known pattern matched automatically — this needs a manual look.</p>
+                              <Link
+                                href={`/reports/item-ledger?item=${r.id}&from=${itemFrom}&to=${itemTo}`}
+                                target="_blank"
+                                className="mt-1 inline-flex items-center gap-1 text-blue-600 hover:underline"
+                              >
+                                Open Item Ledger <ArrowRight className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {diagnosis.findings.map((f, i) => (
+                                <div key={i} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                                  <p className="text-xs font-semibold text-amber-900">{f.title}</p>
+                                  <p className="mt-0.5 text-xs text-amber-800">{f.detail}</p>
+                                </div>
+                              ))}
+                              <p className="text-[11px] text-gray-500">
+                                Diagnosis only — nothing has been changed. Verify against the physical/paperwork records before making a fix.
+                              </p>
+                              <Link
+                                href={`/reports/item-ledger?item=${r.id}&from=${itemFrom}&to=${itemTo}`}
+                                target="_blank"
+                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                              >
+                                Open Item Ledger <ArrowRight className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
