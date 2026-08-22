@@ -1122,6 +1122,7 @@ export const GET_JOB_WORK_ORDER_FOR_EDIT_QUERY = `
         item_master_id item_name
         material_type_id material_size_id size_label
         quantity_sent quantity_received quantity_transferred_out received_date unit notes
+        is_transfer_line
         item_master { item_code }
       }
       job_work_output_items(order_by: {created_at: asc}) {

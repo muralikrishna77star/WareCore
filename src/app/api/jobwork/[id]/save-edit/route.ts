@@ -21,7 +21,7 @@ export async function POST(
   const {
     company_id, warehouse_id, vendor_id,
     dispatch_date, expected_return_date, work_description, notes,
-    input_items, output_items,
+    input_items, output_items, deleted_input_ids, deleted_output_ids,
   } = body
 
   if (!dispatch_date) return NextResponse.json({ error: 'dispatch_date is required' }, { status: 400 })
@@ -34,6 +34,12 @@ export async function POST(
     v == null ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`
   const uuidOrNull = (v: string | null | undefined) =>
     v && uuidRe.test(v) ? `'${v}'::uuid` : 'NULL::uuid'
+  const uuidArrayLiteral = (ids: unknown): string => {
+    const valid = (Array.isArray(ids) ? ids : []).filter(
+      (v): v is string => typeof v === 'string' && uuidRe.test(v)
+    )
+    return valid.length ? `ARRAY[${valid.map(v => `'${v}'`).join(',')}]::uuid[]` : `'{}'::uuid[]`
+  }
 
   const escapedInputItems = JSON.stringify(input_items).replace(/'/g, "''")
   const escapedOutputItems = JSON.stringify(output_items).replace(/'/g, "''")
@@ -49,7 +55,9 @@ export async function POST(
       ${escape(work_description)}::text,
       ${escape(notes)}::text,
       '${escapedInputItems}'::jsonb,
-      '${escapedOutputItems}'::jsonb
+      '${escapedOutputItems}'::jsonb,
+      ${uuidArrayLiteral(deleted_input_ids)},
+      ${uuidArrayLiteral(deleted_output_ids)}
     )
   `
 

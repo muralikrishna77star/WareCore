@@ -57,6 +57,7 @@ interface JobWorkEditInputItem {
   received_date: string | null
   unit: string | null
   notes: string | null
+  is_transfer_line: boolean
 }
 
 interface JobWorkEditOutputItem {
@@ -91,6 +92,7 @@ interface JobWorkOrderForEdit {
 type PurchaseLineOption = { purchase_line_id: string; available_qty: number }
 
 type InputLine = {
+  id: string
   item_master_id: string
   item_name: string
   item_code: string
@@ -108,9 +110,11 @@ type InputLine = {
   job_line_id: string
   quantity_transferred_out: number
   vendor_direct_baseline: number
+  is_transfer_line: boolean
 }
 
 type OutputLine = {
+  id: string
   item_master_id: string
   item_name: string
   item_code: string
@@ -125,6 +129,7 @@ type OutputLine = {
 }
 
 const emptyInput = (): InputLine => ({
+  id: '',
   item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   purchase_line_options: [], purchase_lines_loading: false,
@@ -133,9 +138,11 @@ const emptyInput = (): InputLine => ({
   job_line_id: '',
   quantity_transferred_out: 0,
   vendor_direct_baseline: 0,
+  is_transfer_line: false,
 })
 
 const emptyOutput = (): OutputLine => ({
+  id: '',
   item_master_id: '', item_name: '', item_code: '',
   material_type_id: '', material_size_id: '', size_label: '',
   quantity: '', unit: 'MT', notes: '',
@@ -169,6 +176,7 @@ function InputLineRow({
   filteredInputItems,
   onRemove,
   canRemove,
+  blockedReason,
   inputFieldCls,
   selectCls,
   disabled,
@@ -185,6 +193,7 @@ function InputLineRow({
   filteredInputItems: (search: string) => SelectableItem[]
   onRemove: () => void
   canRemove: boolean
+  blockedReason?: string | null
   inputFieldCls: string
   selectCls: string
   disabled?: boolean
@@ -326,8 +335,12 @@ function InputLineRow({
 
       <td className="px-2 py-2 text-center">
         {canRemove && !disabled && (
-          <button type="button" onClick={onRemove}
-            className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+          blockedReason ? (
+            <span className="text-gray-300 text-lg leading-none cursor-not-allowed" title={blockedReason}>×</span>
+          ) : (
+            <button type="button" onClick={onRemove}
+              className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+          )
         )}
       </td>
     </tr>
@@ -533,6 +546,13 @@ export default function EditJobWorkPage() {
   // Line items
   const [inputLines, setInputLines] = useState<InputLine[]>([])
   const [outputLines, setOutputLines] = useState<OutputLine[]>([])
+  // Row ids present when the order was loaded — diffed against what's still
+  // present at submit time to compute exactly which rows to delete (whether
+  // removed via the × button or just blanked out). Anything not originally
+  // loaded and not deleted (a row this tab never knew about) is left
+  // completely untouched by edit_job_work_order().
+  const [originalInputIds, setOriginalInputIds] = useState<string[]>([])
+  const [originalOutputIds, setOriginalOutputIds] = useState<string[]>([])
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -682,6 +702,7 @@ export default function EditJobWorkPage() {
         const found = loadedItemMasters.find(x => x.id === it.item_master_id)
         if (Number(it.quantity_transferred_out) > 0) anyTransfers = true
         return {
+          id: it.id ?? '',
           item_master_id: it.item_master_id ?? '',
           item_name: it.item_name ?? '',
           item_code: found?.item_code ?? '',
@@ -699,9 +720,11 @@ export default function EditJobWorkPage() {
           job_line_id: it.job_line_id ?? '',
           quantity_transferred_out: Number(it.quantity_transferred_out) || 0,
           vendor_direct_baseline: (it.purchase_line_id && vendorDirectBaselineByLine[it.purchase_line_id]) || 0,
+          is_transfer_line: Boolean(it.is_transfer_line),
         }
       })
       setHasTransfers(anyTransfers)
+      setOriginalInputIds(loadedInputs.map(l => l.id).filter(Boolean))
 
       // Net quantity still held at the vendor for each loaded input line (sent
       // minus already-transferred-out), aligned by index with `loadedInputs` —
@@ -722,6 +745,7 @@ export default function EditJobWorkPage() {
       const finalOutputs: OutputLine[] = rawOutputs.map((it) => {
         const found = loadedItemMasters.find(x => x.id === it.item_master_id)
         return {
+          id: it.id ?? '',
           item_master_id: it.item_master_id ?? '',
           item_name: it.item_name ?? '',
           item_code: found?.item_code ?? '',
@@ -736,6 +760,7 @@ export default function EditJobWorkPage() {
         }
       })
       setOutputLines(finalOutputs.length ? finalOutputs : [emptyOutput()])
+      setOriginalOutputIds(finalOutputs.map(l => l.id).filter(Boolean))
 
       const outSearch: Record<number, string> = {}
       finalOutputs.forEach((l, i) => { if (l.item_name) outSearch[i] = l.item_name })
@@ -1068,6 +1093,7 @@ export default function EditJobWorkPage() {
         work_description: workDescription || null,
         notes: notes || null,
         input_items: validInputs.map(l => ({
+          id: l.id || null,
           purchase_line_id: l.purchase_line_id || null,
           sub_purchase_line_id: l.sub_purchase_line_id || null,
           job_line_id: l.job_line_id || null,
@@ -1082,6 +1108,7 @@ export default function EditJobWorkPage() {
           notes: l.notes || null,
         })),
         output_items: validOutputs.map(l => ({
+          id: l.id || null,
           item_master_id: l.item_master_id || null,
           item_name: l.item_name || null,
           material_type_id: l.material_type_id || null,
@@ -1093,6 +1120,13 @@ export default function EditJobWorkPage() {
           notes: l.notes || null,
           received_date: l.received_date || null,
         })),
+        // Any originally-loaded row id no longer present among the current
+        // valid lines gets deleted server-side — whether removed via the ×
+        // button or just blanked out. Anything this tab never loaded (added
+        // elsewhere since) is never in originalInputIds/originalOutputIds,
+        // so it's never touched.
+        deleted_input_ids: originalInputIds.filter(id => !validInputs.some(l => l.id === id)),
+        deleted_output_ids: originalOutputIds.filter(id => !validOutputs.some(l => l.id === id)),
       }),
     })
 
@@ -1300,6 +1334,15 @@ export default function EditJobWorkPage() {
                       filteredInputItems={filteredInputItems}
                       onRemove={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
                       canRemove={inputLines.length > 1}
+                      blockedReason={
+                        line.is_transfer_line
+                          ? 'Transferred in from another vendor order — use Delete Transfer instead'
+                          : line.quantity_transferred_out > 0
+                          ? 'Transferred to another vendor — use Delete Transfer instead'
+                          : line.vendor_direct_baseline > 0 || getReturnedQuantity(line.job_line_id, outputLines) > 0
+                          ? 'Has recorded returns/sales — clear Output Materials for this line, or cancel the Vendor Direct Sale, first'
+                          : null
+                      }
                       inputFieldCls={inputFieldCls}
                       selectCls={selectCls}
                       disabled={returnsOnly}
