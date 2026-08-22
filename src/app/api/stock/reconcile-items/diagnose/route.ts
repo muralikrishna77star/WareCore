@@ -21,7 +21,7 @@ function sqlLiteral(v: string): string {
 }
 
 export interface DiagnosisFinding {
-  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive'
+  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive' | 'missing_dispatch_ledger'
   title: string
   detail: string
 }
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const materialSizeSql = materialSizeId ? sqlLiteral(materialSizeId) : 'NULL'
     const sizeLabelSql = sizeLabel ? sqlLiteral(sizeLabel) : 'NULL'
 
-    const [aggRes, timingRes, transferLegRes, phantomRes, purchaseRes] = await Promise.all([
+    const [aggRes, timingRes, transferLegRes, phantomRes, purchaseRes, dispatchLedgerRes] = await Promise.all([
       // Basic aggregates, for context in the response.
       hasuraRunSql(`
         WITH ledger AS (
@@ -139,6 +139,36 @@ export async function GET(request: NextRequest) {
         FROM consumption
         WHERE (consumed - received_quantity) > ${TOLERANCE}
       `),
+      // Pattern: a job work line's quantity_sent isn't backed by the ledger row it
+      // should have posted (JOB_WORK_OUT for a plain line, JOB_WORK_TRANSFER_IN for
+      // a transfer-destination line) — e.g. a manually-repaired row later wiped by
+      // an "Edit Order" save from a stale browser tab (GI00069/GA00128's shape,
+      // 2026-08-22). Compared per order, not per line, since a plain JOB_WORK_OUT
+      // row doesn't carry purchase_line_id.
+      hasuraRunSql(`
+        WITH jw AS (
+          SELECT jwi.job_work_order_id, jwo.reference_number, jwi.is_transfer_line,
+            SUM(jwi.quantity_sent) AS total_sent
+          FROM job_work_items jwi
+          JOIN job_work_orders jwo ON jwo.id = jwi.job_work_order_id
+          WHERE jwi.material_type_id = '${materialTypeId}' AND jwi.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
+          GROUP BY jwi.job_work_order_id, jwo.reference_number, jwi.is_transfer_line
+        ),
+        ledger_totals AS (
+          SELECT sl.reference_id AS job_work_order_id,
+            SUM(CASE WHEN sl.entry_type = 'JOB_WORK_OUT' THEN ABS(sl.quantity) ELSE 0 END) AS out_total,
+            SUM(CASE WHEN sl.entry_type = 'JOB_WORK_TRANSFER_IN' THEN sl.quantity ELSE 0 END) AS transfer_in_total
+          FROM stock_ledger sl
+          WHERE sl.reference_type = 'job_work'
+            AND sl.material_type_id = '${materialTypeId}' AND sl.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
+          GROUP BY sl.reference_id
+        )
+        SELECT jw.reference_number, jw.is_transfer_line, jw.total_sent,
+          (CASE WHEN jw.is_transfer_line THEN COALESCE(lt.transfer_in_total,0) ELSE COALESCE(lt.out_total,0) END) AS ledger_total
+        FROM jw
+        LEFT JOIN ledger_totals lt ON lt.job_work_order_id = jw.job_work_order_id
+        WHERE ABS(jw.total_sent - (CASE WHEN jw.is_transfer_line THEN COALESCE(lt.transfer_in_total,0) ELSE COALESCE(lt.out_total,0) END)) > ${TOLERANCE}
+      `),
     ])
 
     const aggRow = parseRows(aggRes)[0] ?? ['0', '0', '0']
@@ -182,6 +212,17 @@ export async function GET(request: NextRequest) {
         pattern: 'purchase_variance',
         title: `Purchase line ${purchaseLineId} oversold by ${shortfall.toFixed(3)} MT`,
         detail: `Invoiced ${invoicedQty} MT (received_quantity currently ${receivedQty} MT), but ${consumed} MT has been sent to job work or sold downstream — ${shortfall.toFixed(3)} MT more than recorded. If this is a genuine weighbridge/underbilling variance, raising received_quantity on this line to ${(num(receivedQty) + shortfall).toFixed(3)} would close the gap. Verify the physical delivery before changing it — CR00431 initially looked like this but the real cause turned out to be a sale invoice needing correction instead. Fixed this way for CR00431/GA00128.`,
+      })
+    }
+
+    for (const r of parseRows(dispatchLedgerRes)) {
+      const [refNumber, isTransferLine, totalSent, ledgerTotal] = r
+      const gap = num(totalSent) - num(ledgerTotal)
+      const ledgerKind = isTransferLine === 't' ? 'JOB_WORK_TRANSFER_IN' : 'JOB_WORK_OUT'
+      findings.push({
+        pattern: 'missing_dispatch_ledger',
+        title: `${refNumber}: ${gap.toFixed(3)} MT sent with no matching ${ledgerKind} in the ledger`,
+        detail: `This order's job work line(s) show ${totalSent} MT sent, but only ${ledgerTotal} MT is backed by a ${ledgerKind} stock_ledger row — ${gap.toFixed(3)} MT unaccounted for. Often means a repair-inserted line (or its ledger row) was later wiped by an Edit Order save from a stale browser tab. Fixed this way for GA00128/GI00069 on 2026-08-22 — re-post the missing ledger row, or re-insert the missing line if it's gone entirely.`,
       })
     }
 
