@@ -44,16 +44,14 @@ export type MovementRow = {
   material_types: { description: string | null; unit?: string | null } | null
   material_sizes: { size_label: string | null } | null
   runningBalance?: number
+  rate: number | null
+  value: number | null
 }
 
 export function MovementsRows({
   movements,
-  rateFor,
-  valueFor,
 }: {
   movements: MovementRow[]
-  rateFor: (m: MovementRow) => number | null
-  valueFor: (m: MovementRow) => number | null
 }) {
   const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(movements, {
     date: (m) => m.entry_date,
@@ -64,8 +62,8 @@ export function MovementsRows({
     size: (m) => m.material_sizes?.size_label ?? m.size_label ?? '',
     qty: (m) => Number(m.quantity),
     running_balance: (m) => m.runningBalance ?? 0,
-    rate: (m) => rateFor(m),
-    value: (m) => valueFor(m),
+    rate: (m) => m.rate,
+    value: (m) => m.value,
     reference: (m) => m.reference_id ?? '',
   })
 
@@ -98,8 +96,8 @@ export function MovementsRows({
         {sortedRows.map((m) => {
           const cfg = entryTypeConfig[m.entry_type] ?? { label: m.entry_type, color: 'bg-gray-100 text-gray-800', isIn: Number(m.quantity) >= 0 }
           const isIn = cfg.isIn
-          const rate = rateFor(m)
-          const value = valueFor(m)
+          const rate = m.rate
+          const value = m.value
           return (
             <tr key={m.id} className="hover:bg-gray-50">
               <td className="px-4 py-3 text-gray-600">{formatDate(m.entry_date)}</td>

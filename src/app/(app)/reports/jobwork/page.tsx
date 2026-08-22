@@ -107,6 +107,13 @@ export default async function JobWorkReportPage({
   const rateMap = await fetchPurchaseLineRateMap(lineIds)
   const rateFor = (item: JobWorkItem): number => (item.purchase_line_id ? rateMap.get(item.purchase_line_id) ?? 0 : 0)
 
+  // Precomputed onto each item (rather than passing rateFor itself) — a
+  // function can't cross the Server -> Client Component boundary.
+  const ordersWithRates = orders.map((o) => ({
+    ...o,
+    job_work_items: (o.job_work_items ?? []).map((item) => ({ ...item, rate: rateFor(item) })),
+  }))
+
   const totalSent = orders.reduce((s, o) => {
     return s + (o.job_work_items ?? []).reduce((si: number, i) => si + Number(i.quantity_sent || 0), 0)
   }, 0)
@@ -339,7 +346,7 @@ export default async function JobWorkReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No job work orders found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <JobWorkReportRows orders={orders} rateFor={rateFor} />
+              <JobWorkReportRows orders={ordersWithRates} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={7}>Total</td>

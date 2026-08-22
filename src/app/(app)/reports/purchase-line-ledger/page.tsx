@@ -111,7 +111,7 @@ export default async function PurchaseLineLedgerPage({
   const runningBalance = { value: 0 }
   const rows = entries.map((e) => {
     runningBalance.value += Number(e.quantity)
-    return { ...e, balance: runningBalance.value }
+    return { ...e, balance: runningBalance.value, itemLabel: itemLabelFor(e) }
   })
   const currentBalance = runningBalance.value
 
@@ -165,7 +165,7 @@ export default async function PurchaseLineLedgerPage({
         sno: idx + 1,
         date: row.entry_date,
         type: cfg.label,
-        item: `${itemLabelFor(row)}${itemSize ? ` (${itemSize})` : ''}`,
+        item: `${row.itemLabel}${itemSize ? ` (${itemSize})` : ''}`,
         reference: row.reference_number || '',
         linkedLineId: row.sub_purchase_line_id || '',
         company: row.companies?.name || '',
@@ -268,7 +268,7 @@ export default async function PurchaseLineLedgerPage({
             </div>
             <div className="overflow-auto max-h-[80vh]">
               <table className="w-full text-xs">
-                <PurchaseLineLedgerRows rows={rows} itemLabelFor={itemLabelFor} />
+                <PurchaseLineLedgerRows rows={rows} />
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-xs">
                     <td className="px-2 py-1.5 text-gray-700" colSpan={7}>Current Balance</td>

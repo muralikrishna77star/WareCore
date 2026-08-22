@@ -250,6 +250,11 @@ export default async function MovementsReportPage({
   }
   const totalValue = movements.reduce((s, m) => s + (valueFor(m) ?? 0), 0)
 
+  // Precomputed onto each row (rather than passing rateFor/valueFor
+  // themselves) — a function can't cross the Server -> Client Component
+  // boundary.
+  const movementsWithValues = movements.map((m) => ({ ...m, rate: rateFor(m), value: valueFor(m) }))
+
   const exportMeta = {
     companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',
     fromDate,
@@ -432,7 +437,7 @@ export default async function MovementsReportPage({
             <p className="p-8 text-center text-gray-500 text-sm">No movements found for the selected period.</p>
           ) : (
             <table className="w-full text-sm">
-              <MovementsRows movements={movements} rateFor={rateFor} valueFor={valueFor} />
+              <MovementsRows movements={movementsWithValues} />
               <tfoot>
                 <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                   <td className="px-4 py-3 text-gray-700" colSpan={6}>Net Movement</td>

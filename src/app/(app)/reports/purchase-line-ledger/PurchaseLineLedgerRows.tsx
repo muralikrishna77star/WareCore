@@ -46,21 +46,20 @@ export type PurchaseLineLedgerRow = {
   material_size_id?: string | null
   material_types?: { description: string; unit: string } | null
   balance: number
+  itemLabel: string
 }
 
 const fmtQ = (n: number) => n.toFixed(3)
 
 export function PurchaseLineLedgerRows({
   rows: allRows,
-  itemLabelFor,
 }: {
   rows: PurchaseLineLedgerRow[]
-  itemLabelFor: (row: PurchaseLineLedgerRow) => string
 }) {
   const { sortedRows: rows, sortKey, sortDir, toggleSort } = useTableSort(allRows, {
     date: (r) => r.entry_date,
     type: (r) => entryTypeConfig[r.entry_type]?.label ?? r.entry_type,
-    item: (r) => itemLabelFor(r),
+    item: (r) => r.itemLabel,
     reference: (r) => r.reference_number ?? '',
     linked_line: (r) => r.sub_purchase_line_id ?? '',
     company: (r) => r.companies?.name ?? '',
@@ -102,7 +101,7 @@ export function PurchaseLineLedgerRows({
                 </span>
               </td>
               <td className="px-2 py-1 text-gray-700 whitespace-nowrap">
-                {itemLabelFor(row)}
+                {row.itemLabel}
                 {(row.material_sizes?.size_label || row.size_label) && (
                   <span className="ml-1 text-[11px] text-gray-400">({row.material_sizes?.size_label || row.size_label})</span>
                 )}

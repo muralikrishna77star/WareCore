@@ -22,6 +22,7 @@ type JobWorkItem = {
   purchase_line_id: string | null
   material_types: { description: string | null; unit?: string | null } | null
   material_sizes: { size_label: string | null } | null
+  rate: number
 }
 
 export type JobWorkOrderRow = {
@@ -38,11 +39,12 @@ export type JobWorkOrderRow = {
   job_work_items: JobWorkItem[]
 }
 
-function sortValue(o: JobWorkOrderRow, key: string, rateFor: (item: JobWorkItem) => number): string | number {
+function sortValue(o: JobWorkOrderRow, key: string): string | number {
   const first = o.job_work_items?.[0] ?? null
   const sent = first ? Number(first.quantity_sent || 0) : 0
   const received = first ? Number(first.quantity_received || 0) : 0
   const pending = sent - received - (first ? Number(first.quantity_transferred_out || 0) : 0)
+  const rate = first?.rate ?? 0
   switch (key) {
     case 'reference': return o.reference_number ?? ''
     case 'dispatch_date': return o.dispatch_date
@@ -54,9 +56,9 @@ function sortValue(o: JobWorkOrderRow, key: string, rateFor: (item: JobWorkItem)
     case 'sent': return sent
     case 'received': return received
     case 'pending': return pending
-    case 'rate': return first ? rateFor(first) : 0
-    case 'sent_value': return first ? sent * rateFor(first) : 0
-    case 'pending_value': return first ? pending * rateFor(first) : 0
+    case 'rate': return rate
+    case 'sent_value': return sent * rate
+    case 'pending_value': return pending * rate
     case 'status': return o.status ?? ''
     default: return ''
   }
@@ -64,13 +66,11 @@ function sortValue(o: JobWorkOrderRow, key: string, rateFor: (item: JobWorkItem)
 
 export function JobWorkReportRows({
   orders,
-  rateFor,
 }: {
   orders: JobWorkOrderRow[]
-  rateFor: (item: JobWorkItem) => number
 }) {
   const keys = ['reference', 'dispatch_date', 'expected_return', 'company', 'supplier', 'material', 'size', 'sent', 'received', 'pending', 'rate', 'sent_value', 'pending_value', 'status']
-  const accessors = Object.fromEntries(keys.map((k) => [k, (o: JobWorkOrderRow) => sortValue(o, k, rateFor)]))
+  const accessors = Object.fromEntries(keys.map((k) => [k, (o: JobWorkOrderRow) => sortValue(o, k)]))
   const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(orders, accessors)
 
   return (
@@ -113,7 +113,7 @@ export function JobWorkReportRows({
                   const sent = Number(item.quantity_sent || 0)
                   const received = Number(item.quantity_received || 0)
                   const pending = sent - received - Number(item.quantity_transferred_out || 0)
-                  const rate = rateFor(item)
+                  const rate = item.rate
                   return (
                     <>
                       <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
