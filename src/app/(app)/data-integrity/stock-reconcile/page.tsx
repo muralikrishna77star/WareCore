@@ -293,12 +293,14 @@ export default function StockReconcilePage() {
       </div>
 
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <span className="font-semibold">Legacy reconciliation tool</span> — use{' '}
-        <Link href="/data-integrity" className="underline font-medium">Data Integrity</Link> for comprehensive,
-        read-only validation across purchases, sales, transfers, and job work, with a persistent exception
-        history and no direct writes. The tools below remain available for the specific phantom-purchase-line
-        check they were built for, but &quot;Run Reconciliation&quot; below writes directly to the stock ledger —
-        it is not the same as &quot;Verify&quot; underneath it, which only reads.
+        <span className="font-semibold">Legacy reconciliation tool</span> — see the{' '}
+        <Link href="/data-integrity" className="underline font-medium">Dashboard</Link>,{' '}
+        <Link href="/data-integrity/runs" className="underline font-medium">Reconciliation Runs</Link>, and{' '}
+        <Link href="/data-integrity/exceptions" className="underline font-medium">Exception Workbench</Link> above
+        for comprehensive, read-only validation across purchases, sales, transfers, and job work, with a
+        persistent exception history and no direct writes. The tools below remain available for the specific
+        phantom-purchase-line check they were built for, but &quot;Run Reconciliation&quot; below writes directly
+        to the stock ledger — it is not the same as &quot;Verify&quot; underneath it, which only reads.
       </div>
 
       <div className="rounded-xl border bg-white p-6 space-y-4">

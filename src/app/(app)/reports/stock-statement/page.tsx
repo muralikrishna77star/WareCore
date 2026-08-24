@@ -747,7 +747,7 @@ export default async function StockStatementPage({
             transactions={transactions}
             reconciliation={reconciliation}
           />
-          <Link href="/reports/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
+          <Link href="/data-integrity/stock-reconcile" className="text-sm text-orange-600 hover:underline font-medium">
             Reconcile Stock
           </Link>
           <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">

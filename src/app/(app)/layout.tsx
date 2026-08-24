@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Admin', href: '/admin', icon: Settings },
   { title: 'Backup & Restore', href: '/admin/backups', icon: DatabaseBackup },
-  { title: 'Data Integrity', href: '/data-integrity', icon: ShieldCheck },
+  { title: 'Data Integrity & Stock Recon', href: '/data-integrity', icon: ShieldCheck },
   { title: 'Purchase Entry', href: '/bills', icon: ClipboardList },
   { title: 'Purchase Cancellations', href: '/purchase-cancellations', icon: Undo2 },
   { title: 'Accounts', href: '/accounts', icon: Wallet },

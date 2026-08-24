@@ -9,6 +9,7 @@ const TABS = [
   { href: '/data-integrity/runs', label: 'Reconciliation Runs' },
   { href: '/data-integrity/exceptions', label: 'Exception Workbench' },
   { href: '/data-integrity/rules', label: 'Rule Catalogue' },
+  { href: '/data-integrity/stock-reconcile', label: 'Stock Reconciliation' },
 ]
 
 export default async function DataIntegrityLayout({ children }: { children: React.ReactNode }) {
