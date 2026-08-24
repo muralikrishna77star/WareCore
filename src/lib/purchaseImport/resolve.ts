@@ -310,21 +310,13 @@ export function resolveImport(rows: ParsedRow[], snapshot: MasterDataSnapshot): 
     groups.get(key)!.push(r)
   }
 
-  // In-file duplicate-line guard: same material/size/quantity/rate more than
-  // once within the same bill is almost always a copy-paste mistake.
-  for (const key of groupOrder) {
-    const seen = new Map<string, number>() // signature -> first rowNumber
-    for (const r of groups.get(key)!) {
-      const sig = [r.materialTypeId, r.materialSizeId ?? '', r.row.quantity, r.row.rate].join('|')
-      const firstRow = seen.get(sig)
-      if (firstRow) {
-        errors.push({ rowNumber: r.row.rowNumber, message: `Duplicate line: same material/size/quantity/rate as row ${firstRow} in the same bill.` })
-      } else {
-        seen.set(sig, r.row.rowNumber)
-      }
-    }
-  }
-  if (errors.length > 0) return { bills: [], errors }
+  // Same material/size/quantity/rate more than once within the same bill is
+  // NOT blocked here — real purchases genuinely repeat (e.g. multiple coils
+  // of the same size/weight/rate on one invoice), confirmed against
+  // PIB-000006 where 4 legitimate separate lines shared one signature. The
+  // review screen already surfaces this as a non-blocking warning via
+  // findDuplicateLines() below, so a human sees it before Import; it must
+  // not also hard-block the file the way it used to.
 
   const allBillNumbers = [...snapshot.existingBillNumbers]
   const allLineIds = [...snapshot.existingLineIds]

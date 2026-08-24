@@ -45,9 +45,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Authoritative re-resolution against FRESH master data — the single
     // gate resolveImport() already enforces for the (now-retired) one-shot
     // commit route. Every row individually validating at staging/correction
-    // time does not guarantee the WHOLE FILE still resolves cleanly (e.g.
-    // two rows independently corrected into a new cross-row duplicate, or a
-    // referenced master record was deactivated after staging).
+    // time does not guarantee the WHOLE FILE still resolves cleanly (e.g. a
+    // referenced master record was deactivated after staging). Duplicate
+    // material/size/quantity/rate lines are deliberately NOT an error here —
+    // resolveImport() only ever raises the same per-field problems
+    // resolveRowIndependent() below also catches, so the two never disagree
+    // about which rows are actually invalid.
     const freshSnapshot = await fetchMasterDataSnapshot()
     const parsedRows = rows.map((r) => r.current_data)
     const { bills, errors } = resolveImport(parsedRows, freshSnapshot)

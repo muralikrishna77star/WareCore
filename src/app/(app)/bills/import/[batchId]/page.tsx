@@ -223,7 +223,7 @@ export default function BatchReviewPage() {
         <>
           {batchWarnings.length > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-900">Possible duplicate lines (won&apos;t block review, but will block Import):</p>
+              <p className="text-sm font-semibold text-amber-900">Possible duplicate lines (won&apos;t block review or Import — double-check these aren&apos;t copy-paste mistakes):</p>
               <ul className="mt-1 text-sm text-amber-800">
                 {batchWarnings.map((w, i) => <li key={i}>Row {w.rowNumber}: {w.message}</li>)}
               </ul>

@@ -74,11 +74,11 @@ describe('resolveImport()', () => {
     expect(bills).toHaveLength(2)
   })
 
-  it('flags an exact-duplicate line within the same bill as a copy-paste guard error', () => {
+  it('does NOT block an exact-duplicate line within the same bill — real purchases can genuinely repeat', () => {
     const { bills, errors } = resolveImport([row({}, 2), row({}, 3)], SNAPSHOT)
-    expect(bills).toHaveLength(0)
-    expect(errors).toHaveLength(1)
-    expect(errors[0].message).toMatch(/Duplicate line/)
+    expect(errors).toHaveLength(0)
+    expect(bills).toHaveLength(1)
+    expect(bills[0].lines).toHaveLength(2)
   })
 
   it('computes CGST/SGST/TDS via the shared calculateLineTax when a Tax Rate is given', () => {
