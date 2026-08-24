@@ -63,6 +63,114 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
     // leave empty — malformed evidence shouldn't crash the page
   }
 
+  // REC-005 (Negative company-wide stock) only: pull the actual chronological
+  // ledger movement trail for this exact scope, plus a read-only diagnosis of
+  // WHICH known pattern produced the dip — the generic evidence JSON above
+  // only ever carried the minimum/current balance, never the transactions
+  // themselves or a specific reason, matching the user's ask to see the data
+  // and the "why" rather than just the number. Deliberately diagnose-only —
+  // no write actions — same scope choice already made for Item-by-Item
+  // Reconciliation's Review & Fix.
+  let movementHistory: Record<string, string>[] = []
+  let diagnosis: {
+    duplicates: Record<string, string>[]
+    reversalExceedsOriginal: Record<string, string>[]
+    negativeLines: Record<string, string>[]
+    missingPurchaseInflow: Record<string, string>[]
+  } | null = null
+
+  if (exception.rule_code === 'REC-005' && exception.company_id && exception.material_type_id) {
+    const sizeFilter = exception.material_size_id
+      ? `material_size_id = '${exception.material_size_id}'::uuid`
+      : `material_size_id IS NULL`
+
+    const [movementResult, dupResult, reversalResult, lineResult, missingInflowResult] = await Promise.all([
+      hasuraRunSql(`
+        SELECT sl.id, sl.entry_type, sl.quantity, sl.entry_date, sl.created_at,
+               sl.reference_type, sl.reference_number, sl.purchase_line_id, sl.sub_purchase_line_id,
+               sl.notes,
+               SUM(sl.quantity) OVER (
+                 ORDER BY sl.entry_date, sl.quantity DESC, sl.created_at
+                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+               ) AS running_balance
+        FROM stock_ledger sl
+        WHERE sl.company_id = '${exception.company_id}'::uuid
+          AND sl.material_type_id = '${exception.material_type_id}'::uuid
+          AND sl.${sizeFilter}
+        ORDER BY sl.entry_date, sl.quantity DESC, sl.created_at
+      `),
+      // Pattern 1: exact duplicate rows (same entry_type/reference/line/qty
+      // more than once) — the CR00700-shaped defect (double-submit/edit).
+      hasuraRunSql(`
+        SELECT entry_type, reference_id::text, purchase_line_id, sub_purchase_line_id, quantity::text,
+               count(*)::text AS dup_count, array_agg(id)::text AS ledger_ids, array_agg(reference_number)::text AS reference_numbers
+        FROM stock_ledger
+        WHERE company_id = '${exception.company_id}'::uuid
+          AND material_type_id = '${exception.material_type_id}'::uuid
+          AND ${sizeFilter}
+          AND (purchase_line_id IS NOT NULL OR sub_purchase_line_id IS NOT NULL OR reference_id IS NOT NULL)
+        GROUP BY entry_type, reference_id, purchase_line_id, sub_purchase_line_id, quantity
+        HAVING count(*) > 1
+      `),
+      // Pattern 2: a PURCHASE_CANCEL exceeding what was ever purchased on
+      // that line (over-cancellation) — same invariant as REC-007, scoped
+      // down to this exception's exact company/material/size.
+      hasuraRunSql(`
+        SELECT purchase_line_id,
+               COALESCE(SUM(quantity) FILTER (WHERE entry_type = 'PURCHASE_IN'), 0)::text AS total_in,
+               COALESCE(-SUM(quantity) FILTER (WHERE entry_type = 'PURCHASE_CANCEL'), 0)::text AS total_cancelled
+        FROM stock_ledger
+        WHERE company_id = '${exception.company_id}'::uuid
+          AND material_type_id = '${exception.material_type_id}'::uuid
+          AND ${sizeFilter}
+          AND purchase_line_id IS NOT NULL
+        GROUP BY purchase_line_id
+        HAVING COALESCE(-SUM(quantity) FILTER (WHERE entry_type = 'PURCHASE_CANCEL'), 0)
+             > COALESCE(SUM(quantity) FILTER (WHERE entry_type = 'PURCHASE_IN'), 0) + 0.001
+      `),
+      // Pattern 3: which SPECIFIC purchase line within this material/size
+      // scope is actually negative on its own — pinpoints the concentrated
+      // culprit rather than leaving it as an aggregate-only number, since
+      // REC-005 groups by material/size, not by line.
+      hasuraRunSql(`
+        SELECT purchase_line_id, SUM(quantity)::text AS net_balance
+        FROM stock_ledger
+        WHERE company_id = '${exception.company_id}'::uuid
+          AND material_type_id = '${exception.material_type_id}'::uuid
+          AND ${sizeFilter}
+          AND purchase_line_id IS NOT NULL
+        GROUP BY purchase_line_id
+        HAVING SUM(quantity) < -0.001
+        ORDER BY SUM(quantity) ASC
+      `),
+      // Pattern 4: a purchase line with outflow activity (job work/sale) in
+      // this scope but NO PURCHASE_IN at all — the single most common real
+      // shape found while building this (e.g. a sale posted against a line
+      // whose purchase was recorded under a different material/size, or
+      // never posted at all).
+      hasuraRunSql(`
+        SELECT purchase_line_id,
+               COALESCE(SUM(quantity) FILTER (WHERE entry_type <> 'PURCHASE_IN'), 0)::text AS total_other_activity
+        FROM stock_ledger
+        WHERE company_id = '${exception.company_id}'::uuid
+          AND material_type_id = '${exception.material_type_id}'::uuid
+          AND ${sizeFilter}
+          AND purchase_line_id IS NOT NULL
+        GROUP BY purchase_line_id
+        HAVING COALESCE(SUM(quantity) FILTER (WHERE entry_type = 'PURCHASE_IN'), 0) = 0
+           AND COALESCE(SUM(quantity) FILTER (WHERE entry_type <> 'PURCHASE_IN'), 0) <> 0
+      `),
+    ])
+
+    movementHistory = rowsToObjects(movementResult)
+    diagnosis = {
+      duplicates: rowsToObjects(dupResult),
+      reversalExceedsOriginal: rowsToObjects(reversalResult),
+      negativeLines: rowsToObjects(lineResult),
+      missingPurchaseInflow: rowsToObjects(missingInflowResult),
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border bg-white p-4">
@@ -115,6 +223,101 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
         <p className="text-sm font-semibold text-gray-700 mb-2">Evidence</p>
         <pre className="text-xs bg-gray-50 rounded p-3 overflow-auto max-h-64">{JSON.stringify(evidence, null, 2)}</pre>
       </div>
+
+      {diagnosis && (
+        <div className="rounded-xl border bg-white p-4">
+          <p className="text-sm font-semibold text-gray-700 mb-1">Why it went negative</p>
+          <p className="text-xs text-gray-500 mb-3">Read-only diagnosis against the exact company/material/size scope above — no data is changed here.</p>
+
+          {diagnosis.duplicates.length === 0 && diagnosis.reversalExceedsOriginal.length === 0 &&
+            diagnosis.negativeLines.length === 0 && diagnosis.missingPurchaseInflow.length === 0 && (
+            <p className="text-sm text-gray-600">No known pattern (duplicate posting, over-cancellation, a single negative purchase line, or a missing purchase inflow) matched — review the movement history below manually.</p>
+          )}
+
+          {diagnosis.missingPurchaseInflow.length > 0 && (
+            <div className="mb-3">
+              <p className="text-sm font-medium text-red-700">Purchase line has activity but no purchase-in was ever posted</p>
+              <ul className="mt-1 text-sm text-gray-700 space-y-1">
+                {diagnosis.missingPurchaseInflow.map((l, i) => (
+                  <li key={i}>Line {l.purchase_line_id}: {l.total_other_activity} of outflow activity, but 0 purchased in this exact material/size scope — likely posted under a different size, or never invoiced.</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {diagnosis.duplicates.length > 0 && (
+            <div className="mb-3">
+              <p className="text-sm font-medium text-red-700">Duplicate ledger rows found</p>
+              <ul className="mt-1 text-sm text-gray-700 space-y-1">
+                {diagnosis.duplicates.map((d, i) => (
+                  <li key={i}>
+                    {d.dup_count}× <span className="font-mono text-xs">{d.entry_type}</span> rows of quantity {d.quantity}
+                    {d.purchase_line_id ? ` on line ${d.purchase_line_id}` : ''} — reference numbers {d.reference_numbers}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {diagnosis.reversalExceedsOriginal.length > 0 && (
+            <div className="mb-3">
+              <p className="text-sm font-medium text-red-700">Cancellation exceeds what was ever purchased</p>
+              <ul className="mt-1 text-sm text-gray-700 space-y-1">
+                {diagnosis.reversalExceedsOriginal.map((r, i) => (
+                  <li key={i}>Line {r.purchase_line_id}: purchased {r.total_in}, cancelled {r.total_cancelled}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {diagnosis.negativeLines.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-red-700">Specific purchase line(s) actually negative</p>
+              <ul className="mt-1 text-sm text-gray-700 space-y-1">
+                {diagnosis.negativeLines.map((l, i) => (
+                  <li key={i}>Line {l.purchase_line_id}: net {l.net_balance}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {movementHistory.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="px-6 py-3 border-b bg-gray-50">
+            <span className="font-semibold text-gray-700 text-sm">Ledger movement history for this scope</span>
+          </div>
+          <div className="overflow-auto max-h-96">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs uppercase text-gray-500 border-b bg-gray-50">
+                  <th className="px-4 py-2 text-left">Date</th>
+                  <th className="px-4 py-2 text-left">Entry Type</th>
+                  <th className="px-4 py-2 text-left">Reference</th>
+                  <th className="px-4 py-2 text-left">Line</th>
+                  <th className="px-4 py-2 text-right">Quantity</th>
+                  <th className="px-4 py-2 text-right">Running Balance</th>
+                  <th className="px-4 py-2 text-left">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {movementHistory.map((m) => (
+                  <tr key={m.id} className={Number(m.running_balance) < 0 ? 'bg-red-50' : undefined}>
+                    <td className="px-4 py-2 whitespace-nowrap">{m.entry_date}</td>
+                    <td className="px-4 py-2 font-mono text-xs">{m.entry_type}</td>
+                    <td className="px-4 py-2">{m.reference_number ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-xs">{m.purchase_line_id ?? m.sub_purchase_line_id ?? '—'}</td>
+                    <td className="px-4 py-2 text-right">{m.quantity}</td>
+                    <td className={`px-4 py-2 text-right font-medium ${Number(m.running_balance) < 0 ? 'text-red-600' : 'text-gray-900'}`}>{m.running_balance}</td>
+                    <td className="px-4 py-2 text-gray-500">{m.notes ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {evidenceRows.length > 0 && (
         <div className="rounded-xl border bg-white overflow-hidden">
