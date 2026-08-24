@@ -10,11 +10,6 @@ import {
   ACTIVE_SUPPLIERS_QUERY,
   ALL_JOB_WORK_LINE_IDS_QUERY,
   ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY,
-  CREATE_JOB_WORK_ORDER_MUTATION,
-  CREATE_JOB_WORK_ITEMS_MUTATION,
-  UPDATE_JOB_WORK_ITEM_TRANSFERRED_OUT_MUTATION,
-  CREATE_JOB_WORK_TRANSFER_MUTATION,
-  CREATE_JOB_WORK_TRANSFER_ITEMS_MUTATION,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 
@@ -189,84 +184,35 @@ export default function JobWorkTransferPage() {
 
     const referenceNumber = generateReferenceNumber('JW')
     const transferNumber = generateTransferNumber(existingTransferNumbers)
-
-    const { data: orderData, error: oErr } = await hasuraFetch<{ insert_job_work_orders_one: { id: string } | null }>(CREATE_JOB_WORK_ORDER_MUTATION, {
-      reference_number: referenceNumber,
-      company_id: order.company_id,
-      warehouse_id: order.warehouse_id,
-      vendor_id: targetVendorId,
-      dispatch_date: transferDate,
-      expected_return_date: order.expected_return_date || null,
-      work_description: `Transferred from ${order.reference_number}`,
-      status: 'dispatched',
-      notes: reason || null,
-    })
-    const newOrder = orderData?.insert_job_work_orders_one
-    if (oErr || !newOrder) { setError(oErr?.message ?? 'Failed to create new job work order'); setSaving(false); return }
-
     const ddmm = getDDMM(new Date(transferDate + 'T00:00:00'))
     const usedLineIds = [...existingJobLineIds]
-    const itemObjects = validLines.map(l => {
+    const linePayload = validLines.map(l => {
       const jobLineId = generateJobLineId(ddmm, usedLineIds)
       usedLineIds.push(jobLineId)
-      return {
-        job_work_order_id: newOrder.id,
-        purchase_line_id: l.purchaseLineId || null,
-        sub_purchase_line_id: l.subPurchaseLineId || null,
-        job_line_id: jobLineId,
-        item_master_id: l.itemMasterId || null,
-        item_name: l.itemName || null,
-        material_type_id: l.materialTypeId || null,
-        material_size_id: l.materialSizeId || null,
-        size_label: l.sizeLabel || null,
-        quantity_sent: parseFloat(l.quantity),
-        quantity_received: 0,
-        unit: l.unit,
-        is_transfer_line: true,
-        source_job_work_item_id: l.sourceItemId,
-        notes: `Transferred from ${order.reference_number}`,
-      }
+      return { source_item_id: l.sourceItemId, job_line_id: jobLineId, quantity: parseFloat(l.quantity) }
     })
 
-    const { error: iErr } = await hasuraFetch(CREATE_JOB_WORK_ITEMS_MUTATION, { objects: itemObjects })
-    if (iErr) { setError(iErr.message); setSaving(false); return }
-
-    for (const l of validLines) {
-      await hasuraFetch(UPDATE_JOB_WORK_ITEM_TRANSFERRED_OUT_MUTATION, {
-        id: l.sourceItemId,
-        quantity_transferred_out: l.existingTransferredOut + parseFloat(l.quantity),
-      })
-    }
-
-    const { data: transferData, error: tErr } = await hasuraFetch<{ insert_job_work_transfers_one: { id: string; transfer_number: string } | null }>(CREATE_JOB_WORK_TRANSFER_MUTATION, {
-      transfer_number: transferNumber,
-      transfer_date: transferDate,
-      from_job_work_order_id: sourceId,
-      from_vendor_id: order.vendor_id,
-      to_job_work_order_id: newOrder.id,
-      to_vendor_id: targetVendorId,
-      reason: reason || null,
-      notes: notes || null,
+    // Single atomic database call — order, items, source-side
+    // quantity_transferred_out, transfer audit row, and transfer items all
+    // commit together or not at all, so a failure partway through can never
+    // leave the ledger silently unposted while everything else looks done.
+    const res = await fetch(`/api/jobwork/${sourceId}/transfer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target_vendor_id: targetVendorId,
+        transfer_date: transferDate,
+        reference_number: referenceNumber,
+        transfer_number: transferNumber,
+        reason: reason || null,
+        notes: notes || null,
+        lines: linePayload,
+      }),
     })
-    const transfer = transferData?.insert_job_work_transfers_one
-    if (tErr || !transfer) { setError(tErr?.message ?? 'Failed to record transfer'); setSaving(false); return }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { setError(data.error || `Server error (${res.status})`); setSaving(false); return }
 
-    const transferItemObjects = validLines.map(l => ({
-      job_work_transfer_id: transfer.id,
-      from_job_work_item_id: l.sourceItemId,
-      purchase_line_id: l.purchaseLineId || null,
-      sub_purchase_line_id: l.subPurchaseLineId || null,
-      item_master_id: l.itemMasterId || null,
-      item_name: l.itemName || null,
-      material_type_id: l.materialTypeId || null,
-      material_size_id: l.materialSizeId || null,
-      size_label: l.sizeLabel || null,
-      quantity_transferred: parseFloat(l.quantity),
-      unit: l.unit,
-    }))
-    await hasuraFetch(CREATE_JOB_WORK_TRANSFER_ITEMS_MUTATION, { objects: transferItemObjects })
-
-    router.push(`/jobwork/${newOrder.id}`)
+    router.push(`/jobwork/${data.toJobWorkOrderId}`)
     router.refresh()
   }
 
