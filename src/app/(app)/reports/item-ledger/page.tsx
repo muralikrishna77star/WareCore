@@ -361,6 +361,7 @@ export default async function ItemStockLedgerPage({
       orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
       vendorName,
+      ownVendorName,
     }
   })
   const closingBalance = runningBalance.warehouse
@@ -479,8 +480,11 @@ export default async function ItemStockLedgerPage({
       const outRow = ledgerRows[transferMerge.outIdx]
       const inRow = ledgerRows[transferMerge.inIdx]
       const laterRow = ledgerRows[i]
-      const fromVendor = outRow.vendorName || '—'
-      const toVendor = inRow.vendorName || '—'
+      // Each row's OWN vendor (not its decorated vendorName, which for a
+      // transfer leg is already the full "A → B" string) — using vendorName
+      // here would double up into "Transfer from A → B to A → B".
+      const fromVendor = outRow.ownVendorName || '—'
+      const toVendor = inRow.ownVendorName || '—'
       displayRows.push({
         ...inRow,
         id: `jwt-${outRow.id}-${inRow.id}`,
