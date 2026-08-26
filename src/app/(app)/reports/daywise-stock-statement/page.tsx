@@ -12,6 +12,7 @@ import {
   ACTIVE_MATERIAL_SIZES_QUERY,
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
+  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
 } from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
@@ -20,7 +21,7 @@ import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './DaywiseStockStatementTable'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
+import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 // Stock Movement classification for the Transaction Details export — same
@@ -118,10 +119,13 @@ interface StockLedgerMovement {
   entry_date: string
   reference_number: string | null
   reference_type: string | null
+  reference_id: string | null
   purchase_line_id: string | null
   sub_purchase_line_id: string | null
   size_label: string | null
   notes: string | null
+  material_type_id: string | null
+  material_size_id: string | null
   companies: { name: string; code?: string | null } | null
   warehouses: { name: string } | null
   material_types: { description: string | null; unit?: string | null } | null
@@ -237,6 +241,29 @@ export default async function DaywiseStockStatementPage({
   // Query already orders by entry_date asc, created_at asc — grouping below
   // preserves that order within and across days.
   const movements = (result.stock_ledger ?? []) as StockLedgerMovement[]
+
+  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement when its
+  // order's Output Materials line matches one of that order's own INPUT
+  // lines' material — no real conversion happened, so it's really the
+  // vendor-return leg. Single authoritative check shared with Item Stock
+  // Ledger / Stock Statement (isVendorMovementRow, src/lib/stockLedger.ts).
+  // Note: openingVendorBalance below is NOT corrected by this — it's a raw
+  // DB aggregate over VENDOR_MOVEMENT_TYPES only, same limitation this
+  // figure already had when no single item is selected (summing across
+  // materials/units isn't meaningful there either).
+  const outputOrderIds = Array.from(
+    new Set(movements.filter((m) => m.entry_type === 'JOB_WORK_OUTPUT_IN' && m.reference_id).map((m) => m.reference_id as string))
+  )
+  const sameMaterialOutputKeys = new Set<string>()
+  if (outputOrderIds.length > 0) {
+    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
+    const rows: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
+      matchingInputResult.job_work_items ?? []
+    for (const r of rows) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
+  }
+  const isVendorMovementMovement = (m: StockLedgerMovement) =>
+    isVendorMovementRow(m.entry_type, m.reference_id, m.material_type_id, m.material_size_id, sameMaterialOutputKeys)
+
   const openingWarehouseBalance = Number(openingWhResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
   // Vendor balance rises when warehouse-side quantity falls (JOB_WORK_OUT is
   // negative), so it's accumulated as the negation — same convention as the
@@ -292,7 +319,7 @@ export default async function DaywiseStockStatementPage({
       const itemName = size ? `${material} — ${size}` : material
 
       runningBalance.warehouse += rawQty
-      if (VENDOR_MOVEMENT_TYPES.includes(m.entry_type)) runningBalance.vendor -= rawQty
+      if (isVendorMovementMovement(m)) runningBalance.vendor -= rawQty
       if (m.entry_type === 'PURCHASE_IN' || m.entry_type === 'PURCHASE_CANCEL') dayTotals.purchasesRaw += rawQty
       if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL') dayTotals.salesRaw += rawQty
       if (m.entry_type === 'TRANSFER_IN') dayTotals.transferIn += rawQty
@@ -301,7 +328,7 @@ export default async function DaywiseStockStatementPage({
       if (m.entry_type === 'JOB_WORK_RETURN_IN' || m.entry_type === 'VENDOR_RETURN_IN') dayTotals.jobReturns += rawQty
       dayTotals.value += txnValue ?? 0
 
-      const isVendorMovement = VENDOR_MOVEMENT_TYPES.includes(m.entry_type)
+      const isVendorMovement = isVendorMovementMovement(m)
       transactionDetailRows.push({
         date,
         typeLabel: cfg.label,

@@ -1732,7 +1732,7 @@ export const JOB_WORK_REPORT_QUERY = `
 export const MOVEMENTS_REPORT_QUERY = `
   query GetMovementsReport($where: stock_ledger_bool_exp = {}) {
     stock_ledger(where: $where, order_by: [{entry_date: asc}, {created_at: asc}]) {
-      id entry_type quantity entry_date reference_number reference_type purchase_line_id sub_purchase_line_id size_label notes
+      id entry_type quantity entry_date reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label notes
       material_type_id material_size_id warehouse_id
       companies { name code }
       warehouses { name }
@@ -1752,13 +1752,9 @@ export const MOVEMENTS_REPORT_QUERY = `
 export const ITEM_STOCK_LEDGER_QUERY = `
   query GetItemStockLedger(
     $opening_where: stock_ledger_bool_exp = {},
-    $vendor_opening_where: stock_ledger_bool_exp = {},
     $period_where: stock_ledger_bool_exp = {}
   ) {
     opening_agg: stock_ledger_aggregate(where: $opening_where) {
-      aggregate { sum { quantity } }
-    }
-    vendor_opening_agg: stock_ledger_aggregate(where: $vendor_opening_where) {
       aggregate { sum { quantity } }
     }
     entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {quantity: desc}, {created_at: asc}], limit: 5000) {
@@ -1834,6 +1830,23 @@ export const CURRENT_VENDOR_STOCK_QUERY = `
       material_type_id
       material_size_id
       current_vendor_stock
+    }
+  }
+`
+
+// Every INPUT line's (order, material, size) for a batch of job_work_orders
+// — used to tell whether one of those orders' JOB_WORK_OUTPUT_IN rows is
+// really the vendor-return leg (output recorded against the exact same
+// material as one of the order's own input lines, no real conversion)
+// rather than a genuinely different converted item. See
+// isVendorMovementRow/vendorOutputOrderKey (src/lib/stockLedger.ts) and
+// vw_current_vendor_stock's matching JOB_WORK_OUTPUT_IN inclusion (123).
+export const JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY = `
+  query GetJobWorkOrdersInputMaterials($ids: [uuid!]!) {
+    job_work_items(where: { job_work_order_id: { _in: $ids } }) {
+      job_work_order_id
+      material_type_id
+      material_size_id
     }
   }
 `

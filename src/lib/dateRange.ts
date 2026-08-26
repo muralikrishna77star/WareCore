@@ -16,3 +16,11 @@ export function nextDay(dateStr: string): string {
   d.setDate(d.getDate() + 1)
   return d.toISOString().split('T')[0]
 }
+
+/** The day before a date-only string — used to compute an "as of the day
+ * before this range starts" opening balance. */
+export function prevDay(dateStr: string): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().split('T')[0]
+}

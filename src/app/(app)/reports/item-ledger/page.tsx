@@ -7,6 +7,7 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import {
   ITEM_STOCK_LEDGER_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
+  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
   VENDOR_JOB_WORK_TRANSFERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
@@ -15,13 +16,14 @@ import {
   CURRENT_VENDOR_STOCK_QUERY,
   SUPPLIER_NAMES_BY_IDS_QUERY,
 } from '@/lib/hasura/queries'
+import { prevDay } from '@/lib/dateRange'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
 import { ArrowLeft, BookOpen } from 'lucide-react'
-import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
+import { isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
@@ -67,6 +69,24 @@ async function findOrphanedReferences(pairs: { type: string; id: string }[]): Pr
   const result = await hasuraRunSql(sql)
   const rows = result.result?.slice(1) ?? []
   return new Set(rows.map(([type, id]) => `${type}|${id}`))
+}
+
+// Point-in-time vendor-held balance via fn_vendor_balance_as_of (123) —
+// same inclusion/sign rules as vw_current_vendor_stock, so this "opening
+// balance at vendor" always agrees with the "At Vendor (Job Work)" card
+// and the running Balance at Vendor column below it.
+async function fetchVendorBalanceAsOf(
+  materialTypeId: string,
+  materialSizeId: string,
+  companyId: string,
+  asOfDate: string
+): Promise<number> {
+  if (!UUID_RE.test(materialTypeId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) return 0
+  const sizeSql = materialSizeId && UUID_RE.test(materialSizeId) ? `'${materialSizeId}'::uuid` : 'NULL'
+  const companySql = companyId && UUID_RE.test(companyId) ? `'${companyId}'::uuid` : 'NULL'
+  const sql = `SELECT fn_vendor_balance_as_of('${materialTypeId}'::uuid, ${sizeSql}, ${companySql}, '${asOfDate}'::date)`
+  const result = await hasuraRunSql(sql)
+  return Number(result.result?.[1]?.[0] ?? 0)
 }
 
 type ItemMaster = {
@@ -163,20 +183,16 @@ export default async function ItemStockLedgerPage({
       : baseConditions
 
     const openingWhere = { _and: [...baseConditions, { entry_date: { _lt: fromDate } }] }
-    const vendorOpeningWhere = {
-      _and: [...baseConditions, { entry_date: { _lt: fromDate } }, { entry_type: { _in: VENDOR_MOVEMENT_TYPES } }],
-    }
     const periodWhere = {
       _and: [...periodConditions, { entry_date: { _gte: fromDate } }, { entry_date: { _lte: toDate } }],
     }
 
-    const result = await hasuraQuery(ITEM_STOCK_LEDGER_QUERY, {
-      opening_where: openingWhere,
-      vendor_opening_where: vendorOpeningWhere,
-      period_where: periodWhere,
-    })
+    const [result, vendorOpening] = await Promise.all([
+      hasuraQuery(ITEM_STOCK_LEDGER_QUERY, { opening_where: openingWhere, period_where: periodWhere }),
+      fetchVendorBalanceAsOf(selectedItem.material_type_id, selectedSizeId, params.company || '', prevDay(fromDate)),
+    ])
     openingBalance = Number(result.opening_agg?.aggregate?.sum?.quantity ?? 0)
-    vendorOpeningBalance = -Number(result.vendor_opening_agg?.aggregate?.sum?.quantity ?? 0)
+    vendorOpeningBalance = vendorOpening
     entries = result.entries ?? []
 
     const currentVendorStockWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
@@ -231,6 +247,30 @@ export default async function ItemStockLedgerPage({
     const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? '']))
   }
+
+  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement (material no
+  // longer held at the vendor) when its order's Output Materials line is
+  // recorded against the exact same material as one of that order's own
+  // INPUT lines — i.e. no real conversion happened, this is the vendor
+  // return leg. Single authoritative check shared with every other report
+  // (isVendorMovementRow, src/lib/stockLedger.ts) so this always agrees
+  // with vw_current_vendor_stock / fn_vendor_balance_as_of (migration 123).
+  const outputOrderIds = Array.from(
+    new Set(entries.filter((e) => e.entry_type === 'JOB_WORK_OUTPUT_IN' && e.reference_id).map((e) => e.reference_id as string))
+  )
+  const sameMaterialOutputKeys = new Set<string>()
+  if (outputOrderIds.length) {
+    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
+    const rows: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
+      matchingInputResult.job_work_items ?? []
+    for (const r of rows) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
+  }
+  const isVendorMovement = (
+    entryType: string,
+    referenceId: string | null | undefined,
+    materialTypeId: string | null | undefined,
+    materialSizeId: string | null | undefined
+  ) => isVendorMovementRow(entryType, referenceId, materialTypeId, materialSizeId, sameMaterialOutputKeys)
 
   // Counterparty vendor for a JOB_WORK_TRANSFER_OUT/IN row — the row's own
   // reference_id only carries one side of the vendor-to-vendor transfer (the
@@ -290,7 +330,11 @@ export default async function ItemStockLedgerPage({
   const runningBalance = { warehouse: openingBalance, vendor: vendorOpeningBalance }
   const ledgerRows = entries.map((e) => {
     runningBalance.warehouse += Number(e.quantity)
-    if (VENDOR_MOVEMENT_TYPES.includes(e.entry_type)) runningBalance.vendor -= Number(e.quantity)
+    // Every entry here already shares the selected item's material (the
+    // report's own query is scoped to it), so that's what decides a
+    // JOB_WORK_OUTPUT_IN row's vendor-movement status too.
+    if (isVendorMovement(e.entry_type, e.reference_id, selectedItem?.material_type_id, selectedSizeId || null))
+      runningBalance.vendor -= Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
     const ownVendorName = e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null
@@ -469,7 +513,9 @@ export default async function ItemStockLedgerPage({
     displayRows.push({
       ...soloRow,
       warehouseDelta: Number(soloRow.quantity),
-      vendorDelta: VENDOR_MOVEMENT_TYPES.includes(soloRow.entry_type) ? -Number(soloRow.quantity) : 0,
+      vendorDelta: isVendorMovement(soloRow.entry_type, soloRow.reference_id, selectedItem?.material_type_id, selectedSizeId || null)
+        ? -Number(soloRow.quantity)
+        : 0,
     })
   }
 
@@ -503,12 +549,22 @@ export default async function ItemStockLedgerPage({
     row.vendorBalance = finalRunning.vendor
   }
 
-  const totalIn = entries
+  // External In/Out: genuine receipts/issues only — a Job Work Out/Return
+  // (or a same-material Job Work Output In) moves material between the
+  // warehouse and a vendor, both still owned by the company, so it must
+  // never inflate these totals as if new stock arrived or left for good.
+  // Closing Balance already reflects every row unconditionally (above);
+  // only these two summary totals need the internal-vs-external split.
+  const externalEntries = entries.filter(
+    (e) => !isVendorMovement(e.entry_type, e.reference_id, selectedItem?.material_type_id, selectedSizeId || null)
+  )
+  const totalIn = externalEntries
     .filter((e) => Number(e.quantity) > 0)
     .reduce((s, e) => s + Number(e.quantity), 0)
-  const totalOut = entries
+  const totalOut = externalEntries
     .filter((e) => Number(e.quantity) < 0)
     .reduce((s, e) => s + Math.abs(Number(e.quantity)), 0)
+  const overallClosingStock = closingBalance + vendorStock.reduce((s, v) => s + Number(v.pending_quantity), 0)
 
   const unit = selectedItem?.material_types?.unit || selectedItem?.unit || 'tons'
   const sizeLabel = selectedItem?.material_sizes?.size_label || selectedItem?.size_label
@@ -559,8 +615,13 @@ export default async function ItemStockLedgerPage({
           { header: 'Reference', key: 'reference', width: 20, align: 'left' },
           { header: 'Company', key: 'company', width: 16, align: 'left' },
           { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
-          { header: 'Inward Quantity', key: 'in', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
-          { header: 'Outward Quantity', key: 'out', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+          // No totalsFn here: a plain column sum would mix genuine external
+          // receipts/issues with internal Job Work Out/Return movements
+          // (the same conflation the on-screen "External In/Out" cards
+          // fix) — the CLOSING BALANCE row below carries the correct,
+          // externally-filtered totalIn/totalOut instead.
+          { header: 'Inward Quantity', key: 'in', width: 16, align: 'right', numFmt: QTY_FMT },
+          { header: 'Outward Quantity', key: 'out', width: 16, align: 'right', numFmt: QTY_FMT },
           { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
           { header: 'Balance', key: 'balance', width: 16, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
           { header: 'Balance at Vendor', key: 'vendorBalance', width: 18, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
@@ -609,8 +670,26 @@ export default async function ItemStockLedgerPage({
               notes: row.notes || '',
             }
           }),
+          // Mirrors the on-screen tfoot exactly — same totalIn/totalOut
+          // (external only) and closing balances — so the screen, Print
+          // Report and this Excel export always agree.
+          {
+            sno: '',
+            date: toDate,
+            type: 'CLOSING BALANCE',
+            reference: '',
+            company: '',
+            warehouse: '',
+            in: totalIn,
+            out: totalOut,
+            rate: null,
+            balance: closingBalance,
+            vendorBalance: vendorClosingBalance,
+            vendor: '',
+            notes: `Closing balance as of the selected To Date — Overall (Warehouse + At Vendor): ${overallClosingStock.toFixed(3)}`,
+          },
         ],
-        highlightRowIndexes: [0],
+        highlightRowIndexes: [0, displayRows.length + 1],
       }
     : null
 
@@ -743,7 +822,7 @@ export default async function ItemStockLedgerPage({
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <div className="rounded-xl border bg-blue-50 p-4">
               <p className="text-xs text-gray-500">Opening Balance</p>
               <p className={`text-xl font-bold ${openingBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
@@ -751,15 +830,15 @@ export default async function ItemStockLedgerPage({
               </p>
             </div>
             <div className="rounded-xl border bg-green-50 p-4">
-              <p className="text-xs text-gray-500">Total In</p>
+              <p className="text-xs text-gray-500" title="Genuine external receipts only — Job Work Out/Return between the warehouse and a vendor never counts here.">External In</p>
               <p className="text-xl font-bold text-green-700">+{fmtQ(totalIn)}</p>
             </div>
             <div className="rounded-xl border bg-red-50 p-4">
-              <p className="text-xs text-gray-500">Total Out</p>
+              <p className="text-xs text-gray-500" title="Genuine external issues only — Job Work Out/Return between the warehouse and a vendor never counts here.">External Out</p>
               <p className="text-xl font-bold text-red-700">-{fmtQ(totalOut)}</p>
             </div>
             <div className="rounded-xl border bg-gray-50 p-4">
-              <p className="text-xs text-gray-500">Closing Balance</p>
+              <p className="text-xs text-gray-500">Warehouse Stock</p>
               <p className={`text-xl font-bold ${closingBalance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                 {fmtQ(closingBalance)}
               </p>
@@ -777,6 +856,13 @@ export default async function ItemStockLedgerPage({
               {vendorStock.length === 1 && (
                 <p className="text-[11px] text-gray-500 mt-1">{vendorStock[0].vendor_name}</p>
               )}
+            </div>
+            <div className="rounded-xl border bg-indigo-50 p-4">
+              <p className="text-xs text-gray-500">Overall Closing Stock</p>
+              <p className={`text-xl font-bold ${overallClosingStock < 0 ? 'text-red-600' : 'text-indigo-900'}`}>
+                {fmtQ(overallClosingStock)}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-1">Warehouse Stock + At Vendor</p>
             </div>
           </div>
 

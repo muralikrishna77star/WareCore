@@ -14,12 +14,13 @@ import {
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
+  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
   DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY,
   TRANSFERS_WAREHOUSE_LOOKUP_QUERY,
   AVERAGE_PURCHASE_RATES_QUERY,
   USER_PROFILES_QUERY,
 } from '@/lib/hasura/queries'
-import { VENDOR_MOVEMENT_TYPES } from '@/lib/stockLedger'
+import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { StockStatementExportButton } from './StockStatementExportButton'
@@ -285,7 +286,8 @@ export default async function StockStatementPage({
   const jobWorkOrderIds = Array.from(
     new Set(
       [...openingRows, ...periodRows]
-        .filter((r) => VENDOR_MOVEMENT_TYPES.includes(r.entry_type) && r.reference_type === 'job_work' && r.reference_id)
+        .filter((r) => r.reference_type === 'job_work' && r.reference_id &&
+          (VENDOR_MOVEMENT_TYPES.includes(r.entry_type) || r.entry_type === 'JOB_WORK_OUTPUT_IN'))
         .map((r) => r.reference_id as string)
     )
   )
@@ -295,6 +297,28 @@ export default async function StockStatementPage({
     const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? 'Unknown Vendor']))
   }
+
+  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement when its
+  // order's Output Materials line matches one of that order's own INPUT
+  // lines' material — no real conversion happened, so it's really the
+  // vendor-return leg. Single authoritative check shared with the Item
+  // Stock Ledger report (isVendorMovementRow, src/lib/stockLedger.ts).
+  const outputOrderIds = Array.from(
+    new Set(
+      [...openingRows, ...periodRows]
+        .filter((r) => r.entry_type === 'JOB_WORK_OUTPUT_IN' && r.reference_id)
+        .map((r) => r.reference_id as string)
+    )
+  )
+  const sameMaterialOutputKeys = new Set<string>()
+  if (outputOrderIds.length > 0) {
+    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
+    const rows: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
+      matchingInputResult.job_work_items ?? []
+    for (const r of rows) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
+  }
+  const isVendorMovement = (row: LedgerRow) =>
+    isVendorMovementRow(row.entry_type, row.reference_id, row.material_type_id, row.material_size_id, sameMaterialOutputKeys)
 
   // Customer names for the Transaction Details extract — SALE_OUT/SALE_CANCEL
   // reference a dispatch_orders.id, which carries the customer.
@@ -425,7 +449,7 @@ export default async function StockStatementPage({
     item.openingWarehouse += qty
     const whName = row.warehouses?.name ?? 'Unknown Warehouse'
     item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
-    if (VENDOR_MOVEMENT_TYPES.includes(row.entry_type)) {
+    if (isVendorMovement(row)) {
       const vendorDelta = vendorDeltaFor(row, qty)
       item.openingVendor += vendorDelta
       const vendorName = vendorNameFor(row)
@@ -441,7 +465,10 @@ export default async function StockStatementPage({
     const item = ensureItem(row)
     const qty = Number(row.quantity)
 
-    const bucket = WAREHOUSE_BUCKET[row.entry_type]
+    // A same-material JOB_WORK_OUTPUT_IN is the vendor-return leg, same
+    // bucket as JOB_WORK_RETURN_IN — a genuinely converted output (not a
+    // vendor movement) still falls through to Other In, same as before.
+    const bucket = row.entry_type === 'JOB_WORK_OUTPUT_IN' && isVendorMovement(row) ? 'jw_return' : WAREHOUSE_BUCKET[row.entry_type]
     if (bucket === 'purchase_in') item.purchase_in += qty
     else if (bucket === 'transfer_in') item.transfer_in += qty
     else if (bucket === 'transfer_out') item.transfer_out += Math.abs(qty)
@@ -457,7 +484,7 @@ export default async function StockStatementPage({
     const whName = row.warehouses?.name ?? 'Unknown Warehouse'
     item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
 
-    if (VENDOR_MOVEMENT_TYPES.includes(row.entry_type)) {
+    if (isVendorMovement(row)) {
       const vendorDelta = vendorDeltaFor(row, qty)
       item.closingVendor += vendorDelta
       const vendorName = vendorNameFor(row)
@@ -547,9 +574,8 @@ export default async function StockStatementPage({
     for (const row of periodRowsByKey[displayKey] ?? []) {
       const rawQty = Number(row.quantity)
       const info = ENTRY_TYPE_INFO[row.entry_type] ?? { label: row.entry_type, movement: rawQty >= 0 ? 'INWARD' as const : 'OUTWARD' as const }
-      const isVendorMovement = VENDOR_MOVEMENT_TYPES.includes(row.entry_type)
       const warehouseChange = rawQty
-      const vendorChange = isVendorMovement ? vendorDeltaFor(row, rawQty) : 0
+      const vendorChange = isVendorMovement(row) ? vendorDeltaFor(row, rawQty) : 0
       runningWarehouse += warehouseChange
       runningVendor += vendorChange
 
@@ -571,7 +597,7 @@ export default async function StockStatementPage({
         warehouseName,
         sourceWarehouseName: isTransferOut ? warehouseName : isTransferIn ? (transferPair?.from ?? '') : '',
         destinationWarehouseName: isTransferIn ? warehouseName : isTransferOut ? (transferPair?.to ?? '') : '',
-        vendorName: isVendorMovement && row.reference_type === 'job_work' && row.reference_id
+        vendorName: isVendorMovement(row) && row.reference_type === 'job_work' && row.reference_id
           ? vendorNameByJobWorkOrderId.get(row.reference_id) ?? 'Unknown Vendor'
           : '',
         customerName: row.reference_type === 'dispatch' && row.reference_id
