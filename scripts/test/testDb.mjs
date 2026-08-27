@@ -54,6 +54,20 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '082_redo_jw_msa5jkmm_feg0_repair.sql',
   '083_fix_082_transfer_out_date.sql',
   '084_repair_cr00700_duplicate_cancel.sql',
+  // Found while adding tests/data-integrity/vendor-movements-report.test.ts
+  // (2026-08-27): four more one-off forensic repairs added after this list
+  // was last updated, same shape as the ones above (hardcoded production
+  // UUIDs for companies/vendors/orders that don't exist in a blank schema).
+  // Confirmed via a full from-scratch migration run that this set (plus the
+  // ones above) is exactly what's needed for every migration to apply
+  // cleanly to a fresh embedded Postgres — re-verify with the same method
+  // (run scripts/test/run-migration-check.mjs, or startTestDb with
+  // skipProductionDataMigrations: false) if a new repair migration is added.
+  '113_repair_gi00069_dedicated_transfer_order.sql',
+  '119_repair_missing_transfer_jwt_0826_0012.sql',
+  '121_backfill_intercompany_stock_sharing.sql',
+  '122_correct_cr0524_0065_misattribution.sql',
+  '124_fix_jwt_0826_0012_qty_sent_corruption.sql',
 ])
 
 /**

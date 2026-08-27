@@ -51,6 +51,21 @@ function sourceDestinationFor(
   }
 }
 
+// Vendor-stock-movement sign of each transaction type (mirrors
+// VendorMovementsTable's runningBalanceEffect) — Job Work Out and Transfer
+// In increase the vendor's held stock, Return / Direct Sale / Transfer Out
+// decrease it. Independent of the underlying ledger row's own sign
+// convention, so the Excel export's Quantity/Running Balance columns always
+// agree with the on-screen drill-down.
+const runningBalanceEffect: Record<Transaction['type'], 1 | -1> = {
+  'Job Work Out': 1,
+  'Transfer In': 1,
+  Return: -1,
+  'Return (paired with direct sale)': -1,
+  'Direct Sale': -1,
+  'Transfer Out': -1,
+}
+
 type ItemOption = ComboOption & {
   material_type_id: string
   material_size_id: string | null
@@ -157,6 +172,7 @@ type GroupRow = {
   directSales: number
   returns: number
   balance: number
+  openingBalance: number
   rate: number | null
   purchaseDate: string | null
   transactions: Transaction[]
@@ -420,6 +436,7 @@ export default async function VendorMovementsPage({
         directSales: 0,
         returns: 0,
         balance: 0,
+        openingBalance: 0,
         rate: null,
         purchaseDate: null,
         transactions: [],
@@ -584,11 +601,44 @@ export default async function VendorMovementsPage({
       cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) + Math.abs(Number(m.quantity)))
     }
   }
+  // Opening balance (as of the day before the From date): the same
+  // cumulative formula as the closing balance above, just re-summed over
+  // the already-fetched jobWorkItemBalances/cumulativeJobWork datasets
+  // restricted to activity strictly before fromDate — both datasets are
+  // fetched unbounded-below (dispatch_date/entry_date <= toDate only), so
+  // no extra query is needed to isolate the pre-period slice.
+  const openingOutByKey = new Map<string, number>()
+  const openingReturnInByKey = new Map<string, number>()
+  const openingTransferOutByKey = new Map<string, number>()
+  for (const item of jobWorkItemBalances) {
+    const order = item.job_work_orders
+    if (!order?.vendor_id || order.dispatch_date >= fromDate) continue
+    if (vendorFilter && order.vendor_id !== vendorFilter) continue
+    const key = groupKey(order.vendor_id, item.material_type_id, item.material_size_id ?? null)
+    openingOutByKey.set(key, (openingOutByKey.get(key) ?? 0) + Number(item.quantity_sent ?? 0))
+  }
+  for (const m of cumulativeJobWork) {
+    if (m.entry_date >= fromDate) continue
+    const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
+    if (!info) continue
+    if (vendorFilter && info.vendor_id !== vendorFilter) continue
+    const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
+    if (m.entry_type === 'JOB_WORK_RETURN_IN') {
+      openingReturnInByKey.set(key, (openingReturnInByKey.get(key) ?? 0) + Number(m.quantity))
+    } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
+      openingTransferOutByKey.set(key, (openingTransferOutByKey.get(key) ?? 0) + Math.abs(Number(m.quantity)))
+    }
+  }
+
   for (const g of groups.values()) {
     g.balance =
       (cumulativeOutByKey.get(g.key) ?? 0) -
       (cumulativeReturnInByKey.get(g.key) ?? 0) -
       (cumulativeTransferOutByKey.get(g.key) ?? 0)
+    g.openingBalance =
+      (openingOutByKey.get(g.key) ?? 0) -
+      (openingReturnInByKey.get(g.key) ?? 0) -
+      (openingTransferOutByKey.get(g.key) ?? 0)
     const latest = latestByMaterialMap.get(`${g.materialTypeId}|${g.materialSizeId ?? ''}`)
     if (latest) {
       g.rate = latest.rate
@@ -614,6 +664,7 @@ export default async function VendorMovementsPage({
     company: (g) => g.companyName,
     item: (g) => itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
     size: (g) => g.sizeLabel,
+    opening_balance: (g) => g.openingBalance,
     job_work_out: (g) => g.jobWorkOut,
     direct_sales: (g) => g.directSales,
     returns: (g) => g.returns,
@@ -633,14 +684,27 @@ export default async function VendorMovementsPage({
 
   const totals = rows.reduce(
     (acc, g) => ({
+      openingBalance: acc.openingBalance + g.openingBalance,
       jobWorkOut: acc.jobWorkOut + g.jobWorkOut,
       directSales: acc.directSales + g.directSales,
       returns: acc.returns + g.returns,
+      transferOutQty: acc.transferOutQty + g.transferOutQty,
+      transferInQty: acc.transferInQty + g.transferInQty,
       balance: acc.balance + g.balance,
       valuation: acc.valuation + (g.rate ? g.balance * g.rate : 0),
     }),
-    { jobWorkOut: 0, directSales: 0, returns: 0, balance: 0, valuation: 0 }
+    { openingBalance: 0, jobWorkOut: 0, directSales: 0, returns: 0, transferOutQty: 0, transferInQty: 0, balance: 0, valuation: 0 }
   )
+
+  // Reconciliation check: the closing balance must equal opening balance plus
+  // every visible movement category — Job Work Out and Transfers In increase
+  // vendor stock, Returns/Direct Sales/Transfers Out decrease it. A non-zero
+  // gap here means a movement category is missing or mis-signed somewhere
+  // upstream, not just an isolated rounding difference.
+  const derivedClosing =
+    totals.openingBalance + totals.jobWorkOut + totals.transferInQty - totals.returns - totals.directSales - totals.transferOutQty
+  const reconciliationDiff = totals.balance - derivedClosing
+  const isReconciled = Math.abs(reconciliationDiff) < 0.0005
 
   const sortHref = (column: string) => {
     const next = new URLSearchParams()
@@ -655,7 +719,7 @@ export default async function VendorMovementsPage({
     return `/reports/vendor-movements?${next.toString()}`
   }
   const sortHrefs = Object.fromEntries(
-    ['vendor', 'company', 'item', 'size', 'job_work_out', 'direct_sales', 'returns', 'balance', 'purchase_date', 'rate', 'valuation'].map((c) => [c, sortHref(c)])
+    ['vendor', 'company', 'item', 'size', 'opening_balance', 'job_work_out', 'direct_sales', 'returns', 'balance', 'purchase_date', 'rate', 'valuation'].map((c) => [c, sortHref(c)])
   )
 
   const tableRows = rows.map((g) => ({
@@ -665,9 +729,12 @@ export default async function VendorMovementsPage({
     itemLabel: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
     sizeLabel: g.sizeLabel,
     unit: g.unit,
+    openingBalance: g.openingBalance,
     jobWorkOut: g.jobWorkOut,
     directSales: g.directSales,
     returns: g.returns,
+    transferOutQty: g.transferOutQty,
+    transferInQty: g.transferInQty,
     balance: g.balance,
     rate: g.rate,
     purchaseDate: g.purchaseDate,
@@ -694,6 +761,7 @@ export default async function VendorMovementsPage({
       { header: 'Company', key: 'company', width: 18, align: 'left' },
       { header: 'Item', key: 'item', width: 26, align: 'left' },
       { header: 'Size', key: 'size', width: 12, align: 'left' },
+      { header: `Opening Balance (${fromDate})`, key: 'openingBalance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Job Work Out', key: 'jobWorkOut', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Direct Sales', key: 'directSales', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Returns', key: 'returns', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
@@ -701,7 +769,7 @@ export default async function VendorMovementsPage({
       { header: 'Transferred Out To', key: 'transferOutTo', width: 24, align: 'left' },
       { header: 'Transferred In', key: 'transferInQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Transferred In From', key: 'transferInFrom', width: 24, align: 'left' },
-      { header: `Balance as on ${toDate}`, key: 'balance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
+      { header: `Closing Balance (${toDate})`, key: 'balance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
       { header: 'Purchase Date', key: 'purchaseDate', width: 16, align: 'center', isDate: true },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
       { header: 'Valuation (₹)', key: 'valuation', width: 18, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
@@ -711,6 +779,7 @@ export default async function VendorMovementsPage({
       company: g.companyName,
       item: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
       size: g.sizeLabel || '',
+      openingBalance: g.openingBalance,
       jobWorkOut: g.jobWorkOut,
       directSales: g.directSales,
       returns: g.returns,
@@ -741,11 +810,14 @@ export default async function VendorMovementsPage({
       { header: 'Quantity', key: 'quantity', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Reference', key: 'reference', width: 18, align: 'left' },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Running Balance', key: 'runningBalance', width: 16, align: 'right', numFmt: QTY_FMT },
       { header: 'Notes', key: 'notes', width: 30, align: 'left' },
     ],
-    rows: rows.flatMap((g) =>
-      g.transactions.map((t) => {
+    rows: rows.flatMap((g) => {
+      let running = g.openingBalance
+      return g.transactions.map((t) => {
         const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor, t.customerName)
+        running += runningBalanceEffect[t.type] * Math.abs(t.quantity)
         return {
           date: t.date,
           vendor: g.vendorName,
@@ -755,13 +827,14 @@ export default async function VendorMovementsPage({
           type: t.type,
           source,
           destination,
-          quantity: t.quantity,
+          quantity: runningBalanceEffect[t.type] * Math.abs(t.quantity),
           reference: t.reference_number || '',
           rate: t.rate ?? null,
+          runningBalance: running,
           notes: t.notes || '',
         }
       })
-    ).map((row, idx) => ({ sno: idx + 1, ...row })),
+    }).map((row, idx) => ({ sno: idx + 1, ...row })),
   }
 
   return (
@@ -839,27 +912,52 @@ export default async function VendorMovementsPage({
       </form>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-xl border bg-slate-50 p-4">
+          <p className="text-xs text-gray-500">Opening Balance ({fromDate})</p>
+          <p className="text-xl font-bold text-slate-800">{totals.openingBalance.toFixed(3)}</p>
+        </div>
         <div className="rounded-xl border bg-purple-50 p-4">
           <p className="text-xs text-gray-500">Job Work Out</p>
           <p className="text-xl font-bold text-purple-800">{totals.jobWorkOut.toFixed(3)}</p>
         </div>
-        <div className="rounded-xl border bg-red-50 p-4">
-          <p className="text-xs text-gray-500">Direct Sales</p>
-          <p className="text-xl font-bold text-red-700">{totals.directSales.toFixed(3)}</p>
+        <div className="rounded-xl border bg-indigo-50 p-4">
+          <p className="text-xs text-gray-500">Transfers In</p>
+          <p className="text-xl font-bold text-indigo-800">{totals.transferInQty.toFixed(3)}</p>
+        </div>
+        <div className="rounded-xl border bg-orange-50 p-4">
+          <p className="text-xs text-gray-500">Transfers Out</p>
+          <p className="text-xl font-bold text-orange-800">{totals.transferOutQty.toFixed(3)}</p>
         </div>
         <div className="rounded-xl border bg-teal-50 p-4">
           <p className="text-xs text-gray-500">Returns</p>
           <p className="text-xl font-bold text-teal-800">{totals.returns.toFixed(3)}</p>
         </div>
-        <div className="rounded-xl border bg-orange-50 p-4">
-          <p className="text-xs text-gray-500">Balance at Vendors</p>
-          <p className="text-xl font-bold text-orange-800">{totals.balance.toFixed(3)}</p>
+        <div className="rounded-xl border bg-red-50 p-4">
+          <p className="text-xs text-gray-500">Direct Sales</p>
+          <p className="text-xl font-bold text-red-700">{totals.directSales.toFixed(3)}</p>
+        </div>
+        <div className="rounded-xl border bg-blue-50 p-4">
+          <p className="text-xs text-gray-500">Closing Balance ({toDate})</p>
+          <p className="text-xl font-bold text-blue-800">{totals.balance.toFixed(3)}</p>
         </div>
         <div className="rounded-xl border bg-amber-50 p-4">
           <p className="text-xs text-gray-500">Valuation at Vendors</p>
           <p className="text-xl font-bold text-amber-800">{fmtC(totals.valuation)}</p>
         </div>
+      </div>
+
+      {/* Reconciliation strip — proves the closing balance above is derived
+          entirely from the visible categories, not a hidden number. */}
+      <div className={`rounded-xl border p-3 text-xs flex flex-wrap items-center gap-x-2 gap-y-1 print:hidden ${isReconciled ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+        <span className="font-semibold">{isReconciled ? '✓ Reconciled' : '⚠ Not reconciled'}:</span>
+        <span>
+          Opening {totals.openingBalance.toFixed(3)} + Job Work Out {totals.jobWorkOut.toFixed(3)} + Transfers In {totals.transferInQty.toFixed(3)}
+          {' − '}Returns {totals.returns.toFixed(3)} − Direct Sales {totals.directSales.toFixed(3)} − Transfers Out {totals.transferOutQty.toFixed(3)}
+          {' = '}{derivedClosing.toFixed(3)}
+        </span>
+        <span>vs. displayed Closing Balance {totals.balance.toFixed(3)}</span>
+        {!isReconciled && <span className="font-semibold">(gap: {reconciliationDiff.toFixed(3)})</span>}
       </div>
 
       {/* Table */}

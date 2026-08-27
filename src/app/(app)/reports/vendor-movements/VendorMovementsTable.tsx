@@ -22,13 +22,30 @@ export type GroupRow = {
   itemLabel: string
   sizeLabel: string
   unit: string
+  openingBalance: number
   jobWorkOut: number
   directSales: number
   returns: number
+  transferOutQty: number
+  transferInQty: number
   balance: number
   rate: number | null
   purchaseDate: string | null
   transactions: Transaction[]
+}
+
+// Vendor-stock-movement sign of each transaction type, independent of how the
+// underlying ledger row happens to be signed: Job Work Out and Transfer In
+// increase the vendor's held stock, Return / Direct Sale / Transfer Out
+// decrease it. Used to build the per-transaction running balance shown in
+// the drill-down, starting from the group's opening balance.
+const runningBalanceEffect: Record<Transaction['type'], 1 | -1> = {
+  'Job Work Out': 1,
+  'Transfer In': 1,
+  Return: -1,
+  'Return (paired with direct sale)': -1,
+  'Direct Sale': -1,
+  'Transfer Out': -1,
 }
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -139,10 +156,12 @@ export default function VendorMovementsTable({
           <SortableTh column="company" label="Company" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="item" label="Item" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="size" label="Size" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <SortableTh column="opening_balance" label="Opening" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="job_work_out" label="Job Work Out" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="direct_sales" label="Direct Sales" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="returns" label="Returns" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
-          <SortableTh column="balance" label="Balance" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <th className="px-4 py-3 text-xs font-medium text-gray-500 uppercase text-right">Transfers In/Out</th>
+          <SortableTh column="balance" label="Closing Balance" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="purchase_date" label="Purchase Date" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="rate" label="Rate" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
           <SortableTh column="valuation" label="Valuation" align="right" sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
@@ -164,9 +183,16 @@ export default function VendorMovementsTable({
                 <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{g.companyName}</td>
                 <td className="px-4 py-2.5 text-gray-900 whitespace-nowrap">{g.itemLabel}</td>
                 <td className="px-4 py-2.5 text-gray-600">{g.sizeLabel}</td>
+                <td className="px-4 py-2.5 text-right font-medium text-slate-700">{g.openingBalance.toFixed(3)} {g.unit}</td>
                 <td className="px-4 py-2.5 text-right font-medium text-purple-700">{g.jobWorkOut.toFixed(3)} {g.unit}</td>
                 <td className="px-4 py-2.5 text-right font-medium text-red-700">{g.directSales.toFixed(3)} {g.unit}</td>
                 <td className="px-4 py-2.5 text-right font-medium text-teal-700">{g.returns.toFixed(3)} {g.unit}</td>
+                <td className="px-4 py-2.5 text-right font-medium text-indigo-700 whitespace-nowrap">
+                  {g.transferInQty > 0 && <span>+{g.transferInQty.toFixed(3)}</span>}
+                  {g.transferInQty > 0 && g.transferOutQty > 0 && ' / '}
+                  {g.transferOutQty > 0 && <span>−{g.transferOutQty.toFixed(3)}</span>}
+                  {g.transferInQty === 0 && g.transferOutQty === 0 && '—'}
+                </td>
                 <td className={`px-4 py-2.5 text-right font-semibold ${g.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                   {g.balance.toFixed(3)} {g.unit}
                 </td>
@@ -176,9 +202,23 @@ export default function VendorMovementsTable({
                   {g.rate ? fmtC(g.balance * g.rate) : '—'}
                 </td>
               </tr>
-              {isOpen && (
+              {isOpen && (() => {
+                // Running balance walks the group's opening balance forward
+                // through its sorted transactions using each type's fixed
+                // vendor-stock-movement sign (runningBalanceEffect) — not the
+                // transaction's raw signed quantity, which follows the
+                // underlying ledger's own (inconsistent) sign convention.
+                let running = g.openingBalance
+                const withRunning = g.transactions.map((t) => {
+                  running += runningBalanceEffect[t.type] * Math.abs(t.quantity)
+                  return { t, running }
+                })
+                return (
                 <tr key={`${g.key}-detail`} className="bg-gray-50/60">
-                  <td colSpan={12} className="px-4 py-3">
+                  <td colSpan={14} className="px-4 py-3">
+                    <p className="text-xs text-gray-500 px-2 pb-2">
+                      Opening Balance {g.openingBalance.toFixed(3)} {g.unit} → Closing Balance {g.balance.toFixed(3)} {g.unit}
+                    </p>
                     {g.transactions.length === 0 ? (
                       <p className="text-xs text-gray-400 px-2">No individual transactions in this period.</p>
                     ) : (
@@ -195,10 +235,11 @@ export default function VendorMovementsTable({
                             <th className="px-3 py-2 text-teal-700">Purchase Date</th>
                             <th className="px-3 py-2 text-right text-teal-700">Rate</th>
                             <th className="px-3 py-2 text-right text-amber-700">Value</th>
+                            <th className="px-3 py-2 text-right text-blue-700">Running Balance</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {g.transactions.map((t) => {
+                          {withRunning.map(({ t, running: runningBalance }) => {
                             const { source, destination } = sourceDestinationFor(t.type, g.vendorName, g.companyName, t.counterpartyVendor, t.customerName)
                             return (
                               <tr key={t.id}>
@@ -210,14 +251,15 @@ export default function VendorMovementsTable({
                                 </td>
                                 <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{source}</td>
                                 <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{destination}</td>
-                                <td className={`px-3 py-2 text-right font-medium ${t.quantity >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                  {t.quantity >= 0 ? '+' : ''}{t.quantity.toFixed(3)} {g.unit}
+                                <td className={`px-3 py-2 text-right font-medium ${runningBalanceEffect[t.type] > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                  {runningBalanceEffect[t.type] > 0 ? '+' : '−'}{Math.abs(t.quantity).toFixed(3)} {g.unit}
                                 </td>
                                 <td className="px-3 py-2 font-mono text-gray-500">{t.reference_number || '—'}</td>
                                 <td className="px-3 py-2 text-gray-500">{t.notes || '—'}</td>
                                 <td className="px-3 py-2 text-teal-700 whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
                                 <td className="px-3 py-2 text-right text-teal-700">{t.rate ? fmtC(t.rate) : '—'}</td>
                                 <td className="px-3 py-2 text-right text-amber-700">{t.rate ? fmtC(Math.abs(t.quantity) * t.rate) : '—'}</td>
+                                <td className="px-3 py-2 text-right font-medium text-blue-800">{runningBalance.toFixed(3)} {g.unit}</td>
                               </tr>
                             )
                           })}
@@ -226,7 +268,8 @@ export default function VendorMovementsTable({
                     )}
                   </td>
                 </tr>
-              )}
+                )
+              })()}
             </Fragment>
           )
         })}
@@ -234,9 +277,13 @@ export default function VendorMovementsTable({
       <tfoot>
         <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
           <td className="px-4 py-3 text-gray-700" colSpan={5}>Total</td>
+          <td className="px-4 py-3 text-right text-slate-800">{rows.reduce((s, g) => s + g.openingBalance, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-purple-800">{rows.reduce((s, g) => s + g.jobWorkOut, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-red-800">{rows.reduce((s, g) => s + g.directSales, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-right text-teal-800">{rows.reduce((s, g) => s + g.returns, 0).toFixed(3)}</td>
+          <td className="px-4 py-3 text-right text-indigo-800 whitespace-nowrap">
+            +{rows.reduce((s, g) => s + g.transferInQty, 0).toFixed(3)} / −{rows.reduce((s, g) => s + g.transferOutQty, 0).toFixed(3)}
+          </td>
           <td className="px-4 py-3 text-right text-gray-900">{rows.reduce((s, g) => s + g.balance, 0).toFixed(3)}</td>
           <td className="px-4 py-3 text-gray-400">—</td>
           <td className="px-4 py-3 text-right text-gray-400">—</td>
