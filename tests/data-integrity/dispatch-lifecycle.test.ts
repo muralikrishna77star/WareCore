@@ -158,6 +158,121 @@ describe('Dispatch lifecycle', () => {
     expect(result.r.success).toBe(false)
   })
 
+  // REGRESSION (migration 126): edit_dispatch_order()'s vendor-direct-sale
+  // cleanup DELETE keyed on the row value (purchase_line_id,
+  // sub_purchase_line_id) — but sub_purchase_line_id is NULL on
+  // effectively every dispatch item, and Postgres treats (x, NULL) =
+  // (y, NULL) as UNKNOWN (never TRUE), so the DELETE silently matched
+  // nothing. Every edit of a vendor-direct-sale order therefore left its
+  // previous "Vendor direct sale — virtual return" stock_ledger row
+  // behind — a duplicate if the line was unchanged, an orphan overstating
+  // a DIFFERENT item's vendor balance if the line's material/size changed
+  // or was removed. Found via GI00148 showing an impossible -2.730
+  // "Balance at Vendor".
+  describe('vendor-direct-sale edit (migration 126)', () => {
+    async function makeVendorDirectFixtures() {
+      seq += 1
+      const code = `VD${seq}${Date.now().toString(36).slice(-4)}`.toUpperCase().slice(0, 10)
+      const { rows: [company] } = await client.query(`INSERT INTO companies (name, code) VALUES ($1, $1) RETURNING id`, [code])
+      const { rows: [warehouse] } = await client.query(`INSERT INTO warehouses (company_id, name) VALUES ($1, 'WH') RETURNING id`, [company.id])
+      const { rows: [customer] } = await client.query(`INSERT INTO customers (name) VALUES ($1) RETURNING id`, [code])
+      const { rows: [vendor] } = await client.query(`INSERT INTO suppliers (name) VALUES ($1) RETURNING id`, [`${code}-VENDOR`])
+      const { rows: [materialTypeA] } = await client.query(`INSERT INTO material_types (code, description, unit) VALUES ($1, $1, 'MT') RETURNING id`, [`${code}A`])
+      const { rows: [materialTypeB] } = await client.query(`INSERT INTO material_types (code, description, unit) VALUES ($1, $1, 'MT') RETURNING id`, [`${code}B`])
+      const { rows: [order] } = await client.query(
+        `INSERT INTO job_work_orders (reference_number, vendor_id, company_id, warehouse_id, dispatch_date, status)
+         VALUES ($1, $2, $3, $4, '2024-06-01', 'dispatched') RETURNING id`,
+        [`JW-TEST-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, vendor.id, company.id, warehouse.id]
+      )
+      return {
+        companyId: company.id as string, warehouseId: warehouse.id as string, customerId: customer.id as string,
+        jobWorkOrderId: order.id as string, materialTypeAId: materialTypeA.id as string, materialTypeBId: materialTypeB.id as string,
+      }
+    }
+
+    async function makeVendorDirectDispatch(
+      f: Awaited<ReturnType<typeof makeVendorDirectFixtures>>,
+      purchaseLineId: string, materialTypeId: string, quantity: number
+    ) {
+      const invoiceNumber = `INV-VD-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      const { rows: [order] } = await client.query(
+        `INSERT INTO dispatch_orders (invoice_number, customer_id, company_id, warehouse_id, dispatch_date, status, is_vendor_direct, source_job_work_order_id)
+         VALUES ($1, $2, $3, $4, '2024-06-05', 'active', true, $5) RETURNING id`,
+        [invoiceNumber, f.customerId, f.companyId, f.warehouseId, f.jobWorkOrderId]
+      )
+      await client.query(
+        `INSERT INTO dispatch_items (dispatch_order_id, material_type_id, purchase_line_id, quantity, unit, rate, amount)
+         VALUES ($1, $2, $3, $4, 'tons', 150, $5)`,
+        [order.id, materialTypeId, purchaseLineId, quantity, quantity * 150]
+      )
+      return order.id as string
+    }
+
+    async function editDispatch(orderId: string, items: { materialTypeId: string; purchaseLineId: string; quantity: number }[]) {
+      const { rows: [order] } = await client.query(`SELECT * FROM dispatch_orders WHERE id = $1`, [orderId])
+      const itemsJson = JSON.stringify(items.map((i) => ({
+        material_type_id: i.materialTypeId, purchase_line_id: i.purchaseLineId,
+        quantity: i.quantity, unit: 'tons', rate: 150, amount: i.quantity * 150,
+      })))
+      const { rows: [result] } = await client.query(
+        `SELECT edit_dispatch_order($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb) AS r`,
+        [orderId, order.invoice_number, order.dispatch_date, order.vehicle_number, order.driver_name, order.notes,
+         order.company_id, order.warehouse_id, order.customer_id, order.sale_ref_id, order.status,
+         items.reduce((s, i) => s + i.quantity, 0), items.reduce((s, i) => s + i.quantity * 150, 0), itemsJson]
+      )
+      return result.r
+    }
+
+    async function virtualReturns(jobWorkOrderId: string) {
+      const { rows } = await client.query(
+        `SELECT purchase_line_id, quantity, material_type_id FROM stock_ledger
+         WHERE reference_type = 'job_work' AND reference_id = $1 AND notes = 'Vendor direct sale — virtual return'
+         ORDER BY purchase_line_id`,
+        [jobWorkOrderId]
+      )
+      return rows
+    }
+
+    it('re-saving an unchanged line does not duplicate the virtual-return row', async () => {
+      const f = await makeVendorDirectFixtures()
+      const orderId = await makeVendorDirectDispatch(f, 'PL-0001', f.materialTypeAId, 3.024)
+      expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(1)
+
+      const result = await editDispatch(orderId, [{ materialTypeId: f.materialTypeAId, purchaseLineId: 'PL-0001', quantity: 3.024 }])
+      expect(result.success).toBe(true)
+
+      const returns = await virtualReturns(f.jobWorkOrderId)
+      expect(returns).toHaveLength(1)
+      expect(Number(returns[0].quantity)).toBeCloseTo(3.024, 3)
+    })
+
+    it('editing a line to a different material leaves no orphaned virtual-return row for the old material', async () => {
+      const f = await makeVendorDirectFixtures()
+      const orderId = await makeVendorDirectDispatch(f, 'PL-0002', f.materialTypeAId, 2.730)
+      expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(1)
+
+      // Corrected to a different material under the same purchase line
+      // reference (the real-world case: the wrong item was picked at
+      // entry time, then fixed via Edit Order).
+      const result = await editDispatch(orderId, [{ materialTypeId: f.materialTypeBId, purchaseLineId: 'PL-0002', quantity: 2.730 }])
+      expect(result.success).toBe(true)
+
+      const returns = await virtualReturns(f.jobWorkOrderId)
+      expect(returns).toHaveLength(1)
+      expect(returns[0].material_type_id).toBe(f.materialTypeBId)
+    })
+
+    it('removing a vendor-direct line entirely leaves no orphaned virtual-return row', async () => {
+      const f = await makeVendorDirectFixtures()
+      const orderId = await makeVendorDirectDispatch(f, 'PL-0003', f.materialTypeAId, 2.210)
+      expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(1)
+
+      const result = await editDispatch(orderId, [])
+      expect(result.success).toBe(true)
+      expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(0)
+    })
+  })
+
   it('a backdated order (dispatch_date before entry) posts with the business date, not the insert date', async () => {
     const f = await makeDispatchFixtures()
     const invoiceNumber = `INV-BACKDATED-${Date.now()}`
