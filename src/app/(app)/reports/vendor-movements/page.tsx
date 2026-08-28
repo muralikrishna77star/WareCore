@@ -6,12 +6,14 @@ import {
   VENDOR_JOB_WORK_ITEM_BALANCES_QUERY,
   VENDOR_JOB_WORK_TRANSFERS_QUERY,
   JOB_WORK_ORDERS_VENDOR_INFO_QUERY,
+  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
   DISPATCH_ORDERS_VENDOR_INFO_QUERY,
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   VENDOR_MOVEMENT_PURCHASE_RATES_QUERY,
 } from '@/lib/hasura/queries'
+import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
@@ -133,6 +135,7 @@ interface VendorJobWorkTransfer {
 
 interface JobWorkItemBalanceRow {
   quantity_sent: number | string | null
+  is_transfer_line: boolean | null
   material_type_id: string
   material_size_id: string | null
   size_label: string | null
@@ -264,7 +267,7 @@ export default async function VendorMovementsPage({
       where: {
         _and: [
           ...baseConditions,
-          { entry_type: { _in: ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN'] } },
+          { entry_type: { _in: ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL', 'JOB_WORK_OUTPUT_IN'] } },
           { reference_type: { _eq: 'job_work' } },
           { entry_date: { _gte: fromDate } },
           { entry_date: { _lte: toDate } },
@@ -275,7 +278,7 @@ export default async function VendorMovementsPage({
       where: {
         _and: [
           ...baseConditions,
-          { entry_type: { _in: ['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_TRANSFER_OUT'] } },
+          { entry_type: { _in: [...VENDOR_MOVEMENT_TYPES, 'JOB_WORK_OUTPUT_IN'] } },
           { reference_type: { _eq: 'job_work' } },
           { entry_date: { _lte: toDate } },
         ],
@@ -321,6 +324,28 @@ export default async function VendorMovementsPage({
   const periodSales = (periodSaleResult.stock_ledger ?? []) as VendorLedgerRow[]
   const periodTransfers = (periodTransfersResult.stock_ledger ?? []) as VendorLedgerRow[]
   const jobWorkItemBalances = (jobWorkItemBalanceResult.job_work_items ?? []) as JobWorkItemBalanceRow[]
+
+  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement when its
+  // order's Output Materials line matches one of that order's own INPUT
+  // lines' material — no real conversion happened, so it's really the
+  // vendor-return leg (migration 123). Same authoritative check as the
+  // Stock Statement / Item Stock Ledger reports (isVendorMovementRow).
+  const outputOrderIds = Array.from(
+    new Set(
+      [...periodJobWork, ...cumulativeJobWork]
+        .filter((r) => r.entry_type === 'JOB_WORK_OUTPUT_IN' && r.reference_id)
+        .map((r) => r.reference_id as string)
+    )
+  )
+  const sameMaterialOutputKeys = new Set<string>()
+  if (outputOrderIds.length > 0) {
+    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
+    const rowsIn: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
+      matchingInputResult.job_work_items ?? []
+    for (const r of rowsIn) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
+  }
+  const isCountedVendorRow = (m: VendorLedgerRow) =>
+    isVendorMovementRow(m.entry_type, m.reference_id, m.material_type_id, m.material_size_id, sameMaterialOutputKeys)
 
   // Counterparty vendor lookup for a JOB_WORK_TRANSFER_OUT/IN ledger row —
   // the ledger row only carries one side of the movement (the order it's
@@ -452,24 +477,34 @@ export default async function VendorMovementsPage({
 
   // Period job work out / return in (drives the Job Work Out + Returns columns,
   // pending Direct Sales subtraction below). Gated by the Transaction Type
-  // filter — "Job Work Out" keeps only JOB_WORK_OUT rows, "Return" keeps only
-  // JOB_WORK_RETURN_IN rows, any other selected type excludes this query's
-  // rows entirely.
+  // filter — "Job Work Out" keeps only JOB_WORK_OUT rows, "Return" keeps
+  // JOB_WORK_RETURN_IN plus the same-material-return categories below, any
+  // other selected type excludes this query's rows entirely.
   const jobWorkEntryAllowed = (entryType: string) => {
     if (!typeFilter) return true
     if (typeFilter === 'Job Work Out') return entryType === 'JOB_WORK_OUT'
-    if (typeFilter === 'Return') return entryType === 'JOB_WORK_RETURN_IN'
+    if (typeFilter === 'Return') return entryType === 'JOB_WORK_RETURN_IN' || entryType === 'JOB_WORK_CANCEL' || entryType === 'JOB_WORK_OUTPUT_IN'
     return false
   }
   const periodReturnInByKey = new Map<string, number>()
+  // Material returned via an "Output Materials" line recorded against the
+  // same material as sent (migration 123), and any JOB_WORK_CANCEL rows
+  // correcting a mis-entered one of those — neither posts a
+  // JOB_WORK_RETURN_IN row, so both are invisible to the Returns column
+  // unless tracked separately here. Netted per key (not pushed as raw
+  // transactions) so a mistaken Output Materials entry that got corrected
+  // within the period shows as one rolled-up Return, not a double-counted
+  // pair.
+  const periodOutputCorrectionByKey = new Map<string, { qty: number; date: string }>()
   for (const m of periodJobWork) {
     const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
     if (!jobWorkEntryAllowed(m.entry_type)) continue
-    const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
+    if (m.entry_type === 'JOB_WORK_OUTPUT_IN' && !isCountedVendorRow(m)) continue
     const purchaseInfo = m.purchase_line_id ? lineDateRateMap.get(m.purchase_line_id) : undefined
     if (m.entry_type === 'JOB_WORK_OUT') {
+      const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
       g.jobWorkOut += Math.abs(Number(m.quantity))
       g.transactions.push({
         id: m.id, date: m.entry_date, type: 'Job Work Out',
@@ -477,6 +512,7 @@ export default async function VendorMovementsPage({
         purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
     } else if (m.entry_type === 'JOB_WORK_RETURN_IN') {
+      const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
       const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
       periodReturnInByKey.set(key, (periodReturnInByKey.get(key) ?? 0) + Number(m.quantity))
       const isVirtual = (m.notes || '').toLowerCase().includes('virtual return')
@@ -486,7 +522,26 @@ export default async function VendorMovementsPage({
         quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
         purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
+    } else {
+      // JOB_WORK_CANCEL or a same-material JOB_WORK_OUTPUT_IN.
+      ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
+      const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
+      const running = periodOutputCorrectionByKey.get(key) ?? { qty: 0, date: m.entry_date }
+      running.qty += Number(m.quantity)
+      if (m.entry_date > running.date) running.date = m.entry_date
+      periodOutputCorrectionByKey.set(key, running)
     }
+  }
+  for (const [key, { qty, date }] of periodOutputCorrectionByKey) {
+    if (qty <= 0.0005) continue
+    periodReturnInByKey.set(key, (periodReturnInByKey.get(key) ?? 0) + qty)
+    const g = Array.from(groups.values()).find((row) => row.key === key)
+    g?.transactions.push({
+      id: `output-return-${key}`, date, type: 'Return',
+      quantity: qty, reference_number: null,
+      notes: 'Returned via Output Materials (same material as sent)',
+      purchaseDate: null, rate: null,
+    })
   }
 
   // Vendor-to-vendor transfers: shown on *both* sides — a Transfer Out row
@@ -560,32 +615,31 @@ export default async function VendorMovementsPage({
     if (g) g.returns = Math.max(0, rawReturnIn - g.directSales)
   }
 
-  // Cumulative-to-date balance (as of the To date), independent of the From date.
-  // quantity_sent is used for the outbound side because historic/imported job
-  // work lines can exist without their matching JOB_WORK_OUT ledger entry —
-  // this also picks up transfer-destination lines (is_transfer_line = true),
-  // whose own quantity_sent/order carry the *new* vendor and its own dated
-  // dispatch_date, so incoming transfers land under the receiving vendor
-  // automatically. ensureGroup() is called directly here (not just from the
-  // ledger loops below) so a vendor+material combo whose only job-work
-  // activity is a transfer still gets a row instead of being silently
-  // dropped.
-  //
-  // The same material sent out is still sitting in quantity_sent at the
-  // *source* vendor too, so JOB_WORK_TRANSFER_OUT is subtracted from the
-  // source vendor's key below (mirroring JOB_WORK_RETURN_IN) — using the
-  // dated ledger entries, not job_work_items.quantity_transferred_out
-  // directly, since that column has no date of its own and would ignore
-  // the To date cutoff (subtracting transfers that haven't happened yet
-  // as of the report's as-of date).
+  // Cumulative-to-date balance (as of the To date), independent of the From
+  // date. Ledger JOB_WORK_OUT rows are the primary source for the outbound
+  // side — same inclusion/sign rules as vw_current_vendor_stock (090/123),
+  // so this agrees with Stock Statement's "Stock at Vendor" by construction.
+  // job_work_items.quantity_sent is kept only as a floor beneath that
+  // (Math.max below), for the rare historic/imported line whose matching
+  // JOB_WORK_OUT ledger row was never posted (migration 125) — transfer-
+  // destination lines (is_transfer_line = true) are excluded from that floor
+  // since their quantity_sent is already covered by the explicit
+  // JOB_WORK_TRANSFER_IN addition below, and double-counting it would
+  // otherwise inflate the receiving vendor's balance. ensureGroup() is
+  // called directly from the jobWorkItemBalances loop (not just from the
+  // ledger loop) so a vendor+material combo whose only activity is a
+  // transfer still gets a row instead of being silently dropped.
   const cumulativeOutByKey = new Map<string, number>()
-  const cumulativeReturnInByKey = new Map<string, number>()
+  const cumulativeLedgerOutByKey = new Map<string, number>()
+  const cumulativeReductionByKey = new Map<string, number>() // RETURN_IN + CANCEL + same-material OUTPUT_IN, raw signed qty
   const cumulativeTransferOutByKey = new Map<string, number>()
+  const cumulativeTransferInByKey = new Map<string, number>()
   for (const item of jobWorkItemBalances) {
     const order = item.job_work_orders
     if (!order?.vendor_id) continue
     if (vendorFilter && order.vendor_id !== vendorFilter) continue
     ensureGroup(order.vendor_id, order.suppliers?.name || '—', order.companies?.name || '—', item)
+    if (item.is_transfer_line) continue
     const key = groupKey(order.vendor_id, item.material_type_id, item.material_size_id ?? null)
     cumulativeOutByKey.set(key, (cumulativeOutByKey.get(key) ?? 0) + Number(item.quantity_sent ?? 0))
   }
@@ -593,12 +647,19 @@ export default async function VendorMovementsPage({
     const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
+    if (!isCountedVendorRow(m)) continue
     ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
     const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
-    if (m.entry_type === 'JOB_WORK_RETURN_IN') {
-      cumulativeReturnInByKey.set(key, (cumulativeReturnInByKey.get(key) ?? 0) + Number(m.quantity))
+    const qty = Number(m.quantity)
+    if (m.entry_type === 'JOB_WORK_OUT') {
+      cumulativeLedgerOutByKey.set(key, (cumulativeLedgerOutByKey.get(key) ?? 0) + Math.abs(qty))
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
-      cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) + Math.abs(Number(m.quantity)))
+      cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) + Math.abs(qty))
+    } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
+      cumulativeTransferInByKey.set(key, (cumulativeTransferInByKey.get(key) ?? 0) + qty)
+    } else {
+      // JOB_WORK_RETURN_IN, JOB_WORK_CANCEL, same-material JOB_WORK_OUTPUT_IN.
+      cumulativeReductionByKey.set(key, (cumulativeReductionByKey.get(key) ?? 0) + qty)
     }
   }
   // Opening balance (as of the day before the From date): the same
@@ -608,11 +669,13 @@ export default async function VendorMovementsPage({
   // fetched unbounded-below (dispatch_date/entry_date <= toDate only), so
   // no extra query is needed to isolate the pre-period slice.
   const openingOutByKey = new Map<string, number>()
-  const openingReturnInByKey = new Map<string, number>()
+  const openingLedgerOutByKey = new Map<string, number>()
+  const openingReductionByKey = new Map<string, number>()
   const openingTransferOutByKey = new Map<string, number>()
+  const openingTransferInByKey = new Map<string, number>()
   for (const item of jobWorkItemBalances) {
     const order = item.job_work_orders
-    if (!order?.vendor_id || order.dispatch_date >= fromDate) continue
+    if (!order?.vendor_id || order.dispatch_date >= fromDate || item.is_transfer_line) continue
     if (vendorFilter && order.vendor_id !== vendorFilter) continue
     const key = groupKey(order.vendor_id, item.material_type_id, item.material_size_id ?? null)
     openingOutByKey.set(key, (openingOutByKey.get(key) ?? 0) + Number(item.quantity_sent ?? 0))
@@ -622,22 +685,32 @@ export default async function VendorMovementsPage({
     const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
     if (vendorFilter && info.vendor_id !== vendorFilter) continue
+    if (!isCountedVendorRow(m)) continue
     const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
-    if (m.entry_type === 'JOB_WORK_RETURN_IN') {
-      openingReturnInByKey.set(key, (openingReturnInByKey.get(key) ?? 0) + Number(m.quantity))
+    const qty = Number(m.quantity)
+    if (m.entry_type === 'JOB_WORK_OUT') {
+      openingLedgerOutByKey.set(key, (openingLedgerOutByKey.get(key) ?? 0) + Math.abs(qty))
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
-      openingTransferOutByKey.set(key, (openingTransferOutByKey.get(key) ?? 0) + Math.abs(Number(m.quantity)))
+      openingTransferOutByKey.set(key, (openingTransferOutByKey.get(key) ?? 0) + Math.abs(qty))
+    } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
+      openingTransferInByKey.set(key, (openingTransferInByKey.get(key) ?? 0) + qty)
+    } else {
+      openingReductionByKey.set(key, (openingReductionByKey.get(key) ?? 0) + qty)
     }
   }
 
   for (const g of groups.values()) {
+    const outQty = Math.max(cumulativeLedgerOutByKey.get(g.key) ?? 0, cumulativeOutByKey.get(g.key) ?? 0)
+    const openingOutQty = Math.max(openingLedgerOutByKey.get(g.key) ?? 0, openingOutByKey.get(g.key) ?? 0)
     g.balance =
-      (cumulativeOutByKey.get(g.key) ?? 0) -
-      (cumulativeReturnInByKey.get(g.key) ?? 0) -
+      outQty +
+      (cumulativeTransferInByKey.get(g.key) ?? 0) -
+      (cumulativeReductionByKey.get(g.key) ?? 0) -
       (cumulativeTransferOutByKey.get(g.key) ?? 0)
     g.openingBalance =
-      (openingOutByKey.get(g.key) ?? 0) -
-      (openingReturnInByKey.get(g.key) ?? 0) -
+      openingOutQty +
+      (openingTransferInByKey.get(g.key) ?? 0) -
+      (openingReductionByKey.get(g.key) ?? 0) -
       (openingTransferOutByKey.get(g.key) ?? 0)
     const latest = latestByMaterialMap.get(`${g.materialTypeId}|${g.materialSizeId ?? ''}`)
     if (latest) {

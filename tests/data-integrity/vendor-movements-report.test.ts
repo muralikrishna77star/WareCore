@@ -10,17 +10,39 @@
 // matching JOB_WORK_OUT ledger row, so it counted toward the item-based
 // closing balance but not the ledger-based "Job Work Out" card, while its
 // return WAS counted on the "Returns" card — a 2.310 gap invisible on the
-// report. The fix backfills the missing row (migration 125) and adds an
+// report. The fix backfilled the missing row (migration 125) and added an
 // explicit Opening Balance + reconciliation strip to the report so a future
 // gap like this is visible instead of silent (page.tsx's isReconciled check).
 //
+// A second, structural gap surfaced later comparing this report against
+// Stock Statement's "Stock at Vendor" for 01-Mar-2024 -> 30-Sep-2024: this
+// report's balance formula never looked at JOB_WORK_OUTPUT_IN or
+// JOB_WORK_CANCEL rows at all, so material returned via an "Output
+// Materials" line recorded against the *same* material as sent (migration
+// 123's vendor-return rule) — or a JOB_WORK_CANCEL correcting a mis-entered
+// one of those — stayed invisible, overstating the vendor balance by
+// whatever came back that way (3 real orders, Arun Engineering, Sep 2024,
+// totaling 9.440). Fixed by switching the outbound side to the ledger's own
+// JOB_WORK_OUT rows (job_work_items.quantity_sent is now only a floor
+// beneath that, for the historic-orphan case above) and folding
+// JOB_WORK_CANCEL / same-material JOB_WORK_OUTPUT_IN into the reduction
+// side — the same inclusion/sign rules as vw_current_vendor_stock
+// (090/123), so this report now agrees with Stock Statement by
+// construction rather than by coincidence.
+//
 // The helpers below mirror page.tsx's formula exactly:
-//   closingBalance(asOf)  = SUM(job_work_items.quantity_sent, dispatch_date<=asOf, not cancelled)
-//                          - SUM(stock_ledger JOB_WORK_RETURN_IN, entry_date<=asOf)
-//                          - SUM(ABS(stock_ledger JOB_WORK_TRANSFER_OUT), entry_date<=asOf)
+//   ledgerOut(asOf)       = SUM(ABS(stock_ledger JOB_WORK_OUT), entry_date<=asOf)
+//   floorOut(asOf)        = SUM(job_work_items.quantity_sent, dispatch_date<=asOf, not cancelled, not is_transfer_line)
+//   outQty(asOf)          = MAX(ledgerOut(asOf), floorOut(asOf))
+//   reduction(asOf)       = SUM(stock_ledger.quantity, entry_type IN (JOB_WORK_RETURN_IN, JOB_WORK_CANCEL,
+//                              same-material JOB_WORK_OUTPUT_IN), entry_date<=asOf)
+//   transferIn(asOf)      = SUM(stock_ledger JOB_WORK_TRANSFER_IN, entry_date<=asOf)
+//   transferOut(asOf)     = SUM(ABS(stock_ledger JOB_WORK_TRANSFER_OUT), entry_date<=asOf)
+//   closingBalance(asOf)  = outQty(asOf) + transferIn(asOf) - reduction(asOf) - transferOut(asOf)
 //   openingBalance        = closingBalance(asOf = dayBeforeFromDate)
 //   periodJobWorkOut      = SUM(ABS(stock_ledger JOB_WORK_OUT), fromDate<=entry_date<=toDate)
-//   periodReturnRaw       = SUM(stock_ledger JOB_WORK_RETURN_IN, fromDate<=entry_date<=toDate)
+//   periodReturnRaw       = SUM(stock_ledger.quantity, entry_type IN (JOB_WORK_RETURN_IN, JOB_WORK_CANCEL,
+//                              same-material JOB_WORK_OUTPUT_IN), fromDate<=entry_date<=toDate)
 //   periodDirectSales     = SUM(ABS(stock_ledger SALE_OUT), vendor-direct dispatch, in period)
 //   periodReturnsNet      = max(0, periodReturnRaw - periodDirectSales)  [displayed "Returns"]
 //   periodTransferOut/In  = SUM(ABS(stock_ledger JOB_WORK_TRANSFER_OUT/IN), in period)
@@ -77,12 +99,12 @@ async function makeJobWorkOrder(opts: { companyId: string; warehouseId: string; 
 // line's JOB_WORK_OUT automatically (unless suppressTrigger reproduces the
 // exact production bug this suite regression-tests: an item row that never
 // got its ledger row).
-async function makeJobWorkItem(opts: { jobWorkOrderId: string; materialTypeId: string; quantitySent: number; suppressTrigger?: boolean }) {
+async function makeJobWorkItem(opts: { jobWorkOrderId: string; materialTypeId: string; quantitySent: number; suppressTrigger?: boolean; isTransferLine?: boolean }) {
   if (opts.suppressTrigger) await client.query(`ALTER TABLE job_work_items DISABLE TRIGGER USER`)
   await client.query(
-    `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent, quantity_received, unit)
-     VALUES ($1, $2, $3, 0, 'MT')`,
-    [opts.jobWorkOrderId, opts.materialTypeId, opts.quantitySent]
+    `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent, quantity_received, unit, is_transfer_line)
+     VALUES ($1, $2, $3, 0, 'MT', $4)`,
+    [opts.jobWorkOrderId, opts.materialTypeId, opts.quantitySent, opts.isTransferLine ?? false]
   )
   if (opts.suppressTrigger) await client.query(`ALTER TABLE job_work_items ENABLE TRIGGER USER`)
 }
@@ -98,14 +120,32 @@ async function insertLedger(opts: {
   )
 }
 
+// Same-material JOB_WORK_OUTPUT_IN rows (migration 123's vendor-return
+// rule) — an order's Output Materials line counts as a vendor return only
+// when it matches one of that order's own input lines' material.
+const SAME_MATERIAL_OUTPUT_SQL = `
+  sl.entry_type = 'JOB_WORK_OUTPUT_IN' AND EXISTS (
+    SELECT 1 FROM job_work_items jwi
+    WHERE jwi.job_work_order_id = sl.reference_id AND jwi.material_type_id = sl.material_type_id
+  )`
+
 async function closingBalance(materialTypeId: string, vendorId: string, asOf: string) {
   const { rows: [r] } = await client.query(
     `SELECT
-       COALESCE((SELECT SUM(ji.quantity_sent) FROM job_work_items ji JOIN job_work_orders o ON o.id = ji.job_work_order_id
-                 WHERE o.vendor_id = $2 AND o.status != 'cancelled' AND o.dispatch_date <= $3 AND ji.material_type_id = $1), 0)
-       - COALESCE((SELECT SUM(sl.quantity) FROM stock_ledger sl JOIN job_work_orders o ON o.id = sl.reference_id
-                   WHERE sl.reference_type = 'job_work' AND sl.entry_type = 'JOB_WORK_RETURN_IN'
+       GREATEST(
+         COALESCE((SELECT SUM(ABS(sl.quantity)) FROM stock_ledger sl JOIN job_work_orders o ON o.id = sl.reference_id
+                   WHERE sl.reference_type = 'job_work' AND sl.entry_type = 'JOB_WORK_OUT'
+                     AND o.vendor_id = $2 AND sl.material_type_id = $1 AND sl.entry_date <= $3), 0),
+         COALESCE((SELECT SUM(ji.quantity_sent) FROM job_work_items ji JOIN job_work_orders o ON o.id = ji.job_work_order_id
+                   WHERE o.vendor_id = $2 AND o.status != 'cancelled' AND o.dispatch_date <= $3
+                     AND ji.material_type_id = $1 AND ji.is_transfer_line = false), 0)
+       )
+       + COALESCE((SELECT SUM(sl.quantity) FROM stock_ledger sl JOIN job_work_orders o ON o.id = sl.reference_id
+                   WHERE sl.reference_type = 'job_work' AND sl.entry_type = 'JOB_WORK_TRANSFER_IN'
                      AND o.vendor_id = $2 AND sl.material_type_id = $1 AND sl.entry_date <= $3), 0)
+       - COALESCE((SELECT SUM(sl.quantity) FROM stock_ledger sl JOIN job_work_orders o ON o.id = sl.reference_id
+                   WHERE sl.reference_type = 'job_work' AND o.vendor_id = $2 AND sl.material_type_id = $1 AND sl.entry_date <= $3
+                     AND (sl.entry_type IN ('JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL') OR (${SAME_MATERIAL_OUTPUT_SQL}))), 0)
        - COALESCE((SELECT SUM(ABS(sl.quantity)) FROM stock_ledger sl JOIN job_work_orders o ON o.id = sl.reference_id
                    WHERE sl.reference_type = 'job_work' AND sl.entry_type = 'JOB_WORK_TRANSFER_OUT'
                      AND o.vendor_id = $2 AND sl.material_type_id = $1 AND sl.entry_date <= $3), 0)
@@ -135,8 +175,9 @@ async function periodMovements(materialTypeId: string, vendorId: string, fromDat
   )
   const returnRaw = await client.query(
     `SELECT COALESCE(SUM(sl.quantity), 0) AS v FROM stock_ledger sl JOIN job_work_orders o ON o.id = sl.reference_id
-     WHERE sl.reference_type = 'job_work' AND sl.entry_type = 'JOB_WORK_RETURN_IN' AND o.vendor_id = $2 AND sl.material_type_id = $1
-       AND sl.entry_date BETWEEN $3 AND $4`,
+     WHERE sl.reference_type = 'job_work' AND o.vendor_id = $2 AND sl.material_type_id = $1
+       AND sl.entry_date BETWEEN $3 AND $4
+       AND (sl.entry_type IN ('JOB_WORK_RETURN_IN', 'JOB_WORK_CANCEL') OR (${SAME_MATERIAL_OUTPUT_SQL}))`,
     [materialTypeId, vendorId, fromDate, toDate]
   )
   const transferOut = await client.query(
@@ -310,7 +351,11 @@ describe('Vendorwise Stock Movement report reconciliation', () => {
     await insertLedger({ entryType: 'JOB_WORK_TRANSFER_OUT', quantity: -10.000, entryDate: '2024-05-01', companyId, warehouseId, materialTypeId, referenceId: orderA })
 
     const orderB = await makeJobWorkOrder({ companyId, warehouseId, vendorId: vendorB, dispatchDate: '2024-05-01' })
-    await makeJobWorkItem({ jobWorkOrderId: orderB, materialTypeId, quantitySent: 10.000 }) // transfer-destination line
+    // Transfer-destination line: in production fn_job_work_item_to_ledger()
+    // posts JOB_WORK_TRANSFER_IN (not JOB_WORK_OUT) for is_transfer_line
+    // rows, so the trigger is suppressed here and the ledger row inserted
+    // explicitly, matching migration 120's atomic transfer creation exactly.
+    await makeJobWorkItem({ jobWorkOrderId: orderB, materialTypeId, quantitySent: 10.000, isTransferLine: true, suppressTrigger: true })
     await insertLedger({ entryType: 'JOB_WORK_TRANSFER_IN', quantity: 10.000, entryDate: '2024-05-01', companyId, warehouseId, materialTypeId, referenceId: orderB })
 
     const rA = await reconcile(materialTypeId, vendorA, '2024-03-01', '2024-12-31')
@@ -325,7 +370,11 @@ describe('Vendorwise Stock Movement report reconciliation', () => {
     const active = await makeJobWorkOrder({ companyId, warehouseId, vendorId, dispatchDate: '2024-04-01' })
     await makeJobWorkItem({ jobWorkOrderId: active, materialTypeId, quantitySent: 12.000 })
     const cancelled = await makeJobWorkOrder({ companyId, warehouseId, vendorId, dispatchDate: '2024-04-01', status: 'cancelled' })
-    await makeJobWorkItem({ jobWorkOrderId: cancelled, materialTypeId, quantitySent: 99.000 })
+    // A real cancellation deletes the order's ledger rows outright (migration
+    // 061), leaving no JOB_WORK_OUT footprint — suppress the trigger here to
+    // match that, rather than leaving a stray ledger row a real cancelled
+    // order would never have.
+    await makeJobWorkItem({ jobWorkOrderId: cancelled, materialTypeId, quantitySent: 99.000, suppressTrigger: true })
 
     const r = await reconcile(materialTypeId, vendorId, '2024-03-01', '2024-12-31')
     expect(r.closing).toBeCloseTo(12.000, 3)
@@ -396,6 +445,48 @@ describe('Vendorwise Stock Movement report reconciliation', () => {
     const r2 = await reconcile(materialTypeId, vendorId, '2024-03-01', '2024-12-31')
     expect(r2.jobWorkOut).toBeCloseTo(2.310, 3)
     expect(r2.closing).toBeCloseTo(r2.derivedClosing, 3)
+  })
+
+  it('REGRESSION: material returned via an Output Materials line (same material as sent) reduces the vendor balance, matching Stock Statement', async () => {
+    // Real production case (Arun Engineering / Scrap Scrap, Sep 2024): sent
+    // 3.970 to the vendor, 3.840 came back through an Output Materials line
+    // recorded against the exact same material — not through Qty Received,
+    // so no JOB_WORK_RETURN_IN row exists. Before this fix, the report
+    // showed the full 3.970 as still outstanding at the vendor while Stock
+    // Statement (ledger-based, vw_current_vendor_stock) correctly showed
+    // 0.130 — a 3.840 gap invisible on this report alone.
+    const { companyId, warehouseId, materialTypeId, vendorId } = await makeScope()
+    const order = await makeJobWorkOrder({ companyId, warehouseId, vendorId, dispatchDate: '2024-09-04' })
+    await makeJobWorkItem({ jobWorkOrderId: order, materialTypeId, quantitySent: 3.970 })
+    await insertLedger({ entryType: 'JOB_WORK_OUTPUT_IN', quantity: 3.840, entryDate: '2024-09-12', companyId, warehouseId, materialTypeId, referenceId: order })
+
+    const r = await reconcile(materialTypeId, vendorId, '2024-03-01', '2024-12-31')
+    expect(r.closing).toBeCloseTo(0.130, 3)
+    expect(r.returnsNet).toBeCloseTo(3.840, 3)
+    expect(r.closing).toBeCloseTo(r.derivedClosing, 3)
+  })
+
+  it('REGRESSION: a JOB_WORK_CANCEL correcting a mis-entered Output Materials return nets out, not double-counted', async () => {
+    // Real production case (Arun Engineering / CR Slit, Sep 2024): sent
+    // 4.300, a first Output Materials return of 1.230 was entered and then
+    // corrected via Edit Order — which reverses the old row with a
+    // JOB_WORK_CANCEL before reposting the corrected JOB_WORK_OUTPUT_IN
+    // (see migration 114's fn_job_work_item_to_ledger) — followed by two
+    // ordinary returns via Qty Received. Before this fix, both CANCEL and
+    // OUTPUT_IN were invisible to this report, overstating the balance by
+    // 1.230 (the corrected return).
+    const { companyId, warehouseId, materialTypeId, vendorId } = await makeScope()
+    const order = await makeJobWorkOrder({ companyId, warehouseId, vendorId, dispatchDate: '2024-09-06' })
+    await makeJobWorkItem({ jobWorkOrderId: order, materialTypeId, quantitySent: 4.300 })
+    await insertLedger({ entryType: 'JOB_WORK_OUTPUT_IN', quantity: 1.230, entryDate: '2024-09-06', companyId, warehouseId, materialTypeId, referenceId: order })
+    await insertLedger({ entryType: 'JOB_WORK_CANCEL', quantity: -1.230, entryDate: '2024-09-06', companyId, warehouseId, materialTypeId, referenceId: order })
+    await insertLedger({ entryType: 'JOB_WORK_OUTPUT_IN', quantity: 1.230, entryDate: '2024-09-17', companyId, warehouseId, materialTypeId, referenceId: order })
+    await insertLedger({ entryType: 'JOB_WORK_RETURN_IN', quantity: 2.140, entryDate: '2024-09-30', companyId, warehouseId, materialTypeId, referenceId: order })
+    await insertLedger({ entryType: 'JOB_WORK_RETURN_IN', quantity: 0.930, entryDate: '2024-09-30', companyId, warehouseId, materialTypeId, referenceId: order })
+
+    const r = await reconcile(materialTypeId, vendorId, '2024-03-01', '2024-12-31')
+    expect(r.closing).toBeCloseTo(0, 3)
+    expect(r.closing).toBeCloseTo(r.derivedClosing, 3)
   })
 
   it('valuation is quantity times rate, computed from the corrected closing balance', async () => {

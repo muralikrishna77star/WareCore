@@ -1488,6 +1488,7 @@ export const VENDOR_JOB_WORK_ITEM_BALANCES_QUERY = `
   query GetVendorJobWorkItemBalances($where: job_work_items_bool_exp = {}) {
     job_work_items(where: $where) {
       quantity_sent
+      is_transfer_line
       material_type_id
       material_size_id
       size_label
