@@ -81,7 +81,7 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
 
 // Mutations that record who created the row — the proxy injects `created_by`
 // from the verified session so the client can't spoof another user's identity.
-const CREATED_BY_MUTATIONS = new Set(['CreatePurchaseBill', 'CreateDispatchOrder'])
+const CREATED_BY_MUTATIONS = new Set(['CreatePurchaseBill', 'CreateDispatchOrder', 'CreateJobWorkOrder'])
 
 // Personal-resource ops: any authenticated user may act on their own rows.
 // Ownership is enforced by force-overwriting this variable with the caller's

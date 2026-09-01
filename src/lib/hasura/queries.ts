@@ -519,7 +519,7 @@ export const PURCHASE_BILLS_QUERY = `
 export const PURCHASE_BILL_BY_ID_QUERY = `
   query GetPurchaseBillById($id: uuid!) {
     purchase_bills_by_pk(id: $id) {
-      id bill_number bill_date total_quantity total_amount notes created_at created_by
+      id bill_number bill_date total_quantity total_amount notes created_at created_by updated_at updated_by
       status cancelled_at cancelled_notes
       companies { name }
       warehouses { name }
@@ -741,7 +741,7 @@ export const DISPATCH_ORDERS_QUERY = `
 export const DISPATCH_ORDER_BY_ID_QUERY = `
   query GetDispatchOrderById($id: uuid!) {
     dispatch_orders_by_pk(id: $id) {
-      id dispatch_date vehicle_number driver_name notes created_at created_by
+      id dispatch_date vehicle_number driver_name notes created_at created_by updated_at updated_by
       invoice_number status cancelled_at cancelled_notes sale_ref_id
       is_vendor_direct source_job_work_order_id
       companies { name }
@@ -1110,7 +1110,7 @@ export const JOB_WORK_ORDERS_QUERY = `
 export const JOB_WORK_ORDER_BY_ID_QUERY = `
   query GetJobWorkOrderById($id: uuid!) {
     job_work_orders_by_pk(id: $id) {
-      id reference_number dispatch_date expected_return_date actual_return_date status notes created_at
+      id reference_number dispatch_date expected_return_date actual_return_date status notes created_at created_by updated_at updated_by
       company_id warehouse_id vendor_id
       companies { name }
       warehouses { name }
@@ -1174,7 +1174,7 @@ export const JOB_WORK_VENDOR_DIRECT_RETURNS_QUERY = `
 `
 
 export const CREATE_JOB_WORK_ORDER_MUTATION = `
-  mutation CreateJobWorkOrder($reference_number: String!, $company_id: uuid, $warehouse_id: uuid, $vendor_id: uuid, $dispatch_date: date!, $expected_return_date: date, $work_description: String, $status: String!, $notes: String) {
+  mutation CreateJobWorkOrder($reference_number: String!, $company_id: uuid, $warehouse_id: uuid, $vendor_id: uuid, $dispatch_date: date!, $expected_return_date: date, $work_description: String, $status: String!, $notes: String, $created_by: uuid) {
     insert_job_work_orders_one(object: {
       reference_number: $reference_number
       company_id: $company_id
@@ -1185,6 +1185,7 @@ export const CREATE_JOB_WORK_ORDER_MUTATION = `
       work_description: $work_description
       status: $status
       notes: $notes
+      created_by: $created_by
     }) { id }
   }
 `

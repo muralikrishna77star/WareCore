@@ -2,8 +2,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY } from '@/lib/hasura/queries'
-import { formatDate, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
+import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
+import { formatDate, formatDateTime, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
 
@@ -15,6 +15,10 @@ interface JobWorkOrderDetail {
   actual_return_date: string | null
   status: string
   notes: string | null
+  created_at: string
+  created_by: string | null
+  updated_at: string
+  updated_by: string | null
   companies: { name: string } | null
   warehouses: { name: string } | null
   suppliers: { name: string } | null
@@ -60,6 +64,17 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
   if (!order) notFound()
   const items: JobWorkItemDetail[] = itemsResult.job_work_items ?? []
   const outputItems: JobWorkOutputItemDetail[] = outputItemsResult.job_work_output_items ?? []
+
+  let createdByName: string | null = null
+  if (order.created_by) {
+    const creatorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: order.created_by }, { suppressError: true })
+    createdByName = creatorResult.user_profiles_by_pk?.full_name ?? null
+  }
+  let updatedByName: string | null = null
+  if (order.updated_by) {
+    const editorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: order.updated_by }, { suppressError: true })
+    updatedByName = editorResult.user_profiles_by_pk?.full_name ?? null
+  }
 
   // Display output quantities in the same unit as the input item they were produced from,
   // so input (e.g. MT) and output (e.g. Kgs) are comparable at a glance.
@@ -138,6 +153,26 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
               {order.actual_return_date ? formatDate(order.actual_return_date) : 'Pending'}
             </p>
           </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Created On</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(order.created_at)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>
+            <p className="text-sm font-medium text-gray-900 mt-1">{createdByName ?? '—'}</p>
+          </div>
+          {order.updated_by && (
+            <>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Last Modified On</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(order.updated_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Last Modified By</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{updatedByName ?? '—'}</p>
+              </div>
+            </>
+          )}
         </div>
         {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">

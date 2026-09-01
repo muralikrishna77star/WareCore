@@ -41,6 +41,11 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
     const creatorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: order.created_by }, { suppressError: true })
     createdByName = creatorResult.user_profiles_by_pk?.full_name ?? null
   }
+  let updatedByName: string | null = null
+  if (order.updated_by) {
+    const editorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: order.updated_by }, { suppressError: true })
+    updatedByName = editorResult.user_profiles_by_pk?.full_name ?? null
+  }
 
   const totalAmount = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
   const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
@@ -147,6 +152,18 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>
             <p className="text-sm font-medium text-gray-900 mt-1">{createdByName ?? '—'}</p>
           </div>
+          {order.updated_by && (
+            <>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Last Modified On</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(order.updated_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Last Modified By</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{updatedByName ?? '—'}</p>
+              </div>
+            </>
+          )}
         </div>
         {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">

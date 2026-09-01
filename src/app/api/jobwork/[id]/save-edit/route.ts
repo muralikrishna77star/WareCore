@@ -65,6 +65,10 @@ export async function POST(
     const result = await hasuraRunSql(sql)
     const json = JSON.parse(result?.result?.[1]?.[0] ?? '{}') as { success: boolean; error?: string }
     if (!json.success) return NextResponse.json({ error: json.error ?? 'Edit failed' }, { status: 400 })
+    // edit_job_work_order() doesn't know who's calling it — record the editor
+    // as a separate statement rather than threading session.userId through
+    // the function's signature.
+    await hasuraRunSql(`UPDATE job_work_orders SET updated_by = '${session.userId}' WHERE id = '${id}'::uuid`)
     return NextResponse.json({ success: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Edit failed'

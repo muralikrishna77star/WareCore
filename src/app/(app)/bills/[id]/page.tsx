@@ -40,6 +40,11 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
     const creatorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: bill.created_by }, { suppressError: true })
     createdByName = creatorResult.user_profiles_by_pk?.full_name ?? null
   }
+  let updatedByName: string | null = null
+  if (bill.updated_by) {
+    const editorResult = await hasuraQuery(USER_PROFILE_BY_ID_QUERY, { id: bill.updated_by }, { suppressError: true })
+    updatedByName = editorResult.user_profiles_by_pk?.full_name ?? null
+  }
 
   const totalAmount = items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0)
   const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
@@ -155,6 +160,18 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
             <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Created By</p>
             <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{createdByName ?? '—'}</p>
           </div>
+          {bill.updated_by && (
+            <>
+              <div>
+                <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Last Modified On</p>
+                <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{formatDateTime(bill.updated_at)}</p>
+              </div>
+              <div>
+                <p className="text-[0.6875rem] text-gray-500 uppercase tracking-wide">Last Modified By</p>
+                <p className="text-[0.8125rem] font-medium text-gray-900 mt-1">{updatedByName ?? '—'}</p>
+              </div>
+            </>
+          )}
         </div>
         {bill.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">

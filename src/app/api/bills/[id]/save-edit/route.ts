@@ -71,17 +71,17 @@ export async function POST(
 
   // Update bill header
   await hasuraQuery(
-    `mutation UpdateBillHeader($id: uuid!, $company_id: uuid, $warehouse_id: uuid, $supplier_id: uuid, $bill_number: String!, $bill_date: date!, $notes: String) {
+    `mutation UpdateBillHeader($id: uuid!, $company_id: uuid, $warehouse_id: uuid, $supplier_id: uuid, $bill_number: String!, $bill_date: date!, $notes: String, $updated_by: uuid) {
       update_purchase_bills_by_pk(pk_columns: {id: $id}, _set: {
         company_id: $company_id, warehouse_id: $warehouse_id, supplier_id: $supplier_id,
-        bill_number: $bill_number, bill_date: $bill_date, notes: $notes
+        bill_number: $bill_number, bill_date: $bill_date, notes: $notes, updated_by: $updated_by
       }) { id }
     }`,
     {
       id: billId,
       company_id: company_id || null, warehouse_id: warehouse_id || null,
       supplier_id: supplier_id || null, bill_number, bill_date,
-      notes: notes || null,
+      notes: notes || null, updated_by: session.userId,
     }
   )
 
