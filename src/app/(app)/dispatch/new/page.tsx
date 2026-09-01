@@ -15,6 +15,7 @@ import {
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
   ALL_INVOICE_NUMBERS_QUERY, ALL_SALE_LINE_IDS_QUERY,
   PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY, STOCK_LEDGER_LINE_QUANTITIES_QUERY,
+  JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 
@@ -33,6 +34,15 @@ type AvailablePurchaseLine = {
 interface PurchaseBillItemForDispatch {
   id: string
   purchase_line_id: string | null
+  item_name: string | null
+  item_master_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
+}
+
+interface JobWorkOutputItemForDispatch {
+  id: string
   item_name: string | null
   item_master_id: string | null
   material_type_id: string
@@ -211,7 +221,7 @@ export default function NewDispatchPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [c, w, cu, mt, ms, im, tr, invs, slis, pbiRes, slRes] = await Promise.all([
+      const [c, w, cu, mt, ms, im, tr, invs, slis, pbiRes, slRes, jwoiRes] = await Promise.all([
         hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
         hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
         hasuraFetch<{ customers: Customer[] }>(ACTIVE_CUSTOMERS_QUERY),
@@ -223,6 +233,7 @@ export default function NewDispatchPage() {
         hasuraFetch<{ dispatch_items: { sale_line_id: string | null }[] }>(ALL_SALE_LINE_IDS_QUERY),
         hasuraFetch<{ purchase_bill_items: PurchaseBillItemForDispatch[] }>(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
         hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+        hasuraFetch<{ job_work_output_items: JobWorkOutputItemForDispatch[] }>(JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY),
       ])
       setCompanies(c.data?.companies ?? [])
       setWarehouses(w.data?.warehouses ?? [])
@@ -269,6 +280,19 @@ export default function NewDispatchPage() {
           avail.push({ ...item, _key: key, available_quantity: qty })
         }
       }
+      // Job-work output items (e.g. slit material blended from >1 purchase
+      // line) have no purchase_bill_items row and post to stock_ledger with
+      // purchase_line_id NULL — pick up their material-keyed stock here so
+      // it's still sellable.
+      for (const item of jwoiRes.data?.job_work_output_items ?? []) {
+        const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+        if (seen.has(mk)) continue
+        const qty = stockByMaterial[mk] ?? 0
+        if (qty > 0) {
+          seen.add(mk)
+          avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty })
+        }
+      }
       setAvailablePurchaseLines(avail)
       setMasterDataLoading(false)
     }
@@ -284,9 +308,10 @@ export default function NewDispatchPage() {
 
   const refreshPurchaseLines = async () => {
     setRefreshingPurchaseLines(true)
-    const [pbiRes, slRes] = await Promise.all([
+    const [pbiRes, slRes, jwoiRes] = await Promise.all([
       hasuraFetch<{ purchase_bill_items: PurchaseBillItemForDispatch[] }>(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
       hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+      hasuraFetch<{ job_work_output_items: JobWorkOutputItemForDispatch[] }>(JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY),
     ])
     const stockByLine: Record<string, number> = {}
     const stockByMaterial: Record<string, number> = {}
@@ -316,6 +341,15 @@ export default function NewDispatchPage() {
       if (qty > 0) {
         seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
         avail.push({ ...item, _key: key, available_quantity: qty })
+      }
+    }
+    for (const item of jwoiRes.data?.job_work_output_items ?? []) {
+      const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+      if (seen.has(mk)) continue
+      const qty = stockByMaterial[mk] ?? 0
+      if (qty > 0) {
+        seen.add(mk)
+        avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty })
       }
     }
     setAvailablePurchaseLines(avail)

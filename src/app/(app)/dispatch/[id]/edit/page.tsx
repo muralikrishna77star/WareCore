@@ -12,6 +12,7 @@ import {
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
   ALL_SALE_LINE_IDS_QUERY,
   PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY, STOCK_LEDGER_LINE_QUANTITIES_QUERY,
+  JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY,
   GET_DISPATCH_ORDER_FOR_EDIT_QUERY,
   UPDATE_DISPATCH_ORDER_MUTATION,
   DELETE_DISPATCH_ITEMS_BY_ORDER_MUTATION,
@@ -47,6 +48,15 @@ interface StockLedgerLineQuantity {
   material_size_id: string | null
   size_label: string | null
   quantity: number | string
+}
+
+interface JobWorkOutputItemForDispatch {
+  id: string
+  item_name: string | null
+  item_master_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  size_label: string | null
 }
 
 interface DispatchOrderItemForEdit {
@@ -217,7 +227,7 @@ export default function EditDispatchPage() {
 
   useEffect(() => {
     const load = async () => {
-      const [orderRes, c, w, cu, mt, ms, im, tr, slis, pbiRes, slRes] = await Promise.all([
+      const [orderRes, c, w, cu, mt, ms, im, tr, slis, pbiRes, slRes, jwoiRes] = await Promise.all([
         hasuraFetch<{ dispatch_orders_by_pk: DispatchOrderForEdit | null }>(GET_DISPATCH_ORDER_FOR_EDIT_QUERY, { id: orderId }),
         hasuraFetch<{ companies: Company[] }>(ACTIVE_COMPANIES_QUERY),
         hasuraFetch<{ warehouses: Warehouse[] }>(ACTIVE_WAREHOUSES_QUERY),
@@ -229,6 +239,7 @@ export default function EditDispatchPage() {
         hasuraFetch<{ dispatch_items: { sale_line_id: string | null }[] }>(ALL_SALE_LINE_IDS_QUERY),
         hasuraFetch<{ purchase_bill_items: PurchaseBillItemForDispatch[] }>(PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY),
         hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
+        hasuraFetch<{ job_work_output_items: JobWorkOutputItemForDispatch[] }>(JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY),
       ])
 
       const order = orderRes.data?.dispatch_orders_by_pk
@@ -296,6 +307,16 @@ export default function EditDispatchPage() {
         seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
         // Include even zero-stock for items that are already on this order (so they can be kept)
         avail.push({ ...item, _key: key, available_quantity: qty })
+      }
+      // Job-work output items (e.g. slit material blended from >1 purchase
+      // line) have no purchase_bill_items row and post to stock_ledger with
+      // purchase_line_id NULL — pick up their material-keyed stock here too.
+      for (const item of jwoiRes.data?.job_work_output_items ?? []) {
+        const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+        if (seen.has(mk)) continue
+        seen.add(mk)
+        const qty = stockByMaterial[mk] ?? 0
+        avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty })
       }
       setAvailablePurchaseLines(avail)
 

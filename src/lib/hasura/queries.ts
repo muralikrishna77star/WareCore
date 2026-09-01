@@ -900,6 +900,26 @@ export const STOCK_LEDGER_LINE_QUANTITIES_QUERY = `
   }
 `
 
+// Job-work output items (e.g. slit/sheared material produced from job work,
+// not purchased directly) have no purchase_bill_items row of their own. When
+// an output blends >1 source purchase line, its stock_ledger JOB_WORK_OUTPUT_IN
+// entry is posted with purchase_line_id NULL (see
+// fn_job_work_output_item_to_ledger) — this query supplies the item-identity
+// "template" (item_name/item_master_id/material) that purchase_bill_items
+// would otherwise provide, so that stock is still sellable from the Sale screen.
+export const JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY = `
+  query GetJobWorkOutputItemsForDispatch {
+    job_work_output_items(order_by: { created_at: desc }) {
+      id
+      item_name
+      item_master_id
+      material_type_id
+      material_size_id
+      size_label
+    }
+  }
+`
+
 // ─── Sequence helpers (fetch existing IDs to compute next global counter) ────
 
 export const ALL_BILL_NUMBERS_QUERY = `
