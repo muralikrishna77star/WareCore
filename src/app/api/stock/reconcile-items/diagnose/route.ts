@@ -5,8 +5,21 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOLERANCE = 0.001
-const VENDOR_MOVEMENT_TYPES_SQL =
-  "ARRAY['JOB_WORK_OUT','JOB_WORK_RETURN_IN','JOB_WORK_CANCEL','JOB_WORK_TRANSFER_OUT','JOB_WORK_TRANSFER_IN']"
+// Kept in sync with vw_current_vendor_stock / fn_vendor_balance_as_of
+// (migration 123) — see the identical constant in ../route.ts for the full
+// rationale (TRANSFER sign, same-material JOB_WORK_OUTPUT_IN inclusion).
+const VENDOR_DELTA_SQL = `
+  CASE
+    WHEN sl.entry_type IN ('JOB_WORK_TRANSFER_IN','JOB_WORK_TRANSFER_OUT') THEN sl.quantity
+    WHEN sl.entry_type IN ('JOB_WORK_OUT','JOB_WORK_RETURN_IN','JOB_WORK_CANCEL') THEN -sl.quantity
+    WHEN sl.entry_type = 'JOB_WORK_OUTPUT_IN' AND EXISTS (
+      SELECT 1 FROM job_work_items jwi
+      WHERE jwi.job_work_order_id = sl.reference_id
+        AND jwi.material_type_id = sl.material_type_id
+        AND jwi.material_size_id IS NOT DISTINCT FROM sl.material_size_id
+    ) THEN -sl.quantity
+    ELSE 0
+  END`
 
 type Row = string[]
 function parseRows(result: { result: Row[] }): Row[] {
@@ -49,13 +62,13 @@ export async function GET(request: NextRequest) {
       // Basic aggregates, for context in the response.
       hasuraRunSql(`
         WITH ledger AS (
-          SELECT sl.quantity, (sl.entry_type = ANY(${VENDOR_MOVEMENT_TYPES_SQL})) AS is_vendor
+          SELECT sl.quantity, (${VENDOR_DELTA_SQL}) AS vendor_delta
           FROM stock_ledger sl
           WHERE sl.material_type_id = '${materialTypeId}' AND sl.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
         )
         SELECT
           COALESCE((SELECT SUM(quantity) FROM ledger), 0) AS closing_balance,
-          COALESCE((SELECT SUM(CASE WHEN is_vendor THEN -quantity ELSE 0 END) FROM ledger), 0) AS vendor_closing_balance,
+          COALESCE((SELECT SUM(vendor_delta) FROM ledger), 0) AS vendor_closing_balance,
           COALESCE((SELECT SUM(pending_quantity) FROM v_stock_at_vendors WHERE material_type_id = '${materialTypeId}' AND size_label IS NOT DISTINCT FROM ${sizeLabelSql}), 0) AS vendor_expected
       `),
       // Pattern: transfer legs backfilled far apart in created_at (false-positive negative dip).

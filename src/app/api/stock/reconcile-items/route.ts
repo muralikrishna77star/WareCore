@@ -18,11 +18,26 @@ function num(v: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-// Every entry_type that moves stock to/from a job-work vendor — kept in sync
-// with src/lib/stockLedger.ts's VENDOR_MOVEMENT_TYPES (duplicated here since
-// this runs as a raw SQL literal, not importable into the query string).
-const VENDOR_MOVEMENT_TYPES_SQL =
-  "ARRAY['JOB_WORK_OUT','JOB_WORK_RETURN_IN','JOB_WORK_CANCEL','JOB_WORK_TRANSFER_OUT','JOB_WORK_TRANSFER_IN']"
+// Per-row vendor-balance delta for one stock_ledger row `sl` — kept in sync
+// with vw_current_vendor_stock / fn_vendor_balance_as_of (migration 123),
+// the canonical source src/lib/stockLedger.ts's isVendorMovementRow also
+// mirrors, duplicated here since this runs as a raw SQL literal. TRANSFER_IN/
+// OUT use +quantity (090, warehouse-neutral wash); OUT/RETURN_IN/CANCEL use
+// -quantity; JOB_WORK_OUTPUT_IN only counts (as -quantity) when its order
+// also has an input line of the exact same material — a genuine conversion
+// to a different output item stays excluded (123).
+const VENDOR_DELTA_SQL = (alias: string) => `
+  CASE
+    WHEN ${alias}.entry_type IN ('JOB_WORK_TRANSFER_IN','JOB_WORK_TRANSFER_OUT') THEN ${alias}.quantity
+    WHEN ${alias}.entry_type IN ('JOB_WORK_OUT','JOB_WORK_RETURN_IN','JOB_WORK_CANCEL') THEN -${alias}.quantity
+    WHEN ${alias}.entry_type = 'JOB_WORK_OUTPUT_IN' AND EXISTS (
+      SELECT 1 FROM job_work_items jwi
+      WHERE jwi.job_work_order_id = ${alias}.reference_id
+        AND jwi.material_type_id = ${alias}.material_type_id
+        AND jwi.material_size_id IS NOT DISTINCT FROM ${alias}.material_size_id
+    ) THEN -${alias}.quantity
+    ELSE 0
+  END`
 
 export async function GET(request: NextRequest) {
   try {
@@ -70,7 +85,7 @@ export async function GET(request: NextRequest) {
           sl.entry_date,
           sl.created_at,
           sl.quantity,
-          (sl.entry_type = ANY(${VENDOR_MOVEMENT_TYPES_SQL})) AS is_vendor
+          (${VENDOR_DELTA_SQL('sl')}) AS vendor_delta
         FROM target_items ti
         JOIN stock_ledger sl
           ON sl.material_type_id = ti.material_type_id
@@ -81,9 +96,9 @@ export async function GET(request: NextRequest) {
         SELECT
           item_id,
           COALESCE(SUM(quantity) FILTER (WHERE entry_date < '${from}'), 0) AS opening_balance,
-          COALESCE(SUM(CASE WHEN is_vendor THEN -quantity ELSE 0 END) FILTER (WHERE entry_date < '${from}'), 0) AS vendor_opening_balance,
+          COALESCE(SUM(vendor_delta) FILTER (WHERE entry_date < '${from}'), 0) AS vendor_opening_balance,
           COALESCE(SUM(quantity), 0) AS closing_balance,
-          COALESCE(SUM(CASE WHEN is_vendor THEN -quantity ELSE 0 END), 0) AS vendor_closing_balance,
+          COALESCE(SUM(vendor_delta), 0) AS vendor_closing_balance,
           COUNT(*) FILTER (WHERE entry_date >= '${from}') AS txn_count
         FROM ledger
         GROUP BY item_id
@@ -98,7 +113,7 @@ export async function GET(request: NextRequest) {
       ledger_grouped AS (
         SELECT item_id, entry_date, created_at,
           SUM(quantity) AS qty,
-          SUM(CASE WHEN is_vendor THEN -quantity ELSE 0 END) AS vendor_qty
+          SUM(vendor_delta) AS vendor_qty
         FROM ledger
         GROUP BY item_id, entry_date, created_at
       ),
