@@ -2,7 +2,7 @@
 
 import { Fragment, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, ChevronDown, Search } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, Search, Copy, Check } from 'lucide-react'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { useTableSort } from '@/lib/useTableSort'
@@ -232,6 +232,36 @@ export default function StockReconcilePage() {
     } catch {
       setDiagnoses((prev) => ({ ...prev, [id]: 'error' }))
     }
+  }
+
+  // ── Copy-to-clipboard for a mismatched row: formats the same figures an
+  // investigation prompt needs (item, date range, balances, reasons, and
+  // whatever diagnosis has already run) so it can be pasted straight in. ──
+  const [copiedRowId, setCopiedRowId] = useState<string | null>(null)
+
+  const buildCopyText = (r: ItemReconcileResult): string => {
+    const diagnosis = diagnoses[r.id]
+    const lines = [
+      `Reconciliation mismatch — ${r.itemCode} (${r.itemName})`,
+      `Date range: ${itemFrom} to ${itemTo}`,
+      `Opening: ${fmt(r.openingBalance)}   Closing: ${fmt(r.closingBalance)}`,
+      `Vendor Closing: ${fmt(r.vendorClosingBalance)}   Vendor Expected: ${r.vendorExpected === null ? '—' : fmt(r.vendorExpected)}`,
+      'Reasons:',
+      ...r.reasons.map((reason) => `- ${reason}`),
+    ]
+    if (diagnosis && diagnosis !== 'loading' && diagnosis !== 'error') {
+      lines.push('', 'Diagnosis findings:')
+      lines.push(...(diagnosis.findings.length
+        ? diagnosis.findings.map((f) => `- [${f.pattern}] ${f.title}: ${f.detail}`)
+        : ['- No known pattern matched automatically.']))
+    }
+    return lines.join('\n')
+  }
+
+  const handleCopyRow = (r: ItemReconcileResult) => {
+    navigator.clipboard.writeText(buildCopyText(r))
+    setCopiedRowId(r.id)
+    setTimeout(() => setCopiedRowId((id) => (id === r.id ? null : id)), 1500)
   }
 
   const validCount = itemResults.filter((r) => r.valid).length
@@ -787,6 +817,50 @@ export default function StockReconcilePage() {
               </span>
             </div>
 
+            {itemResults.length > 0 && (
+              <div className="flex justify-end">
+                <ProfessionalExportButton
+                  meta={{
+                    companyName: 'All Companies',
+                    fromDate: itemFrom,
+                    toDate: itemTo,
+                    filterLine: `${showOnlyIssues ? 'Mismatches only' : 'All items'} — Valid: ${validCount}, Mismatch: ${mismatchCount}`,
+                    generatedBy: '',
+                  }}
+                  sheets={[{
+                    sheetName: 'Item Reconciliation',
+                    title: 'Item-by-Item Reconciliation',
+                    emptyMessage: 'No items to display.',
+                    columns: [
+                      { header: 'Item Code', key: 'itemCode', width: 16, align: 'left' },
+                      { header: 'Item Name', key: 'itemName', width: 28, align: 'left' },
+                      { header: 'Unit', key: 'unit', width: 8, align: 'center' },
+                      { header: 'Opening', key: 'opening', width: 14, align: 'right', numFmt: QTY_FMT },
+                      { header: 'Closing', key: 'closing', width: 14, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+                      { header: 'Vendor Closing', key: 'vendorClosing', width: 16, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+                      { header: 'Vendor Expected', key: 'vendorExpected', width: 16, align: 'right', numFmt: QTY_FMT },
+                      { header: 'Status', key: 'status', width: 12, align: 'center' },
+                      { header: 'Reasons', key: 'reasons', width: 48, align: 'left' },
+                    ],
+                    rows: visibleResults.map((r) => ({
+                      itemCode: r.itemCode,
+                      itemName: r.itemName,
+                      unit: r.unit,
+                      opening: r.openingBalance,
+                      closing: r.closingBalance,
+                      vendorClosing: r.vendorClosingBalance,
+                      vendorExpected: r.vendorExpected,
+                      status: r.valid ? 'Valid' : 'Mismatch',
+                      reasons: r.reasons.join('; '),
+                    })),
+                  } satisfies ProfessionalSheetSpec]}
+                  filenameBase="Item_By_Item_Reconciliation"
+                  successMessage="Item-by-item reconciliation exported successfully."
+                  errorMessage="Unable to export. Please try again."
+                />
+              </div>
+            )}
+
             <div className="overflow-auto max-h-[32rem] rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50">
@@ -839,14 +913,24 @@ export default function StockReconcilePage() {
                             View Ledger <ArrowRight className="h-3 w-3" />
                           </Link>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => toggleDiagnosis(r.id)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
-                          >
-                            <Search className="h-3 w-3" /> Review & Fix
-                            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                          </button>
+                          <span className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyRow(r)}
+                              title="Copy details to paste into a fix prompt"
+                              className="inline-flex items-center rounded-lg border border-gray-300 p-1.5 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                            >
+                              {copiedRowId === r.id ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleDiagnosis(r.id)}
+                              className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                            >
+                              <Search className="h-3 w-3" /> Review & Fix
+                              <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          </span>
                         )}
                       </td>
                     </tr>
