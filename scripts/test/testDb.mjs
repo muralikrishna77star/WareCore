@@ -68,6 +68,10 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '121_backfill_intercompany_stock_sharing.sql',
   '122_correct_cr0524_0065_misattribution.sql',
   '124_fix_jwt_0826_0012_qty_sent_corruption.sql',
+  // Found while verifying migration 136 (2026-09-02): same shape as the
+  // ones above, added after this list was last updated.
+  '133_backfill_intercompany_stock_sharing_reverse.sql',
+  '137_repair_jw_mtbes07o_sbt8_noop_ledger_pairs.sql',
 ])
 
 /**
