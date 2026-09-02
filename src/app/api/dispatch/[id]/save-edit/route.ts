@@ -5,6 +5,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff', 'sales_manager'])
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const dateRe = /^\d{4}-\d{2}-\d{2}$/
 
 export async function POST(
   request: NextRequest,
@@ -26,6 +27,7 @@ export async function POST(
   } = body
 
   if (!dispatch_date) return NextResponse.json({ error: 'dispatch_date is required' }, { status: 400 })
+  if (!dateRe.test(dispatch_date)) return NextResponse.json({ error: 'dispatch_date must be YYYY-MM-DD' }, { status: 400 })
   if (!Array.isArray(items)) return NextResponse.json({ error: 'items must be an array' }, { status: 400 })
 
   const escape = (v: string | null | undefined) =>
@@ -33,6 +35,14 @@ export async function POST(
 
   const itemsJson = JSON.stringify(items)
   const escapedItems = itemsJson.replace(/'/g, "''")
+
+  // total_quantity/total_amount land in an unquoted ::numeric slot — force
+  // them through Number() so only a safe numeric literal can ever reach the
+  // SQL string, not arbitrary attacker-controlled text.
+  const totalQuantityNum = Number(total_quantity)
+  const totalAmountNum = Number(total_amount)
+  const safeTotalQuantity = Number.isFinite(totalQuantityNum) ? totalQuantityNum : 0
+  const safeTotalAmount = Number.isFinite(totalAmountNum) ? totalAmountNum : 0
 
   const sql = `
     SELECT edit_dispatch_order(
@@ -47,8 +57,8 @@ export async function POST(
       ${customer_id && uuidRe.test(customer_id) ? `'${customer_id}'::uuid` : 'NULL::uuid'},
       ${escape(sale_ref_id)}::text,
       ${escape(status || 'active')}::text,
-      ${total_quantity ?? 0}::numeric,
-      ${total_amount ?? 0}::numeric,
+      ${safeTotalQuantity}::numeric,
+      ${safeTotalAmount}::numeric,
       '${escapedItems}'::jsonb
     )
   `

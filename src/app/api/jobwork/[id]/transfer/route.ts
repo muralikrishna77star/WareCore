@@ -5,6 +5,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager'])
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const dateRe = /^\d{4}-\d{2}-\d{2}$/
 
 // Single atomic call replacing the old 5-step client-side sequence (create
 // order, create items, update source quantity_transferred_out, create
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (!uuidRe.test(target_vendor_id ?? '')) return NextResponse.json({ error: 'target_vendor_id is required' }, { status: 400 })
   if (!transfer_date) return NextResponse.json({ error: 'transfer_date is required' }, { status: 400 })
+  if (!dateRe.test(transfer_date)) return NextResponse.json({ error: 'transfer_date must be YYYY-MM-DD' }, { status: 400 })
   if (!reference_number || !transfer_number) return NextResponse.json({ error: 'reference_number and transfer_number are required' }, { status: 400 })
   if (!Array.isArray(lines) || !lines.length) return NextResponse.json({ error: 'At least one line is required' }, { status: 400 })
 

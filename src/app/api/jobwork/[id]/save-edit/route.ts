@@ -5,6 +5,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager'])
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const dateRe = /^\d{4}-\d{2}-\d{2}$/
 
 export async function POST(
   request: NextRequest,
@@ -25,6 +26,10 @@ export async function POST(
   } = body
 
   if (!dispatch_date) return NextResponse.json({ error: 'dispatch_date is required' }, { status: 400 })
+  if (!dateRe.test(dispatch_date)) return NextResponse.json({ error: 'dispatch_date must be YYYY-MM-DD' }, { status: 400 })
+  if (expected_return_date && !dateRe.test(expected_return_date)) {
+    return NextResponse.json({ error: 'expected_return_date must be YYYY-MM-DD' }, { status: 400 })
+  }
   if (!Array.isArray(input_items) || !input_items.length) {
     return NextResponse.json({ error: 'At least one input item is required' }, { status: 400 })
   }
