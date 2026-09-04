@@ -2,7 +2,10 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
+import {
+  JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY,
+  JOB_WORK_ITEMS_FROM_OUTPUT_QUERY, JOB_WORK_ORDERS_BY_IDS_QUERY,
+} from '@/lib/hasura/queries'
 import { formatDate, formatDateTime, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
@@ -44,12 +47,29 @@ interface JobWorkOutputItemDetail {
   item_name: string | null
   size_label: string | null
   quantity: number
+  quantity_consumed: number | null
   unit: string
   source_job_line_id: string | null
   received_date: string | null
   material_types: { description: string } | null
   material_sizes: { size_label: string } | null
   item_master: { item_code: string | null } | null
+}
+
+interface SentOnwardLine {
+  id: string
+  job_work_order_id: string
+  source_job_work_output_item_id: string | null
+  quantity_sent: number
+  unit: string
+}
+
+interface SentOnwardOrder {
+  id: string
+  status: string
+  reference_number: string | null
+  dispatch_date: string | null
+  suppliers: { name: string } | null
 }
 
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -64,6 +84,30 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
   if (!order) notFound()
   const items: JobWorkItemDetail[] = itemsResult.job_work_items ?? []
   const outputItems: JobWorkOutputItemDetail[] = outputItemsResult.job_work_output_items ?? []
+
+  // "Sent onward" trail: which downstream job work order(s) drew from each
+  // of this order's output lines, and how much (migration 138). Every
+  // partial send is its own job_work_items row, so this is a plain lookup —
+  // no separate transfer/audit table involved.
+  const outputItemIds = outputItems.map((o) => o.id)
+  const sentOnwardByOutputItem: Record<string, { order: SentOnwardOrder; quantity: number; unit: string }[]> = {}
+  if (outputItemIds.length > 0) {
+    const consumingResult = await hasuraQuery(JOB_WORK_ITEMS_FROM_OUTPUT_QUERY, { output_item_ids: outputItemIds }, { suppressError: true })
+    const consumingLines: SentOnwardLine[] = consumingResult.job_work_items ?? []
+    if (consumingLines.length > 0) {
+      const downstreamOrderIds = [...new Set(consumingLines.map((l) => l.job_work_order_id))]
+      const ordersResult = await hasuraQuery(JOB_WORK_ORDERS_BY_IDS_QUERY, { ids: downstreamOrderIds }, { suppressError: true })
+      const ordersById = new Map<string, SentOnwardOrder>((ordersResult.job_work_orders ?? []).map((o: SentOnwardOrder) => [o.id, o]))
+      for (const line of consumingLines) {
+        if (!line.source_job_work_output_item_id) continue
+        const order = ordersById.get(line.job_work_order_id)
+        if (!order) continue
+        if (!sentOnwardByOutputItem[line.source_job_work_output_item_id]) sentOnwardByOutputItem[line.source_job_work_output_item_id] = []
+        sentOnwardByOutputItem[line.source_job_work_output_item_id].push({ order, quantity: Number(line.quantity_sent), unit: line.unit })
+      }
+    }
+  }
+  const hasSendableOutput = outputItems.some((o) => Number(o.quantity) - Number(o.quantity_consumed ?? 0) > 0)
 
   let createdByName: string | null = null
   if (order.created_by) {
@@ -116,6 +160,12 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
             <Link href={`/jobwork/${id}/transfer`}
               className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">
               Transfer to Another Vendor
+            </Link>
+          )}
+          {hasSendableOutput && (
+            <Link href={`/jobwork/${id}/output-transfer`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+              Send Output to Vendor
             </Link>
           )}
         </div>
@@ -199,6 +249,8 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produced Item</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Onward</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Date</th>
@@ -210,9 +262,12 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                     (item.source_job_line_id && inputUnitByJobLine[item.source_job_line_id]) || defaultInputUnit
                   const converted = targetUnit ? convertQuantity(Number(item.quantity), item.unit, targetUnit) : null
                   const showConverted = converted !== null && !isSameUnit(item.unit, targetUnit)
+                  const consumed = Number(item.quantity_consumed ?? 0)
+                  const remaining = Number(item.quantity) - consumed
+                  const sentOnward = sentOnwardByOutputItem[item.id] ?? []
 
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50">
+                    <tr key={item.id} className="hover:bg-gray-50 align-top">
                       <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                       <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
@@ -227,6 +282,22 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                           </div>
                         )}
                       </td>
+                      <td className="px-6 py-4 text-sm text-right font-mono">
+                        {consumed > 0 ? (
+                          <div>
+                            <span className="text-gray-900">{consumed.toFixed(3)}</span>
+                            <div className="mt-1 space-y-0.5">
+                              {sentOnward.map((s, i) => (
+                                <Link key={i} href={`/jobwork/${s.order.id}`}
+                                  className="block text-xs font-sans text-indigo-600 hover:underline whitespace-nowrap">
+                                  {s.quantity.toFixed(3)} {s.unit} → {s.order.suppliers?.name ?? '—'} ({s.order.reference_number})
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-right font-mono text-gray-900">{remaining.toFixed(3)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">{showConverted ? targetUnit : item.unit}</td>
                       <td className="px-6 py-4">
                         {item.source_job_line_id ? (

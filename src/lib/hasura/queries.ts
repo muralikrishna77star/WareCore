@@ -1274,10 +1274,24 @@ export const JOB_WORK_OUTPUT_ITEMS_QUERY = `
     ) {
       id job_work_order_id item_master_id item_name
       material_type_id material_size_id size_label
-      quantity unit source_job_line_id notes received_date
+      quantity quantity_consumed unit source_job_line_id notes received_date
       material_types { description }
       material_sizes { size_label }
       item_master { item_code }
+    }
+  }
+`
+
+// Downstream job_work_items rows sourced from a given set of output items —
+// i.e. the "sent onward" trail for each produced line (migration 138).
+export const JOB_WORK_ITEMS_FROM_OUTPUT_QUERY = `
+  query GetJobWorkItemsFromOutput($output_item_ids: [uuid!]!) {
+    job_work_items(
+      where: { source_job_work_output_item_id: { _in: $output_item_ids } }
+      order_by: { created_at: asc }
+    ) {
+      id job_work_order_id source_job_work_output_item_id
+      quantity_sent unit job_line_id created_at
     }
   }
 `
@@ -1442,6 +1456,8 @@ export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
     job_work_orders(where: {id: {_in: $ids}}) {
       id
       status
+      reference_number
+      dispatch_date
       suppliers { name }
     }
   }
