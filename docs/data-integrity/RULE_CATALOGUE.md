@@ -56,6 +56,17 @@ Requires at least one stable line/reference key (`purchase_line_id`,
 `sub_purchase_line_id`, or `reference_id`) to avoid false positives on
 under-specified rows.
 
+**`entry_date` is part of the duplicate key (migration 141, 2026-09-08).**
+Found via EXC-000696 on JW-MT74ETAR-BGSJ / GA0924-0008: two vendor-direct
+dispatches five days apart (1024-0405, 1024-0451) each sold exactly 2.280
+of the 4.560 on that line and each correctly posted its own "Vendor direct
+sale — virtual return" row — same line, same quantity, different business
+dates, and `quantity_received` = 4.560 agreed. Grouping without
+`entry_date` collapsed them into a "duplicate". A genuine double-submit or
+repeated edit-save (CR00700, 2m43s apart) always shares its `entry_date`,
+so nothing real is lost. Same change to REC-013's own duplicate detection,
+and `entry_date` is appended to the REC-001 fingerprint.
+
 ### REC-002 — Missing ledger posting
 **Severity: HIGH.** Two sub-checks:
 - **Purchase** (line-level, exact): an active `purchase_bill_items` row with
@@ -111,6 +122,28 @@ net frequently exactly `0.000`. Company-wide aggregation still catches a
 genuine deficit (production data confirms 4 remain, all `SALE_OUT`-caused,
 all one specific company) while no longer flagging the intentional split.
 
+**Recurring cause: informal inter-company stock sharing (migrations 121,
+133, 140).** Sri Sai Steels and DS Steel Enterprises share inventory
+informally (owner-confirmed 2026-08-08, recorded in EXC-000326's resolution
+note): a dispatch or job-work order under one company draws on a purchase
+line — or a job-work output — that was booked under the other, and nothing
+records the move, so the consuming company's company-wide balance goes
+negative while the owner's stays positive by the same amount. The app
+allows it because the dispatch/job-work forms compute "available stock"
+from every company's ledger rows with no company filter
+(`STOCK_LEDGER_LINE_QUANTITIES_QUERY`). Three batches so far: 4 lines
+(121, Apr–Aug 2024), 9 lines (133, Oct 2024), 29 outflow rows (140, Oct–Nov
+2024 — 18 REC-005 CRITICAL + 1 HIGH + 2 that never dipped negative).
+Detection query for the purchase-line-tagged shape: every `SALE_OUT` /
+`JOB_WORK_OUT` whose `purchase_line_id`'s bill belongs to a different
+`company_id` than the row, with no `TRANSFER_IN` for that line in the
+consuming company. Output-based draws (`purchase_line_id` NULL) only show
+up through REC-005. Before backfilling, always check the owner's FULL
+history for that item: CR0524-0065 (121) and 1124-0517 / GI0824-0037 (140,
+still open as EXC-000798) both turned out to be material that was still at
+a job-work vendor, not free stock — a transfer alone would just move the
+negative to the other company.
+
 ### REC-007 — Reversal mismatch
 **Severity: HIGH.** Two sub-checks, both an accounting invariant rather than
 a timing heuristic (complementary to REC-001 — catches the same class of
@@ -159,6 +192,20 @@ incomparable) per-line quantities. Confirmed on a real order: 6 lines'
 `quantity_sent` values summed to exactly the ledger total. Fixed to
 aggregate by scope before comparing; production's REC-009 count dropped
 from 43 to 5 real findings.
+
+*Output Materials and `quantity_received`* — the "never compare
+`JOB_WORK_OUTPUT_IN`" statement above was superseded by migration 128:
+since 069, `edit_job_work_order()` sets `quantity_received` from an Output
+Materials line without posting a `JOB_WORK_RETURN_IN`, so `quantity_received`
+is compared against `JOB_WORK_RETURN_IN` + `JOB_WORK_OUTPUT_IN` (plus the
+`JOB_WORK_CANCEL` rows that correct an output). Migration 142 (2026-09-08,
+EXC-000807 on JW-MTLF316W-LMUS) extended this to an output recorded as a
+**different item** than the input it consumed (0.85X995 → 0.90X121, linked
+by `job_work_output_items.source_job_line_id`): the OUTPUT_IN row is posted
+under the output item, so matching by the input scope's material/size found
+nothing and reported received=6.190 vs ledger 0. `ledger_output_in` now
+reads `vw_job_work_vendor_movements`, which attributes such rows to the
+input line named by `source_job_line_id`.
 
 ### REC-013 — Zero-stock validation
 **Severity: LOW, and only when something else is actually wrong.** Zero
@@ -234,6 +281,22 @@ fix approved earlier for this pattern was never applied and would have been
 wrong — it was designed for a REC-009-style sync gap, but the real defect
 here was in the read-only reconciliation view, not in `job_work_items` or
 `stock_ledger`.
+
+**Second view-side false positive — cross-item Output Materials (migration
+142, 2026-09-08, EXC-000809).** JW-MTLF316W-LMUS sent 6.390 of OTH00042
+"0.85X995" and got 6.190 back as OT00006 "0.90X121" (a real slitting
+conversion, `source_job_line_id` set). `v_stock_at_vendors` correctly said
+0.200 pending; `vw_current_vendor_stock` still said 6.390, because 123's
+rule only credits a `JOB_WORK_OUTPUT_IN` against the vendor when it is the
+*same* material/size as an input line. Fixed read-side only: the new
+row-level view `vw_job_work_vendor_movements` gives every job-work ledger
+row an *effective* item scope (for a cross-item output, the consumed input
+line's), and `vw_current_vendor_stock`, `fn_vendor_balance_as_of`, REC-009,
+the Item Stock Ledger report and the reconcile-items API all read it. It
+also stops a `JOB_WORK_CANCEL` that reverses a cross-item output from being
+counted as phantom vendor stock for an output item that was never sent
+anywhere. Zero `stock_ledger` rows touched; this was the first cross-item
+output in the ledger, so nothing else moved.
 
 ## Catalogued, not yet implemented (Phase 2 backlog)
 

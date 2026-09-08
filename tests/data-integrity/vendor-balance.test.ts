@@ -179,6 +179,86 @@ describe('vw_current_vendor_stock — same-material Job Work Output In (123)', (
   })
 })
 
+describe('cross-item Job Work Output attribution (142)', () => {
+  async function vendorStockBySize(materialTypeId: string, materialSizeId: string) {
+    const { rows } = await client.query(
+      `SELECT current_vendor_stock FROM vw_current_vendor_stock WHERE material_type_id = $1 AND material_size_id = $2`,
+      [materialTypeId, materialSizeId]
+    )
+    return rows[0] ? Number(rows[0].current_vendor_stock) : 0
+  }
+  async function asOf(materialTypeId: string, materialSizeId: string, companyId: string, date: string) {
+    const { rows } = await client.query(
+      `SELECT fn_vendor_balance_as_of($1::uuid, $2::uuid, $3::uuid, $4::date) AS bal`,
+      [materialTypeId, materialSizeId, companyId, date]
+    )
+    return Number(rows[0].bal)
+  }
+  // The JW-MTLF316W-LMUS shape: input 0.85X995 (6.390) came back as
+  // 0.90X121 (6.190), linked by source_job_line_id.
+  async function makeFixture() {
+    const scope = await makeScope()
+    const order = await makeJobWorkOrder({ ...scope, dispatchDate: '2024-11-08' })
+    const { rows: [inputSize] } = await client.query(
+      `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '0.85X995') RETURNING id`, [scope.materialTypeId]
+    )
+    const { rows: [outputSize] } = await client.query(
+      `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '0.90X121') RETURNING id`, [scope.materialTypeId]
+    )
+    await client.query(
+      `INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity_sent, quantity_received, unit, job_line_id)
+       VALUES ($1, $2, $3, '0.85X995', 6.390, 0, 'MT', 'JW-SYN-0001')`,
+      [order, scope.materialTypeId, inputSize.id]
+    )
+    const { rows: [output] } = await client.query(
+      `INSERT INTO job_work_output_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity, unit, source_job_line_id, received_date)
+       VALUES ($1, $2, $3, '0.90X121', 6.190, 'MT', 'JW-SYN-0001', '2024-11-15') RETURNING id`,
+      [order, scope.materialTypeId, outputSize.id]
+    )
+    return { ...scope, order, inputSizeId: inputSize.id as string, outputSizeId: outputSize.id as string, outputItemId: output.id as string }
+  }
+
+  it('an output recorded as a DIFFERENT size but linked by source_job_line_id reduces the INPUT line\'s vendor balance, not the output item\'s', async () => {
+    const f = await makeFixture()
+    expect(await vendorStockBySize(f.materialTypeId, f.inputSizeId)).toBeCloseTo(0.2, 3)
+    expect(await vendorStockBySize(f.materialTypeId, f.outputSizeId)).toBeCloseTo(0, 3)
+    // Point-in-time agrees: still fully at the vendor the day before the output was received.
+    expect(await asOf(f.materialTypeId, f.inputSizeId, f.companyId, '2024-11-14')).toBeCloseTo(6.39, 3)
+    expect(await asOf(f.materialTypeId, f.inputSizeId, f.companyId, '2024-11-15')).toBeCloseTo(0.2, 3)
+    // An output with NO source_job_line_id is still a genuine conversion (123 rule unchanged).
+    const { rows: [otherSize] } = await client.query(
+      `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '1.00X100') RETURNING id`, [f.materialTypeId]
+    )
+    await client.query(
+      `INSERT INTO job_work_output_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity, unit, received_date)
+       VALUES ($1, $2, $3, '1.00X100', 0.1, 'MT', '2024-11-16')`,
+      [f.order, f.materialTypeId, otherSize.id]
+    )
+    expect(await vendorStockBySize(f.materialTypeId, f.inputSizeId)).toBeCloseTo(0.2, 3)
+    expect(await vendorStockBySize(f.materialTypeId, otherSize.id)).toBeCloseTo(0, 3)
+  })
+
+  it('correcting the output quantity (Edit Order posts JOB_WORK_CANCEL + a new JOB_WORK_OUTPUT_IN) keeps the attribution consistent', async () => {
+    const f = await makeFixture()
+    await client.query(`UPDATE job_work_output_items SET quantity = 6.000 WHERE id = $1`, [f.outputItemId])
+    const { rows: ledger } = await client.query(
+      `SELECT entry_type, quantity FROM stock_ledger WHERE reference_type = 'job_work' AND reference_id = $1 ORDER BY created_at, entry_type`, [f.order]
+    )
+    expect(ledger.map((r) => `${r.entry_type}:${Number(r.quantity)}`)).toEqual([
+      'JOB_WORK_OUT:-6.39', 'JOB_WORK_OUTPUT_IN:6.19', 'JOB_WORK_CANCEL:-6.19', 'JOB_WORK_OUTPUT_IN:6',
+    ])
+    expect(await vendorStockBySize(f.materialTypeId, f.inputSizeId)).toBeCloseTo(0.39, 3)
+    expect(await vendorStockBySize(f.materialTypeId, f.outputSizeId)).toBeCloseTo(0, 3)
+  })
+
+  it('removing the output line (JOB_WORK_CANCEL, no attributable output left) puts the full input quantity back at the vendor, with no phantom balance on the output item', async () => {
+    const f = await makeFixture()
+    await client.query(`DELETE FROM job_work_output_items WHERE id = $1`, [f.outputItemId])
+    expect(await vendorStockBySize(f.materialTypeId, f.inputSizeId)).toBeCloseTo(6.39, 3)
+    expect(await vendorStockBySize(f.materialTypeId, f.outputSizeId)).toBeCloseTo(0, 3)
+  })
+})
+
 describe('fn_vendor_balance_as_of (123)', () => {
   it('matches vw_current_vendor_stock at a point in time and reflects backdated same-item returns', async () => {
     const { companyId, warehouseId, materialTypeId, vendorId } = await makeScope()

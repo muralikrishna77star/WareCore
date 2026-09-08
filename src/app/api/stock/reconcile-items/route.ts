@@ -18,26 +18,11 @@ function num(v: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-// Per-row vendor-balance delta for one stock_ledger row `sl` — kept in sync
-// with vw_current_vendor_stock / fn_vendor_balance_as_of (migration 123),
-// the canonical source src/lib/stockLedger.ts's isVendorMovementRow also
-// mirrors, duplicated here since this runs as a raw SQL literal. TRANSFER_IN/
-// OUT use +quantity (090, warehouse-neutral wash); OUT/RETURN_IN/CANCEL use
-// -quantity; JOB_WORK_OUTPUT_IN only counts (as -quantity) when its order
-// also has an input line of the exact same material — a genuine conversion
-// to a different output item stays excluded (123).
-const VENDOR_DELTA_SQL = (alias: string) => `
-  CASE
-    WHEN ${alias}.entry_type IN ('JOB_WORK_TRANSFER_IN','JOB_WORK_TRANSFER_OUT') THEN ${alias}.quantity
-    WHEN ${alias}.entry_type IN ('JOB_WORK_OUT','JOB_WORK_RETURN_IN','JOB_WORK_CANCEL') THEN -${alias}.quantity
-    WHEN ${alias}.entry_type = 'JOB_WORK_OUTPUT_IN' AND EXISTS (
-      SELECT 1 FROM job_work_items jwi
-      WHERE jwi.job_work_order_id = ${alias}.reference_id
-        AND jwi.material_type_id = ${alias}.material_type_id
-        AND jwi.material_size_id IS NOT DISTINCT FROM ${alias}.material_size_id
-    ) THEN -${alias}.quantity
-    ELSE 0
-  END`
+// Per-row vendor-balance deltas come from vw_job_work_vendor_movements
+// (migration 142) — the one row-level view vw_current_vendor_stock,
+// fn_vendor_balance_as_of and REC-018 all derive from — rather than a
+// hand-copied CASE expression, so this report can never disagree with the
+// "At Vendor" card. See the `ledger` CTE below.
 
 export async function GET(request: NextRequest) {
   try {
@@ -80,17 +65,41 @@ export async function GET(request: NextRequest) {
         LIMIT ${limit} OFFSET ${offset}
       ),
       ledger AS (
+        -- Vendor delta per row from vw_job_work_vendor_movements (142),
+        -- matched on the row's EFFECTIVE item scope — a row the view
+        -- attributes to a different item (a cross-item Output Materials
+        -- line viewed from the output item's side) contributes 0 here.
         SELECT
           ti.id AS item_id,
           sl.entry_date,
           sl.created_at,
           sl.quantity,
-          (${VENDOR_DELTA_SQL('sl')}) AS vendor_delta
+          COALESCE(v.vendor_delta, 0) AS vendor_delta
         FROM target_items ti
         JOIN stock_ledger sl
           ON sl.material_type_id = ti.material_type_id
          AND sl.material_size_id IS NOT DISTINCT FROM ti.material_size_id
+        LEFT JOIN vw_job_work_vendor_movements v
+          ON v.id = sl.id
+         AND v.material_type_id = ti.material_type_id
+         AND v.material_size_id IS NOT DISTINCT FROM ti.material_size_id
         WHERE sl.entry_date <= '${to}'
+        UNION ALL
+        -- Output Materials rows posted under a DIFFERENT item that consumed
+        -- one of this item's job-work lines (source_job_line_id): a vendor
+        -- movement for this item with no warehouse movement.
+        SELECT
+          ti.id,
+          v.entry_date,
+          v.created_at,
+          0::numeric,
+          v.vendor_delta
+        FROM target_items ti
+        JOIN vw_job_work_vendor_movements v
+          ON v.is_cross_item_output
+         AND v.material_type_id = ti.material_type_id
+         AND v.material_size_id IS NOT DISTINCT FROM ti.material_size_id
+        WHERE v.entry_date <= '${to}'
       ),
       opening_closing AS (
         SELECT

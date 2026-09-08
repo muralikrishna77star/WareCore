@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { isReferenceType } from '@/lib/reference'
 import { useTableSort } from '@/lib/useTableSort'
@@ -52,6 +52,14 @@ export type LedgerRow = {
   jobWorkReferenceId?: string | null
   netQuantity?: number
   vendorName?: string | null
+  createdByName?: string | null
+  createdAt?: string | null
+  modifiedAt?: string | null
+  // A JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL row posted under a DIFFERENT
+  // item that consumed one of this item's job-work lines (migration 142):
+  // moves Balance at Vendor only, never the warehouse Balance, and belongs
+  // to the other item's ledger — so it's shown read-only here.
+  vendorOnly?: boolean
 }
 
 const fmtQ = (n: number) => n.toFixed(3)
@@ -75,6 +83,9 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
     vendor_balance: (r) => r.vendorBalance,
     vendor: (r) => r.vendorName ?? '',
     notes: (r) => r.notes ?? '',
+    created_by: (r) => r.createdByName ?? '',
+    created_on: (r) => r.createdAt ?? '',
+    modified_on: (r) => r.modifiedAt ?? '',
   })
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
@@ -143,6 +154,9 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
           <SortableTh label="Balance at Vendor" sortKey="vendor_balance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!normal-case" />
           <SortableTh label="Vendor" sortKey="vendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
           <SortableTh label="Notes" sortKey="notes" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Created By" sortKey="created_by" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Created On" sortKey="created_on" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
+          <SortableTh label="Modified On" sortKey="modified_on" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!normal-case" />
         </tr>
       </thead>
       {canManage && selected.size > 0 && (
@@ -186,12 +200,14 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
             <tr key={row.id} className={`hover:bg-gray-50 ${selected.has(row.id) ? 'bg-red-50/50' : ''}`}>
               {canManage && (
                 <td className="px-2 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(row.id)}
-                    onChange={() => toggle(row.id)}
-                    className="rounded border-gray-300"
-                  />
+                  {!row.vendorOnly && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(row.id)}
+                      onChange={() => toggle(row.id)}
+                      className="rounded border-gray-300"
+                    />
+                  )}
                 </td>
               )}
               <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.entry_date)}</td>
@@ -213,6 +229,14 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
                     className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
                   >
                     {row.duplicateCount}×
+                  </span>
+                )}
+                {row.vendorOnly && (
+                  <span
+                    title="Posted under the output item it came back as — shown here because it consumed this item at the vendor. Changes Balance at Vendor only."
+                    className="ml-1 inline-flex rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700"
+                  >
+                    other item
                   </span>
                 )}
               </td>
@@ -244,8 +268,8 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
               </td>
               <td className="px-4 py-3 text-gray-700">{row.companies?.name || '—'}</td>
               <td className="px-4 py-3 text-gray-500">{row.warehouses?.name || '—'}</td>
-              <td className="px-4 py-3 text-right text-green-700 font-medium">{qty > 0 ? fmtQ(qty) : ''}</td>
-              <td className="px-4 py-3 text-right text-red-600 font-medium">{qty < 0 ? fmtQ(Math.abs(qty)) : ''}</td>
+              <td className="px-4 py-3 text-right text-green-700 font-medium">{qty > 0 && !row.vendorOnly ? fmtQ(qty) : ''}</td>
+              <td className="px-4 py-3 text-right text-red-600 font-medium">{qty < 0 && !row.vendorOnly ? fmtQ(Math.abs(qty)) : ''}</td>
               <td className={`px-4 py-3 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                 {fmtQ(row.balance)}
               </td>
@@ -254,6 +278,9 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
               </td>
               <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{row.vendorName || '—'}</td>
               <td className="px-4 py-3 text-gray-500 text-xs">{row.notes || '—'}</td>
+              <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{row.createdByName || '—'}</td>
+              <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.createdAt ? formatDateTime(row.createdAt) : '—'}</td>
+              <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.modifiedAt ? formatDateTime(row.modifiedAt) : '—'}</td>
             </tr>
           )
         })}

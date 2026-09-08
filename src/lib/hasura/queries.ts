@@ -1796,7 +1796,7 @@ export const ITEM_STOCK_LEDGER_QUERY = `
       aggregate { sum { quantity } }
     }
     entries: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {quantity: desc}, {created_at: asc}], limit: 5000) {
-      id entry_type quantity entry_date reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label notes
+      id entry_type quantity entry_date created_at reference_number reference_type reference_id purchase_line_id sub_purchase_line_id size_label notes
       companies { name code }
       warehouses { name }
       material_types { description unit }
@@ -1812,6 +1812,40 @@ export const JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY = `
     job_work_orders(where: {id: {_in: $ids}}) {
       id
       suppliers { name }
+    }
+  }
+`
+
+// Creator/editor audit fields for a batch of source-document ids, one query
+// per reference_type table — used by the Item Stock Ledger report's
+// Created By/On and Modified On columns. transfers has no updated_by column
+// (migration 135 only added it to purchase_bills/dispatch_orders/
+// job_work_orders), so that lookup omits it.
+export const JOB_WORK_ORDERS_AUDIT_LOOKUP_QUERY = `
+  query GetJobWorkOrdersAuditLookup($ids: [uuid!]!) {
+    job_work_orders(where: {id: {_in: $ids}}) {
+      id created_by created_at updated_by updated_at
+    }
+  }
+`
+export const PURCHASE_BILLS_AUDIT_LOOKUP_QUERY = `
+  query GetPurchaseBillsAuditLookup($ids: [uuid!]!) {
+    purchase_bills(where: {id: {_in: $ids}}) {
+      id created_by created_at updated_by updated_at
+    }
+  }
+`
+export const DISPATCH_ORDERS_AUDIT_LOOKUP_QUERY = `
+  query GetDispatchOrdersAuditLookup($ids: [uuid!]!) {
+    dispatch_orders(where: {id: {_in: $ids}}) {
+      id created_by created_at updated_by updated_at
+    }
+  }
+`
+export const TRANSFERS_AUDIT_LOOKUP_QUERY = `
+  query GetTransfersAuditLookup($ids: [uuid!]!) {
+    transfers(where: {id: {_in: $ids}}) {
+      id created_by created_at updated_at
     }
   }
 `

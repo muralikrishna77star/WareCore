@@ -118,6 +118,36 @@ describe('REC-001 exact duplicate ledger event', () => {
     const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_001($1, '2024-01-01', '2026-12-31')`, [companyId])
     expect(rows).toHaveLength(0)
   })
+
+  it('does NOT flag two identical-quantity events on DIFFERENT entry dates (141) — the JW-MT74ETAR-BGSJ shape: two vendor-direct sales of 2.280 each, five days apart', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    for (const entryDate of ['2024-10-21', '2024-10-26']) {
+      await insertLedger({
+        entryType: 'JOB_WORK_RETURN_IN', quantity: 2.28, entryDate, companyId, warehouseId, materialTypeId,
+        purchaseLineId: 'SYN-GA0924-0008', referenceType: 'job_work', referenceId: orderId,
+        notes: 'Vendor direct sale — virtual return',
+      })
+    }
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_001($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows).toHaveLength(0)
+  })
+
+  it('still flags the same two rows when they share one entry_date (141 keeps the real double-submit signature)', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
+    for (let i = 0; i < 2; i++) {
+      await insertLedger({
+        entryType: 'JOB_WORK_RETURN_IN', quantity: 2.28, entryDate: '2024-10-21', companyId, warehouseId, materialTypeId,
+        purchaseLineId: 'SYN-GA0924-0008', referenceType: 'job_work', referenceId: orderId,
+        notes: 'Vendor direct sale — virtual return',
+      })
+    }
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_001($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].evidence.net_dup_count).toBe(2)
+    expect(rows[0].fingerprint).toContain('2024-10-21')
+  })
 })
 
 describe('REC-005 negative warehouse stock', () => {
@@ -297,7 +327,51 @@ async function makeJobWorkOrder(companyId: string, warehouseId: string) {
   return { vendorId: vendor.id as string, orderId: order.id as string }
 }
 
+// The JW-MTLF316W-LMUS shape (migration 142): the order's only input line
+// (0.85X995, 6.390) came back as an Output Materials line of a DIFFERENT
+// size (0.90X121, 6.190), linked by job_work_output_items.source_job_line_id.
+// edit_job_work_order() sets the input line's quantity_received from that
+// output WITHOUT posting a JOB_WORK_RETURN_IN (069) — reproduced here with
+// the same trigger-skip flag it uses.
+async function makeCrossItemOutputOrder(companyId: string, warehouseId: string, materialTypeId: string) {
+  const { vendorId, orderId } = await makeJobWorkOrder(companyId, warehouseId)
+  const { rows: [inputSize] } = await client.query(
+    `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '0.85X995') RETURNING id`, [materialTypeId]
+  )
+  const { rows: [outputSize] } = await client.query(
+    `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '0.90X121') RETURNING id`, [materialTypeId]
+  )
+  // Auto-posts JOB_WORK_OUT -6.390 (fn_job_work_item_to_ledger INSERT branch).
+  await client.query(
+    `INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity_sent, quantity_received, unit, job_line_id)
+     VALUES ($1, $2, $3, '0.85X995', 6.390, 0, 'MT', 'JW-SYN-0001')`,
+    [orderId, materialTypeId, inputSize.id]
+  )
+  // Auto-posts JOB_WORK_OUTPUT_IN 6.190 under the OUTPUT size.
+  await client.query(
+    `INSERT INTO job_work_output_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity, unit, source_job_line_id, received_date)
+     VALUES ($1, $2, $3, '0.90X121', 6.190, 'MT', 'JW-SYN-0001', '2024-11-15')`,
+    [orderId, materialTypeId, outputSize.id]
+  )
+  await client.query(`SELECT set_config('warecore.skip_job_work_return_trigger', 'true', false)`)
+  await client.query(`UPDATE job_work_items SET quantity_received = 6.190 WHERE job_work_order_id = $1`, [orderId])
+  await client.query(`SELECT set_config('warecore.skip_job_work_return_trigger', 'false', false)`)
+  return { vendorId, orderId, inputSizeId: inputSize.id as string, outputSizeId: outputSize.id as string }
+}
+
 describe('REC-009 job work equation mismatch', () => {
+  it('does NOT flag an input line whose return came back as a DIFFERENT-size Output Materials line linked by source_job_line_id (142)', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { orderId } = await makeCrossItemOutputOrder(companyId, warehouseId, materialTypeId)
+    // Sanity: exactly one RETURN-side ledger row exists and it's the cross-item OUTPUT_IN.
+    const { rows: ledger } = await client.query(
+      `SELECT entry_type, quantity FROM stock_ledger WHERE reference_type = 'job_work' AND reference_id = $1 ORDER BY entry_type`, [orderId]
+    )
+    expect(ledger.map((r: { entry_type: string }) => r.entry_type)).toEqual(['JOB_WORK_OUT', 'JOB_WORK_OUTPUT_IN'])
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows.filter((r: { source_document_id: string }) => r.source_document_id === orderId)).toHaveLength(0)
+  })
+
   it('does not flag a single-line order whose source and ledger agree', async () => {
     const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
     const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
@@ -374,6 +448,22 @@ describe('REC-009 job work equation mismatch', () => {
 })
 
 describe('REC-018 unbalanced vendor-held stock', () => {
+  it('does NOT flag a vendor when a cross-item Output Materials line is attributed back to the input line it consumed (142): ledger 0.200 = job_work_items 0.200', async () => {
+    const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
+    const { vendorId, orderId, inputSizeId, outputSizeId } = await makeCrossItemOutputOrder(companyId, warehouseId, materialTypeId)
+    const { rows: stock } = await client.query(
+      `SELECT material_size_id, current_vendor_stock FROM vw_current_vendor_stock WHERE vendor_id = $1 AND material_type_id = $2`, [vendorId, materialTypeId]
+    )
+    expect(Number(stock.find((r) => r.material_size_id === inputSizeId)?.current_vendor_stock)).toBeCloseTo(0.2, 3)
+    // The output item was never sent to any vendor — it must not show a vendor balance of its own.
+    expect(stock.find((r) => r.material_size_id === outputSizeId)).toBeUndefined()
+    const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_018($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rows.filter((r: { source_document_id: string }) => r.source_document_id === vendorId)).toHaveLength(0)
+    // and the order-level equation (REC-009) agrees for the same order
+    const { rows: rec009 } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
+    expect(rec009.filter((r: { source_document_id: string }) => r.source_document_id === orderId)).toHaveLength(0)
+  })
+
   it('does not flag a vendor whose ledger and job_work_items balances agree', async () => {
     const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
     const { vendorId, orderId } = await makeJobWorkOrder(companyId, warehouseId)

@@ -65,7 +65,7 @@ type ItemReconcileResult = {
   reasons: string[]
 }
 type DiagnosisFinding = {
-  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive'
+  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive' | 'missing_dispatch_ledger' | 'warehouse_overdraw'
   title: string
   detail: string
 }

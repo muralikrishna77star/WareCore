@@ -5,21 +5,9 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOLERANCE = 0.001
-// Kept in sync with vw_current_vendor_stock / fn_vendor_balance_as_of
-// (migration 123) — see the identical constant in ../route.ts for the full
-// rationale (TRANSFER sign, same-material JOB_WORK_OUTPUT_IN inclusion).
-const VENDOR_DELTA_SQL = `
-  CASE
-    WHEN sl.entry_type IN ('JOB_WORK_TRANSFER_IN','JOB_WORK_TRANSFER_OUT') THEN sl.quantity
-    WHEN sl.entry_type IN ('JOB_WORK_OUT','JOB_WORK_RETURN_IN','JOB_WORK_CANCEL') THEN -sl.quantity
-    WHEN sl.entry_type = 'JOB_WORK_OUTPUT_IN' AND EXISTS (
-      SELECT 1 FROM job_work_items jwi
-      WHERE jwi.job_work_order_id = sl.reference_id
-        AND jwi.material_type_id = sl.material_type_id
-        AND jwi.material_size_id IS NOT DISTINCT FROM sl.material_size_id
-    ) THEN -sl.quantity
-    ELSE 0
-  END`
+// Vendor-balance deltas come from vw_job_work_vendor_movements (migration
+// 142), the row-level view vw_current_vendor_stock / fn_vendor_balance_as_of
+// / REC-018 derive from — see ../route.ts and the aggregates query below.
 
 type Row = string[]
 function parseRows(result: { result: Row[] }): Row[] {
@@ -34,10 +22,12 @@ function sqlLiteral(v: string): string {
 }
 
 export interface DiagnosisFinding {
-  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive' | 'missing_dispatch_ledger'
+  pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive' | 'missing_dispatch_ledger' | 'warehouse_overdraw'
   title: string
   detail: string
 }
+
+type PendingVendorLine = { ref: string; line: string; vendor: string; dispatched: string; pending: number }
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,13 +48,24 @@ export async function GET(request: NextRequest) {
     const materialSizeSql = materialSizeId ? sqlLiteral(materialSizeId) : 'NULL'
     const sizeLabelSql = sizeLabel ? sqlLiteral(sizeLabel) : 'NULL'
 
-    const [aggRes, timingRes, transferLegRes, phantomRes, purchaseRes, dispatchLedgerRes] = await Promise.all([
+    const [aggRes, timingRes, transferLegRes, phantomRes, purchaseRes, dispatchLedgerRes, overdrawRes] = await Promise.all([
       // Basic aggregates, for context in the response.
       hasuraRunSql(`
         WITH ledger AS (
-          SELECT sl.quantity, (${VENDOR_DELTA_SQL}) AS vendor_delta
+          SELECT sl.quantity, COALESCE(v.vendor_delta, 0) AS vendor_delta
           FROM stock_ledger sl
+          LEFT JOIN vw_job_work_vendor_movements v
+            ON v.id = sl.id
+           AND v.material_type_id = '${materialTypeId}'
+           AND v.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
           WHERE sl.material_type_id = '${materialTypeId}' AND sl.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
+          UNION ALL
+          -- Cross-item Output Materials rows attributed to this item (142).
+          SELECT 0::numeric, v.vendor_delta
+          FROM vw_job_work_vendor_movements v
+          WHERE v.is_cross_item_output
+            AND v.material_type_id = '${materialTypeId}'
+            AND v.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
         )
         SELECT
           COALESCE((SELECT SUM(quantity) FROM ledger), 0) AS closing_balance,
@@ -182,6 +183,52 @@ export async function GET(request: NextRequest) {
         LEFT JOIN ledger_totals lt ON lt.job_work_order_id = jw.job_work_order_id
         WHERE ABS(jw.total_sent - (CASE WHEN jw.is_transfer_line THEN COALESCE(lt.transfer_in_total,0) ELSE COALESCE(lt.out_total,0) END)) > ${TOLERANCE}
       `),
+      // Pattern: a warehouse-side posting (a dispatch's SALE_OUT, a JOB_WORK_OUT…)
+      // took more out than the running balance held at that moment. Reported
+      // only at steps that push the balance to a NEW low below zero — a later
+      // re-crossing caused by the same earlier shortfall isn't repeated.
+      // Same-instant rows are grouped exactly like the report's running-balance
+      // CTE so a vendor-direct-sale pair can't fake a dip. Each finding also
+      // lists same-material job-work lines still pending at a vendor on that
+      // date — the usual physical source of the "extra" material (GA00193,
+      // 2026-09-05: a 1.800 MT dispatch line with no warehouse stock behind
+      // it, while 3.640 MT sat unreturned at the job-work vendor).
+      hasuraRunSql(`
+        WITH grouped AS (
+          SELECT sl.entry_date, sl.created_at, SUM(sl.quantity) AS qty,
+            STRING_AGG(DISTINCT COALESCE(sl.reference_type || ' ' || sl.reference_number, sl.entry_type), ', ') AS step_refs
+          FROM stock_ledger sl
+          WHERE sl.material_type_id = '${materialTypeId}' AND sl.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
+          GROUP BY sl.entry_date, sl.created_at
+        ),
+        running AS (
+          SELECT entry_date, created_at, qty, step_refs,
+            SUM(qty) OVER (ORDER BY entry_date, created_at ROWS UNBOUNDED PRECEDING) AS balance_after
+          FROM grouped
+        ),
+        lows AS (
+          SELECT *,
+            LEAST(0, COALESCE(MIN(balance_after) OVER (ORDER BY entry_date, created_at ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)) AS prior_low
+          FROM running
+        )
+        SELECT l.entry_date, l.step_refs, (l.balance_after - l.qty) AS balance_before, l.balance_after,
+          (l.prior_low - l.balance_after) AS new_shortfall,
+          COALESCE((
+            SELECT json_agg(json_build_object(
+              'ref', jwo.reference_number, 'line', jwi.job_line_id, 'vendor', s.name, 'dispatched', jwo.dispatch_date,
+              'pending', jwi.quantity_sent - COALESCE(jwi.quantity_received, 0) - COALESCE(jwi.quantity_transferred_out, 0)
+            ) ORDER BY jwo.dispatch_date, jwi.job_line_id)
+            FROM job_work_items jwi
+            JOIN job_work_orders jwo ON jwo.id = jwi.job_work_order_id
+            JOIN suppliers s ON s.id = jwo.vendor_id
+            WHERE jwi.material_type_id = '${materialTypeId}' AND jwi.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
+              AND jwo.status <> 'cancelled' AND jwo.dispatch_date <= l.entry_date
+              AND (jwi.quantity_sent - COALESCE(jwi.quantity_received, 0) - COALESCE(jwi.quantity_transferred_out, 0)) > ${TOLERANCE}
+          ), '[]'::json)::text AS pending_lines
+        FROM lows l
+        WHERE l.balance_after < l.prior_low - ${TOLERANCE}
+        ORDER BY l.entry_date, l.created_at
+      `),
     ])
 
     const aggRow = parseRows(aggRes)[0] ?? ['0', '0', '0']
@@ -236,6 +283,19 @@ export async function GET(request: NextRequest) {
         pattern: 'missing_dispatch_ledger',
         title: `${refNumber}: ${gap.toFixed(3)} MT sent with no matching ${ledgerKind} in the ledger`,
         detail: `This order's job work line(s) show ${totalSent} MT sent, but only ${ledgerTotal} MT is backed by a ${ledgerKind} stock_ledger row — ${gap.toFixed(3)} MT unaccounted for. Often means a repair-inserted line (or its ledger row) was later wiped by an Edit Order save from a stale browser tab. Fixed this way for GA00128/GI00069 on 2026-08-22 — re-post the missing ledger row, or re-insert the missing line if it's gone entirely.`,
+      })
+    }
+
+    for (const r of parseRows(overdrawRes)) {
+      const [entryDate, stepRefs, balanceBefore, balanceAfter, shortfall, pendingJson] = r
+      const pending = JSON.parse(pendingJson) as PendingVendorLine[]
+      const pendingText = pending.length
+        ? `Same material was still recorded as pending at a vendor on that date: ${pending.map((p) => `${p.ref} line ${p.line} — ${num(String(p.pending)).toFixed(3)} MT at ${p.vendor} (sent ${p.dispatched})`).join('; ')}. If part of it had actually come back by then, record that return on the job work order (Edit Order → Output Materials, received date on or before ${entryDate}) and the gap closes with the vendor balance staying in sync. Otherwise check the dispatch/invoice line for a wrong item or size.`
+        : `Nothing of this material was pending at a vendor then, so check the dispatch/invoice line for a wrong item or size, or a purchase/return that was never entered.`
+      findings.push({
+        pattern: 'warehouse_overdraw',
+        title: `${stepRefs} on ${entryDate} took ${num(shortfall).toFixed(3)} MT more than the warehouse held`,
+        detail: `Warehouse balance was ${num(balanceBefore).toFixed(3)} MT before this posting and ${num(balanceAfter).toFixed(3)} MT after, so ${num(shortfall).toFixed(3)} MT of it has no stock record behind it. ${pendingText} GA00193's shape (2026-09-05): a 1.800 MT line on dispatch 1124-0464 with 3.640 MT unreturned on JW-1810-0002.`,
       })
     }
 

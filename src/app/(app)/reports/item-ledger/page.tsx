@@ -7,7 +7,6 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import {
   ITEM_STOCK_LEDGER_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
-  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
   VENDOR_JOB_WORK_TRANSFERS_QUERY,
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_COMPANIES_QUERY,
@@ -15,6 +14,11 @@ import {
   ACTIVE_MATERIAL_SIZES_QUERY,
   CURRENT_VENDOR_STOCK_QUERY,
   SUPPLIER_NAMES_BY_IDS_QUERY,
+  JOB_WORK_ORDERS_AUDIT_LOOKUP_QUERY,
+  PURCHASE_BILLS_AUDIT_LOOKUP_QUERY,
+  DISPATCH_ORDERS_AUDIT_LOOKUP_QUERY,
+  TRANSFERS_AUDIT_LOOKUP_QUERY,
+  USER_PROFILES_QUERY,
 } from '@/lib/hasura/queries'
 import { prevDay } from '@/lib/dateRange'
 import { PrintButton } from '@/components/PrintButton'
@@ -23,7 +27,6 @@ import { ItemLedgerItemSizeFields } from '@/components/ItemLedgerItemSizeFields'
 import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
 import { ArrowLeft, BookOpen } from 'lucide-react'
-import { isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
@@ -106,6 +109,7 @@ type LedgerEntry = {
   entry_type: string
   quantity: number | string
   entry_date: string
+  created_at?: string | null
   reference_number?: string | null
   reference_type?: string | null
   reference_id?: string | null
@@ -117,6 +121,94 @@ type LedgerEntry = {
   warehouses?: { name: string } | null
   material_types?: { description: string; unit: string } | null
   material_sizes?: { size_label: string } | null
+  // A JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL row posted under a DIFFERENT
+  // item that consumed one of this item's job-work lines (migration 142):
+  // moves Balance at Vendor only, never the warehouse Balance.
+  vendorOnly?: boolean
+}
+
+// Vendor-movement classification for one item, from
+// vw_job_work_vendor_movements (migration 142) — the row-level view every
+// vendor-held-stock figure derives from (vw_current_vendor_stock,
+// fn_vendor_balance_as_of, REC-009/REC-018), so the running "Balance at
+// Vendor" column, its opening balance and the "At Vendor (Job Work)" card
+// can never disagree.
+//   ownIds: this item's own JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL rows the
+//     view counts as vendor movements (123's same-item rule).
+//   crossItemRows: OUTPUT_IN / CANCEL rows posted under a DIFFERENT item
+//     whose Output Materials line consumed one of this item's job-work
+//     lines (source_job_line_id) — e.g. OTH00042 0.85X995 slit into OT00006
+//     0.90X121 on JW-MTLF316W-LMUS. They never appear in this item's own
+//     ledger query, so they're merged into the report as vendor-only rows.
+async function fetchVendorMovementRows(
+  materialTypeId: string,
+  materialSizeId: string,
+  companyId: string,
+  warehouseId: string,
+  fromDate: string,
+  toDate: string
+): Promise<{ ownIds: string[]; crossItemRows: LedgerEntry[] }> {
+  const empty = { ownIds: [] as string[], crossItemRows: [] as LedgerEntry[] }
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/
+  if (!UUID_RE.test(materialTypeId) || !dateRe.test(fromDate) || !dateRe.test(toDate)) return empty
+  const sizeSql = materialSizeId && UUID_RE.test(materialSizeId) ? `'${materialSizeId}'::uuid` : 'NULL'
+  const scopeSql = `
+      v.material_type_id = '${materialTypeId}'::uuid
+      AND v.material_size_id IS NOT DISTINCT FROM ${sizeSql}
+      AND v.entry_date BETWEEN '${fromDate}'::date AND '${toDate}'::date
+      ${companyId && UUID_RE.test(companyId) ? `AND v.company_id = '${companyId}'::uuid` : ''}
+      ${warehouseId && UUID_RE.test(warehouseId) ? `AND v.warehouse_id = '${warehouseId}'::uuid` : ''}`
+  const [ownRes, crossRes] = await Promise.all([
+    hasuraRunSql(`
+      SELECT v.id::text
+      FROM vw_job_work_vendor_movements v
+      WHERE NOT v.is_cross_item_output
+        AND v.entry_type IN ('JOB_WORK_OUTPUT_IN', 'JOB_WORK_CANCEL')
+        AND ${scopeSql}`),
+    hasuraRunSql(`
+      SELECT v.id::text, v.entry_type, v.quantity::text, v.entry_date::text,
+             to_char(v.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') || '+00:00',
+             COALESCE(sl.reference_number, ''), sl.reference_id::text,
+             COALESCE(sl.purchase_line_id, ''), COALESCE(sl.sub_purchase_line_id, ''),
+             COALESCE(c.name, ''), COALESCE(c.code, ''), COALESCE(w.name, ''),
+             COALESCE(im.item_code, ''), COALESCE(v.own_size_label, '')
+      FROM vw_job_work_vendor_movements v
+      JOIN stock_ledger sl ON sl.id = v.id
+      LEFT JOIN companies c ON c.id = v.company_id
+      LEFT JOIN warehouses w ON w.id = v.warehouse_id
+      LEFT JOIN job_work_output_items oi ON oi.id = v.output_item_id
+      LEFT JOIN item_master im ON im.id = oi.item_master_id
+      WHERE v.is_cross_item_output
+        AND ${scopeSql}`),
+  ])
+  const ownIds = (ownRes.result?.slice(1) ?? []).map(([id]) => id)
+  const crossItemRows: LedgerEntry[] = (crossRes.result?.slice(1) ?? []).map((r) => {
+    const [
+      id, entryType, quantity, entryDate, createdAt, referenceNumber, referenceId,
+      purchaseLineId, subPurchaseLineId, companyName, companyCode, warehouseName, outputItemCode, outputSizeLabel,
+    ] = r
+    const outputLabel = [outputItemCode, outputSizeLabel].filter(Boolean).join(' ') || 'another item'
+    return {
+      id,
+      entry_type: entryType,
+      quantity,
+      entry_date: entryDate,
+      created_at: createdAt,
+      reference_number: referenceNumber || null,
+      reference_type: 'job_work',
+      reference_id: referenceId,
+      purchase_line_id: purchaseLineId || null,
+      sub_purchase_line_id: subPurchaseLineId || null,
+      size_label: outputSizeLabel || null,
+      notes: entryType === 'JOB_WORK_CANCEL'
+        ? `Output line corrected — was recorded as ${outputLabel} (posted under that item)`
+        : `Came back from the vendor as ${outputLabel} — posted under that item; reduces this item's balance at vendor only`,
+      companies: { name: companyName, code: companyCode },
+      warehouses: { name: warehouseName },
+      vendorOnly: true,
+    }
+  })
+  return { ownIds, crossItemRows }
 }
 
 export default async function ItemStockLedgerPage({
@@ -158,6 +250,9 @@ export default async function ItemStockLedgerPage({
   let openingBalance = 0
   let vendorOpeningBalance = 0
   let entries: LedgerEntry[] = []
+  // Ids of this item's own JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL rows that
+  // vw_job_work_vendor_movements (142) counts as vendor movements.
+  const vendorMovementIds = new Set<string>()
   let vendorStock: { vendor_name: string; pending_quantity: number; unit: string }[] = []
 
   if (selectedItem) {
@@ -194,6 +289,23 @@ export default async function ItemStockLedgerPage({
     openingBalance = Number(result.opening_agg?.aggregate?.sum?.quantity ?? 0)
     vendorOpeningBalance = vendorOpening
     entries = result.entries ?? []
+
+    const vendorMovementRows = await fetchVendorMovementRows(
+      selectedItem.material_type_id, selectedSizeId, params.company || '', params.warehouse || '', fromDate, toDate
+    )
+    for (const id of vendorMovementRows.ownIds) vendorMovementIds.add(id)
+    const crossRows = typeFilter?.length
+      ? vendorMovementRows.crossItemRows.filter((r) => typeFilter.includes(r.entry_type))
+      : vendorMovementRows.crossItemRows
+    if (crossRows.length) {
+      // Same order as ITEM_STOCK_LEDGER_QUERY's entries: entry_date, quantity DESC, created_at.
+      entries = [...entries, ...crossRows].sort(
+        (a, b) =>
+          a.entry_date.localeCompare(b.entry_date) ||
+          Number(b.quantity) - Number(a.quantity) ||
+          (a.created_at ?? '').localeCompare(b.created_at ?? '')
+      )
+    }
 
     const currentVendorStockWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
     currentVendorStockWhere.material_size_id = selectedSizeId ? { _eq: selectedSizeId } : { _is_null: true }
@@ -248,29 +360,55 @@ export default async function ItemStockLedgerPage({
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? '']))
   }
 
-  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement (material no
-  // longer held at the vendor) when its order's Output Materials line is
-  // recorded against the exact same material as one of that order's own
-  // INPUT lines — i.e. no real conversion happened, this is the vendor
-  // return leg. Single authoritative check shared with every other report
-  // (isVendorMovementRow, src/lib/stockLedger.ts) so this always agrees
-  // with vw_current_vendor_stock / fn_vendor_balance_as_of (migration 123).
-  const outputOrderIds = Array.from(
-    new Set(entries.filter((e) => e.entry_type === 'JOB_WORK_OUTPUT_IN' && e.reference_id).map((e) => e.reference_id as string))
-  )
-  const sameMaterialOutputKeys = new Set<string>()
-  if (outputOrderIds.length) {
-    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
-    const rows: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
-      matchingInputResult.job_work_items ?? []
-    for (const r of rows) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
+  // Creator/editor audit trail per row (Created By/On, Modified On columns)
+  // — same "batch by reference_id, keyed by type" approach as the vendor
+  // lookup above, since reference_id is polymorphic and each type's audit
+  // fields live on a different table. "Modified" only counts when
+  // updated_by is actually set (a genuine edit), not just because
+  // updated_at defaults alongside created_at on insert — same signal the
+  // Bill/Job Work/Dispatch detail views already use.
+  type AuditInfo = { created_by: string | null; created_at: string; updated_by: string | null; updated_at: string | null }
+  const idsByRefType = {
+    purchase_bill: Array.from(new Set(entries.filter((e) => e.reference_type === 'purchase_bill' && e.reference_id).map((e) => e.reference_id as string))),
+    dispatch: Array.from(new Set(entries.filter((e) => e.reference_type === 'dispatch' && e.reference_id).map((e) => e.reference_id as string))),
+    transfer: Array.from(new Set(entries.filter((e) => e.reference_type === 'transfer' && e.reference_id).map((e) => e.reference_id as string))),
   }
-  const isVendorMovement = (
-    entryType: string,
-    referenceId: string | null | undefined,
-    materialTypeId: string | null | undefined,
-    materialSizeId: string | null | undefined
-  ) => isVendorMovementRow(entryType, referenceId, materialTypeId, materialSizeId, sameMaterialOutputKeys)
+  const [jobWorkAuditResult, billAuditResult, dispatchAuditResult, transferAuditResult] = await Promise.all([
+    jobWorkOrderIds.length ? hasuraQuery(JOB_WORK_ORDERS_AUDIT_LOOKUP_QUERY, { ids: jobWorkOrderIds }) : Promise.resolve({ job_work_orders: [] }),
+    idsByRefType.purchase_bill.length ? hasuraQuery(PURCHASE_BILLS_AUDIT_LOOKUP_QUERY, { ids: idsByRefType.purchase_bill }) : Promise.resolve({ purchase_bills: [] }),
+    idsByRefType.dispatch.length ? hasuraQuery(DISPATCH_ORDERS_AUDIT_LOOKUP_QUERY, { ids: idsByRefType.dispatch }) : Promise.resolve({ dispatch_orders: [] }),
+    idsByRefType.transfer.length ? hasuraQuery(TRANSFERS_AUDIT_LOOKUP_QUERY, { ids: idsByRefType.transfer }) : Promise.resolve({ transfers: [] }),
+  ])
+  const auditByRef = new Map<string, AuditInfo>()
+  for (const r of (jobWorkAuditResult.job_work_orders ?? []) as (AuditInfo & { id: string })[]) auditByRef.set(`job_work|${r.id}`, r)
+  for (const r of (billAuditResult.purchase_bills ?? []) as (AuditInfo & { id: string })[]) auditByRef.set(`purchase_bill|${r.id}`, r)
+  for (const r of (dispatchAuditResult.dispatch_orders ?? []) as (AuditInfo & { id: string })[]) auditByRef.set(`dispatch|${r.id}`, r)
+  for (const r of (transferAuditResult.transfers ?? []) as { id: string; created_by: string | null; created_at: string; updated_at: string | null }[]) {
+    auditByRef.set(`transfer|${r.id}`, { ...r, updated_by: null })
+  }
+
+  let userNameById = new Map<string, string>()
+  const auditUserIds = new Set<string>()
+  for (const a of auditByRef.values()) {
+    if (a.created_by) auditUserIds.add(a.created_by)
+    if (a.updated_by) auditUserIds.add(a.updated_by)
+  }
+  if (auditUserIds.size) {
+    const usersResult = await hasuraQuery(USER_PROFILES_QUERY)
+    const users: { id: string; full_name: string }[] = usersResult.user_profiles ?? []
+    userNameById = new Map(users.map((u) => [u.id, u.full_name]))
+  }
+
+  // Which rows move stock to/from a job-work vendor. JOB_WORK_OUT / RETURN_IN /
+  // TRANSFER_OUT / TRANSFER_IN always do; a JOB_WORK_OUTPUT_IN or
+  // JOB_WORK_CANCEL row only does when vw_job_work_vendor_movements (142)
+  // says so for THIS item's scope — a same-item Output Materials return
+  // (123), or a cross-item output attributed back to this item's input line
+  // (merged in above as a vendorOnly row). Reading the view keeps this in
+  // lock-step with vw_current_vendor_stock / fn_vendor_balance_as_of.
+  const ALWAYS_VENDOR_MOVEMENT = new Set(['JOB_WORK_OUT', 'JOB_WORK_RETURN_IN', 'JOB_WORK_TRANSFER_OUT', 'JOB_WORK_TRANSFER_IN'])
+  const isVendorMovement = (e: { id: string; entry_type: string; vendorOnly?: boolean }) =>
+    e.vendorOnly === true || ALWAYS_VENDOR_MOVEMENT.has(e.entry_type) || vendorMovementIds.has(e.id)
 
   // Counterparty vendor for a JOB_WORK_TRANSFER_OUT/IN row — the row's own
   // reference_id only carries one side of the vendor-to-vendor transfer (the
@@ -329,12 +467,10 @@ export default async function ItemStockLedgerPage({
   // via property writes, not variable reassignment, inside the nested map.
   const runningBalance = { warehouse: openingBalance, vendor: vendorOpeningBalance }
   const ledgerRows = entries.map((e) => {
-    runningBalance.warehouse += Number(e.quantity)
-    // Every entry here already shares the selected item's material (the
-    // report's own query is scoped to it), so that's what decides a
-    // JOB_WORK_OUTPUT_IN row's vendor-movement status too.
-    if (isVendorMovement(e.entry_type, e.reference_id, selectedItem?.material_type_id, selectedSizeId || null))
-      runningBalance.vendor -= Number(e.quantity)
+    // A cross-item output row (vendorOnly) belongs to another item's
+    // warehouse balance — it only reduces what this item still has at the vendor.
+    if (!e.vendorOnly) runningBalance.warehouse += Number(e.quantity)
+    if (isVendorMovement(e)) runningBalance.vendor -= Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
     const ownVendorName = e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null
@@ -354,6 +490,11 @@ export default async function ItemStockLedgerPage({
       }
     }
 
+    const audit = e.reference_type && e.reference_id ? auditByRef.get(`${e.reference_type}|${e.reference_id}`) : undefined
+    const createdByName = audit?.created_by ? userNameById.get(audit.created_by) ?? null : null
+    const createdAt = audit?.created_at ?? null
+    const modifiedAt = audit?.updated_by ? audit.updated_at ?? null : null
+
     return {
       ...e,
       balance: runningBalance.warehouse,
@@ -362,6 +503,9 @@ export default async function ItemStockLedgerPage({
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
       vendorName,
       ownVendorName,
+      createdByName,
+      createdAt,
+      modifiedAt,
     }
   })
   const closingBalance = runningBalance.warehouse
@@ -516,10 +660,8 @@ export default async function ItemStockLedgerPage({
     const soloRow = ledgerRows[i]
     displayRows.push({
       ...soloRow,
-      warehouseDelta: Number(soloRow.quantity),
-      vendorDelta: isVendorMovement(soloRow.entry_type, soloRow.reference_id, selectedItem?.material_type_id, selectedSizeId || null)
-        ? -Number(soloRow.quantity)
-        : 0,
+      warehouseDelta: soloRow.vendorOnly ? 0 : Number(soloRow.quantity),
+      vendorDelta: isVendorMovement(soloRow) ? -Number(soloRow.quantity) : 0,
     })
   }
 
@@ -559,9 +701,7 @@ export default async function ItemStockLedgerPage({
   // never inflate these totals as if new stock arrived or left for good.
   // Closing Balance already reflects every row unconditionally (above);
   // only these two summary totals need the internal-vs-external split.
-  const externalEntries = entries.filter(
-    (e) => !isVendorMovement(e.entry_type, e.reference_id, selectedItem?.material_type_id, selectedSizeId || null)
-  )
+  const externalEntries = entries.filter((e) => !e.vendorOnly && !isVendorMovement(e))
   const totalIn = externalEntries
     .filter((e) => Number(e.quantity) > 0)
     .reduce((s, e) => s + Number(e.quantity), 0)
@@ -877,7 +1017,7 @@ export default async function ItemStockLedgerPage({
               <span className="text-xs text-gray-500">{displayRows.length} entr{displayRows.length !== 1 ? 'ies' : 'y'}</span>
             </div>
             <div className="overflow-auto max-h-[70vh]">
-              <table className="w-full text-sm">
+              <table className="min-w-full text-sm">
                 <tbody className="divide-y divide-gray-100">
                   <tr className="bg-blue-50/50 font-medium">
                     <td className="px-4 py-3 text-gray-600" colSpan={canManage ? 8 : 7}>Opening Balance as of {fromDate}</td>
@@ -889,10 +1029,13 @@ export default async function ItemStockLedgerPage({
                     </td>
                     <td />
                     <td />
+                    <td />
+                    <td />
+                    <td />
                   </tr>
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={canManage ? 12 : 11} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={canManage ? 15 : 14} className="px-4 py-8 text-center text-gray-400">
                         No movements for this item in the selected period.
                       </td>
                     </tr>
@@ -910,6 +1053,9 @@ export default async function ItemStockLedgerPage({
                     <td className={`px-4 py-3 text-right font-bold ${vendorClosingBalance < 0 ? 'text-red-700' : 'text-purple-900'}`}>
                       {fmtQ(vendorClosingBalance)}
                     </td>
+                    <td />
+                    <td />
+                    <td />
                     <td />
                     <td />
                   </tr>

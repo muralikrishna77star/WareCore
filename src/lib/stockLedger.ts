@@ -29,13 +29,21 @@ export function vendorOutputOrderKey(
   return `${jobWorkOrderId}|${materialTypeId}|${materialSizeId ?? ''}`
 }
 
-/** The single authoritative "does this stock_ledger row represent material
- * moving to/from a job-work vendor" check — mirrors vw_current_vendor_stock
- * (087/090/123) exactly, so every report's vendor balance and "external
- * in/out" classification agrees with the DB view. `sameMaterialOutputKeys`
- * is the Set built from JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY via
- * vendorOutputOrderKey for every order referenced by a JOB_WORK_OUTPUT_IN
- * row in the report's dataset. */
+/** "Does this stock_ledger row represent material moving to/from a job-work
+ * vendor" check for reports that only have an item's OWN ledger rows in
+ * hand — mirrors vw_current_vendor_stock's 087/090/123 rules.
+ * `sameMaterialOutputKeys` is the Set built from
+ * JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY via vendorOutputOrderKey for every
+ * order referenced by a JOB_WORK_OUTPUT_IN row in the report's dataset.
+ *
+ * Known limit (migration 142): an Output Materials line recorded as a
+ * DIFFERENT item than the input it consumed (source_job_line_id set, e.g.
+ * OTH00042 0.85X995 slit into OT00006 0.90X121) is posted under the output
+ * item, so it never appears among the input item's own rows and this check
+ * can't see it. The DB view vw_job_work_vendor_movements attributes such
+ * rows back to the input line; anything that must match the "At Vendor"
+ * card exactly (the Item Stock Ledger report, the reconcile-items API)
+ * reads that view instead of using this helper. */
 export function isVendorMovementRow(
   entryType: string,
   referenceId: string | null | undefined,
