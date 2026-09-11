@@ -29,6 +29,10 @@ type AvailablePurchaseLine = {
   material_size_id: string | null
   size_label: string | null
   available_quantity: number
+  // Net quantity broken down by owning company_id — lets the form warn (not
+  // block) when the order's own company has none of this stock itself and
+  // it's really recorded under the other, informally stock-sharing company.
+  companyQuantities: Record<string, number>
 }
 
 interface PurchaseBillItemForDispatch {
@@ -56,6 +60,7 @@ interface StockLedgerLineQuantity {
   material_size_id: string | null
   size_label: string | null
   quantity: number | string
+  company_id: string
 }
 
 type DispatchLine = {
@@ -112,6 +117,80 @@ function generateSaleLineId(typeCode: string, allLineIds: string[]): string {
   const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
   const prefix = typeCode.slice(0, 2).toUpperCase()
   return `${prefix}${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+}
+
+// Shared by the initial load and the "refresh purchase lines" button —
+// aggregates stock_ledger by purchase line (or by material for job-work
+// output / unlinked stock), same as before, but also keeps a per-company
+// breakdown so the form can warn when a pick's stock actually belongs to
+// the other, informally stock-sharing company.
+function buildAvailablePurchaseLines(
+  pbiItems: PurchaseBillItemForDispatch[],
+  stockRows: StockLedgerLineQuantity[],
+  jwoiItems: JobWorkOutputItemForDispatch[],
+): AvailablePurchaseLine[] {
+  const stockByLine: Record<string, number> = {}
+  const stockByMaterial: Record<string, number> = {}
+  const companyByLine: Record<string, Record<string, number>> = {}
+  const companyByMaterial: Record<string, Record<string, number>> = {}
+  for (const entry of stockRows) {
+    const qty = Number(entry.quantity)
+    if (entry.purchase_line_id) {
+      stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + qty
+      const byCompany = (companyByLine[entry.purchase_line_id] ??= {})
+      byCompany[entry.company_id] = (byCompany[entry.company_id] ?? 0) + qty
+    } else {
+      const mk = `${entry.material_type_id}|${entry.material_size_id ?? ''}|${entry.size_label ?? ''}`
+      stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + qty
+      const byCompany = (companyByMaterial[mk] ??= {})
+      byCompany[entry.company_id] = (byCompany[entry.company_id] ?? 0) + qty
+    }
+  }
+  const seen = new Set<string>()
+  const avail: AvailablePurchaseLine[] = []
+  for (const item of pbiItems) {
+    let qty: number
+    let key: string
+    let companyQuantities: Record<string, number>
+    if (item.purchase_line_id) {
+      if (seen.has(item.purchase_line_id)) continue
+      qty = stockByLine[item.purchase_line_id] ?? 0
+      key = item.purchase_line_id
+      companyQuantities = companyByLine[item.purchase_line_id] ?? {}
+    } else {
+      const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+      if (seen.has(mk)) continue
+      qty = stockByMaterial[mk] ?? 0
+      key = `ID:${item.id}`
+      companyQuantities = companyByMaterial[mk] ?? {}
+    }
+    if (qty > 0) {
+      seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
+      avail.push({ ...item, _key: key, available_quantity: qty, companyQuantities })
+    }
+  }
+  for (const item of jwoiItems) {
+    const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
+    if (seen.has(mk)) continue
+    const qty = stockByMaterial[mk] ?? 0
+    if (qty > 0) {
+      seen.add(mk)
+      avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty, companyQuantities: companyByMaterial[mk] ?? {} })
+    }
+  }
+  return avail
+}
+
+// Returns the id of the company that actually holds this line's stock when
+// the order's own company holds none of it itself — null when the order's
+// company already has some (no warning needed) or when no other company
+// has any either.
+function crossCompanyOwner(pl: { companyQuantities: Record<string, number> }, orderCompanyId: string): string | null {
+  if (!orderCompanyId) return null
+  const ownQty = pl.companyQuantities[orderCompanyId] ?? 0
+  if (ownQty > 0.0009) return null
+  const other = Object.entries(pl.companyQuantities).find(([cid, qty]) => cid !== orderCompanyId && qty > 0.0009)
+  return other ? other[0] : null
 }
 
 function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<DispatchLine> {
@@ -249,51 +328,11 @@ export default function NewDispatchPage() {
       setExistingLineIds(lineIds)
       setSaleId(generateSaleId(invoiceNums, dispatchDateRef.current))
 
-      const stockByLine: Record<string, number> = {}
-      const stockByMaterial: Record<string, number> = {}
-      for (const entry of slRes.data?.stock_ledger ?? []) {
-        if (entry.purchase_line_id) {
-          stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
-        } else {
-          const mk = `${entry.material_type_id}|${entry.material_size_id ?? ''}|${entry.size_label ?? ''}`
-          stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + Number(entry.quantity)
-        }
-      }
-
-      const seen = new Set<string>()
-      const avail: AvailablePurchaseLine[] = []
-      for (const item of pbiRes.data?.purchase_bill_items ?? []) {
-        let qty: number
-        let key: string
-        if (item.purchase_line_id) {
-          if (seen.has(item.purchase_line_id)) continue
-          qty = stockByLine[item.purchase_line_id] ?? 0
-          key = item.purchase_line_id
-        } else {
-          const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
-          if (seen.has(mk)) continue
-          qty = stockByMaterial[mk] ?? 0
-          key = `ID:${item.id}`
-        }
-        if (qty > 0) {
-          seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
-          avail.push({ ...item, _key: key, available_quantity: qty })
-        }
-      }
-      // Job-work output items (e.g. slit material blended from >1 purchase
-      // line) have no purchase_bill_items row and post to stock_ledger with
-      // purchase_line_id NULL — pick up their material-keyed stock here so
-      // it's still sellable.
-      for (const item of jwoiRes.data?.job_work_output_items ?? []) {
-        const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
-        if (seen.has(mk)) continue
-        const qty = stockByMaterial[mk] ?? 0
-        if (qty > 0) {
-          seen.add(mk)
-          avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty })
-        }
-      }
-      setAvailablePurchaseLines(avail)
+      setAvailablePurchaseLines(buildAvailablePurchaseLines(
+        pbiRes.data?.purchase_bill_items ?? [],
+        slRes.data?.stock_ledger ?? [],
+        jwoiRes.data?.job_work_output_items ?? [],
+      ))
       setMasterDataLoading(false)
     }
     load()
@@ -313,46 +352,11 @@ export default function NewDispatchPage() {
       hasuraFetch<{ stock_ledger: StockLedgerLineQuantity[] }>(STOCK_LEDGER_LINE_QUANTITIES_QUERY),
       hasuraFetch<{ job_work_output_items: JobWorkOutputItemForDispatch[] }>(JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY),
     ])
-    const stockByLine: Record<string, number> = {}
-    const stockByMaterial: Record<string, number> = {}
-    for (const entry of slRes.data?.stock_ledger ?? []) {
-      if (entry.purchase_line_id) {
-        stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
-      } else {
-        const mk = `${entry.material_type_id}|${entry.material_size_id ?? ''}|${entry.size_label ?? ''}`
-        stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + Number(entry.quantity)
-      }
-    }
-    const seen = new Set<string>()
-    const avail: AvailablePurchaseLine[] = []
-    for (const item of pbiRes.data?.purchase_bill_items ?? []) {
-      let qty: number
-      let key: string
-      if (item.purchase_line_id) {
-        if (seen.has(item.purchase_line_id)) continue
-        qty = stockByLine[item.purchase_line_id] ?? 0
-        key = item.purchase_line_id
-      } else {
-        const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
-        if (seen.has(mk)) continue
-        qty = stockByMaterial[mk] ?? 0
-        key = `ID:${item.id}`
-      }
-      if (qty > 0) {
-        seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
-        avail.push({ ...item, _key: key, available_quantity: qty })
-      }
-    }
-    for (const item of jwoiRes.data?.job_work_output_items ?? []) {
-      const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
-      if (seen.has(mk)) continue
-      const qty = stockByMaterial[mk] ?? 0
-      if (qty > 0) {
-        seen.add(mk)
-        avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty })
-      }
-    }
-    setAvailablePurchaseLines(avail)
+    setAvailablePurchaseLines(buildAvailablePurchaseLines(
+      pbiRes.data?.purchase_bill_items ?? [],
+      slRes.data?.stock_ledger ?? [],
+      jwoiRes.data?.job_work_output_items ?? [],
+    ))
     setRefreshingPurchaseLines(false)
   }
 
@@ -539,9 +543,30 @@ export default function NewDispatchPage() {
         })
         .filter((w): w is string => !!w)
 
-      if (overStockWarnings.length) {
+      // Warn (don't block) when a picked line's stock is really recorded
+      // under the OTHER company — the two companies here informally share
+      // inventory, so this is a routine, intentional pick, not an error. See
+      // migrations 121/133/140/143/144: unflagged cross-company picks are
+      // the recurring root cause of negative-stock exceptions.
+      const crossCompanyWarnings = companyId
+        ? validLines
+            .map((l) => {
+              if (!l.purchase_line_id) return null
+              const pl = availablePurchaseLines.find((al) => al._key === l.purchase_line_id)
+              if (!pl) return null
+              const otherCompanyId = crossCompanyOwner(pl, companyId)
+              if (!otherCompanyId) return null
+              const otherCompany = companies.find((c) => c.id === otherCompanyId)
+              const label = l.item_name || l.size_label || 'this item'
+              return `${label}: stock is recorded under ${otherCompany?.name ?? 'another company'}, not this order's company`
+            })
+            .filter((w): w is string => !!w)
+        : []
+
+      const allWarnings = [...overStockWarnings, ...crossCompanyWarnings]
+      if (allWarnings.length) {
         const proceed = window.confirm(
-          `This will take stock negative for:\n\n${overStockWarnings.join('\n')}\n\nContinue anyway?`
+          `Please review before saving:\n\n${allWarnings.join('\n')}\n\nContinue anyway?`
         )
         if (!proceed) {
           setLoading(false)
@@ -927,6 +952,15 @@ export default function NewDispatchPage() {
                           ) : line.item_master_id && purchaseLinesForRow.length === 0 && !masterDataLoading ? (
                             <p className="text-[10px] text-amber-600 mt-0.5">No stock for this item</p>
                           ) : null}
+                          {(() => {
+                            if (!companyId || !line.purchase_line_id) return null
+                            const pl = availablePurchaseLines.find((l) => l._key === line.purchase_line_id)
+                            const otherCompanyId = pl ? crossCompanyOwner(pl, companyId) : null
+                            const otherCompany = otherCompanyId ? companies.find((c) => c.id === otherCompanyId) : null
+                            return otherCompany ? (
+                              <p className="text-[10px] text-amber-600 mt-0.5 font-medium">⚠ Stock recorded under {otherCompany.name} — may need an inter-company transfer</p>
+                            ) : null
+                          })()}
                         </div>
                       </td>
                       {/* ── Material ── */}

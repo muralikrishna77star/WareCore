@@ -888,6 +888,10 @@ export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
   }
 `
 
+// company_id is included (though this stays deliberately un-filtered by
+// company) so callers can warn when a purchase line's stock is recorded
+// under a different company than the order being created — the two
+// companies here informally share inventory, so this must warn, not block.
 export const STOCK_LEDGER_LINE_QUANTITIES_QUERY = `
   query GetStockLedgerLineQuantities {
     stock_ledger {
@@ -896,6 +900,7 @@ export const STOCK_LEDGER_LINE_QUANTITIES_QUERY = `
       material_size_id
       size_label
       quantity
+      company_id
     }
   }
 `
@@ -1237,11 +1242,16 @@ export const ALL_PURCHASE_BILL_ITEM_LINES_QUERY = `
   }
 `
 
+// company_id is included (though this stays deliberately un-filtered by
+// company) so callers can warn when a purchase line's stock is recorded
+// under a different company than the order being created — the two
+// companies here informally share inventory, so this must warn, not block.
 export const ALL_STOCK_BY_PURCHASE_LINE_QUERY = `
   query GetAllStockByPurchaseLine {
     stock_ledger(where: { purchase_line_id: { _is_null: false } }) {
       purchase_line_id
       quantity
+      company_id
     }
   }
 `
@@ -1262,6 +1272,7 @@ export const PURCHASE_LINES_STOCK_QUERY = `
     stock_ledger(where: { purchase_line_id: { _in: $purchase_line_ids } }) {
       purchase_line_id
       quantity
+      company_id
     }
   }
 `

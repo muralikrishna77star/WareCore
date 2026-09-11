@@ -89,7 +89,26 @@ interface JobWorkOrderForEdit {
   job_work_output_items: JobWorkEditOutputItem[]
 }
 
-type PurchaseLineOption = { purchase_line_id: string; available_qty: number }
+type PurchaseLineOption = {
+  purchase_line_id: string
+  available_qty: number
+  // Net quantity broken down by owning company_id — lets the form warn (not
+  // block) when the order's own company has none of this stock itself and
+  // it's really recorded under the other, informally stock-sharing company.
+  companyQuantities: Record<string, number>
+}
+
+// Returns the id of the company that actually holds this line's stock when
+// the order's own company holds none of it itself — null when the order's
+// company already has some (no warning needed) or when no other company
+// has any either.
+function crossCompanyOwner(companyQuantities: Record<string, number>, orderCompanyId: string): string | null {
+  if (!orderCompanyId) return null
+  const ownQty = companyQuantities[orderCompanyId] ?? 0
+  if (ownQty > 0.0009) return null
+  const other = Object.entries(companyQuantities).find(([cid, qty]) => cid !== orderCompanyId && qty > 0.0009)
+  return other ? other[0] : null
+}
 
 type InputLine = {
   id: string
@@ -180,6 +199,8 @@ function InputLineRow({
   inputFieldCls,
   selectCls,
   disabled,
+  companyId,
+  companies,
 }: {
   line: InputLine
   index: number
@@ -197,6 +218,8 @@ function InputLineRow({
   inputFieldCls: string
   selectCls: string
   disabled?: boolean
+  companyId: string
+  companies: Company[]
 }) {
   const anchorRef = useRef<HTMLDivElement | null>(null)
   return (
@@ -287,6 +310,15 @@ function InputLineRow({
               ))}
             </select>
           )}
+        {(() => {
+          if (!companyId || !line.purchase_line_id) return null
+          const opt = line.purchase_line_options.find(o => o.purchase_line_id === line.purchase_line_id)
+          const otherCompanyId = opt ? crossCompanyOwner(opt.companyQuantities, companyId) : null
+          const otherCompany = otherCompanyId ? companies.find(c => c.id === otherCompanyId) : null
+          return otherCompany ? (
+            <p className="text-[10px] text-amber-600 mt-0.5 font-medium">⚠ Stock under {otherCompany.name} — may need an inter-company transfer</p>
+          ) : null
+        })()}
       </td>
 
       {/* Avail Stock */}
@@ -593,11 +625,14 @@ export default function EditJobWorkPage() {
       .filter((id): id is string => Boolean(id))
 
     const stockMap: Record<string, number> = {}
+    const companyMap: Record<string, Record<string, number>> = {}
     if (purchaseLineIds.length) {
-      const { data: stockData } = await hasuraFetch<{ stock_ledger: { purchase_line_id: string; quantity: number }[] }>(PURCHASE_LINES_STOCK_QUERY, { purchase_line_ids: purchaseLineIds })
+      const { data: stockData } = await hasuraFetch<{ stock_ledger: { purchase_line_id: string; quantity: number; company_id: string }[] }>(PURCHASE_LINES_STOCK_QUERY, { purchase_line_ids: purchaseLineIds })
       for (const row of stockData?.stock_ledger ?? []) {
         if (row.purchase_line_id) {
           stockMap[row.purchase_line_id] = (stockMap[row.purchase_line_id] ?? 0) + Number(row.quantity)
+          const byCompany = (companyMap[row.purchase_line_id] ??= {})
+          byCompany[row.company_id] = (byCompany[row.company_id] ?? 0) + Number(row.quantity)
         }
       }
     }
@@ -609,7 +644,7 @@ export default function EditJobWorkPage() {
       .map(id => {
         let qty = stockMap[id] ?? 0
         if (preservePurchaseLineId && id === preservePurchaseLineId) qty += extraQty ?? 0
-        return { purchase_line_id: id, available_qty: Number(qty.toFixed(3)) }
+        return { purchase_line_id: id, available_qty: Number(qty.toFixed(3)), companyQuantities: companyMap[id] ?? {} }
       })
       .filter(opt => opt.available_qty > 0)
       .sort((a, b) => a.purchase_line_id.localeCompare(b.purchase_line_id))
@@ -1064,6 +1099,35 @@ export default function EditJobWorkPage() {
       }
     }
 
+    // Warn (don't block) when a picked line's stock is really recorded
+    // under the OTHER company — the two companies here informally share
+    // inventory, so this is a routine, intentional pick, not an error. See
+    // migrations 121/133/140/143/144: unflagged cross-company picks are the
+    // recurring root cause of negative-stock exceptions.
+    if (companyId) {
+      const crossCompanyWarnings = validInputs
+        .map((l) => {
+          if (!l.purchase_line_id) return null
+          const opt = l.purchase_line_options.find((o) => o.purchase_line_id === l.purchase_line_id)
+          if (!opt) return null
+          const otherCompanyId = crossCompanyOwner(opt.companyQuantities, companyId)
+          if (!otherCompanyId) return null
+          const otherCompany = companies.find((c) => c.id === otherCompanyId)
+          return `${l.item_name || l.purchase_line_id}: stock is recorded under ${otherCompany?.name ?? 'another company'}, not this order's company`
+        })
+        .filter((w): w is string => !!w)
+
+      if (crossCompanyWarnings.length) {
+        const proceed = window.confirm(
+          `Please review before saving:\n\n${crossCompanyWarnings.join('\n')}\n\nContinue anyway?`
+        )
+        if (!proceed) {
+          setLoading(false)
+          return
+        }
+      }
+    }
+
     const validOutputs = outputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
 
     // Qty Returned is derived from produced output rows sharing the same Job
@@ -1346,6 +1410,8 @@ export default function EditJobWorkPage() {
                       inputFieldCls={inputFieldCls}
                       selectCls={selectCls}
                       disabled={returnsOnly}
+                      companyId={companyId}
+                      companies={companies}
                     />
                   ))}
                 </tbody>

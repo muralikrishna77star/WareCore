@@ -30,6 +30,10 @@ type AvailablePurchaseLine = {
   material_size_id: string | null
   size_label: string | null
   available_quantity: number
+  // Net quantity broken down by owning company_id — lets the form warn (not
+  // block) when the order's own company has none of this stock itself and
+  // it's really recorded under the other, informally stock-sharing company.
+  companyQuantities: Record<string, number>
 }
 
 interface PurchaseBillItemForDispatch {
@@ -48,6 +52,7 @@ interface StockLedgerLineQuantity {
   material_size_id: string | null
   size_label: string | null
   quantity: number | string
+  company_id: string
 }
 
 interface JobWorkOutputItemForDispatch {
@@ -146,6 +151,18 @@ function generateSaleLineId(typeCode: string, allLineIds: string[]): string {
   const seq = computeNextSeq(allLineIds, /^[A-Z]{2}\d{4}-(\d+)$/)
   const prefix = typeCode.slice(0, 2).toUpperCase()
   return `${prefix}${getMMYY()}-${String(seq + 1).padStart(4, '0')}`
+}
+
+// Returns the id of the company that actually holds this line's stock when
+// the order's own company holds none of it itself — null when the order's
+// company already has some (no warning needed) or when no other company
+// has any either.
+function crossCompanyOwner(pl: { companyQuantities: Record<string, number> }, orderCompanyId: string): string | null {
+  if (!orderCompanyId) return null
+  const ownQty = pl.companyQuantities[orderCompanyId] ?? 0
+  if (ownQty > 0.0009) return null
+  const other = Object.entries(pl.companyQuantities).find(([cid, qty]) => cid !== orderCompanyId && qty > 0.0009)
+  return other ? other[0] : null
 }
 
 function calcSalesTax(line: DispatchLine, taxRates: TaxRate[]): Partial<DispatchLine> {
@@ -277,15 +294,24 @@ export default function EditDispatchPage() {
         })
       setExistingLineIds(lineIds)
 
-      // Stock maps
+      // Stock maps, plus a per-company breakdown so cross-company picks can
+      // be flagged (the two companies here informally share inventory — see
+      // migrations 121/133/140/143/144 — so this warns rather than blocks).
       const stockByLine: Record<string, number> = {}
       const stockByMaterial: Record<string, number> = {}
+      const companyByLine: Record<string, Record<string, number>> = {}
+      const companyByMaterial: Record<string, Record<string, number>> = {}
       for (const entry of slRes.data?.stock_ledger ?? []) {
+        const qty = Number(entry.quantity)
         if (entry.purchase_line_id) {
-          stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + Number(entry.quantity)
+          stockByLine[entry.purchase_line_id] = (stockByLine[entry.purchase_line_id] ?? 0) + qty
+          const byCompany = (companyByLine[entry.purchase_line_id] ??= {})
+          byCompany[entry.company_id] = (byCompany[entry.company_id] ?? 0) + qty
         } else {
           const mk = `${entry.material_type_id}|${entry.material_size_id ?? ''}|${entry.size_label ?? ''}`
-          stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + Number(entry.quantity)
+          stockByMaterial[mk] = (stockByMaterial[mk] ?? 0) + qty
+          const byCompany = (companyByMaterial[mk] ??= {})
+          byCompany[entry.company_id] = (byCompany[entry.company_id] ?? 0) + qty
         }
       }
 
@@ -294,19 +320,22 @@ export default function EditDispatchPage() {
       for (const item of pbiRes.data?.purchase_bill_items ?? []) {
         let qty: number
         let key: string
+        let companyQuantities: Record<string, number>
         if (item.purchase_line_id) {
           if (seen.has(item.purchase_line_id)) continue
           qty = stockByLine[item.purchase_line_id] ?? 0
           key = item.purchase_line_id
+          companyQuantities = companyByLine[item.purchase_line_id] ?? {}
         } else {
           const mk = `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`
           if (seen.has(mk)) continue
           qty = stockByMaterial[mk] ?? 0
           key = `ID:${item.id}`
+          companyQuantities = companyByMaterial[mk] ?? {}
         }
         seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
         // Include even zero-stock for items that are already on this order (so they can be kept)
-        avail.push({ ...item, _key: key, available_quantity: qty })
+        avail.push({ ...item, _key: key, available_quantity: qty, companyQuantities })
       }
       // Job-work output items (e.g. slit material blended from >1 purchase
       // line) have no purchase_bill_items row and post to stock_ledger with
@@ -316,7 +345,7 @@ export default function EditDispatchPage() {
         if (seen.has(mk)) continue
         seen.add(mk)
         const qty = stockByMaterial[mk] ?? 0
-        avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty })
+        avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty, companyQuantities: companyByMaterial[mk] ?? {} })
       }
       setAvailablePurchaseLines(avail)
 
@@ -500,6 +529,36 @@ export default function EditDispatchPage() {
       setError('Add at least one line item.')
       setLoading(false)
       return
+    }
+
+    // Warn (don't block) when a picked line's stock is really recorded
+    // under the OTHER company — the two companies here informally share
+    // inventory, so this is a routine, intentional pick, not an error. See
+    // migrations 121/133/140/143/144: unflagged cross-company picks are the
+    // recurring root cause of negative-stock exceptions.
+    if (status === 'active' && companyId) {
+      const crossCompanyWarnings = validLines
+        .map((l) => {
+          if (!l.purchase_line_id) return null
+          const pl = availablePurchaseLines.find((al) => al._key === l.purchase_line_id)
+          if (!pl) return null
+          const otherCompanyId = crossCompanyOwner(pl, companyId)
+          if (!otherCompanyId) return null
+          const otherCompany = companies.find((c) => c.id === otherCompanyId)
+          const label = l.item_name || l.size_label || 'this item'
+          return `${label}: stock is recorded under ${otherCompany?.name ?? 'another company'}, not this order's company`
+        })
+        .filter((w): w is string => !!w)
+
+      if (crossCompanyWarnings.length) {
+        const proceed = window.confirm(
+          `Please review before saving:\n\n${crossCompanyWarnings.join('\n')}\n\nContinue anyway?`
+        )
+        if (!proceed) {
+          setLoading(false)
+          return
+        }
+      }
     }
 
     // Active orders go through the atomic Postgres function to reverse + rewrite stock
@@ -871,6 +930,15 @@ export default function EditDispatchPage() {
                             <option value={line.purchase_line_id}>{line.purchase_line_id} (current)</option>
                           )}
                         </select>
+                        {(() => {
+                          if (!companyId || !line.purchase_line_id) return null
+                          const pl = availablePurchaseLines.find((l) => l._key === line.purchase_line_id)
+                          const otherCompanyId = pl ? crossCompanyOwner(pl, companyId) : null
+                          const otherCompany = otherCompanyId ? companies.find((c) => c.id === otherCompanyId) : null
+                          return otherCompany ? (
+                            <p className="text-[10px] text-amber-600 mt-0.5 font-medium">⚠ Stock recorded under {otherCompany.name} — may need an inter-company transfer</p>
+                          ) : null
+                        })()}
                       </td>
                       {/* Material */}
                       <td className="pr-3 py-2">

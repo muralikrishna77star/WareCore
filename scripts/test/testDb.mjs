@@ -75,6 +75,8 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   // Added 2026-09-08: same shape (production-only row ids / one-off repairs).
   '139_repair_ga00190_ga00193_output_size_mixup.sql',
   '140_backfill_intercompany_stock_sharing_oct_nov_2024.sql',
+  '143_repair_11_open_rec005_exceptions_sep_2026.sql',
+  '144_repair_cr1224_intercompany_purchase_lines.sql',
 ])
 
 /**
