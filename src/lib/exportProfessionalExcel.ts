@@ -26,6 +26,14 @@ export type ProfessionalSheetSpec = {
   emptyMessage?: string
   /** Row indexes (0-based, matching `rows`) to render with the "opening balance" style. */
   highlightRowIndexes?: number[]
+  /**
+   * Outline level per row (0-based, matching `rows`): 0 keeps a row always
+   * visible, 1 nests it under the nearest preceding level-0 row. Excel then
+   * renders the native +/- group controls in the left margin, so one sheet
+   * can hold a summary line and its own detail rows and be expanded or
+   * collapsed in place.
+   */
+  rowOutlineLevels?: number[]
 }
 
 export type ProfessionalExportMeta = {
@@ -194,9 +202,21 @@ export function buildProfessionalSheet(workbook: ExcelJS.Workbook, meta: Profess
   const totalsRowIdx = lastDataRow + 1
   const highlightSet = new Set(spec.highlightRowIndexes ?? [])
 
+  // Summary rows sit ABOVE the detail they group, which is the opposite of
+  // Excel's default, so say so or the +/- controls attach to the wrong row.
+  if (spec.rowOutlineLevels?.length) {
+    sheet.properties.outlineProperties = { summaryBelow: false, summaryRight: false }
+  }
+
   for (let r = firstDataRow; r <= lastDataRow; r++) {
     const row = sheet.getRow(r)
     const isHighlighted = highlightSet.has(r - firstDataRow)
+    const outline = spec.rowOutlineLevels?.[r - firstDataRow]
+    if (outline) {
+      row.outlineLevel = outline
+      // Ship expanded; the reader collapses with the group controls.
+      row.hidden = false
+    }
     spec.columns.forEach((col, i) => {
       const cell = row.getCell(i + 1)
       cell.border = THIN_BORDER
@@ -234,11 +254,15 @@ export function buildProfessionalSheet(workbook: ExcelJS.Workbook, meta: Profess
   }
 }
 
-export async function exportProfessionalWorkbook(
+/**
+ * Builds the workbook and returns its bytes. Pure — touches no DOM — so the
+ * generated file (row grouping, number formats, totals) can be asserted in
+ * Node tests rather than only in a browser.
+ */
+export async function buildProfessionalWorkbookBuffer(
   meta: ProfessionalExportMeta,
-  sheets: ProfessionalSheetSpec[],
-  filenameBase: string
-): Promise<void> {
+  sheets: ProfessionalSheetSpec[]
+): Promise<ExcelJS.Buffer> {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = meta.generatedBy || 'WareCore'
   workbook.created = new Date()
@@ -247,7 +271,15 @@ export async function exportProfessionalWorkbook(
     buildProfessionalSheet(workbook, meta, spec)
   }
 
-  const buffer = await workbook.xlsx.writeBuffer()
+  return workbook.xlsx.writeBuffer()
+}
+
+export async function exportProfessionalWorkbook(
+  meta: ProfessionalExportMeta,
+  sheets: ProfessionalSheetSpec[],
+  filenameBase: string
+): Promise<void> {
+  const buffer = await buildProfessionalWorkbookBuffer(meta, sheets)
   const parts = [sanitizeFilenamePart(filenameBase)]
   if (meta.fromDate && meta.toDate) {
     parts.push(formatDDMMMYYYY(meta.fromDate), 'to', formatDDMMMYYYY(meta.toDate))

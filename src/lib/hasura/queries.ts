@@ -2398,3 +2398,25 @@ export const STOCK_LEDGER_DATE_BOUNDS_QUERY = `
     stock_ledger_aggregate { aggregate { max { entry_date } min { entry_date } } }
   }
 `
+
+// Supplier / job-worker names for a batch of purchase bills and job work
+// orders — the counterpart to DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY, used by
+// the Daywise Stock Statement to fill its single Customer/Vendor/Supplier
+// column from stock_ledger.reference_id.
+export const PURCHASE_BILLS_SUPPLIER_LOOKUP_QUERY = `
+  query GetPurchaseBillsSupplierLookup($ids: [uuid!]!) {
+    purchase_bills(where: {id: {_in: $ids}}) {
+      id
+      suppliers { name }
+    }
+  }
+`
+
+export const JOB_WORK_ORDERS_VENDOR_NAME_LOOKUP_QUERY = `
+  query GetJobWorkOrdersVendorNameLookup($ids: [uuid!]!) {
+    job_work_orders(where: {id: {_in: $ids}}) {
+      id
+      suppliers { name }
+    }
+  }
+`

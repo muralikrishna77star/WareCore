@@ -11,6 +11,9 @@ import {
   ACTIVE_MATERIAL_TYPES_QUERY,
   ACTIVE_MATERIAL_SIZES_QUERY,
   STOCK_LEDGER_DATE_BOUNDS_QUERY,
+  PURCHASE_BILLS_SUPPLIER_LOOKUP_QUERY,
+  JOB_WORK_ORDERS_VENDOR_NAME_LOOKUP_QUERY,
+  DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY,
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
   JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
@@ -296,6 +299,37 @@ export default async function DaywiseStockStatementPage({
 
   const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m) => m.purchase_line_id))
 
+  // Counterparty for each movement, resolved in three batched lookups keyed
+  // by stock_ledger.reference_id. Attached from Maps rather than joined, so a
+  // movement can never be duplicated by its own party lookup. Exactly one
+  // role applies per row — purchases have a supplier, sales a customer, job
+  // work a vendor — so they share a single column.
+  const uniqueIds = (type: string) =>
+    Array.from(new Set(movements.filter((m) => m.reference_type === type && m.reference_id).map((m) => m.reference_id as string)))
+  const billIds = uniqueIds('purchase_bill')
+  const dispatchIds = uniqueIds('dispatch')
+  const jobIds = uniqueIds('job_work')
+
+  const [billPartyRes, dispatchPartyRes, jobPartyRes] = await Promise.all([
+    billIds.length ? hasuraQuery(PURCHASE_BILLS_SUPPLIER_LOOKUP_QUERY, { ids: billIds }) : Promise.resolve({ purchase_bills: [] }),
+    dispatchIds.length ? hasuraQuery(DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY, { ids: dispatchIds }) : Promise.resolve({ dispatch_orders: [] }),
+    jobIds.length ? hasuraQuery(JOB_WORK_ORDERS_VENDOR_NAME_LOOKUP_QUERY, { ids: jobIds }) : Promise.resolve({ job_work_orders: [] }),
+  ])
+
+  const partyByRef = new Map<string, { name: string; role: string }>()
+  for (const b of (billPartyRes.purchase_bills ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
+    if (b.suppliers?.name) partyByRef.set(b.id, { name: b.suppliers.name, role: 'Supplier' })
+  }
+  for (const d of (dispatchPartyRes.dispatch_orders ?? []) as { id: string; customers?: { name: string } | null }[]) {
+    if (d.customers?.name) partyByRef.set(d.id, { name: d.customers.name, role: 'Customer' })
+  }
+  for (const j of (jobPartyRes.job_work_orders ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
+    if (j.suppliers?.name) partyByRef.set(j.id, { name: j.suppliers.name, role: 'Vendor' })
+  }
+  // Transfers have no external counterparty — left blank rather than guessed.
+  const partyFor = (referenceId: string | null | undefined) =>
+    (referenceId && partyByRef.get(referenceId)) || { name: '', role: '' }
+
   // Bucket movements by day first (preserving within-day order), then walk
   // the days in order maintaining running Warehouse/Vendor balances — so
   // each day's Opening is the prior day's Closing.
@@ -370,6 +404,10 @@ export default async function DaywiseStockStatementPage({
         vendorBalance: runningBalance.vendor,
         rate: rate ?? null,
         value: txnValue ?? null,
+        partyLabel: (() => {
+          const pa = partyFor(m.reference_id)
+          return pa.name ? `${pa.name}${pa.role ? ` (${pa.role})` : ''}` : ''
+        })(),
         remarks: m.notes ?? '',
       })
 
@@ -386,6 +424,8 @@ export default async function DaywiseStockStatementPage({
         rate,
         value: txnValue,
         reference: m.reference_number ?? '',
+        party: partyFor(m.reference_id).name,
+        partyRole: partyFor(m.reference_id).role,
       }
     })
 
@@ -496,9 +536,77 @@ export default async function DaywiseStockStatementPage({
       { header: 'Vendor Running Balance', key: 'vendorBalance', width: 20, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
       { header: 'Transaction Value (₹)', key: 'value', width: 18, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
+      { header: 'Customer / Vendor / Supplier', key: 'partyLabel', width: 30, align: 'left' },
       { header: 'Remarks', key: 'remarks', width: 22, align: 'left' },
     ],
     rows: transactionDetailRows.map((row, idx) => ({ sno: idx + 1, ...row })),
+  }
+
+  // Combined sheet: one row per day, with that day's own transactions nested
+  // directly beneath it at outline level 1, so the whole statement is
+  // expandable/collapsible inside a single sheet using Excel's native group
+  // controls. Built from `groups` — the same running balances the screen and
+  // the two separate sheets use — so all three always agree.
+  const combinedRows: Record<string, unknown>[] = []
+  const combinedOutline: number[] = []
+  for (const g of groups) {
+    combinedRows.push({
+      date: g.date,
+      kind: 'DAY TOTAL',
+      itemName: `${g.count} transaction${g.count === 1 ? '' : 's'}`,
+      openingWarehouse: g.openingWarehouse,
+      openingVendor: g.openingVendor,
+      inward: g.purchases + g.transferIn + g.jobReturns,
+      outward: Math.abs(g.sales) + Math.abs(g.transferOut) + Math.abs(g.jobWorkOut),
+      closingWarehouse: g.closingWarehouse,
+      closingVendor: g.closingVendor,
+      value: g.value,
+    })
+    combinedOutline.push(0)
+
+    for (const t of g.transactions) {
+      combinedRows.push({
+        date: g.date,
+        kind: t.typeLabel,
+        itemName: t.itemName,
+        company: t.company,
+        warehouse: t.warehouse,
+        partyLabel: t.party ? `${t.party}${t.partyRole ? ` (${t.partyRole})` : ''}` : '',
+        reference: t.reference,
+        inward: t.isIn ? Math.abs(t.qty) : null,
+        outward: t.isIn ? null : Math.abs(t.qty),
+        rate: t.rate,
+        value: t.value,
+      })
+      combinedOutline.push(1)
+    }
+  }
+
+  const combinedSheet: ProfessionalSheetSpec = {
+    sheetName: 'Daywise + Transactions',
+    title: `Daywise Stock Statement — Day Totals with Transactions — ${period.label}`,
+    emptyMessage: 'No stock movements found for the selected period.',
+    columns: [
+      { header: 'Date', key: 'date', width: 14, align: 'center', isDate: true },
+      { header: 'Day / Transaction Type', key: 'kind', width: 22, align: 'left' },
+      { header: 'Item Name', key: 'itemName', width: 30, align: 'left' },
+      { header: 'Company', key: 'company', width: 18, align: 'left' },
+      { header: 'Warehouse', key: 'warehouse', width: 16, align: 'left' },
+      { header: 'Customer / Vendor / Supplier', key: 'partyLabel', width: 30, align: 'left' },
+      { header: 'Reference', key: 'reference', width: 20, align: 'left' },
+      { header: 'Opening (Warehouse)', key: 'openingWarehouse', width: 18, align: 'right', numFmt: QTY_FMT },
+      { header: 'Opening (Vendor)', key: 'openingVendor', width: 16, align: 'right', numFmt: QTY_FMT },
+      { header: 'Inward Qty', key: 'inward', width: 14, align: 'right', numFmt: QTY_FMT },
+      { header: 'Outward Qty', key: 'outward', width: 14, align: 'right', numFmt: QTY_FMT },
+      { header: 'Closing (Warehouse)', key: 'closingWarehouse', width: 18, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Closing (Vendor)', key: 'closingVendor', width: 16, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Value (₹)', key: 'value', width: 16, align: 'right', numFmt: MONEY_FMT },
+    ],
+    rows: combinedRows,
+    rowOutlineLevels: combinedOutline,
+    // Day rows keep the summary styling so they stand out from their detail.
+    highlightRowIndexes: combinedOutline.flatMap((lvl, i) => (lvl === 0 ? [i] : [])),
   }
 
   return (
@@ -529,7 +637,7 @@ export default async function DaywiseStockStatementPage({
           {groups.length > 0 && (
             <ProfessionalExportButton
               meta={exportMeta}
-              sheets={[summarySheet, transactionDetailsSheet]}
+              sheets={[combinedSheet, summarySheet, transactionDetailsSheet]}
               filenameBase="Daywise_Stock_Statement"
               successMessage="Daywise Stock Statement exported successfully."
               errorMessage="Unable to export the Daywise Stock Statement. Please try again."

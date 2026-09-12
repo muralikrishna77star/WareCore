@@ -128,13 +128,20 @@ function TotalsCells({ totals }: { totals: Totals }) {
   )
 }
 
-function SummaryRow({ group }: { group: SummaryGroup }) {
-  const [open, setOpen] = useState(false)
+function SummaryRow({
+  group,
+  open,
+  onToggle,
+}: {
+  group: SummaryGroup
+  open: boolean
+  onToggle: () => void
+}) {
   return (
     <>
       <tr
         className="cursor-pointer border-b border-gray-100 hover:bg-blue-50/40"
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
       >
         <td className="px-3 py-2">
           <span className="inline-flex items-center gap-1 text-gray-500">
@@ -167,7 +174,48 @@ function SummaryRow({ group }: { group: SummaryGroup }) {
 }
 
 export function DayWiseItemLedgerTable({ report }: { report: LedgerReport }) {
-  const [allOpen, setAllOpen] = useState(false)
+  // Both levels are held as explicit id sets rather than per-row local state,
+  // so Expand All / Collapse All can reach the item rows nested inside a day —
+  // and so a day card's open state stays owned by React. The previous
+  // <details open={...}> went uncontrolled the moment a user clicked it, after
+  // which the bulk toggle silently stopped applying to that card.
+  const allDayKeys = report.days.map((d) => d.entryDate)
+  const allGroupKeys = report.days.flatMap((d) => d.groups.map((g) => g.key))
+
+  // Small result sets start open; large ones start collapsed so the page is
+  // scannable. Same initial-state rule as before, just now explicit.
+  const [openDays, setOpenDays] = useState<Set<string>>(
+    () => new Set(report.days.length <= 3 ? allDayKeys : [])
+  )
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set<string>())
+
+  const toggleDay = (key: string) =>
+    setOpenDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const toggleGroup = (key: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const expandAll = () => {
+    setOpenDays(new Set(allDayKeys))
+    setOpenGroups(new Set(allGroupKeys))
+  }
+  const collapseAll = () => {
+    setOpenDays(new Set())
+    setOpenGroups(new Set())
+  }
+
+  const allExpanded = openDays.size === allDayKeys.length && openGroups.size === allGroupKeys.length
+  const allCollapsed = openDays.size === 0 && openGroups.size === 0
 
   if (report.days.length === 0) {
     return (
@@ -191,20 +239,44 @@ export function DayWiseItemLedgerTable({ report }: { report: LedgerReport }) {
             </span>
           )}
         </p>
-        <button
-          type="button"
-          onClick={() => setAllOpen((o) => !o)}
-          className="text-sm text-blue-600 hover:underline"
-        >
-          {allOpen ? 'Collapse all days' : 'Expand all days'}
-        </button>
+        <div className="flex items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={expandAll}
+            disabled={allExpanded}
+            className="text-blue-600 hover:underline disabled:cursor-default disabled:text-gray-400 disabled:no-underline"
+          >
+            Expand All
+          </button>
+          <span className="text-gray-300">|</span>
+          <button
+            type="button"
+            onClick={collapseAll}
+            disabled={allCollapsed}
+            className="text-blue-600 hover:underline disabled:cursor-default disabled:text-gray-400 disabled:no-underline"
+          >
+            Collapse All
+          </button>
+        </div>
       </div>
 
       {report.days.map((day) => (
-        <details key={day.entryDate} open={allOpen || report.days.length <= 3} className="rounded-xl border bg-white">
-          <summary className="cursor-pointer list-none px-4 py-3">
+        <div key={day.entryDate} className="rounded-xl border bg-white">
+          <button
+            type="button"
+            onClick={() => toggleDay(day.entryDate)}
+            aria-expanded={openDays.has(day.entryDate)}
+            className="w-full cursor-pointer px-4 py-3 text-left"
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="font-semibold text-gray-900">{formatDate(day.entryDate)}</span>
+              <span className="flex items-center gap-1.5 font-semibold text-gray-900">
+                {openDays.has(day.entryDate) ? (
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                )}
+                {formatDate(day.entryDate)}
+              </span>
               <span className="flex flex-wrap items-center gap-4 text-sm">
                 <span className="text-gray-500">
                   In <strong className="text-green-700">{qty(day.totals.inwardQuantity)}</strong>
@@ -223,8 +295,9 @@ export function DayWiseItemLedgerTable({ report }: { report: LedgerReport }) {
                 </span>
               </span>
             </div>
-          </summary>
+          </button>
 
+          {openDays.has(day.entryDate) && (
           <div className="overflow-x-auto border-t">
             <table className="w-full text-sm">
               <thead>
@@ -243,7 +316,12 @@ export function DayWiseItemLedgerTable({ report }: { report: LedgerReport }) {
               </thead>
               <tbody>
                 {day.groups.map((g) => (
-                  <SummaryRow key={g.key} group={g} />
+                  <SummaryRow
+                    key={g.key}
+                    group={g}
+                    open={openGroups.has(g.key)}
+                    onToggle={() => toggleGroup(g.key)}
+                  />
                 ))}
                 <tr className="border-t-2 border-gray-300 bg-gray-50">
                   <td colSpan={4} className="px-3 py-2 font-semibold text-gray-700">
@@ -257,7 +335,8 @@ export function DayWiseItemLedgerTable({ report }: { report: LedgerReport }) {
               </tbody>
             </table>
           </div>
-        </details>
+          )}
+        </div>
       ))}
 
       <div className="overflow-x-auto rounded-xl border-2 border-blue-200 bg-blue-50/40">

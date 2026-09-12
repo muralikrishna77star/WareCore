@@ -18,6 +18,10 @@ export type Transaction = {
   rate: number | null
   value: number | null
   reference: string
+  /** Counterparty name — customer, job worker/vendor or supplier. */
+  party: string
+  /** Which of the three roles `party` is, so one column can say which. */
+  partyRole: string
 }
 
 export type DayGroup = {
@@ -137,6 +141,7 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
                             <th className="px-2 py-1.5 text-right">Qty</th>
                             <th className="px-2 py-1.5 text-right text-teal-700 bg-teal-50">Rate</th>
                             <th className="px-2 py-1.5 text-right text-teal-700 bg-teal-50">Value</th>
+                            <th className="px-2 py-1.5 text-left">Customer / Vendor / Supplier</th>
                             <th className="px-2 py-1.5 text-left">Reference</th>
                           </tr>
                         </thead>
@@ -157,6 +162,16 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
                               <td className="px-2 py-1.5 text-right text-teal-700 bg-teal-50/40">{t.rate != null ? fmtC(t.rate) : '—'}</td>
                               <td className={`px-2 py-1.5 text-right font-medium bg-teal-50/40 ${t.value != null && t.value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
                                 {t.value != null ? fmtC(t.value) : '—'}
+                              </td>
+                              <td className="px-2 py-1.5 text-gray-700">
+                                {t.party ? (
+                                  <>
+                                    {t.party}
+                                    <span className="ml-1 text-[10px] uppercase text-gray-400">{t.partyRole}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
                               </td>
                               <td className="px-2 py-1.5 text-gray-500 text-[11px]">{t.reference || '—'}</td>
                             </tr>
