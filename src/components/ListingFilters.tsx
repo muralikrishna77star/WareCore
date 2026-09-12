@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { MonthYearFilter } from '@/components/MonthYearFilter'
 
 type PartyOption = { id: string; name: string }
 type ItemOption = { id: string; item_code: string; item_name: string }
@@ -19,6 +20,9 @@ export function ListingFilters({
   itemOptions,
   extra,
   dateLabel = 'Created',
+  month = '',
+  year = '',
+  yearOptions = [],
 }: {
   basePath: string
   fromDate: string
@@ -31,6 +35,9 @@ export function ListingFilters({
   itemOptions: ItemOption[]
   extra?: ReactNode
   dateLabel?: string
+  month?: string
+  year?: string
+  yearOptions?: number[]
 }) {
   const partyCombo: ComboOption[] = (partyOptions ?? []).map((p) => ({ id: p.id, label: p.name, search: p.name.toLowerCase() }))
   const itemCombo: ComboOption[] = itemOptions.map((i) => ({
@@ -41,7 +48,7 @@ export function ListingFilters({
   const selectedParty = partyOptions?.find((p) => p.id === partyValue)
   const selectedItem = itemOptions.find((i) => i.id === itemValue)
 
-  const hasFilters = !!(partyValue || itemValue)
+  const hasFilters = !!(partyValue || itemValue || month || year)
 
   return (
     <form className="rounded-xl border bg-white p-4">
@@ -68,6 +75,13 @@ export function ListingFilters({
             placeholder="Search item…"
             options={itemCombo}
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">Month / Year</label>
+          <div className="flex gap-2">
+            <MonthYearFilter month={month} year={year} yearOptions={yearOptions} />
+          </div>
         </div>
 
         <div>

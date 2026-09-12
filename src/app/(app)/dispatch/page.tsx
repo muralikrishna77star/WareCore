@@ -3,28 +3,34 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { Truck } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { DISPATCH_ORDERS_QUERY, DISPATCH_ORDERS_MAX_CREATED_QUERY, ACTIVE_CUSTOMERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
-import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
+import { DISPATCH_ORDERS_QUERY, DISPATCH_ORDERS_DISPATCH_DATE_BOUNDS_QUERY, ACTIVE_CUSTOMERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { defaultCreatedRange, resolveListingRange, yearOptionsFrom } from '@/lib/dateRange'
 import DispatchTable, { type DispatchOrderRow as DispatchOrderListRow } from './DispatchTable'
 import { ListingFilters } from '@/components/ListingFilters'
-import { ListingSummary } from '@/components/ListingSummary'
+import { ListingSummary, LISTING_ROW_LIMIT } from '@/components/ListingSummary'
 
 export default async function DispatchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; customer?: string; item?: string }>
+  searchParams: Promise<{ from?: string; to?: string; month?: string; year?: string; customer?: string; item?: string }>
 }) {
   const params = await searchParams
 
-  const maxCreatedResult = await hasuraQuery(DISPATCH_ORDERS_MAX_CREATED_QUERY)
-  const maxCreatedAt = maxCreatedResult.dispatch_orders_aggregate?.aggregate?.max?.created_at
-  const defaults = defaultCreatedRange(maxCreatedAt)
-  const fromDate = params.from || defaults.from
-  const toDate = params.to || defaults.to
+  // Anchored on the sale's own dispatch_date, not created_at: the Date column
+  // shows dispatch_date and the list is ordered by it, so filtering on the
+  // keyed-in timestamp used to let rows fall outside the selected range.
+  const boundsResult = await hasuraQuery(DISPATCH_ORDERS_DISPATCH_DATE_BOUNDS_QUERY)
+  const bounds = boundsResult.dispatch_orders_aggregate?.aggregate
+  const maxDispatchDate = bounds?.max?.dispatch_date
+  const defaults = defaultCreatedRange(maxDispatchDate)
+  const { from: fromDate, to: toDate, month, year } = resolveListingRange(params, defaults)
+  const yearOptions = yearOptionsFrom(bounds?.min?.dispatch_date, maxDispatchDate)
 
+  // dispatch_date is a plain date column, so an inclusive _lte is correct —
+  // no next-day exclusive bound needed (that's only for timestamps).
   const conditions: Record<string, unknown>[] = [
-    { created_at: { _gte: fromDate } },
-    { created_at: { _lt: nextDay(toDate) } },
+    { dispatch_date: { _gte: fromDate } },
+    { dispatch_date: { _lte: toDate } },
   ]
   if (params.customer) conditions.push({ customer_id: { _eq: params.customer } })
   if (params.item) conditions.push({ dispatch_items: { item_master_id: { _eq: params.item } } })
@@ -70,12 +76,16 @@ export default async function DispatchPage({
         </div>
       </div>
 
-      <ListingSummary count={orders.length} countLabel="sale" countIcon={Truck} totalQuantity={totalQuantity} totalAmount={totalAmount} />
+      <ListingSummary count={orders.length} countLabel="sale" countIcon={Truck} totalQuantity={totalQuantity} totalAmount={totalAmount} capped={orders.length >= LISTING_ROW_LIMIT} />
 
       <ListingFilters
         basePath="/dispatch"
+        dateLabel="Sale"
         fromDate={fromDate}
         toDate={toDate}
+        month={month}
+        year={year}
+        yearOptions={yearOptions}
         partyLabel="Customer"
         partyName="customer"
         partyValue={params.customer || ''}

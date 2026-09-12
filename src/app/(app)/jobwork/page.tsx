@@ -3,27 +3,32 @@ export const dynamic = 'force-dynamic'
 import Link from 'next/link'
 import { MapPin, Factory } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { JOB_WORK_ORDERS_QUERY, JOB_WORK_ORDERS_MAX_CREATED_QUERY, VENDOR_STOCK_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
-import { defaultCreatedRange, nextDay } from '@/lib/dateRange'
+import { JOB_WORK_ORDERS_QUERY, JOB_WORK_ORDERS_DISPATCH_DATE_BOUNDS_QUERY, VENDOR_STOCK_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import { defaultCreatedRange, resolveListingRange, yearOptionsFrom } from '@/lib/dateRange'
 import JobWorkTable, { type JobWorkOrderRow } from './JobWorkTable'
-import { ListingSummary } from '@/components/ListingSummary'
+import { ListingSummary, LISTING_ROW_LIMIT } from '@/components/ListingSummary'
 
 export default async function JobWorkPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; vendor?: string; item?: string }>
+  searchParams: Promise<{ from?: string; to?: string; month?: string; year?: string; vendor?: string; item?: string }>
 }) {
   const params = await searchParams
 
-  const maxCreatedResult = await hasuraQuery(JOB_WORK_ORDERS_MAX_CREATED_QUERY)
-  const maxCreatedAt = maxCreatedResult.job_work_orders_aggregate?.aggregate?.max?.created_at
-  const defaults = defaultCreatedRange(maxCreatedAt)
-  const fromDate = params.from || defaults.from
-  const toDate = params.to || defaults.to
+  // Anchored and filtered on dispatch_date — the order's own transaction date,
+  // which is what the first column shows and what the list is ordered by.
+  // Filtering on created_at meant a Month/Year pick returned orders by when
+  // they were keyed in rather than when the job work actually happened.
+  const boundsResult = await hasuraQuery(JOB_WORK_ORDERS_DISPATCH_DATE_BOUNDS_QUERY)
+  const bounds = boundsResult.job_work_orders_aggregate?.aggregate
+  const maxDispatchDate = bounds?.max?.dispatch_date
+  const defaults = defaultCreatedRange(maxDispatchDate)
+  const { from: fromDate, to: toDate, month, year } = resolveListingRange(params, defaults)
+  const yearOptions = yearOptionsFrom(bounds?.min?.dispatch_date, maxDispatchDate)
 
   const conditions: Record<string, unknown>[] = [
-    { created_at: { _gte: fromDate } },
-    { created_at: { _lt: nextDay(toDate) } },
+    { dispatch_date: { _gte: fromDate } },
+    { dispatch_date: { _lte: toDate } },
   ]
   if (params.vendor) conditions.push({ vendor_id: { _eq: params.vendor } })
   if (params.item) conditions.push({ job_work_items: { item_master_id: { _eq: params.item } } })
@@ -60,7 +65,7 @@ export default async function JobWorkPage({
         </Link>
       </div>
 
-      <ListingSummary count={orders.length} countLabel="order" countIcon={Factory} totalQuantity={totalQuantity} />
+      <ListingSummary count={orders.length} countLabel="order" countIcon={Factory} totalQuantity={totalQuantity} capped={orders.length >= LISTING_ROW_LIMIT} />
 
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="overflow-auto max-h-[70vh]">
@@ -68,6 +73,9 @@ export default async function JobWorkPage({
             orders={orders ?? []}
             fromDate={fromDate}
             toDate={toDate}
+            month={month}
+            year={year}
+            yearOptions={yearOptions}
             basePath="/jobwork"
             vendors={vendors}
             vendorValue={params.vendor || ''}

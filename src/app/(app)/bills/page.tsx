@@ -4,25 +4,26 @@ import Link from 'next/link'
 import { FileText } from 'lucide-react'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_BILLS_QUERY, PURCHASE_BILLS_MAX_BILL_DATE_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
-import { defaultCreatedRange } from '@/lib/dateRange'
+import { defaultCreatedRange, resolveListingRange, yearOptionsFrom } from '@/lib/dateRange'
 import BillsTable from './BillsTable'
 import type { PurchaseBillListItem } from './BillRow'
 import { ListingFilters } from '@/components/ListingFilters'
-import { ListingSummary } from '@/components/ListingSummary'
+import { ListingSummary, LISTING_ROW_LIMIT } from '@/components/ListingSummary'
 
 export default async function BillsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ line_id?: string; from?: string; to?: string; supplier?: string; item?: string }>
+  searchParams: Promise<{ line_id?: string; from?: string; to?: string; month?: string; year?: string; supplier?: string; item?: string }>
 }) {
   const params = await searchParams
   const lineId = params.line_id?.trim() || ''
 
   const maxBillDateResult = await hasuraQuery(PURCHASE_BILLS_MAX_BILL_DATE_QUERY)
-  const maxBillDate = maxBillDateResult.purchase_bills_aggregate?.aggregate?.max?.bill_date
+  const billDateBounds = maxBillDateResult.purchase_bills_aggregate?.aggregate
+  const maxBillDate = billDateBounds?.max?.bill_date
   const defaults = defaultCreatedRange(maxBillDate)
-  const fromDate = params.from || defaults.from
-  const toDate = params.to || defaults.to
+  const { from: fromDate, to: toDate, month, year } = resolveListingRange(params, defaults)
+  const yearOptions = yearOptionsFrom(billDateBounds?.min?.bill_date, maxBillDate)
 
   const conditions: Record<string, unknown>[] = [
     { bill_date: { _gte: fromDate } },
@@ -73,6 +74,7 @@ export default async function BillsPage({
         countIcon={FileText}
         totalQuantity={totalQuantity}
         totalAmount={totalAmount}
+        capped={bills.length >= LISTING_ROW_LIMIT}
       />
 
       <ListingFilters
@@ -80,6 +82,9 @@ export default async function BillsPage({
         dateLabel="Purchase"
         fromDate={fromDate}
         toDate={toDate}
+        month={month}
+        year={year}
+        yearOptions={yearOptions}
         partyLabel="Supplier"
         partyName="supplier"
         partyValue={params.supplier || ''}

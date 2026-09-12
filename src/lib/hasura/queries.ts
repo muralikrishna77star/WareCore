@@ -498,7 +498,7 @@ export const ITEM_MASTERS_QUERY = `
 
 export const PURCHASE_BILLS_MAX_BILL_DATE_QUERY = `
   query GetPurchaseBillsMaxBillDate {
-    purchase_bills_aggregate { aggregate { max { bill_date } } }
+    purchase_bills_aggregate { aggregate { max { bill_date } min { bill_date } } }
   }
 `
 
@@ -718,9 +718,9 @@ export const UPDATE_TRANSFER_STATUS_MUTATION = `
 
 // ─── Dispatch Orders ─────────────────────────────────────────────────────────
 
-export const DISPATCH_ORDERS_MAX_CREATED_QUERY = `
-  query GetDispatchOrdersMaxCreated {
-    dispatch_orders_aggregate { aggregate { max { created_at } } }
+export const DISPATCH_ORDERS_DISPATCH_DATE_BOUNDS_QUERY = `
+  query GetDispatchOrdersDispatchDateBounds {
+    dispatch_orders_aggregate { aggregate { max { dispatch_date } min { dispatch_date } } }
   }
 `
 
@@ -1091,9 +1091,9 @@ export const CUSTOMERS_LIST_QUERY = `
 
 // ─── Job Work Orders ─────────────────────────────────────────────────────────
 
-export const JOB_WORK_ORDERS_MAX_CREATED_QUERY = `
-  query GetJobWorkOrdersMaxCreated {
-    job_work_orders_aggregate { aggregate { max { created_at } } }
+export const JOB_WORK_ORDERS_DISPATCH_DATE_BOUNDS_QUERY = `
+  query GetJobWorkOrdersDispatchDateBounds {
+    job_work_orders_aggregate { aggregate { max { dispatch_date } min { dispatch_date } } }
   }
 `
 

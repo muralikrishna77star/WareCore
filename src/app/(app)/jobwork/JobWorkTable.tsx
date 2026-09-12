@@ -8,6 +8,7 @@ import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { MonthYearFilter } from '@/components/MonthYearFilter'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 
@@ -78,6 +79,9 @@ export default function JobWorkTable({
   orders,
   fromDate,
   toDate,
+  month = '',
+  year = '',
+  yearOptions = [],
   basePath,
   vendors,
   vendorValue,
@@ -88,6 +92,9 @@ export default function JobWorkTable({
   orders: JobWorkOrderRow[]
   fromDate?: string
   toDate?: string
+  month?: string
+  year?: string
+  yearOptions?: number[]
   basePath: string
   vendors: PartyOption[]
   vendorValue: string
@@ -105,17 +112,28 @@ export default function JobWorkTable({
   const [pendingItem, setPendingItem] = useState(itemValue)
   const [pendingFrom, setPendingFrom] = useState(fromDate ?? '')
   const [pendingTo, setPendingTo] = useState(toDate ?? '')
+  const [pendingMonth, setPendingMonth] = useState(month)
+  const [pendingYear, setPendingYear] = useState(year)
 
   const dirty =
     pendingVendor !== vendorValue ||
     pendingItem !== itemValue ||
     pendingFrom !== (fromDate ?? '') ||
-    pendingTo !== (toDate ?? '')
+    pendingTo !== (toDate ?? '') ||
+    pendingMonth !== month ||
+    pendingYear !== year
 
   const applyServerFilters = () => {
     const qs = new URLSearchParams()
-    if (pendingFrom) qs.set('from', pendingFrom)
-    if (pendingTo) qs.set('to', pendingTo)
+    // Month/Year wins over from/to server-side (see resolveListingRange), so
+    // don't also send the derived dates — they'd just be dead weight in the URL.
+    if (pendingMonth || pendingYear) {
+      if (pendingMonth) qs.set('month', pendingMonth)
+      if (pendingYear) qs.set('year', pendingYear)
+    } else {
+      if (pendingFrom) qs.set('from', pendingFrom)
+      if (pendingTo) qs.set('to', pendingTo)
+    }
     if (pendingVendor) qs.set('vendor', pendingVendor)
     if (pendingItem) qs.set('item', pendingItem)
     router.push(`${basePath}?${qs.toString()}`)
@@ -124,6 +142,8 @@ export default function JobWorkTable({
   const clearAll = () => {
     setPendingVendor('')
     setPendingItem('')
+    setPendingMonth('')
+    setPendingYear('')
     router.push(basePath)
   }
 
@@ -143,7 +163,7 @@ export default function JobWorkTable({
   const selectedVendor = vendors.find((v) => v.id === vendorValue)
   const selectedItem = itemOptions.find((i) => i.id === itemValue)
 
-  const hasAppliedFilters = !!(vendorValue || itemValue)
+  const hasAppliedFilters = !!(vendorValue || itemValue || month || year)
 
   const filtered = useMemo(() => {
     const active = Object.entries(filters).filter(([, v]) => v.trim() !== '')
@@ -201,16 +221,29 @@ export default function JobWorkTable({
                 type="date"
                 value={pendingFrom}
                 onChange={(e) => setPendingFrom(e.target.value)}
-                aria-label="Created from"
+                aria-label="Transaction date from"
                 className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
               />
               <input
                 type="date"
                 value={pendingTo}
                 onChange={(e) => setPendingTo(e.target.value)}
-                aria-label="Created to"
+                aria-label="Transaction date to"
                 className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
               />
+              <div className="flex gap-1">
+                <MonthYearFilter
+                  month={pendingMonth}
+                  year={pendingYear}
+                  yearOptions={yearOptions}
+                  compact
+                  onPick={({ month: m, year: y }) => {
+                    setPendingMonth(m)
+                    setPendingYear(y)
+                    if (m || y) { setPendingFrom(''); setPendingTo('') }
+                  }}
+                />
+              </div>
             </div>
           </th>
           <th className="px-6 py-2 align-top">
