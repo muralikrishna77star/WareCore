@@ -2260,3 +2260,133 @@ export const DELETE_AI_CONVERSATION_MUTATION = `
   }
 `
 
+// ── Day-Wise Item Ledger report ─────────────────────────────────────────
+// stock_ledger is the report's spine: one output row per ledger row, with
+// financial/party detail attached from the lookups below rather than joined
+// row-to-row (a ledger-to-dispatch_items join multiplies 3 groups in
+// production). See src/lib/dayWiseItemLedger.ts for the attach logic.
+
+export const DAY_WISE_ITEM_LEDGER_QUERY = `
+  query GetDayWiseItemLedger($where: stock_ledger_bool_exp = {}, $limit: Int!) {
+    stock_ledger(
+      where: $where
+      order_by: [{entry_date: asc}, {created_at: asc}]
+      limit: $limit
+    ) {
+      id entry_type quantity entry_date created_at created_by
+      reference_type reference_id reference_number
+      purchase_line_id sub_purchase_line_id size_label notes
+      company_id warehouse_id material_type_id material_size_id
+      companies { name code }
+      warehouses { name }
+      material_types { description unit code }
+      material_sizes { size_label }
+    }
+  }
+`
+
+// Row count for the current filter, so the report can tell the user when
+// the detail query hit its cap instead of silently truncating.
+export const DAY_WISE_ITEM_LEDGER_COUNT_QUERY = `
+  query GetDayWiseItemLedgerCount($where: stock_ledger_bool_exp = {}) {
+    stock_ledger_aggregate(where: $where) { aggregate { count } }
+  }
+`
+
+// purchase_line_id is UNIQUE in purchase_bill_items (verified: zero
+// duplicates), so this is a safe 1:1 attach for PURCHASE_IN/PURCHASE_CANCEL
+// and the valuation-rate source for job work and transfer rows, which carry
+// the same purchase_line_id but have no price of their own.
+export const DAY_WISE_LEDGER_PURCHASE_LINES_QUERY = `
+  query GetDayWiseLedgerPurchaseLines($line_ids: [String!]!) {
+    purchase_bill_items(where: {purchase_line_id: {_in: $line_ids}}) {
+      purchase_line_id item_master_id item_name
+      quantity received_quantity rate amount
+      taxable_value cgst_rate cgst_amount sgst_rate sgst_amount total_with_tax
+      bill_id
+      purchase_bills {
+        id bill_number bill_date status
+        suppliers { name }
+      }
+      item_master { item_code item_name unit }
+    }
+  }
+`
+
+// Sales financials are attached per dispatch order, then bucketed by
+// (material_type, material_size) in application code so the three known
+// ambiguous line groups sum instead of multiplying the ledger row.
+export const DAY_WISE_LEDGER_DISPATCH_ITEMS_QUERY = `
+  query GetDayWiseLedgerDispatchItems($order_ids: [uuid!]!) {
+    dispatch_items(where: {dispatch_order_id: {_in: $order_ids}}) {
+      dispatch_order_id material_type_id material_size_id size_label
+      item_master_id item_name purchase_line_id
+      quantity rate amount
+      taxable_value cgst_rate cgst_amount sgst_rate sgst_amount total_with_tax
+      item_master { item_code item_name unit }
+    }
+  }
+`
+
+export const DAY_WISE_LEDGER_DISPATCH_ORDERS_QUERY = `
+  query GetDayWiseLedgerDispatchOrders($ids: [uuid!]!) {
+    dispatch_orders(where: {id: {_in: $ids}}) {
+      id invoice_number sale_ref_id dispatch_date status is_vendor_direct
+      customers { name }
+      companies { name }
+      warehouses { name }
+    }
+  }
+`
+
+// Job work rows: the order supplies the job worker, status and reference.
+// job_work_items carries no price, so job work valuation comes from the
+// purchase-line rate map above.
+export const DAY_WISE_LEDGER_JOB_WORK_ORDERS_QUERY = `
+  query GetDayWiseLedgerJobWorkOrders($ids: [uuid!]!) {
+    job_work_orders(where: {id: {_in: $ids}}) {
+      id reference_number dispatch_date status
+      suppliers { name }
+      companies { name }
+      warehouses { name }
+      job_work_items {
+        id is_transfer_line source_job_work_item_id
+        material_type_id material_size_id item_master_id
+      }
+    }
+  }
+`
+
+// Resolves the SOURCE vendor of a job work transfer: the destination order
+// links back through job_work_items.source_job_work_item_id.
+export const DAY_WISE_LEDGER_JOB_WORK_SOURCE_VENDOR_QUERY = `
+  query GetDayWiseLedgerJobWorkSourceVendor($item_ids: [uuid!]!) {
+    job_work_items(where: {id: {_in: $item_ids}}) {
+      id
+      job_work_orders { id reference_number suppliers { name } }
+    }
+  }
+`
+
+export const DAY_WISE_LEDGER_TRANSFERS_QUERY = `
+  query GetDayWiseLedgerTransfers($ids: [uuid!]!) {
+    transfers(where: {id: {_in: $ids}}) {
+      id reference_number transfer_date status
+      from_company: companies_from { name }
+      to_company: companies_to { name }
+      from_warehouse: warehouses_from { name }
+      to_warehouse: warehouses_to { name }
+    }
+  }
+`
+
+// Fallback item resolution for ledger rows with no purchase line: 52
+// (material_type, material_size) pairs map to more than one item_master, so
+// the caller picks deterministically and flags the ambiguity.
+export const DAY_WISE_LEDGER_ITEM_MASTER_QUERY = `
+  query GetDayWiseLedgerItemMaster {
+    item_master(where: {is_active: {_eq: true}}, order_by: {item_code: asc}) {
+      id item_code item_name unit material_type_id material_size_id size_label
+    }
+  }
+`
