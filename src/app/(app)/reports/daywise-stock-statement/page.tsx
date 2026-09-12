@@ -10,6 +10,7 @@ import {
   ACTIVE_ITEM_MASTER_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY,
   ACTIVE_MATERIAL_SIZES_QUERY,
+  STOCK_LEDGER_DATE_BOUNDS_QUERY,
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
   JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
@@ -18,6 +19,8 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
+import { MonthYearFilter } from '@/components/MonthYearFilter'
+import { resolveStatementPeriod, yearOptionsFrom } from '@/lib/dateRange'
 import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './DaywiseStockStatementTable'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -144,13 +147,25 @@ export default async function DaywiseStockStatementPage({
     vendor?: string
     from?: string
     to?: string
+    month?: string
+    year?: string
   }>
 }) {
   const params = await searchParams
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
-  const toDate = params.to || today.toISOString().split('T')[0]
+
+  // Month/Year populates From/To; editing either afterwards makes the period
+  // a custom range. A selected CURRENT month stops at today rather than at
+  // month end. Everything downstream — opening balance, daily movements,
+  // warehouse and vendor running balances, closing balance and the Excel
+  // export — already derives from these two dates, so resolving them here is
+  // the whole of the change.
+  const period = resolveStatementPeriod({
+    from: params.from,
+    to: params.to,
+    month: params.month,
+    year: params.year,
+  })
+  const { from: fromDate, to: toDate } = period
 
   const [compResult, whResult, supResult, itemResult, matTypeResult, matSizeResult] = await Promise.all([
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
@@ -159,6 +174,15 @@ export default async function DaywiseStockStatementPage({
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
     hasuraQuery(ACTIVE_MATERIAL_TYPES_QUERY),
     hasuraQuery(ACTIVE_MATERIAL_SIZES_QUERY),
+  ])
+  const ledgerBoundsResult = await hasuraQuery(STOCK_LEDGER_DATE_BOUNDS_QUERY)
+  const ledgerBounds = ledgerBoundsResult.stock_ledger_aggregate?.aggregate
+  // The resolved year must be selectable even when the ledger holds no data
+  // for it — the default period is the CURRENT month, which is typically
+  // later than the newest ledger entry.
+  const yearOptions = yearOptionsFrom(ledgerBounds?.min?.entry_date, ledgerBounds?.max?.entry_date, [
+    period.year,
+    new Date().getFullYear(),
   ])
 
   const companies = (compResult.companies ?? []) as Company[]
@@ -407,6 +431,8 @@ export default async function DaywiseStockStatementPage({
     fromDate,
     toDate,
     filterLine: [
+      `Period: ${period.label}${period.mode === 'month' ? ' (selected month)' : ' (custom range)'}`,
+      `Effective: ${fromDate} to ${toDate}`,
       `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
       `Item: ${selectedItem?.label || 'All Items'}`,
       `Supplier: ${suppliers.find((s) => s.id === params.vendor)?.name || 'All Suppliers'}`,
@@ -415,7 +441,7 @@ export default async function DaywiseStockStatementPage({
   }
   const summarySheet: ProfessionalSheetSpec = {
     sheetName: 'Daywise Summary',
-    title: 'Daywise Stock Statement — Summary',
+    title: `Daywise Stock Statement — Summary — ${period.label}`,
     emptyMessage: 'No stock movements found for the selected period.',
     columns: [
       { header: 'Date', key: 'date', width: 14, align: 'center', isDate: true },
@@ -450,7 +476,7 @@ export default async function DaywiseStockStatementPage({
   }
   const transactionDetailsSheet: ProfessionalSheetSpec = {
     sheetName: 'Transaction Details',
-    title: 'Daywise Stock Statement — Transaction Details',
+    title: `Daywise Stock Statement — Transaction Details — ${period.label}`,
     emptyMessage: 'No stock movements found for the selected period.',
     columns: [
       { header: 'S.No.', key: 'sno', width: 8, align: 'center' },
@@ -479,8 +505,25 @@ export default async function DaywiseStockStatementPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2 print:hidden">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Daywise Stock Statement</h1>
-          <p className="text-sm text-gray-500 mt-1">Day-by-day summary with every transaction listed underneath</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Daywise Stock Statement
+            <span className="ml-2 text-lg font-semibold text-gray-600">— {period.label}</span>
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Day-by-day summary with every transaction listed underneath
+            <span
+              className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${
+                period.mode === 'month'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'bg-amber-50 text-amber-800'
+              }`}
+            >
+              {period.mode === 'month' ? 'Selected month' : 'Custom date range'}
+            </span>
+            <span className="ml-2 text-xs text-gray-400">
+              {fromDate} to {toDate}
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {groups.length > 0 && (
@@ -498,13 +541,27 @@ export default async function DaywiseStockStatementPage({
       </div>
 
       <div className="hidden print:block text-center mb-4">
-        <h1 className="text-xl font-bold">Daywise Stock Statement</h1>
+        <h1 className="text-xl font-bold">Daywise Stock Statement — {period.label}</h1>
         <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
       </div>
 
       {/* Filters */}
       <form className="bg-white rounded-xl border p-4 print:hidden">
         <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Month / Year</label>
+            <div className="flex gap-2">
+              <MonthYearFilter month={period.month} year={period.year} yearOptions={yearOptions} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+            <input type="date" name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+            <input type="date" name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>
             <select name="company" defaultValue={params.company || ''} className="rounded border border-gray-300 px-2 py-1.5 text-sm">
@@ -556,15 +613,13 @@ export default async function DaywiseStockStatementPage({
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-            <input type="date" name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-            <input type="date" name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
-          </div>
-          <button type="submit" className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Apply</button>
+          <button type="submit" className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Apply Filters</button>
+          <Link
+            href="/reports/daywise-stock-statement"
+            className="rounded border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Reset
+          </Link>
         </div>
       </form>
 

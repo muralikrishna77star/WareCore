@@ -87,3 +87,28 @@ describe('yearOptionsFrom', () => {
     expect(yearOptionsFrom(undefined, undefined)).toEqual([now])
   })
 })
+
+describe('yearOptionsFrom mustInclude', () => {
+  it('adds a year the data does not reach, so the select can display it', () => {
+    // Ledger holds only 2024, but the screen's default period is the current
+    // month — the current year must still be selectable.
+    expect(yearOptionsFrom('2024-01-01', '2024-12-31', [2026])).toEqual([2026, 2025, 2024])
+  })
+
+  it('accepts the year as a string, as the resolver returns it', () => {
+    expect(yearOptionsFrom('2024-01-01', '2024-12-31', ['2026'])).toEqual([2026, 2025, 2024])
+  })
+
+  it('extends backwards too', () => {
+    expect(yearOptionsFrom('2024-01-01', '2024-12-31', [2022])).toEqual([2024, 2023, 2022])
+  })
+
+  it('ignores junk and out-of-range years', () => {
+    expect(yearOptionsFrom('2024-01-01', '2024-12-31', ['abc', null, undefined, 1800, 3500]))
+      .toEqual([2024])
+  })
+
+  it('is unchanged when the extra year is already covered', () => {
+    expect(yearOptionsFrom('2023-01-01', '2025-12-31', [2024])).toEqual([2025, 2024, 2023])
+  })
+})
