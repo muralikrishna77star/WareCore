@@ -2390,3 +2390,11 @@ export const DAY_WISE_LEDGER_ITEM_MASTER_QUERY = `
     }
   }
 `
+
+// Earliest / latest entry_date in the ledger — anchors the Day-Wise Item
+// Ledger's default window and populates its Year dropdown.
+export const STOCK_LEDGER_DATE_BOUNDS_QUERY = `
+  query GetStockLedgerDateBounds {
+    stock_ledger_aggregate { aggregate { max { entry_date } min { entry_date } } }
+  }
+`

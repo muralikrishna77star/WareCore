@@ -13,13 +13,15 @@ import {
   ACTIVE_SUPPLIERS_QUERY,
   ACTIVE_CUSTOMERS_QUERY,
   USER_PROFILES_QUERY,
+  STOCK_LEDGER_DATE_BOUNDS_QUERY,
 } from '@/lib/hasura/queries'
-import { defaultCreatedRange } from '@/lib/dateRange'
+import { defaultCreatedRange, resolveListingRange, yearOptionsFrom } from '@/lib/dateRange'
 import { loadDayWiseItemLedger, DAY_WISE_LEDGER_LIMIT, type DayWiseFilters } from '@/lib/dayWiseItemLedgerData'
 import { PrintButton } from '@/components/PrintButton'
 import { DayWiseItemLedgerFilters } from './DayWiseItemLedgerFilters'
 import { DayWiseItemLedgerTable } from './DayWiseItemLedgerTable'
 import { DayWiseItemLedgerExport } from './DayWiseItemLedgerExport'
+import { DayWiseStockPosition } from './DayWiseStockPosition'
 import { buildExportSheets, buildCriteriaLines } from './exportSpec'
 
 /** Reports are readable by every signed-in role; this one adds no extra gate. */
@@ -59,6 +61,8 @@ export default async function DayWiseItemLedgerPage({
       hasuraQuery(ACTIVE_CUSTOMERS_QUERY),
       hasuraQuery(USER_PROFILES_QUERY),
     ])
+  const boundsRes = await hasuraQuery(STOCK_LEDGER_DATE_BOUNDS_QUERY)
+  const ledgerBounds = boundsRes.stock_ledger_aggregate?.aggregate
 
   const companies: { id: string; name: string; code?: string }[] = companiesRes.companies ?? []
   const warehouses: { id: string; name: string; company_id?: string }[] = warehousesRes.warehouses ?? []
@@ -84,9 +88,14 @@ export default async function DayWiseItemLedgerPage({
       ? warehouses.filter((w) => w.company_id === scopedCompanyId)
       : warehouses
 
-  const defaults = defaultCreatedRange(null, 30)
-  const fromDate = asString(params.from) || defaults.from
-  const toDate = asString(params.to) || defaults.to
+  // Anchored on the ledger's own latest entry_date so the default window
+  // lands on real data rather than an empty stretch of wall-clock time.
+  const defaults = defaultCreatedRange(ledgerBounds?.max?.entry_date, 30)
+  const { from: fromDate, to: toDate, month, year } = resolveListingRange(
+    { from: asString(params.from), to: asString(params.to), month: asString(params.month), year: asString(params.year) },
+    defaults
+  )
+  const yearOptions = yearOptionsFrom(ledgerBounds?.min?.entry_date, ledgerBounds?.max?.entry_date)
 
   const requestedCompanies = asArray(params.company)
   const requestedWarehouses = asArray(params.warehouse)
@@ -122,10 +131,10 @@ export default async function DayWiseItemLedgerPage({
     ),
   }
 
-  const { report, matchedCount, truncated, integrityProblems } = await loadDayWiseItemLedger(
-    filters,
-    itemMaterialKeys
-  )
+  const {
+    report, matchedCount, truncated, integrityProblems,
+    stockPositions, stockTotals, stockScopeBroaderThanList,
+  } = await loadDayWiseItemLedger(filters, itemMaterialKeys)
 
   const criteriaLines = buildCriteriaLines(filters, {
     companies: visibleCompanies,
@@ -134,7 +143,7 @@ export default async function DayWiseItemLedgerPage({
     sizes,
   })
 
-  const exportSheets = buildExportSheets(report, criteriaLines)
+  const exportSheets = buildExportSheets(report, criteriaLines, stockPositions)
   const companyLabel =
     filters.companyIds.length === 1
       ? companies.find((c) => c.id === filters.companyIds[0])?.name ?? 'All Companies'
@@ -180,8 +189,19 @@ export default async function DayWiseItemLedgerPage({
         customers={customers}
         jobWorkers={suppliers}
         selected={filters}
+        month={month}
+        year={year}
+        yearOptions={yearOptions}
         companyLocked={!!scopedCompanyId}
         warehouseLocked={!!scopedWarehouseId}
+      />
+
+      <DayWiseStockPosition
+        positions={stockPositions}
+        totals={stockTotals}
+        fromDate={fromDate}
+        toDate={toDate}
+        scopeBroaderThanList={stockScopeBroaderThanList}
       />
 
       {truncated && (

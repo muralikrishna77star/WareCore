@@ -5,7 +5,7 @@ import {
   type ProfessionalSheetSpec,
 } from '@/lib/exportProfessionalExcel'
 import { ENTRY_TYPE_META, type EntryType, type LedgerReport } from '@/lib/dayWiseItemLedger'
-import type { DayWiseFilters } from '@/lib/dayWiseItemLedgerData'
+import type { DayWiseFilters, StockPosition } from '@/lib/dayWiseItemLedgerData'
 
 export type CriteriaLine = { label: string; value: string }
 
@@ -51,6 +51,12 @@ export function buildCriteriaLines(
     { label: 'Job Worker', value: f.jobWorkerIds.length ? f.jobWorkerIds.join(', ') : 'All' },
     { label: 'Document / Bill No.', value: f.documentNumber.trim() || 'All' },
     { label: 'Cancelled transactions', value: f.includeCancelled ? 'Included' : 'Excluded' },
+    {
+      label: 'Opening / Closing basis',
+      value:
+        'All transaction types within the selected company, warehouse, item and size scope. ' +
+        'Transaction-type, party and document filters narrow the listed transactions only.',
+    },
   ]
 }
 
@@ -112,6 +118,17 @@ const EXCEPTION_COLUMNS: ProfessionalColumn[] = [
   { header: 'Ledger Row ID', key: 'ledgerId', width: 38, align: 'left' },
 ]
 
+const STOCK_POSITION_COLUMNS: ProfessionalColumn[] = [
+  { header: 'Item Code', key: 'itemCode', width: 14, align: 'left' },
+  { header: 'Item Description', key: 'itemDescription', width: 32, align: 'left' },
+  { header: 'Item Size', key: 'itemSize', width: 14, align: 'left' },
+  { header: 'UOM', key: 'unit', width: 8, align: 'center' },
+  { header: 'Opening Stock', key: 'opening', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
+  { header: 'Inward Qty', key: 'periodInward', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+  { header: 'Outward Qty', key: 'periodOutward', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+  { header: 'Closing Stock', key: 'closing', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
+]
+
 const CRITERIA_COLUMNS: ProfessionalColumn[] = [
   { header: 'Filter', key: 'label', width: 26, align: 'left' },
   { header: 'Applied Value', key: 'value', width: 90, align: 'left' },
@@ -136,7 +153,11 @@ function formatCreatedAt(iso: string): string {
  * highlighted rows, so the daily totals are visible in Excel exactly where
  * they appear on screen rather than only as a grand total.
  */
-export function buildExportSheets(report: LedgerReport, criteria: CriteriaLine[]): ProfessionalSheetSpec[] {
+export function buildExportSheets(
+  report: LedgerReport,
+  criteria: CriteriaLine[],
+  stockPositions: StockPosition[] = []
+): ProfessionalSheetSpec[] {
   const summaryRows: Record<string, unknown>[] = []
   const highlightRowIndexes: number[] = []
 
@@ -211,6 +232,22 @@ export function buildExportSheets(report: LedgerReport, criteria: CriteriaLine[]
       title: 'Day-Wise Item Ledger — Report Criteria',
       columns: CRITERIA_COLUMNS,
       rows: criteria.map((c) => ({ label: c.label, value: c.value })),
+    },
+    {
+      sheetName: 'Opening & Closing Stock',
+      title: 'Day-Wise Item Ledger — Opening and Closing Stock by Item',
+      columns: STOCK_POSITION_COLUMNS,
+      rows: stockPositions.map((p) => ({
+        itemCode: p.itemCode,
+        itemDescription: p.itemDescription,
+        itemSize: p.itemSize,
+        unit: p.unit,
+        opening: p.opening,
+        periodInward: p.periodInward,
+        periodOutward: p.periodOutward,
+        closing: p.closing,
+      })),
+      emptyMessage: 'No stock movement for the selected criteria.',
     },
     {
       sheetName: 'Day-Wise Summary',

@@ -10,7 +10,7 @@
  * Pure classification/valuation/grouping lives in ./dayWiseItemLedger.ts;
  * this module is the I/O half.
  */
-import { hasuraQuery } from '@/lib/hasura/server'
+import { hasuraQuery, hasuraRunSql } from '@/lib/hasura/server'
 import {
   DAY_WISE_ITEM_LEDGER_QUERY,
   DAY_WISE_ITEM_LEDGER_COUNT_QUERY,
@@ -35,11 +35,37 @@ import {
   type RowContext,
   type SourceFinancials,
   normalizeStatus,
+  QTY_EPSILON,
+  roundQty,
   verifyTotals,
 } from '@/lib/dayWiseItemLedger'
 
 /** Hard cap on detail rows fetched in one run. */
 export const DAY_WISE_LEDGER_LIMIT = 5000
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Opening / closing stock for one item + size within the report's scope.
+ *
+ * Deliberately computed over ALL entry types, ignoring the transaction-type,
+ * party and document filters: a stock balance that only counted the rows a
+ * user happened to filter to would not be a balance. closing always equals
+ * opening + periodInward - periodOutward.
+ */
+export type StockPosition = {
+  materialTypeId: string
+  materialSizeId: string | null
+  itemCode: string
+  itemDescription: string
+  itemSize: string
+  unit: string
+  opening: number
+  periodInward: number
+  periodOutward: number
+  closing: number
+}
 
 const num = (v: unknown): number | null =>
   v == null || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null
@@ -66,6 +92,15 @@ export type DayWiseLedgerResult = {
   truncated: boolean
   /** Problems found by the post-build totals check; empty when consistent. */
   integrityProblems: string[]
+  /** Opening / closing stock per item + size, over ALL entry types. */
+  stockPositions: StockPosition[]
+  /** Sum of stockPositions, for the headline strip. */
+  stockTotals: { opening: number; periodInward: number; periodOutward: number; closing: number }
+  /**
+   * True when a transaction-type / party / document filter is narrowing the
+   * listed transactions, so the stock position covers more than what is shown.
+   */
+  stockScopeBroaderThanList: boolean
 }
 
 /**
@@ -137,6 +172,58 @@ const uuidOnly = (ids: (string | null | undefined)[]): string[] =>
   Array.from(new Set(ids.filter((v): v is string => !!v)))
 
 /**
+ * Loads opening / period / closing stock per item + size.
+ *
+ * Uses run_sql because this needs a GROUP BY aggregate, which Hasura's
+ * GraphQL aggregates cannot express. Every interpolated value is a
+ * regex-validated UUID or YYYY-MM-DD date and nothing else reaches the
+ * string — no free text, no user-supplied search terms. (See
+ * project_sql_injection_fix_2026_09_02: unescaped values reaching
+ * hasuraRunSql, which runs with full admin rights, is a known trap here.)
+ */
+async function loadStockPositions(
+  f: DayWiseFilters,
+  itemMaterialKeys: { materialTypeIds: string[]; materialSizeIds: string[] }
+): Promise<Map<string, { opening: number; periodInward: number; periodOutward: number }>> {
+  const map = new Map<string, { opening: number; periodInward: number; periodOutward: number }>()
+  if (!DATE_RE.test(f.fromDate) || !DATE_RE.test(f.toDate)) return map
+
+  const inClause = (column: string, ids: string[]): string => {
+    const safe = ids.filter((id) => UUID_RE.test(id))
+    if (!safe.length) return ''
+    return ` AND ${column} IN (${safe.map((id) => `'${id}'::uuid`).join(',')})`
+  }
+
+  const sizeIds = f.materialSizeIds.length ? f.materialSizeIds : itemMaterialKeys.materialSizeIds
+
+  const sql = `
+    SELECT
+      material_type_id::text,
+      COALESCE(material_size_id::text, ''),
+      COALESCE(SUM(CASE WHEN entry_date < '${f.fromDate}'::date THEN quantity ELSE 0 END), 0)::text,
+      COALESCE(SUM(CASE WHEN entry_date >= '${f.fromDate}'::date AND quantity > 0 THEN quantity ELSE 0 END), 0)::text,
+      COALESCE(SUM(CASE WHEN entry_date >= '${f.fromDate}'::date AND quantity < 0 THEN -quantity ELSE 0 END), 0)::text
+    FROM stock_ledger
+    WHERE entry_date <= '${f.toDate}'::date${inClause('company_id', f.companyIds)}${inClause(
+      'warehouse_id',
+      f.warehouseIds
+    )}${inClause('material_type_id', itemMaterialKeys.materialTypeIds)}${inClause('material_size_id', sizeIds)}
+    GROUP BY 1, 2
+  `
+
+  const result = await hasuraRunSql(sql)
+  for (const row of result.result?.slice(1) ?? []) {
+    const [matId, sizeId, opening, periodIn, periodOut] = row
+    map.set(`${matId}|${sizeId}`, {
+      opening: Number(opening) || 0,
+      periodInward: Number(periodIn) || 0,
+      periodOutward: Number(periodOut) || 0,
+    })
+  }
+  return map
+}
+
+/**
  * Loads and assembles the report.
  *
  * `partyFilter` is applied after enrichment because supplier/customer/job
@@ -149,9 +236,10 @@ export async function loadDayWiseItemLedger(
 ): Promise<DayWiseLedgerResult> {
   const where = buildLedgerWhere(filters, itemMaterialKeys)
 
-  const [ledgerResult, countResult] = await Promise.all([
+  const [ledgerResult, countResult, rawPositions] = await Promise.all([
     hasuraQuery(DAY_WISE_ITEM_LEDGER_QUERY, { where, limit: DAY_WISE_LEDGER_LIMIT }),
     hasuraQuery(DAY_WISE_ITEM_LEDGER_COUNT_QUERY, { where }),
+    loadStockPositions(filters, itemMaterialKeys),
   ])
 
   const rows: LedgerQueryRow[] = ledgerResult.stock_ledger ?? []
@@ -616,10 +704,75 @@ export async function loadDayWiseItemLedger(
     ...extraExceptions.filter((e) => filtered.some((d) => d.ledgerId === e.ledgerId))
   )
 
+  // ── Opening / closing stock ───────────────────────────────────────────
+  // Item identity for a balance row comes from the same item_master lookup
+  // the detail rows use, so the two always name an item the same way.
+  const stockPositions: StockPosition[] = []
+  for (const [key, agg] of rawPositions) {
+    const [materialTypeId, sizeIdRaw] = key.split('|')
+    const materialSizeId = sizeIdRaw || null
+    const item = itemMasterByMaterial.get(`${materialTypeId}|${sizeIdRaw}`)
+    // Prefer a label already resolved on a detail row for this item.
+    const sample = details.find(
+      (d) => d.itemKey.startsWith(`${materialTypeId}|`) && d.sizeKey === (materialSizeId ?? '')
+    )
+    const closing = roundQty(agg.opening + agg.periodInward - agg.periodOutward)
+    // Skip items with no opening balance, no movement and no closing balance:
+    // they carry no information and would bury the rows that do. An item whose
+    // inward and outward cancel out is NOT skipped — that is real activity.
+    if (
+      Math.abs(agg.opening) < QTY_EPSILON &&
+      Math.abs(agg.periodInward) < QTY_EPSILON &&
+      Math.abs(agg.periodOutward) < QTY_EPSILON &&
+      Math.abs(closing) < QTY_EPSILON
+    ) {
+      continue
+    }
+    stockPositions.push({
+      materialTypeId,
+      materialSizeId,
+      itemCode: sample?.itemCode ?? item?.item_code ?? '—',
+      itemDescription: sample?.itemDescription ?? item?.item_name ?? '',
+      itemSize: sample?.itemSize ?? item?.size_label ?? '',
+      unit: sample?.unit ?? item?.unit ?? 'MT',
+      opening: roundQty(agg.opening),
+      periodInward: roundQty(agg.periodInward),
+      periodOutward: roundQty(agg.periodOutward),
+      closing,
+    })
+  }
+  stockPositions.sort(
+    (a, b) => a.itemCode.localeCompare(b.itemCode) || a.itemSize.localeCompare(b.itemSize)
+  )
+
+  const stockTotals = stockPositions.reduce(
+    (t, p) => ({
+      opening: t.opening + p.opening,
+      periodInward: t.periodInward + p.periodInward,
+      periodOutward: t.periodOutward + p.periodOutward,
+      closing: t.closing + p.closing,
+    }),
+    { opening: 0, periodInward: 0, periodOutward: 0, closing: 0 }
+  )
+
   return {
     report,
     matchedCount,
     truncated: matchedCount > rows.length,
     integrityProblems: verifyTotals(report),
+    stockPositions,
+    stockTotals: {
+      opening: roundQty(stockTotals.opening),
+      periodInward: roundQty(stockTotals.periodInward),
+      periodOutward: roundQty(stockTotals.periodOutward),
+      closing: roundQty(stockTotals.closing),
+    },
+    stockScopeBroaderThanList:
+      filters.entryTypes.length > 0 ||
+      filters.supplierIds.length > 0 ||
+      filters.customerIds.length > 0 ||
+      filters.jobWorkerIds.length > 0 ||
+      filters.documentNumber.trim() !== '' ||
+      !filters.includeCancelled,
   }
 }

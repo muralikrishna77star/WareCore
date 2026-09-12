@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { MultiSelectFilter, type MultiSelectOption } from '@/components/MultiSelectFilter'
+import { MonthYearFilter } from '@/components/MonthYearFilter'
 import { ENTRY_TYPES, ENTRY_TYPE_META } from '@/lib/dayWiseItemLedger'
 import type { DayWiseFilters } from '@/lib/dayWiseItemLedgerData'
 
@@ -32,6 +33,9 @@ export function DayWiseItemLedgerFilters({
   customers,
   jobWorkers,
   selected,
+  month = '',
+  year = '',
+  yearOptions = [],
   companyLocked = false,
   warehouseLocked = false,
 }: {
@@ -45,6 +49,9 @@ export function DayWiseItemLedgerFilters({
   customers: Named[]
   jobWorkers: Named[]
   selected: DayWiseFilters
+  month?: string
+  year?: string
+  yearOptions?: number[]
   companyLocked?: boolean
   warehouseLocked?: boolean
 }) {
@@ -77,11 +84,20 @@ export function DayWiseItemLedgerFilters({
     selected.customerIds.length > 0 ||
     selected.jobWorkerIds.length > 0 ||
     selected.documentNumber.trim() !== '' ||
-    selected.includeCancelled
+    selected.includeCancelled ||
+    month !== '' ||
+    year !== ''
 
   return (
     <form className="rounded-xl border bg-white p-4 print:hidden">
       <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-[0.6875rem] font-medium text-gray-500 mb-1 uppercase">Month / Year</label>
+          <div className="flex gap-2">
+            <MonthYearFilter month={month} year={year} yearOptions={yearOptions} />
+          </div>
+        </div>
+
         <div>
           <label className="block text-[0.6875rem] font-medium text-gray-500 mb-1 uppercase">From Date</label>
           <input
