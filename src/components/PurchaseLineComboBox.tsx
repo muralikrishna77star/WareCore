@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DropdownPortal } from './DropdownPortal'
 
 // A purchase line as the Sale Entry screens need to show it. `_key` is the
@@ -69,9 +69,20 @@ export function PurchaseLineComboBox({
   dropdownWidthClass?: string
 }) {
   const anchorRef = useRef<HTMLDivElement | null>(null)
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [search, setSearch] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(0)
+
+  // The list is a fixed-height scroller, so arrowing past the last visible row
+  // moves the highlight somewhere the user cannot see and the dropdown looks
+  // like it has stopped responding. Keep the highlighted row in view.
+  // 'nearest' scrolls the dropdown itself by the minimum needed, without
+  // yanking the page around.
+  useEffect(() => {
+    if (!open) return
+    optionRefs.current[highlight]?.scrollIntoView({ block: 'nearest' })
+  }, [highlight, open])
 
   const selected = options.find(o => o._key === value) ?? null
   const selectedLabel = selected
@@ -123,7 +134,8 @@ export function PurchaseLineComboBox({
           if (e.key === 'ArrowDown') {
             e.preventDefault()
             if (!open) { setOpen(true); setHighlight(0); return }
-            setHighlight(h => Math.min(h + 1, filtered.length - 1))
+            // Math.max guards the empty-list case, where length - 1 is -1.
+            setHighlight(h => Math.max(0, Math.min(h + 1, filtered.length - 1)))
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
             setHighlight(h => Math.max(h - 1, 0))
@@ -165,6 +177,7 @@ export function PurchaseLineComboBox({
           return (
             <button
               key={pl._key}
+              ref={el => { optionRefs.current[idx] = el }}
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => commit(pl)}
