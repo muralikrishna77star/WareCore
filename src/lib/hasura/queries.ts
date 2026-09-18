@@ -1178,32 +1178,6 @@ export const JOB_WORK_VENDOR_DIRECT_RETURNS_QUERY = `
   }
 `
 
-export const CREATE_JOB_WORK_ORDER_MUTATION = `
-  mutation CreateJobWorkOrder($reference_number: String!, $company_id: uuid, $warehouse_id: uuid, $vendor_id: uuid, $dispatch_date: date!, $expected_return_date: date, $work_description: String, $status: String!, $notes: String, $created_by: uuid) {
-    insert_job_work_orders_one(object: {
-      reference_number: $reference_number
-      company_id: $company_id
-      warehouse_id: $warehouse_id
-      vendor_id: $vendor_id
-      dispatch_date: $dispatch_date
-      expected_return_date: $expected_return_date
-      work_description: $work_description
-      status: $status
-      notes: $notes
-      created_by: $created_by
-    }) { id }
-  }
-`
-
-export const CREATE_JOB_WORK_ITEMS_MUTATION = `
-  mutation CreateJobWorkItems($objects: [job_work_items_insert_input!]!) {
-    insert_job_work_items(objects: $objects) {
-      affected_rows
-      returning { id item_name item_master_id job_line_id material_types { description } }
-    }
-  }
-`
-
 export const UPDATE_JOB_WORK_ITEM_MUTATION = `
   mutation UpdateJobWorkItem($id: uuid!, $quantity_received: numeric!, $received_date: date) {
     update_job_work_items_by_pk(pk_columns: {id: $id}, _set: {quantity_received: $quantity_received, received_date: $received_date}) {
@@ -1256,6 +1230,10 @@ export const ALL_STOCK_BY_PURCHASE_LINE_QUERY = `
   }
 `
 
+// bill_date comes back with each line so the Job Work form can grey out a
+// purchase line invoiced after the order's dispatch date — migration 117's
+// trigger refuses those at the database, and without this the user only
+// finds out when the save fails.
 export const ITEM_PURCHASE_LINES_QUERY = `
   query GetItemPurchaseLines($item_master_id: uuid!) {
     purchase_bill_items(
@@ -1263,6 +1241,7 @@ export const ITEM_PURCHASE_LINES_QUERY = `
       distinct_on: [purchase_line_id]
     ) {
       purchase_line_id
+      purchase_bill { bill_date }
     }
   }
 `
@@ -1303,15 +1282,6 @@ export const JOB_WORK_ITEMS_FROM_OUTPUT_QUERY = `
     ) {
       id job_work_order_id source_job_work_output_item_id
       quantity_sent unit job_line_id created_at
-    }
-  }
-`
-
-export const CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION = `
-  mutation CreateJobWorkOutputItems($objects: [job_work_output_items_insert_input!]!) {
-    insert_job_work_output_items(objects: $objects) {
-      affected_rows
-      returning { id item_name quantity unit source_job_line_id }
     }
   }
 `

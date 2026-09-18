@@ -1,5 +1,6 @@
 import { hasuraFetchEnvelope } from './transport'
 import { runSqlLocal } from '@/lib/localdb/sql'
+import { firstGraphQLErrorMessage } from './errors'
 
 const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
 const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || process.env.NEXT_PUBLIC_HASURA_ADMIN_SECRET || ''
@@ -14,8 +15,7 @@ export async function hasuraQuery(
 ): Promise<any> {
   const json = await hasuraFetchEnvelope(query, variables)
   if (json.errors) {
-    const firstError = json.errors[0]
-    const message = firstError?.message ?? 'Hasura query failed'
+    const message = firstGraphQLErrorMessage(json.errors, 'Hasura query failed')
     if (!options?.suppressError) {
       console.error('[Hasura] GraphQL error:', message)
     }

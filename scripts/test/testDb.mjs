@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
+import { createServer } from 'node:net'
 import EmbeddedPostgres from 'embedded-postgres'
 import { runPendingMigrations } from '../desktop/migrate.mjs'
 
@@ -79,6 +80,34 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '144_repair_cr1224_intercompany_purchase_lines.sql',
 ])
 
+/** Resolves true only if nothing is already bound to this port on loopback. */
+function portIsFree(port) {
+  return new Promise((resolve) => {
+    const probe = createServer()
+    probe.once('error', () => resolve(false))
+    probe.once('listening', () => probe.close(() => resolve(true)))
+    probe.listen(port, '127.0.0.1')
+  })
+}
+
+/**
+ * Picks a port nothing is listening on. Each test file starts its own
+ * cluster from a 500-wide random range, and on Windows the harness leaks
+ * postmasters (pg.stop() does not reliably reap them), so that range fills
+ * up and collisions become routine. A colliding postgres exits with
+ * "could not create any TCP/IP sockets" and embedded-postgres rejects with
+ * literally `undefined`, which vitest reports as "Unknown Error: undefined"
+ * against a whole test file — a failure that names neither a port nor a
+ * cause. Probing first also avoids paying for an initdb per doomed attempt.
+ */
+async function findFreePort(attempts = 40) {
+  for (let i = 0; i < attempts; i++) {
+    const port = 55555 + Math.floor(Math.random() * 5000)
+    if (await portIsFree(port)) return port
+  }
+  throw new Error('startTestDb: no free port found for the embedded Postgres instance')
+}
+
 /**
  * @param {{ port?: number, log?: (msg: string) => void, skipProductionDataMigrations?: boolean }} [opts]
  *   skipProductionDataMigrations (default true): skip the migrations listed
@@ -86,25 +115,42 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
  *   blank database. Set false only to reproduce/confirm the failure itself.
  */
 export async function startTestDb(opts = {}) {
-  const port = opts.port ?? 55555 + Math.floor(Math.random() * 500)
   const log = opts.log ?? (() => {})
   const skipProductionDataMigrations = opts.skipProductionDataMigrations ?? true
-  const dataDir = mkdtempSync(join(tmpdir(), 'warecore-test-pg-'))
   const user = 'warecore_test'
   const password = 'warecore_test'
   const database = 'warecore_test'
 
-  const pg = new EmbeddedPostgres({
-    databaseDir: dataDir,
-    port,
-    user,
-    password,
-    persistent: false,
-    initdbFlags: ['--encoding=UTF8', '--locale=C'],
-  })
+  // findFreePort() removes the common collision; the retry below still
+  // covers the race between probing a port and postgres binding it.
+  const attempts = opts.port ? 1 : 5
+  let pg, dataDir, port, lastErr
 
-  await pg.initialise()
-  await pg.start()
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    port = opts.port ?? await findFreePort()
+    dataDir = mkdtempSync(join(tmpdir(), 'warecore-test-pg-'))
+    pg = new EmbeddedPostgres({
+      databaseDir: dataDir,
+      port,
+      user,
+      password,
+      persistent: false,
+      initdbFlags: ['--encoding=UTF8', '--locale=C'],
+    })
+    try {
+      await pg.initialise()
+      await pg.start()
+      lastErr = undefined
+      break
+    } catch (err) {
+      lastErr = err ?? new Error(`embedded postgres failed to start on port ${port}`)
+      try { await pg.stop() } catch { /* not running */ }
+      rmSync(dataDir, { recursive: true, force: true })
+      log(`startTestDb: port ${port} unusable, retrying (${attempt + 1}/${attempts})`)
+    }
+  }
+  if (lastErr) throw lastErr
+
   await pg.createDatabase(database)
 
   const connectionString = `postgres://${user}:${password}@127.0.0.1:${port}/${database}`

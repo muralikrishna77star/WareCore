@@ -45,8 +45,8 @@ async function setupOrder() {
     [`JW-${code}`, supplier.id, company.id, warehouse.id]
   )
   await client.query(
-    `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent, unit)
-     VALUES ($1, $2, 5.000, 'MT')`,
+    `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent, unit)
+     VALUES ('TEST-PL-001', $1, $2, 5.000, 'MT')`,
     [order.id, materialType.id]
   )
   const { rows: [output] } = await client.query(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
+import { sanitizeGraphQLErrors } from '@/lib/hasura/errors'
 
 type RoleSet = ReadonlySet<string>
 
@@ -61,12 +62,13 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
   CreateTransfer:       ALL_STAFF,
   CreateTransferItems:  ALL_STAFF,
   UpdateTransferStatus: ALL_STAFF,
-  // Job work
-  CreateJobWorkOrder:              ALL_STAFF,
-  CreateJobWorkItems:              ALL_STAFF,
+  // Job work — order creation is NOT here: it goes through
+  // /api/jobwork/create (migration 146) so the order, its input lines and
+  // its output lines are written in one transaction. Leaving the old
+  // per-table insert mutations exposed would keep the orphan-header path
+  // reachable, so they are deliberately absent and denied by default.
   UpdateJobWorkItem:               ALL_STAFF,
   UpdateJobWorkOrderStatus:        ALL_STAFF,
-  CreateJobWorkOutputItems:        ALL_STAFF,
   // Job work vendor transfer
   UpdateJobWorkItemTransferredOut: ALL_STAFF,
   CreateJobWorkTransfer:           ALL_STAFF,
@@ -81,7 +83,7 @@ const MUTATION_PERMISSIONS: Record<string, RoleSet> = {
 
 // Mutations that record who created the row — the proxy injects `created_by`
 // from the verified session so the client can't spoof another user's identity.
-const CREATED_BY_MUTATIONS = new Set(['CreatePurchaseBill', 'CreateDispatchOrder', 'CreateJobWorkOrder'])
+const CREATED_BY_MUTATIONS = new Set(['CreatePurchaseBill', 'CreateDispatchOrder'])
 
 // Personal-resource ops: any authenticated user may act on their own rows.
 // Ownership is enforced by force-overwriting this variable with the caller's
@@ -170,5 +172,11 @@ export async function POST(request: NextRequest) {
   }
 
   const data = await hasuraFetchEnvelope(body.query, body.variables)
-  return NextResponse.json(data, { status: data.errors ? 500 : 200 })
+  if (data.errors) {
+    // Surface the underlying Postgres message (a trigger's RAISE says exactly
+    // what the user did wrong) instead of Hasura's opaque "database query
+    // error", and strip the generated SQL that rides along with it.
+    return NextResponse.json({ ...data, errors: sanitizeGraphQLErrors(data.errors) }, { status: 500 })
+  }
+  return NextResponse.json(data, { status: 200 })
 }

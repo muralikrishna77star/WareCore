@@ -1,6 +1,8 @@
 // Client-side Hasura GraphQL fetcher (browser-safe)
 // Proxies through /api/graphql — admin secret never exposed to the browser
 
+import { firstGraphQLErrorMessage } from './errors'
+
 export async function hasuraFetch<T = Record<string, unknown>>(
   query: string,
   variables?: Record<string, unknown>
@@ -19,7 +21,7 @@ export async function hasuraFetch<T = Record<string, unknown>>(
     const json = await res.json()
 
     if (json.errors) {
-      return { data: null, error: { message: json.errors[0]?.message ?? 'GraphQL error' } }
+      return { data: null, error: { message: firstGraphQLErrorMessage(json.errors) } }
     }
 
     return { data: json.data as T, error: null }

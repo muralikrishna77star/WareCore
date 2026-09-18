@@ -343,8 +343,8 @@ async function makeCrossItemOutputOrder(companyId: string, warehouseId: string, 
   )
   // Auto-posts JOB_WORK_OUT -6.390 (fn_job_work_item_to_ledger INSERT branch).
   await client.query(
-    `INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity_sent, quantity_received, unit, job_line_id)
-     VALUES ($1, $2, $3, '0.85X995', 6.390, 0, 'MT', 'JW-SYN-0001')`,
+    `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, material_size_id, size_label, quantity_sent, quantity_received, unit, job_line_id)
+     VALUES ('TEST-PL-001', $1, $2, $3, '0.85X995', 6.390, 0, 'MT', 'JW-SYN-0001')`,
     [orderId, materialTypeId, inputSize.id]
   )
   // Auto-posts JOB_WORK_OUTPUT_IN 6.190 under the OUTPUT size.
@@ -378,7 +378,7 @@ describe('REC-009 job work equation mismatch', () => {
     // fn_job_work_item_to_ledger() auto-posts JOB_WORK_OUT on insert, so
     // source and ledger start in agreement by construction.
     await client.query(
-      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 7.5)`,
+      `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent) VALUES ('TEST-PL-002', $1, $2, 7.5)`,
       [orderId, materialTypeId]
     )
     const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_009($1, '2024-01-01', '2026-12-31')`, [companyId])
@@ -389,7 +389,7 @@ describe('REC-009 job work equation mismatch', () => {
     const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
     const { orderId } = await makeJobWorkOrder(companyId, warehouseId)
     await client.query(
-      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 7.5)`,
+      `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent) VALUES ('TEST-PL-003', $1, $2, 7.5)`,
       [orderId, materialTypeId]
     )
     await client.query(`DELETE FROM stock_ledger WHERE reference_type = 'job_work' AND reference_id = $1 AND entry_type = 'JOB_WORK_OUT'`, [orderId])
@@ -415,7 +415,7 @@ describe('REC-009 job work equation mismatch', () => {
     const quantities = [4.875, 3.515, 3.445, 3.055, 2.180, 4.890]
     for (const q of quantities) {
       await client.query(
-        `INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ($1, $2, $3, $4)`,
+        `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ('TEST-PL-004', $1, $2, $3, $4)`,
         [orderId, materialTypeId, size.id, q]
       )
     }
@@ -430,8 +430,8 @@ describe('REC-009 job work equation mismatch', () => {
       `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '1.00X1250') RETURNING id`,
       [materialTypeId]
     )
-    await client.query(`INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ($1, $2, $3, 5.0)`, [orderId, materialTypeId, size.id])
-    await client.query(`INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ($1, $2, $3, 3.0)`, [orderId, materialTypeId, size.id])
+    await client.query(`INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ('TEST-PL-005', $1, $2, $3, 5.0)`, [orderId, materialTypeId, size.id])
+    await client.query(`INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, material_size_id, quantity_sent) VALUES ('TEST-PL-006', $1, $2, $3, 3.0)`, [orderId, materialTypeId, size.id])
     // Only one of the two lines' JOB_WORK_OUT rows gets deleted directly —
     // scope total should now be 8.0 (source) vs 3.0 (ledger), not per-line.
     await client.query(
@@ -471,7 +471,7 @@ describe('REC-018 unbalanced vendor-held stock', () => {
     // ledger and job_work_items.quantity_sent start in agreement by
     // construction, same as the transfer-pair trigger discovered earlier.
     await client.query(
-      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 12.0)`,
+      `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent) VALUES ('TEST-PL-007', $1, $2, 12.0)`,
       [orderId, materialTypeId]
     )
     const { rows } = await client.query(`SELECT * FROM fn_reconcile_rec_018($1, '2024-01-01', '2026-12-31')`, [companyId])
@@ -483,7 +483,7 @@ describe('REC-018 unbalanced vendor-held stock', () => {
     const { companyId, warehouseId, materialTypeId } = await makeCompanyAndWarehouse()
     const { vendorId, orderId } = await makeJobWorkOrder(companyId, warehouseId)
     await client.query(
-      `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent) VALUES ($1, $2, 9.5)`,
+      `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent) VALUES ('TEST-PL-008', $1, $2, 9.5)`,
       [orderId, materialTypeId]
     )
     // Simulate an admin directly deleting the ledger row via

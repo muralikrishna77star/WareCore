@@ -70,8 +70,8 @@ async function makeJobWorkOrder(opts: { companyId: string; warehouseId: string; 
 // alongside this helper.
 async function makeJobWorkItem(opts: { jobWorkOrderId: string; materialTypeId: string; quantitySent: number }) {
   await client.query(
-    `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent, quantity_received, unit)
-     VALUES ($1, $2, $3, 0, 'MT')`,
+    `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent, quantity_received, unit)
+     VALUES ('TEST-PL-001', $1, $2, $3, 0, 'MT')`,
     [opts.jobWorkOrderId, opts.materialTypeId, opts.quantitySent]
   )
 }
@@ -206,8 +206,8 @@ describe('cross-item Job Work Output attribution (142)', () => {
       `INSERT INTO material_sizes (material_type_id, size_label) VALUES ($1, '0.90X121') RETURNING id`, [scope.materialTypeId]
     )
     await client.query(
-      `INSERT INTO job_work_items (job_work_order_id, material_type_id, material_size_id, size_label, quantity_sent, quantity_received, unit, job_line_id)
-       VALUES ($1, $2, $3, '0.85X995', 6.390, 0, 'MT', 'JW-SYN-0001')`,
+      `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, material_size_id, size_label, quantity_sent, quantity_received, unit, job_line_id)
+       VALUES ('TEST-PL-002', $1, $2, $3, '0.85X995', 6.390, 0, 'MT', 'JW-SYN-0001')`,
       [order, scope.materialTypeId, inputSize.id]
     )
     const { rows: [output] } = await client.query(

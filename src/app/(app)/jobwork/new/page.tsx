@@ -9,8 +9,6 @@ import { DropdownPortal } from '@/components/DropdownPortal'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_SUPPLIERS_QUERY, ACTIVE_WAREHOUSES_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY, ACTIVE_ITEM_MASTER_QUERY,
-  CREATE_JOB_WORK_ORDER_MUTATION, CREATE_JOB_WORK_ITEMS_MUTATION,
-  CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION,
   ITEM_PURCHASE_LINES_QUERY, PURCHASE_LINES_STOCK_QUERY,
   ALL_PURCHASE_BILL_ITEM_LINES_QUERY, ALL_STOCK_BY_PURCHASE_LINE_QUERY,
   ALL_JOB_WORK_LINE_IDS_QUERY,
@@ -45,6 +43,10 @@ function generateJobLineId(ddmm: string, allJobLineIds: string[]): string {
 type PurchaseLineOption = {
   purchase_line_id: string
   available_qty: number
+  // Invoice date of the bill this line sits on. A line invoiced after the
+  // order's dispatch date is refused by the database (migration 117), so the
+  // form greys it out rather than letting the save fail.
+  bill_date: string | null
   // Net quantity broken down by owning company_id — lets the form warn (not
   // block) when the order's own company has none of this stock itself and
   // it's really recorded under the other, informally stock-sharing company.
@@ -109,6 +111,13 @@ const emptyOutput = (): OutputLine => ({
   job_line_id: '',
 })
 
+// True when this purchase line's bill is dated after the order's dispatch
+// date — the database refuses those outright (migration 117), so the form
+// disables them instead of letting the user discover it on save.
+function isInvoicedAfter(opt: PurchaseLineOption, dispatchDate: string): boolean {
+  return Boolean(opt.bill_date && dispatchDate && opt.bill_date > dispatchDate)
+}
+
 type SelectableItem = ItemMaster & { availableStock: number }
 
 // Each row gets its own plain useRef() (declared here, not in a shared keyed
@@ -134,6 +143,7 @@ function InputLineRow({
   selectCls,
   companyId,
   companies,
+  dispatchDate,
 }: {
   line: InputLine
   index: number
@@ -152,6 +162,7 @@ function InputLineRow({
   selectCls: string
   companyId: string
   companies: Company[]
+  dispatchDate: string
 }) {
   const anchorRef = useRef<HTMLDivElement | null>(null)
   return (
@@ -233,13 +244,29 @@ function InputLineRow({
               onChange={e => updateInputLine(index, 'purchase_line_id', e.target.value)}
               className={selectCls + ' font-mono'}>
               <option value="">— Select —</option>
-              {line.purchase_line_options.map(opt => (
-                <option key={opt.purchase_line_id} value={opt.purchase_line_id}>
-                  {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
-                </option>
-              ))}
+              {line.purchase_line_options.map(opt => {
+                const tooLate = isInvoicedAfter(opt, dispatchDate)
+                return (
+                  <option key={opt.purchase_line_id} value={opt.purchase_line_id} disabled={tooLate}>
+                    {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
+                    {tooLate ? ` — invoiced ${opt.bill_date}` : ''}
+                  </option>
+                )
+              })}
             </select>
           )}
+        {(() => {
+          // Every line this item has was invoiced after the dispatch date, so
+          // the select is there but nothing in it can be picked — say why.
+          if (!line.item_master_id || line.purchase_lines_loading) return null
+          const opts = line.purchase_line_options
+          if (!opts.length || !opts.every(o => isInvoicedAfter(o, dispatchDate))) return null
+          return (
+            <p className="text-[10px] text-red-600 mt-0.5">
+              All stock of this item was invoiced after {dispatchDate} — move the dispatch date forward.
+            </p>
+          )
+        })()}
         {(() => {
           if (!companyId || !line.purchase_line_id) return null
           const opt = line.purchase_line_options.find(o => o.purchase_line_id === line.purchase_line_id)
@@ -550,10 +577,11 @@ export default function NewJobWorkPage() {
       return u
     })
 
-    const { data: linesData } = await hasuraFetch<{ purchase_bill_items: { purchase_line_id: string | null }[] }>(ITEM_PURCHASE_LINES_QUERY, { item_master_id: itemMasterId })
-    const purchaseLineIds: string[] = (linesData?.purchase_bill_items ?? [])
-      .map((r) => r.purchase_line_id)
-      .filter((id): id is string => Boolean(id))
+    const { data: linesData } = await hasuraFetch<{ purchase_bill_items: { purchase_line_id: string | null; purchase_bill: { bill_date: string | null } | null }[] }>(ITEM_PURCHASE_LINES_QUERY, { item_master_id: itemMasterId })
+    const lineRows = (linesData?.purchase_bill_items ?? []).filter((r) => Boolean(r.purchase_line_id))
+    const purchaseLineIds: string[] = lineRows.map((r) => r.purchase_line_id as string)
+    const billDateByLine: Record<string, string | null> = {}
+    for (const row of lineRows) billDateByLine[row.purchase_line_id as string] = row.purchase_bill?.bill_date ?? null
 
     if (!purchaseLineIds.length) {
       setInputLines(prev => {
@@ -582,7 +610,12 @@ export default function NewJobWorkPage() {
     }
 
     const options: PurchaseLineOption[] = purchaseLineIds
-      .map(id => ({ purchase_line_id: id, available_qty: Number((stockMap[id] ?? 0).toFixed(3)), companyQuantities: companyMap[id] ?? {} }))
+      .map(id => ({
+        purchase_line_id: id,
+        available_qty: Number((stockMap[id] ?? 0).toFixed(3)),
+        companyQuantities: companyMap[id] ?? {},
+        bill_date: billDateByLine[id] ?? null,
+      }))
       .filter(opt => opt.available_qty > 0)
       .sort((a, b) => a.purchase_line_id.localeCompare(b.purchase_line_id))
 
@@ -642,6 +675,24 @@ export default function NewJobWorkPage() {
       fetchPurchaseLinesForItem(value, index)
     }
   }, [itemMasters, fetchPurchaseLinesForItem, dispatchDate, existingJobLineIds])
+
+  // Moving the dispatch date can invalidate an already-picked purchase line
+  // (its bill is now dated after the order). Drop those selections here
+  // rather than carrying them into a save the database will refuse.
+  const handleDispatchDateChange = useCallback((value: string) => {
+    setDispatchDate(value)
+    setInputLines(prev => {
+      let changed = false
+      const next = prev.map(l => {
+        if (!l.purchase_line_id) return l
+        const opt = l.purchase_line_options.find(o => o.purchase_line_id === l.purchase_line_id)
+        if (!opt || !isInvoicedAfter(opt, value)) return l
+        changed = true
+        return { ...l, purchase_line_id: '', available_quantity: '' }
+      })
+      return changed ? next : prev
+    })
+  }, [])
 
   const updateOutputLine = useCallback((index: number, field: keyof OutputLine, value: string) => {
     setOutputLines(prev => {
@@ -896,9 +947,16 @@ export default function NewJobWorkPage() {
       }
     }
 
-    // Create order
-    const { data: orderData, error: oErr } = await hasuraFetch<{ insert_job_work_orders_one: { id: string } | null }>(
-      CREATE_JOB_WORK_ORDER_MUTATION, {
+    // One atomic call: the order, its input lines and its output lines are
+    // written in a single transaction. This used to be three sequential
+    // mutations, so a validation trigger rejecting the lines left the
+    // already-committed order header behind as an orphan (migration 146).
+    const validOutputs = outputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
+
+    const res = await fetch('/api/jobwork/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         reference_number: generateReferenceNumber('JW'),
         company_id: companyId || null,
         warehouse_id: warehouseId || null,
@@ -908,57 +966,35 @@ export default function NewJobWorkPage() {
         work_description: workDescription || null,
         status: 'dispatched',
         notes: notes || null,
-      }
-    )
-    const order = orderData?.insert_job_work_orders_one
-    if (oErr || !order) {
-      setError(oErr?.message ?? 'Failed to create job work order')
+        inputs: validInputs.map(l => ({
+          purchase_line_id: l.purchase_line_id || null,
+          job_line_id: l.job_line_id || null,
+          item_master_id: l.item_master_id || null,
+          item_name: l.item_name || null,
+          material_type_id: l.material_type_id || null,
+          material_size_id: l.material_size_id || null,
+          size_label: l.size_label || null,
+          quantity_sent: parseFloat(l.quantity),
+          unit: l.unit || 'MT',
+        })),
+        outputs: validOutputs.map(l => ({
+          item_master_id: l.item_master_id || null,
+          item_name: l.item_name || null,
+          material_type_id: l.material_type_id || null,
+          material_size_id: l.material_size_id || null,
+          size_label: l.size_label || null,
+          quantity: parseFloat(l.quantity),
+          unit: l.unit || 'MT',
+          source_job_line_id: l.job_line_id || null,
+          notes: l.notes || null,
+        })),
+      }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.success) {
+      setError(json.error ?? 'Failed to create job work order')
       setLoading(false)
       return
-    }
-
-    // Create input items
-    const inputItems = validInputs.map(l => ({
-      job_work_order_id: order.id,
-      purchase_line_id: l.purchase_line_id || null,
-      job_line_id: l.job_line_id || null,
-      item_master_id: l.item_master_id || null,
-      item_name: l.item_name || null,
-      material_type_id: l.material_type_id || null,
-      material_size_id: l.material_size_id || null,
-      size_label: l.size_label || null,
-      quantity_sent: parseFloat(l.quantity),
-      quantity_received: 0,
-      unit: l.unit || 'MT',
-    }))
-    const { error: iErr } = await hasuraFetch(CREATE_JOB_WORK_ITEMS_MUTATION, { objects: inputItems })
-    if (iErr) {
-      setError(iErr.message)
-      setLoading(false)
-      return
-    }
-
-    // Create output items (if any)
-    const validOutputs = outputLines.filter(l => l.item_master_id && parseFloat(l.quantity) > 0)
-    if (validOutputs.length) {
-      const outputItems = validOutputs.map(l => ({
-        job_work_order_id: order.id,
-        item_master_id: l.item_master_id || null,
-        item_name: l.item_name || null,
-        material_type_id: l.material_type_id || null,
-        material_size_id: l.material_size_id || null,
-        size_label: l.size_label || null,
-        quantity: parseFloat(l.quantity),
-        unit: l.unit || 'MT',
-        source_job_line_id: l.job_line_id || null,
-        notes: l.notes || null,
-      }))
-      const { error: outErr } = await hasuraFetch(CREATE_JOB_WORK_OUTPUT_ITEMS_MUTATION, { objects: outputItems })
-      if (outErr) {
-        setError(outErr.message)
-        setLoading(false)
-        return
-      }
     }
 
     router.push('/jobwork')
@@ -1053,7 +1089,7 @@ export default function NewJobWorkPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
-                <input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} required className={inputFieldCls} />
+                <input type="date" value={dispatchDate} onChange={e => handleDispatchDateChange(e.target.value)} required className={inputFieldCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Expected Return</label>
@@ -1125,6 +1161,7 @@ export default function NewJobWorkPage() {
                       selectCls={selectCls}
                       companyId={companyId}
                       companies={companies}
+                      dispatchDate={dispatchDate}
                     />
                   ))}
                 </tbody>

@@ -102,8 +102,8 @@ async function makeJobWorkOrder(opts: { companyId: string; warehouseId: string; 
 async function makeJobWorkItem(opts: { jobWorkOrderId: string; materialTypeId: string; quantitySent: number; suppressTrigger?: boolean; isTransferLine?: boolean }) {
   if (opts.suppressTrigger) await client.query(`ALTER TABLE job_work_items DISABLE TRIGGER USER`)
   await client.query(
-    `INSERT INTO job_work_items (job_work_order_id, material_type_id, quantity_sent, quantity_received, unit, is_transfer_line)
-     VALUES ($1, $2, $3, 0, 'MT', $4)`,
+    `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent, quantity_received, unit, is_transfer_line)
+     VALUES ('TEST-PL-001', $1, $2, $3, 0, 'MT', $4)`,
     [opts.jobWorkOrderId, opts.materialTypeId, opts.quantitySent, opts.isTransferLine ?? false]
   )
   if (opts.suppressTrigger) await client.query(`ALTER TABLE job_work_items ENABLE TRIGGER USER`)
