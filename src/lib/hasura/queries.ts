@@ -871,6 +871,10 @@ export const DELETE_DISPATCH_ITEMS_BY_ORDER_MUTATION = `
 
 // ─── Available purchase lines for sale dispatch ──────────────────────────────
 
+// bill_date and the supplier's name ride along so the Sale Entry purchase-line
+// picker can show where a line came from — a bare "CR0125-0080" means nothing
+// to the person choosing, and several lines of the same item differ only by
+// which bill and supplier they arrived on.
 export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
   query GetPurchaseBillItemsForDispatch {
     purchase_bill_items(
@@ -884,6 +888,11 @@ export const PURCHASE_BILL_ITEMS_FOR_DISPATCH_QUERY = `
       material_type_id
       material_size_id
       size_label
+      purchase_bill {
+        bill_date
+        bill_number
+        supplier { name }
+      }
     }
   }
 `

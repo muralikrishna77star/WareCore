@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Check } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { DropdownPortal } from '@/components/DropdownPortal'
+import { PurchaseLineComboBox } from '@/components/PurchaseLineComboBox'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
@@ -30,6 +31,11 @@ type AvailablePurchaseLine = {
   material_size_id: string | null
   size_label: string | null
   available_quantity: number
+  // Where this line came from, shown in the picker so several lines of the
+  // same item can be told apart.
+  bill_number: string | null
+  bill_date: string | null
+  supplier_name: string | null
   // Net quantity broken down by owning company_id — lets the form warn (not
   // block) when the order's own company has none of this stock itself and
   // it's really recorded under the other, informally stock-sharing company.
@@ -44,6 +50,11 @@ interface PurchaseBillItemForDispatch {
   material_type_id: string
   material_size_id: string | null
   size_label: string | null
+  purchase_bill?: {
+    bill_date: string | null
+    bill_number: string | null
+    supplier: { name: string | null } | null
+  } | null
 }
 
 interface StockLedgerLineQuantity {
@@ -335,7 +346,15 @@ export default function EditDispatchPage() {
         }
         seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
         // Include even zero-stock for items that are already on this order (so they can be kept)
-        avail.push({ ...item, _key: key, available_quantity: qty, companyQuantities })
+        avail.push({
+          ...item,
+          _key: key,
+          available_quantity: qty,
+          companyQuantities,
+          bill_number: item.purchase_bill?.bill_number ?? null,
+          bill_date: item.purchase_bill?.bill_date ?? null,
+          supplier_name: item.purchase_bill?.supplier?.name ?? null,
+        })
       }
       // Job-work output items (e.g. slit material blended from >1 purchase
       // line) have no purchase_bill_items row and post to stock_ledger with
@@ -345,7 +364,17 @@ export default function EditDispatchPage() {
         if (seen.has(mk)) continue
         seen.add(mk)
         const qty = stockByMaterial[mk] ?? 0
-        avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty, companyQuantities: companyByMaterial[mk] ?? {} })
+        avail.push({
+          ...item,
+          purchase_line_id: null,
+          _key: `ID:${item.id}`,
+          available_quantity: qty,
+          companyQuantities: companyByMaterial[mk] ?? {},
+          // Job-work output, not purchased — there is no bill or supplier.
+          bill_number: null,
+          bill_date: null,
+          supplier_name: null,
+        })
       }
       setAvailablePurchaseLines(avail)
 
@@ -915,21 +944,16 @@ export default function EditDispatchPage() {
                       </td>
                       {/* Purchase Line */}
                       <td className="pr-3 py-2">
-                        <select value={line.purchase_line_id} onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
-                          className="block w-44 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
-                          <option value="">— Select —</option>
-                          {purchaseLinesForRow.map((pl) => (
-                            <option key={pl._key} value={pl._key}>
-                              {pl.purchase_line_id
-                                ? `${pl.purchase_line_id} (${pl.available_quantity.toFixed(2)})`
-                                : `[Stock] ${pl.item_name || pl.size_label || 'General'} (${pl.available_quantity.toFixed(2)})`}
-                            </option>
-                          ))}
-                          {/* Show currently selected PL even if it has zero stock */}
-                          {line.purchase_line_id && !purchaseLinesForRow.find(pl => pl._key === line.purchase_line_id) && (
-                            <option value={line.purchase_line_id}>{line.purchase_line_id} (current)</option>
-                          )}
-                        </select>
+                        <PurchaseLineComboBox
+                          value={line.purchase_line_id}
+                          options={purchaseLinesForRow}
+                          onChange={(key) => updateLine(i, 'purchase_line_id', key)}
+                          /* A line already on this order may no longer have
+                             stock; keep showing it rather than blanking the
+                             field (the old <select> did this with a
+                             "(current)" option). */
+                          currentFallbackLabel={`${line.purchase_line_id} (current)`}
+                        />
                         {(() => {
                           if (!companyId || !line.purchase_line_id) return null
                           const pl = availablePurchaseLines.find((l) => l._key === line.purchase_line_id)

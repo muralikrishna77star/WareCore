@@ -6,6 +6,7 @@ import { Check, RefreshCw } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import { DropdownPortal } from '@/components/DropdownPortal'
+import { PurchaseLineComboBox } from '@/components/PurchaseLineComboBox'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
@@ -29,6 +30,11 @@ type AvailablePurchaseLine = {
   material_size_id: string | null
   size_label: string | null
   available_quantity: number
+  // Where this line came from, shown in the picker so several lines of the
+  // same item can be told apart.
+  bill_number: string | null
+  bill_date: string | null
+  supplier_name: string | null
   // Net quantity broken down by owning company_id — lets the form warn (not
   // block) when the order's own company has none of this stock itself and
   // it's really recorded under the other, informally stock-sharing company.
@@ -43,6 +49,11 @@ interface PurchaseBillItemForDispatch {
   material_type_id: string
   material_size_id: string | null
   size_label: string | null
+  purchase_bill?: {
+    bill_date: string | null
+    bill_number: string | null
+    supplier: { name: string | null } | null
+  } | null
 }
 
 interface JobWorkOutputItemForDispatch {
@@ -166,7 +177,15 @@ function buildAvailablePurchaseLines(
     }
     if (qty > 0) {
       seen.add(item.purchase_line_id ?? `${item.material_type_id}|${item.material_size_id ?? ''}|${item.size_label ?? ''}`)
-      avail.push({ ...item, _key: key, available_quantity: qty, companyQuantities })
+      avail.push({
+        ...item,
+        _key: key,
+        available_quantity: qty,
+        companyQuantities,
+        bill_number: item.purchase_bill?.bill_number ?? null,
+        bill_date: item.purchase_bill?.bill_date ?? null,
+        supplier_name: item.purchase_bill?.supplier?.name ?? null,
+      })
     }
   }
   for (const item of jwoiItems) {
@@ -175,7 +194,17 @@ function buildAvailablePurchaseLines(
     const qty = stockByMaterial[mk] ?? 0
     if (qty > 0) {
       seen.add(mk)
-      avail.push({ ...item, purchase_line_id: null, _key: `ID:${item.id}`, available_quantity: qty, companyQuantities: companyByMaterial[mk] ?? {} })
+      avail.push({
+        ...item,
+        purchase_line_id: null,
+        _key: `ID:${item.id}`,
+        available_quantity: qty,
+        companyQuantities: companyByMaterial[mk] ?? {},
+        // Job-work output, not purchased — there is no bill or supplier.
+        bill_number: null,
+        bill_date: null,
+        supplier_name: null,
+      })
     }
   }
   return avail
@@ -928,25 +957,12 @@ export default function NewDispatchPage() {
                       {/* ── Purchase Line ── */}
                       <td className="pr-2 py-2">
                         <div>
-                          <select
+                          <PurchaseLineComboBox
                             value={line.purchase_line_id}
-                            onChange={(e) => updateLine(i, 'purchase_line_id', e.target.value)}
-                            className={`block w-44 rounded border px-2 py-1.5 text-sm focus:outline-none ${
-                              line.item_master_id && purchaseLinesForRow.length === 0
-                                ? 'border-gray-200 bg-gray-50 text-gray-400'
-                                : 'border-gray-300 focus:border-blue-500'
-                            }`}
-                          >
-                            <option value="">— Select —</option>
-                            {purchaseLinesForRow.map((pl) => (
-                              <option key={pl._key} value={pl._key}>
-                                {pl.purchase_line_id
-                                  ? `${pl.purchase_line_id} (${pl.available_quantity.toFixed(2)})`
-                                  : `[Stock] ${pl.item_name || pl.size_label || 'General'} (${pl.available_quantity.toFixed(2)})`
-                                }
-                              </option>
-                            ))}
-                          </select>
+                            options={purchaseLinesForRow}
+                            onChange={(key) => updateLine(i, 'purchase_line_id', key)}
+                            disabled={!!line.item_master_id && purchaseLinesForRow.length === 0}
+                          />
                           {line.available_quantity ? (
                             <p className="text-[10px] text-green-600 mt-0.5 font-medium inline-flex items-center gap-0.5"><Check className="h-3 w-3" /> {line.available_quantity} avail</p>
                           ) : line.item_master_id && purchaseLinesForRow.length === 0 && !masterDataLoading ? (
