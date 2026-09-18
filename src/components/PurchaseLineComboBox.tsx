@@ -53,8 +53,10 @@ export function PurchaseLineComboBox({
   onChange,
   disabled = false,
   currentFallbackLabel,
-  widthClass = 'w-44',
-  dropdownWidthClass = 'w-72',
+  widthClass = 'w-64',
+  // Wide enough to hold id, bill, date and supplier on one line; capped so it
+  // never runs off a narrow screen.
+  dropdownWidthClass = 'w-[34rem] max-w-[92vw]',
 }: {
   value: string
   options: PurchaseLineChoice[]
@@ -170,11 +172,15 @@ export function PurchaseLineComboBox({
                 idx === highlight ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100'
               }`}
             >
-              <span className="flex items-baseline justify-between gap-2">
-                <span className="font-mono font-medium">{purchaseLineLabel(pl)}</span>
-                <span className="text-green-700 whitespace-nowrap">{pl.available_quantity.toFixed(2)}</span>
+              {/* One line: id · bill · date · supplier, with the quantity
+                  pinned right. Both text parts can truncate (an unlinked
+                  [Stock] row's label is a full item name), but the quantity
+                  never shrinks. */}
+              <span className="flex items-baseline gap-2 whitespace-nowrap">
+                <span className="min-w-0 truncate font-mono font-medium">{purchaseLineLabel(pl)}</span>
+                {sub && <span className="min-w-0 truncate text-gray-500">· {sub}</span>}
+                <span className="ml-auto shrink-0 pl-2 font-medium text-green-700">{pl.available_quantity.toFixed(2)}</span>
               </span>
-              {sub && <span className="block text-gray-500 mt-0.5">{sub}</span>}
             </button>
           )
         })}
