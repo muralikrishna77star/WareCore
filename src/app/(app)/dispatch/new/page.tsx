@@ -7,6 +7,7 @@ import { hasuraFetch } from '@/lib/hasura/fetcher'
 import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import { DropdownPortal } from '@/components/DropdownPortal'
 import { PurchaseLineComboBox } from '@/components/PurchaseLineComboBox'
+import { overAllocationFor, purchaseLineOverAllocationWarnings } from '@/lib/dispatch/purchaseLineAllocation'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
@@ -561,16 +562,21 @@ export default function NewDispatchPage() {
     // decide whether to proceed (e.g. stock not yet entered, or a known
     // manual adjustment).
     if (status === 'active') {
-      const overStockWarnings = validLines
-        .map((l) => {
-          const qty = parseFloat(l.quantity) || 0
-          const avail = l.available_quantity ? parseFloat(l.available_quantity) : null
-          const label = l.item_name || l.size_label || 'this item'
-          if (avail === null) return `${label}: no verified stock on file (dispatching ${qty.toFixed(3)})`
-          if (qty > avail) return `${label}: dispatching ${qty.toFixed(3)} but only ${avail.toFixed(3)} available`
-          return null
-        })
-        .filter((w): w is string => !!w)
+      // Lines with a purchase line picked are totalled per purchase line
+      // first — two rows drawing on the same line each pass a per-row check
+      // while together overdrawing it.
+      const overStockWarnings = [
+        ...purchaseLineOverAllocationWarnings(validLines, availablePurchaseLines),
+        // Rows with nothing picked have no balance to total against; keep
+        // flagging them individually as before.
+        ...validLines
+          .filter((l) => !l.purchase_line_id)
+          .map((l) => {
+            const qty = parseFloat(l.quantity) || 0
+            const label = l.item_name || l.size_label || 'this item'
+            return `${label}: no verified stock on file (dispatching ${qty.toFixed(3)})`
+          }),
+      ]
 
       // Warn (don't block) when a picked line's stock is really recorded
       // under the OTHER company — the two companies here informally share
@@ -1024,9 +1030,24 @@ export default function NewDispatchPage() {
                       </td>
                       {/* ── Qty ── */}
                       <td className="pr-2 py-2">
-                        <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
-                          step="0.001" min="0" placeholder="0.000"
-                          className="block w-24 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+                        {(() => {
+                          // Totalled across every row sharing this purchase
+                          // line, so a split that only overdraws in aggregate
+                          // still shows up on the rows causing it.
+                          const over = overAllocationFor(line.purchase_line_id, lines, availablePurchaseLines)
+                          return (
+                            <>
+                              <input type="number" value={line.quantity} onChange={(e) => updateLine(i, 'quantity', e.target.value)}
+                                step="0.001" min="0" placeholder="0.000"
+                                className={`block w-24 rounded border px-2 py-1.5 text-sm focus:outline-none ${
+                                  over > 0 ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'
+                                }`} />
+                              {over > 0 && (
+                                <p className="text-[10px] text-red-600 mt-0.5">Over by {over.toFixed(3)}</p>
+                              )}
+                            </>
+                          )
+                        })()}
                       </td>
                       {/* ── Rate ── */}
                       <td className="pr-2 py-2">
