@@ -15,7 +15,7 @@
 // This never touches production. Each call creates a fresh data directory
 // under the OS temp dir and deletes it on teardown.
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -80,6 +80,58 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '144_repair_cr1224_intercompany_purchase_lines.sql',
 ])
 
+/** The postmaster's own PID, which Postgres writes as line 1 of postmaster.pid. */
+function readPostmasterPid(dataDir) {
+  try {
+    const lines = readFileSync(join(dataDir, 'postmaster.pid'), 'utf8').split(String.fromCharCode(10))
+    const pid = Number(lines[0].trim())
+    return Number.isInteger(pid) && pid > 0 ? pid : null
+  } catch {
+    return null
+  }
+}
+
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    // EPERM means it exists but isn't ours to signal — still alive.
+    return err?.code === 'EPERM'
+  }
+}
+
+/**
+ * Removes warecore-test-pg-* directories left by earlier runs whose postmaster
+ * is gone. pg.stop() does not reliably reap the postmaster on Windows, and a
+ * run killed with Ctrl+C never calls stop() at all, so these accumulate: one
+ * session reached 70 orphaned postgres processes and 44 directories totalling
+ * 642 MB, which slowed the whole suite by roughly 6x. Directories whose
+ * postmaster is still alive are left strictly alone.
+ */
+function sweepStaleDataDirs(log) {
+  let removed = 0
+  let entries = []
+  try {
+    entries = readdirSync(tmpdir()).filter(n => n.startsWith('warecore-test-pg-'))
+  } catch {
+    return 0
+  }
+  for (const name of entries) {
+    const dir = join(tmpdir(), name)
+    const pid = readPostmasterPid(dir)
+    if (pid && processAlive(pid)) continue
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      removed++
+    } catch {
+      // Held open by something else — leave it for the next sweep.
+    }
+  }
+  if (removed) log(`startTestDb: swept ${removed} stale test data director${removed === 1 ? 'y' : 'ies'}`)
+  return removed
+}
+
 /** Resolves true only if nothing is already bound to this port on loopback. */
 function portIsFree(port) {
   return new Promise((resolve) => {
@@ -120,6 +172,8 @@ export async function startTestDb(opts = {}) {
   const user = 'warecore_test'
   const password = 'warecore_test'
   const database = 'warecore_test'
+
+  sweepStaleDataDirs(log)
 
   // findFreePort() removes the common collision; the retry below still
   // covers the race between probing a port and postgres binding it.
@@ -162,15 +216,38 @@ export async function startTestDb(opts = {}) {
     skipFilenames: skipProductionDataMigrations ? PRODUCTION_DATA_DEPENDENT_MIGRATIONS : undefined,
   })
 
+  // Captured while the cluster is definitely up: pg.stop() removes the file,
+  // so this is the only chance to learn which process to verify is gone.
+  const postmasterPid = readPostmasterPid(dataDir)
+
   return {
     connectionString,
     migrationResult,
     async stop() {
       try {
         await pg.stop()
-      } finally {
-        rmSync(dataDir, { recursive: true, force: true })
+      } catch {
+        // Fall through to the force-kill below rather than leaving it running.
       }
+      // pg.stop() reports success on Windows even when the postmaster is still
+      // alive, which is how these leak. Verify, and terminate it ourselves.
+      if (postmasterPid && processAlive(postmasterPid)) {
+        try {
+          process.kill(postmasterPid, 'SIGKILL')
+        } catch {
+          // Already gone between the check and the signal.
+        }
+      }
+      // Windows can hold the data directory briefly after the process dies.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          rmSync(dataDir, { recursive: true, force: true })
+          return
+        } catch {
+          await new Promise(r => setTimeout(r, 200))
+        }
+      }
+      // Still locked — the next run's sweep will collect it.
     },
   }
 }
