@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { TriangleAlert } from 'lucide-react'
-import { formatDate, getJobWorkOrderStatusLabel } from '@/lib/utils'
+import { formatDate, getJobWorkOrderStatusLabel, getJobWorkCompletionLabel } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
@@ -34,6 +34,7 @@ export type JobWorkOrderRow = {
   expected_return_date: string | null
   actual_return_date: string | null
   status: string
+  completion_via?: string | null
   notes: string | null
   companies: { name: string; code: string } | null
   suppliers: { name: string } | null
@@ -68,7 +69,7 @@ const columns: Column[] = [
     filterValue: (o) => (o.expected_return_date ? formatDate(o.expected_return_date) : ''),
     sortValue: (o) => o.expected_return_date,
   },
-  { key: 'status', label: 'Status', filterValue: (o) => getJobWorkOrderStatusLabel(o.status), sortValue: (o) => o.status },
+  { key: 'status', label: 'Status', filterValue: (o) => `${getJobWorkOrderStatusLabel(o.status)} ${getJobWorkCompletionLabel(o.completion_via)}`, sortValue: (o) => o.status },
   { key: 'notes', label: 'Notes', filterValue: (o) => o.notes || '', sortValue: (o) => o.notes || '' },
 ]
 
@@ -191,6 +192,7 @@ export default function JobWorkTable({
       'Expected Return': o.expected_return_date ? formatDate(o.expected_return_date) : '',
       'Rate': '',
       'Status': getJobWorkOrderStatusLabel(o.status),
+      'Completed Via': getJobWorkCompletionLabel(o.completion_via),
       'Notes': o.notes || '',
     }
   })
@@ -386,6 +388,9 @@ export default function JobWorkTable({
                 <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColors[o.status] || 'bg-gray-100 text-gray-700'}`}>
                   {getJobWorkOrderStatusLabel(o.status)}
                 </span>
+                {o.status === 'completed' && o.completion_via && (
+                  <div className="mt-0.5 text-[11px] text-gray-500 whitespace-nowrap">{getJobWorkCompletionLabel(o.completion_via)}</div>
+                )}
               </td>
               <td className="px-6 py-3 text-gray-600 max-w-xs truncate" title={o.notes || ''}>{o.notes || '—'}</td>
               <td className="px-6 py-3 space-x-3 whitespace-nowrap">

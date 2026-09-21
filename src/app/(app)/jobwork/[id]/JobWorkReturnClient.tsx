@@ -1,12 +1,14 @@
 'use client'
 
 import { ArrowUpRight, TriangleAlert } from 'lucide-react'
-import { getJobWorkOrderStatusLabel } from '@/lib/utils'
+import { getJobWorkOrderStatusLabel, getJobWorkCompletionLabel, formatDate } from '@/lib/utils'
 import { useRecordPreview } from '@/components/RecordPreviewProvider'
 import type { ActivityLineSummary } from '@/lib/jobWorkActivity'
 
 interface JobWorkReturnOrder {
   status: string
+  completion_via?: string | null
+  actual_return_date?: string | null
 }
 
 interface JobWorkReturnItem {
@@ -61,6 +63,12 @@ export default function JobWorkReturnClient({ order, items, outputItems, lineSum
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
           {getJobWorkOrderStatusLabel(order.status)}
         </span>
+        {order.status === 'completed' && order.completion_via && (
+          <span className="text-xs text-gray-600">
+            {getJobWorkCompletionLabel(order.completion_via)}
+            {order.actual_return_date ? ` — closed ${formatDate(order.actual_return_date)}` : ''}
+          </span>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">

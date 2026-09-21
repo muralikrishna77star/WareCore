@@ -80,6 +80,30 @@ export function getJobWorkOrderStatusLabel(status: string) {
   return labels[status] || status
 }
 
+/** How a completed job work order's material left the vendor
+ * (job_work_orders.completion_via, migration 149 — comma-separated codes),
+ * e.g. "Sold directly from vendor" or "Sold directly, returned". */
+export function getJobWorkCompletionLabel(completionVia: string | null | undefined) {
+  if (!completionVia) return ''
+  const codes = completionVia.split(',').filter(Boolean)
+  const single: Record<string, string> = {
+    sold_direct: 'Sold directly from vendor',
+    returned: 'Returned to warehouse',
+    transferred: 'Transferred to another vendor',
+    processed: 'Processed into output',
+  }
+  if (codes.length === 1) return single[codes[0]] ?? codes[0]
+  const short: Record<string, string> = {
+    sold_direct: 'sold directly',
+    returned: 'returned',
+    transferred: 'transferred',
+    processed: 'processed',
+  }
+  const parts = codes.map((c) => short[c] ?? c)
+  const text = parts.join(', ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 // Conversion factors to kilograms, for normalizing weight units across job work items
 const UNIT_TO_KG: Record<string, number> = {
   kg: 1, kgs: 1, kilogram: 1, kilograms: 1,

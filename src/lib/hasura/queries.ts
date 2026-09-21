@@ -1109,7 +1109,7 @@ export const JOB_WORK_ORDERS_DISPATCH_DATE_BOUNDS_QUERY = `
 export const JOB_WORK_ORDERS_QUERY = `
   query GetJobWorkOrders($where: job_work_orders_bool_exp = {}) {
     job_work_orders(where: $where, order_by: {dispatch_date: desc}, limit: 500) {
-      id reference_number dispatch_date expected_return_date actual_return_date status notes created_at
+      id reference_number dispatch_date expected_return_date actual_return_date status completion_via notes created_at
       companies { name code }
       suppliers { name }
       job_work_items {
@@ -1124,7 +1124,7 @@ export const JOB_WORK_ORDERS_QUERY = `
 export const JOB_WORK_ORDER_BY_ID_QUERY = `
   query GetJobWorkOrderById($id: uuid!) {
     job_work_orders_by_pk(id: $id) {
-      id reference_number dispatch_date expected_return_date actual_return_date status notes created_at created_by updated_at updated_by
+      id reference_number dispatch_date expected_return_date actual_return_date status completion_via notes created_at created_by updated_at updated_by
       company_id warehouse_id vendor_id
       companies { name }
       warehouses { name }

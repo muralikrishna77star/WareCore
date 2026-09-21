@@ -20,6 +20,7 @@ interface JobWorkOrderDetail {
   expected_return_date: string | null
   actual_return_date: string | null
   status: string
+  completion_via: string | null
   notes: string | null
   created_at: string
   created_by: string | null
