@@ -30,13 +30,11 @@ const ALWAYS_VENDOR_MOVEMENT_TYPES = new Set([
  * fetchCountedOutputAndCancelIds() for every job work order referenced in
  * the report's dataset.
  *
- * Known limit (migration 142): an Output Materials line recorded as a
- * DIFFERENT item than the input it consumed (source_job_line_id set) is
- * posted under the output item, so it never appears among the input item's
- * own rows and this check can't see it. The DB view attributes such rows
- * back to the input line; anything that must match the "At Vendor" card
- * exactly (the Item Stock Ledger report, the reconcile-items API) reads
- * that view instead of using this helper. */
+ * Cross-item output (migration 142): an Output Materials line recorded as
+ * a DIFFERENT item than the input it consumed (source_job_line_id set) is
+ * posted under the output item, so this check can't see it among the input
+ * item's own rows. Reports fold those in separately via
+ * fetchCrossItemVendorRows() (src/lib/vendorMovementRows.ts). */
 export function isVendorMovementRow(
   entryType: string,
   ledgerId: string,

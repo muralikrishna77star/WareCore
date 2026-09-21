@@ -20,7 +20,7 @@ import {
   USER_PROFILES_QUERY,
 } from '@/lib/hasura/queries'
 import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow } from '@/lib/stockLedger'
-import { fetchCountedOutputAndCancelIds } from '@/lib/vendorMovementRows'
+import { fetchCountedOutputAndCancelIds, fetchCrossItemVendorRows } from '@/lib/vendorMovementRows'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { StockStatementExportButton } from './StockStatementExportButton'
@@ -52,6 +52,10 @@ type LedgerRow = {
   purchase_line_id?: string | null
   sub_purchase_line_id?: string | null
   created_by?: string | null
+  /** Set on a vendor-only row folded in from vw_job_work_vendor_movements:
+   * processed output of a different item, counted against this (input)
+   * item's vendor stock. Its vendor delta; it never moves warehouse stock. */
+  crossItemVendorDelta?: number
 }
 
 // entry_type → human label + INWARD/OUTWARD/TRANSFER/ADJUSTMENT classification
@@ -220,14 +224,16 @@ export default async function StockStatementPage({
   // purchase bill / job work order IDs it appears on, same approach as the
   // Stock Movements ledger and Movements Report pages.
   let noResults = false
+  let vendorJobWorkOrderIds: string[] | undefined
   if (params.vendor) {
     const [billIdsResult, jobOrderIdsResult] = await Promise.all([
       hasuraQuery(PURCHASE_BILL_IDS_QUERY, { where: { supplier_id: { _eq: params.vendor } } }),
       hasuraQuery(JOB_WORK_ORDER_IDS_QUERY, { where: { vendor_id: { _eq: params.vendor } } }),
     ])
+    vendorJobWorkOrderIds = (jobOrderIdsResult.job_work_orders ?? []).map((o: { id: string }) => o.id)
     const refIds = [
       ...(billIdsResult.purchase_bills ?? []).map((b: { id: string }) => b.id),
-      ...(jobOrderIdsResult.job_work_orders ?? []).map((o: { id: string }) => o.id),
+      ...(vendorJobWorkOrderIds ?? []),
     ]
     if (refIds.length === 0) {
       noResults = true
@@ -278,6 +284,53 @@ export default async function StockStatementPage({
   const openingRows: LedgerRow[] = result.opening ?? []
   const periodRows: LedgerRow[] = result.period ?? []
 
+  // Processed output of a different item that vw_job_work_vendor_movements
+  // (142) counts against an input item in scope — e.g. 0.85X995 slit into
+  // 0.90X121 reduces 0.85X995's stock at the vendor. Such rows are posted
+  // under the output item, so they're folded in here as vendor-only rows on
+  // the input item, borrowing a real row of that item for its labels.
+  if (!noResults) {
+    const crossRows = await fetchCrossItemVendorRows({
+      toDate,
+      companyId: params.company || null,
+      warehouseId: params.warehouse || null,
+      materialTypeId: selectedItem ? selectedItem.material_type_id : params.material_type || null,
+      materialSizeId: selectedItem ? (selectedItem.material_size_id ?? undefined) : params.size || undefined,
+      jobWorkOrderIds: vendorJobWorkOrderIds,
+    })
+    const allRows = [...openingRows, ...periodRows]
+    for (const cross of crossRows) {
+      const sameItem = allRows.filter(
+        (r) => r.material_type_id === cross.materialTypeId && (r.material_size_id ?? null) === cross.materialSizeId
+      )
+      const template = sameItem.find((r) => r.warehouse_id === cross.warehouseId) ?? sameItem[0]
+      if (!template) continue
+      const row: LedgerRow = {
+        ...template,
+        id: cross.id,
+        entry_type: cross.entryType,
+        quantity: cross.quantity,
+        entry_date: cross.entryDate,
+        created_at: cross.createdAt,
+        reference_type: 'job_work',
+        reference_id: cross.jobWorkOrderId,
+        reference_number: cross.referenceNumber,
+        notes: `Processed at the vendor into ${cross.outputLabel} — reduces this item's stock at the vendor`,
+        purchase_line_id: null,
+        sub_purchase_line_id: null,
+        created_by: null,
+        crossItemVendorDelta: cross.vendorDelta,
+      }
+      if (cross.entryDate < fromDate) openingRows.push(row)
+      else periodRows.push(row)
+    }
+    if (crossRows.length > 0) {
+      periodRows.sort((a, b) =>
+        a.entry_date !== b.entry_date ? (a.entry_date < b.entry_date ? -1 : 1) : a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0
+      )
+    }
+  }
+
   // Vendor names for the "Stock by Vendor" breakdown — job-work movements
   // reference a job_work_orders.id, which carries the vendor. Batched once
   // per distinct order id (same technique as the Item Stock Ledger report),
@@ -306,7 +359,8 @@ export default async function StockStatementPage({
       .filter((r) => r.reference_type === 'job_work' && r.reference_id && (r.entry_type === 'JOB_WORK_OUTPUT_IN' || r.entry_type === 'JOB_WORK_CANCEL'))
       .map((r) => r.reference_id as string)
   )
-  const isVendorMovement = (row: LedgerRow) => isVendorMovementRow(row.entry_type, row.id, countedOutputAndCancelIds)
+  const isVendorMovement = (row: LedgerRow) =>
+    row.crossItemVendorDelta !== undefined || isVendorMovementRow(row.entry_type, row.id, countedOutputAndCancelIds)
 
   // Customer names for the Transaction Details extract — SALE_OUT/SALE_CANCEL
   // reference a dispatch_orders.id, which carries the customer.
@@ -425,7 +479,9 @@ export default async function StockStatementPage({
   // — TRANSFER_OUT (negative) on the losing vendor, TRANSFER_IN (positive)
   // on the gaining vendor — so the vendor side is qty as-is, not inverted.
   const vendorDeltaFor = (row: LedgerRow, qty: number): number =>
-    row.entry_type === 'JOB_WORK_TRANSFER_OUT' || row.entry_type === 'JOB_WORK_TRANSFER_IN' ? qty : -qty
+    row.crossItemVendorDelta !== undefined
+      ? row.crossItemVendorDelta
+      : row.entry_type === 'JOB_WORK_TRANSFER_OUT' || row.entry_type === 'JOB_WORK_TRANSFER_IN' ? qty : -qty
 
   // Opening balance: unconditional sum of everything before From Date (true
   // running balance regardless of type), plus the same for the Vendor side
@@ -434,9 +490,11 @@ export default async function StockStatementPage({
   for (const row of openingRows) {
     const item = ensureItem(row)
     const qty = Number(row.quantity)
-    item.openingWarehouse += qty
-    const whName = row.warehouses?.name ?? 'Unknown Warehouse'
-    item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
+    if (row.crossItemVendorDelta === undefined) {
+      item.openingWarehouse += qty
+      const whName = row.warehouses?.name ?? 'Unknown Warehouse'
+      item.warehouseBreakdown.set(whName, (item.warehouseBreakdown.get(whName) ?? 0) + qty)
+    }
     if (isVendorMovement(row)) {
       const vendorDelta = vendorDeltaFor(row, qty)
       item.openingVendor += vendorDelta
@@ -452,6 +510,14 @@ export default async function StockStatementPage({
   for (const row of periodRows) {
     const item = ensureItem(row)
     const qty = Number(row.quantity)
+
+    if (row.crossItemVendorDelta !== undefined) {
+      const vendorDelta = vendorDeltaFor(row, qty)
+      item.closingVendor += vendorDelta
+      const vendorName = vendorNameFor(row)
+      item.vendorBreakdown.set(vendorName, (item.vendorBreakdown.get(vendorName) ?? 0) + vendorDelta)
+      continue
+    }
 
     // A same-material JOB_WORK_OUTPUT_IN is the vendor-return leg, same
     // bucket as JOB_WORK_RETURN_IN — a genuinely converted output (not a
@@ -561,8 +627,11 @@ export default async function StockStatementPage({
 
     for (const row of periodRowsByKey[displayKey] ?? []) {
       const rawQty = Number(row.quantity)
-      const info = ENTRY_TYPE_INFO[row.entry_type] ?? { label: row.entry_type, movement: rawQty >= 0 ? 'INWARD' as const : 'OUTWARD' as const }
-      const warehouseChange = rawQty
+      const info = row.crossItemVendorDelta !== undefined
+        ? { label: 'Processed at Vendor into Another Item', movement: 'ADJUSTMENT' as const }
+        : ENTRY_TYPE_INFO[row.entry_type] ?? { label: row.entry_type, movement: rawQty >= 0 ? 'INWARD' as const : 'OUTWARD' as const }
+      const isCrossItem = row.crossItemVendorDelta !== undefined
+      const warehouseChange = isCrossItem ? 0 : rawQty
       const vendorChange = isVendorMovement(row) ? vendorDeltaFor(row, rawQty) : 0
       runningWarehouse += warehouseChange
       runningVendor += vendorChange
@@ -595,8 +664,8 @@ export default async function StockStatementPage({
         itemName: item.item_name,
         size: item.size,
         unit: item.unit,
-        inwardQty: rawQty > 0 ? rawQty : 0,
-        outwardQty: rawQty < 0 ? -rawQty : 0,
+        inwardQty: !isCrossItem && rawQty > 0 ? rawQty : 0,
+        outwardQty: !isCrossItem && rawQty < 0 ? -rawQty : 0,
         warehouseChange,
         vendorChange,
         warehouseBalance: runningWarehouse,

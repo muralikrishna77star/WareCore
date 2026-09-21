@@ -13,7 +13,7 @@ import {
   VENDOR_MOVEMENT_PURCHASE_RATES_QUERY,
 } from '@/lib/hasura/queries'
 import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow } from '@/lib/stockLedger'
-import { fetchCountedOutputAndCancelIds } from '@/lib/vendorMovementRows'
+import { fetchCountedOutputAndCancelIds, fetchCrossItemVendorRows } from '@/lib/vendorMovementRows'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
@@ -333,7 +333,51 @@ export default async function VendorMovementsPage({
       .filter((r) => r.reference_id && (r.entry_type === 'JOB_WORK_OUTPUT_IN' || r.entry_type === 'JOB_WORK_CANCEL'))
       .map((r) => r.reference_id as string)
   )
-  const isCountedVendorRow = (m: VendorLedgerRow) => isVendorMovementRow(m.entry_type, m.id, countedOutputAndCancelIds)
+
+  // Processed output of a different item that vw_job_work_vendor_movements
+  // (142) counts against an input item in scope — posted under the output
+  // item, so folded in here as a counted OUTPUT_IN on the INPUT item (raw
+  // quantity = −vendor delta, the same sign convention as a same-material
+  // return) and reported under Returns with its own note.
+  const crossRows = await fetchCrossItemVendorRows({
+    toDate,
+    companyId: params.company || null,
+    materialTypeId: selectedItem?.material_type_id ?? null,
+    materialSizeId: selectedItem ? (selectedItem.material_size_id ?? undefined) : undefined,
+  })
+  const crossItemIds = new Set<string>()
+  for (const cross of crossRows) {
+    const template = [...cumulativeJobWork, ...periodJobWork].find(
+      (m) => m.material_type_id === cross.materialTypeId && (m.material_size_id ?? null) === cross.materialSizeId
+    )
+    const master = itemRows.find(
+      (i) => i.material_type_id === cross.materialTypeId && (i.material_size_id ?? null) === cross.materialSizeId
+    )
+    const row: VendorLedgerRow = {
+      id: cross.id,
+      entry_type: 'JOB_WORK_OUTPUT_IN',
+      quantity: -cross.vendorDelta,
+      entry_date: cross.entryDate,
+      created_at: cross.createdAt,
+      reference_id: cross.jobWorkOrderId,
+      reference_number: cross.referenceNumber,
+      notes: `Processed at the vendor into ${cross.outputLabel}`,
+      company_id: cross.companyId,
+      material_type_id: cross.materialTypeId,
+      material_size_id: cross.materialSizeId,
+      purchase_line_id: null,
+      sub_purchase_line_id: null,
+      companies: template?.companies ?? null,
+      material_types: template?.material_types ?? { description: master?.item_name ?? null },
+      material_sizes: template?.material_sizes ?? master?.material_sizes ?? null,
+    }
+    crossItemIds.add(cross.id)
+    cumulativeJobWork.push(row)
+    if (cross.entryDate >= fromDate) periodJobWork.push(row)
+  }
+
+  const isCountedVendorRow = (m: VendorLedgerRow) =>
+    crossItemIds.has(m.id) || isVendorMovementRow(m.entry_type, m.id, countedOutputAndCancelIds)
 
   // Counterparty vendor lookup for a JOB_WORK_TRANSFER_OUT/IN ledger row —
   // the ledger row only carries one side of the movement (the order it's
@@ -484,6 +528,7 @@ export default async function VendorMovementsPage({
   // within the period shows as one rolled-up Return, not a double-counted
   // pair.
   const periodOutputCorrectionByKey = new Map<string, { qty: number; date: string }>()
+  const periodProcessedByKey = new Map<string, { qty: number; date: string; notes: string[] }>()
   for (const m of periodJobWork) {
     const info = m.reference_id ? jwoInfoById.get(m.reference_id) : undefined
     if (!info) continue
@@ -511,14 +556,34 @@ export default async function VendorMovementsPage({
         purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
     } else {
-      // JOB_WORK_CANCEL or a same-material JOB_WORK_OUTPUT_IN.
+      // JOB_WORK_CANCEL, a same-material JOB_WORK_OUTPUT_IN, or processed
+      // output of another item folded in above.
       ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
       const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
+      if (crossItemIds.has(m.id)) {
+        const processed = periodProcessedByKey.get(key) ?? { qty: 0, date: m.entry_date, notes: [] }
+        processed.qty += Number(m.quantity)
+        if (m.entry_date > processed.date) processed.date = m.entry_date
+        if (m.notes && !processed.notes.includes(m.notes)) processed.notes.push(m.notes)
+        periodProcessedByKey.set(key, processed)
+        continue
+      }
       const running = periodOutputCorrectionByKey.get(key) ?? { qty: 0, date: m.entry_date }
       running.qty += Number(m.quantity)
       if (m.entry_date > running.date) running.date = m.entry_date
       periodOutputCorrectionByKey.set(key, running)
     }
+  }
+  for (const [key, { qty, date, notes }] of periodProcessedByKey) {
+    if (Math.abs(qty) <= 0.0005) continue
+    periodReturnInByKey.set(key, (periodReturnInByKey.get(key) ?? 0) + qty)
+    const g = Array.from(groups.values()).find((row) => row.key === key)
+    g?.transactions.push({
+      id: `processed-${key}`, date, type: 'Return',
+      quantity: qty, reference_number: null,
+      notes: `${notes.join('; ')} (counted as returned from this vendor)`,
+      purchaseDate: null, rate: null,
+    })
   }
   for (const [key, { qty, date }] of periodOutputCorrectionByKey) {
     if (qty <= 0.0005) continue
