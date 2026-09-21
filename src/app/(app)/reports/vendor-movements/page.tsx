@@ -345,7 +345,10 @@ export default async function VendorMovementsPage({
     materialTypeId: selectedItem?.material_type_id ?? null,
     materialSizeId: selectedItem ? (selectedItem.material_size_id ?? undefined) : undefined,
   })
-  const crossItemIds = new Set<string>()
+  // Tracked by object, not id: the folded-in row reuses the ledger id of the
+  // real row posted under the output item, which is also in this dataset and
+  // must stay uncounted there.
+  const crossItemRows = new Set<VendorLedgerRow>()
   for (const cross of crossRows) {
     const template = [...cumulativeJobWork, ...periodJobWork].find(
       (m) => m.material_type_id === cross.materialTypeId && (m.material_size_id ?? null) === cross.materialSizeId
@@ -371,13 +374,13 @@ export default async function VendorMovementsPage({
       material_types: template?.material_types ?? { description: master?.item_name ?? null },
       material_sizes: template?.material_sizes ?? master?.material_sizes ?? null,
     }
-    crossItemIds.add(cross.id)
+    crossItemRows.add(row)
     cumulativeJobWork.push(row)
     if (cross.entryDate >= fromDate) periodJobWork.push(row)
   }
 
   const isCountedVendorRow = (m: VendorLedgerRow) =>
-    crossItemIds.has(m.id) || isVendorMovementRow(m.entry_type, m.id, countedOutputAndCancelIds)
+    crossItemRows.has(m) || isVendorMovementRow(m.entry_type, m.id, countedOutputAndCancelIds)
 
   // Counterparty vendor lookup for a JOB_WORK_TRANSFER_OUT/IN ledger row —
   // the ledger row only carries one side of the movement (the order it's
@@ -560,7 +563,7 @@ export default async function VendorMovementsPage({
       // output of another item folded in above.
       ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
       const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
-      if (crossItemIds.has(m.id)) {
+      if (crossItemRows.has(m)) {
         const processed = periodProcessedByKey.get(key) ?? { qty: 0, date: m.entry_date, notes: [] }
         processed.qty += Number(m.quantity)
         if (m.entry_date > processed.date) processed.date = m.entry_date
