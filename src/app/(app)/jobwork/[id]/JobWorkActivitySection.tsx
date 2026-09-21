@@ -1,5 +1,9 @@
+'use client'
+
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
+import { useTableSort } from '@/lib/useTableSort'
+import { SortableTh } from '@/components/table/SortableTh'
 import type { ActivityEvent, ActivityKind, ActivityLineSummary } from '@/lib/jobWorkActivity'
 
 const KIND_BADGE: Record<ActivityKind, { label: string; className: string }> = {
@@ -37,6 +41,18 @@ export default function JobWorkActivitySection({
     { sent: 0, returned: 0, soldDirect: 0, transferredOut: 0, atVendor: 0 }
   )
   const missingCount = Object.values(lines).filter((l) => l.missingLedger).length
+
+  // Events arrive oldest first; useTableSort is stable, so an ascending Item
+  // sort lists each item's history oldest first (descending reverses the
+  // whole list, newest first). A third click restores the original order.
+  const itemLabelFor = (e: ActivityEvent) => {
+    const label = e.itemId ? itemLabels[e.itemId] : null
+    return label ? `${label.item} ${label.purchaseLine ?? ''}` : e.materialLabel ?? null
+  }
+  const { sortedRows, sortKey, sortDir, toggleSort } = useTableSort(events, {
+    date: (e) => e.date,
+    item: itemLabelFor,
+  })
 
   const cards = [
     { label: 'Sent to Vendor', value: totals.sent, className: 'text-blue-700' },
@@ -80,15 +96,15 @@ export default function JobWorkActivitySection({
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-4 !py-3" />
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">What Happened</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <SortableTh label="Item" sortKey="item" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-4 !py-3" />
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Line Still at Vendor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {events.map((e) => {
+              {sortedRows.map((e) => {
                 const badge = KIND_BADGE[e.kind]
                 const label = e.itemId ? itemLabels[e.itemId] : null
                 return (
