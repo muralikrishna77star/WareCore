@@ -14,13 +14,13 @@ import {
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
-  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
   DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY,
   TRANSFERS_WAREHOUSE_LOOKUP_QUERY,
   AVERAGE_PURCHASE_RATES_QUERY,
   USER_PROFILES_QUERY,
 } from '@/lib/hasura/queries'
-import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
+import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow } from '@/lib/stockLedger'
+import { fetchCountedOutputAndCancelIds } from '@/lib/vendorMovementRows'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { StockStatementExportButton } from './StockStatementExportButton'
@@ -298,27 +298,15 @@ export default async function StockStatementPage({
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? 'Unknown Vendor']))
   }
 
-  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement when its
-  // order's Output Materials line matches one of that order's own INPUT
-  // lines' material — no real conversion happened, so it's really the
-  // vendor-return leg. Single authoritative check shared with the Item
+  // Which JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL rows are vendor movements
+  // comes from vw_job_work_vendor_movements — the same rules as the Item
   // Stock Ledger report (isVendorMovementRow, src/lib/stockLedger.ts).
-  const outputOrderIds = Array.from(
-    new Set(
-      [...openingRows, ...periodRows]
-        .filter((r) => r.entry_type === 'JOB_WORK_OUTPUT_IN' && r.reference_id)
-        .map((r) => r.reference_id as string)
-    )
+  const countedOutputAndCancelIds = await fetchCountedOutputAndCancelIds(
+    [...openingRows, ...periodRows]
+      .filter((r) => r.reference_type === 'job_work' && r.reference_id && (r.entry_type === 'JOB_WORK_OUTPUT_IN' || r.entry_type === 'JOB_WORK_CANCEL'))
+      .map((r) => r.reference_id as string)
   )
-  const sameMaterialOutputKeys = new Set<string>()
-  if (outputOrderIds.length > 0) {
-    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
-    const rows: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
-      matchingInputResult.job_work_items ?? []
-    for (const r of rows) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
-  }
-  const isVendorMovement = (row: LedgerRow) =>
-    isVendorMovementRow(row.entry_type, row.reference_id, row.material_type_id, row.material_size_id, sameMaterialOutputKeys)
+  const isVendorMovement = (row: LedgerRow) => isVendorMovementRow(row.entry_type, row.id, countedOutputAndCancelIds)
 
   // Customer names for the Transaction Details extract — SALE_OUT/SALE_CANCEL
   // reference a dispatch_orders.id, which carries the customer.

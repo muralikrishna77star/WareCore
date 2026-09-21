@@ -16,7 +16,6 @@ import {
   DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY,
   PURCHASE_BILL_IDS_QUERY,
   JOB_WORK_ORDER_IDS_QUERY,
-  JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY,
 } from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { PrintButton } from '@/components/PrintButton'
@@ -27,7 +26,8 @@ import { resolveStatementPeriod, yearOptionsFrom } from '@/lib/dateRange'
 import DaywiseStockStatementTable, { type DayGroup, type Transaction } from './DaywiseStockStatementTable'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow, vendorOutputOrderKey } from '@/lib/stockLedger'
+import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow } from '@/lib/stockLedger'
+import { fetchCountedOutputAndCancelIds } from '@/lib/vendorMovementRows'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 
 // Stock Movement classification for the Transaction Details export — same
@@ -257,45 +257,48 @@ export default async function DaywiseStockStatementPage({
     _and: [...scopeConditions, { entry_date: { _lt: fromDate } }, { entry_type: { _in: VENDOR_MOVEMENT_TYPES } }],
   }
 
-  const [result, openingWhResult, openingVendorResult] = noResults
-    ? [{ stock_ledger: [] }, { stock_ledger_aggregate: { aggregate: { sum: { quantity: 0 } } } }, { stock_ledger_aggregate: { aggregate: { sum: { quantity: 0 } } } }]
+  // OUTPUT_IN / CANCEL rows before From Date: the raw vendor aggregate above
+  // counts every CANCEL and no OUTPUT_IN, so these are re-checked against
+  // vw_job_work_vendor_movements below to correct the opening balance.
+  const openingOutputCancelWhere = {
+    _and: [...scopeConditions, { entry_date: { _lt: fromDate } }, { entry_type: { _in: ['JOB_WORK_OUTPUT_IN', 'JOB_WORK_CANCEL'] } }],
+  }
+
+  const [result, openingWhResult, openingVendorResult, openingOutputCancelResult] = noResults
+    ? [{ stock_ledger: [] }, { stock_ledger_aggregate: { aggregate: { sum: { quantity: 0 } } } }, { stock_ledger_aggregate: { aggregate: { sum: { quantity: 0 } } } }, { stock_ledger: [] }]
     : await Promise.all([
         hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: periodWhere }),
         hasuraQuery(STOCK_LEDGER_OPENING_BALANCE_QUERY, { where: openingWarehouseWhere }),
         hasuraQuery(STOCK_LEDGER_OPENING_BALANCE_QUERY, { where: openingVendorWhere }),
+        hasuraQuery(MOVEMENTS_REPORT_QUERY, { where: openingOutputCancelWhere }),
       ])
 
   // Query already orders by entry_date asc, created_at asc — grouping below
   // preserves that order within and across days.
   const movements = (result.stock_ledger ?? []) as StockLedgerMovement[]
 
-  // A JOB_WORK_OUTPUT_IN row only counts as a vendor movement when its
-  // order's Output Materials line matches one of that order's own INPUT
-  // lines' material — no real conversion happened, so it's really the
-  // vendor-return leg. Single authoritative check shared with Item Stock
-  // Ledger / Stock Statement (isVendorMovementRow, src/lib/stockLedger.ts).
-  // Note: openingVendorBalance below is NOT corrected by this — it's a raw
-  // DB aggregate over VENDOR_MOVEMENT_TYPES only, same limitation this
-  // figure already had when no single item is selected (summing across
-  // materials/units isn't meaningful there either).
-  const outputOrderIds = Array.from(
-    new Set(movements.filter((m) => m.entry_type === 'JOB_WORK_OUTPUT_IN' && m.reference_id).map((m) => m.reference_id as string))
+  // Which JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL rows are vendor movements
+  // comes from vw_job_work_vendor_movements — the same rules as the Item
+  // Stock Ledger / Stock Statement (isVendorMovementRow, src/lib/stockLedger.ts).
+  const openingOutputCancelRows = (openingOutputCancelResult.stock_ledger ?? []) as StockLedgerMovement[]
+  const countedOutputAndCancelIds = await fetchCountedOutputAndCancelIds(
+    [...movements, ...openingOutputCancelRows]
+      .filter((m) => m.reference_id && (m.entry_type === 'JOB_WORK_OUTPUT_IN' || m.entry_type === 'JOB_WORK_CANCEL'))
+      .map((m) => m.reference_id as string)
   )
-  const sameMaterialOutputKeys = new Set<string>()
-  if (outputOrderIds.length > 0) {
-    const matchingInputResult = await hasuraQuery(JOB_WORK_ORDERS_INPUT_MATERIALS_QUERY, { ids: outputOrderIds })
-    const rows: { job_work_order_id: string; material_type_id: string; material_size_id: string | null }[] =
-      matchingInputResult.job_work_items ?? []
-    for (const r of rows) sameMaterialOutputKeys.add(vendorOutputOrderKey(r.job_work_order_id, r.material_type_id, r.material_size_id))
-  }
-  const isVendorMovementMovement = (m: StockLedgerMovement) =>
-    isVendorMovementRow(m.entry_type, m.reference_id, m.material_type_id, m.material_size_id, sameMaterialOutputKeys)
+  const isVendorMovementMovement = (m: StockLedgerMovement) => isVendorMovementRow(m.entry_type, m.id, countedOutputAndCancelIds)
 
   const openingWarehouseBalance = Number(openingWhResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
   // Vendor balance rises when warehouse-side quantity falls (JOB_WORK_OUT is
   // negative), so it's accumulated as the negation — same convention as the
   // Item Stock Ledger report's vendorOpeningBalance.
-  const openingVendorBalance = -Number(openingVendorResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
+  let openingVendorBalance = -Number(openingVendorResult.stock_ledger_aggregate?.aggregate?.sum?.quantity ?? 0)
+  for (const m of openingOutputCancelRows) {
+    const qty = Number(m.quantity)
+    const counted = isVendorMovementMovement(m)
+    if (m.entry_type === 'JOB_WORK_CANCEL' && !counted) openingVendorBalance += qty // undo the aggregate's −qty
+    else if (m.entry_type === 'JOB_WORK_OUTPUT_IN' && counted) openingVendorBalance -= qty
+  }
 
   const movementRateMap = await fetchPurchaseLineRateMap(movements.map((m) => m.purchase_line_id))
 

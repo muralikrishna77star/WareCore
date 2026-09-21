@@ -6,10 +6,10 @@
 // back into the single thing the user actually did, and attributes each one
 // to the order's input line it belongs to so the per-line breakdown (sent /
 // returned / sold direct / transferred / still at vendor) follows the Stock
-// Statement's vendor balance: same row inclusion (isVendorMovementRow) and
-// same vendor-side sign convention. One deliberate exception: a
-// JOB_WORK_CANCEL reversing a different-material output entry is not
-// counted as vendor stock here (isVendorMovementRow counts every CANCEL).
+// Statement's vendor balance: same vendor-side sign convention, and the same
+// row inclusion as vw_job_work_vendor_movements — a same-material
+// JOB_WORK_OUTPUT_IN is a return, and a JOB_WORK_CANCEL reversing a
+// different-material output entry is not vendor stock.
 
 export interface ActivityLedgerRow {
   id: string
