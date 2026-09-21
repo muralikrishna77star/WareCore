@@ -58,14 +58,14 @@ export default function JobWorkReturnClient({ order, items, outputItems, lineSum
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
           {getJobWorkOrderStatusLabel(order.status)}
         </span>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Input Materials <span className="text-sm font-normal text-gray-500">(Consumed)</span></h2>
+        <div className="px-3 py-2 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900">Input Materials <span className="text-xs font-normal text-gray-500">(Consumed)</span></h2>
           <p className="text-xs text-gray-400 mt-0.5">
             Where each line&apos;s material went. Still at Vendor = Sent Out − Returned − Sold Direct − Transferred Out
             {hasOutputs ? ' (material converted into Output Materials stays counted here, same as the Stock Statement)' : ''}.
@@ -75,18 +75,18 @@ export default function JobWorkReturnClient({ order, items, outputItems, lineSum
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sold Direct</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Transferred Out</th>
-                {hasOutputs && <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Output Produced</th>}
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Still at Vendor</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line ID</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sold Direct</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Transferred Out</th>
+                {hasOutputs && <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Output Produced</th>}
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Still at Vendor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -94,19 +94,19 @@ export default function JobWorkReturnClient({ order, items, outputItems, lineSum
                 const line = lineSummaries[item.id]
                 return (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-blue-700">
+                  <td className="px-3 py-2 text-xs text-gray-500">{idx + 1}</td>
+                  <td className="px-3 py-2 text-xs font-mono text-blue-700">
                     {item.purchase_line_id ?? <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-6 py-4 text-sm font-mono text-indigo-700">
+                  <td className="px-3 py-2 text-xs font-mono text-indigo-700">
                     {item.job_line_id ?? <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  <td className="px-3 py-2 text-xs font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                  <td className="px-3 py-2 text-xs font-medium text-gray-900">
                     {item.item_name ?? item.material_types?.description ?? '—'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                  <td className="px-3 py-2 text-xs text-gray-600">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
+                  <td className="px-3 py-2 text-xs text-gray-900 text-right">
                     {item.quantity_sent?.toFixed(3)} <span className="text-xs text-gray-400">{item.unit ?? 'MT'}</span>
                     {Number(item.quantity_transferred_out) > 0 && (
                       <button
@@ -119,15 +119,15 @@ export default function JobWorkReturnClient({ order, items, outputItems, lineSum
                       </button>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-right text-emerald-700">{line && line.returned > 0.0005 ? fmt(line.returned) : <span className="text-gray-300">—</span>}</td>
-                  <td className="px-6 py-4 text-sm text-right text-amber-700">{line && line.soldDirect > 0.0005 ? fmt(line.soldDirect) : <span className="text-gray-300">—</span>}</td>
-                  <td className="px-6 py-4 text-sm text-right text-purple-700">{line && line.transferredOut > 0.0005 ? fmt(line.transferredOut) : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-3 py-2 text-xs text-right text-emerald-700">{line && line.returned > 0.0005 ? fmt(line.returned) : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-3 py-2 text-xs text-right text-amber-700">{line && line.soldDirect > 0.0005 ? fmt(line.soldDirect) : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-3 py-2 text-xs text-right text-purple-700">{line && line.transferredOut > 0.0005 ? fmt(line.transferredOut) : <span className="text-gray-300">—</span>}</td>
                   {hasOutputs && (
-                    <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                    <td className="px-3 py-2 text-xs text-gray-900 text-right">
                       {item.job_line_id ? getReturnedQuantity(item.job_line_id).toFixed(3) : '—'}
                     </td>
                   )}
-                  <td className={`px-6 py-4 text-sm font-semibold text-right ${line && line.atVendor < -0.0005 ? 'text-red-600' : 'text-gray-900'}`}>
+                  <td className={`px-3 py-2 text-xs font-semibold text-right ${line && line.atVendor < -0.0005 ? 'text-red-600' : 'text-gray-900'}`}>
                     {line?.missingLedger ? (
                       <span className="inline-flex items-center gap-1 text-red-600" title="This line has no stock ledger entries, so stock reports don't count it. Report it for a data check.">
                         <TriangleAlert className="h-3.5 w-3.5" /> No ledger entry

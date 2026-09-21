@@ -63,9 +63,9 @@ export default function JobWorkActivitySection({
   ]
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-6">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="text-lg font-semibold text-gray-900">Activity</h2>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-4">
+      <div className="px-3 py-2 border-b border-gray-100">
+        <h2 className="text-base font-semibold text-gray-900">Activity</h2>
         <p className="text-xs text-gray-400 mt-0.5">
           Everything that has happened to this order&apos;s material, oldest first. A direct sale is shown here as one event;
           Purchase Line Movements and the Item Ledger show it as two rows — a &ldquo;Job Work Return In — Vendor direct sale —
@@ -75,32 +75,32 @@ export default function JobWorkActivitySection({
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-px bg-gray-100 border-b border-gray-100">
         {cards.map((c) => (
-          <div key={c.label} className="bg-white px-4 py-3">
+          <div key={c.label} className="bg-white px-3 py-2">
             <p className="text-xs text-gray-500">{c.label}</p>
-            <p className={`text-lg font-semibold font-mono ${c.className}`}>{fmt(c.value)}</p>
+            <p className={`text-base font-semibold font-mono ${c.className}`}>{fmt(c.value)}</p>
           </div>
         ))}
       </div>
 
       {missingCount > 0 && (
-        <div className="px-6 py-3 text-sm text-red-700 bg-red-50 border-b border-red-100">
+        <div className="px-3 py-2 text-xs text-red-700 bg-red-50 border-b border-red-100">
           {missingCount === 1 ? '1 line has' : `${missingCount} lines have`} no stock ledger entries, so stock reports don&apos;t
           count {missingCount === 1 ? 'it' : 'them'} and the totals above leave {missingCount === 1 ? 'it' : 'them'} out. Please report this for a data check.
         </div>
       )}
 
       {events.length === 0 ? (
-        <p className="px-6 py-6 text-sm text-gray-400">No stock movements recorded for this order.</p>
+        <p className="px-6 py-6 text-xs text-gray-400">No stock movements recorded for this order.</p>
       ) : (
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-4 !py-3" />
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">What Happened</th>
-                <SortableTh label="Item" sortKey="item" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-4 !py-3" />
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Line Still at Vendor</th>
+                <SortableTh label="Date" sortKey="date" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-3 !py-2" />
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">What Happened</th>
+                <SortableTh label="Item" sortKey="item" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-3 !py-2" />
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Line Still at Vendor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -109,8 +109,8 @@ export default function JobWorkActivitySection({
                 const label = e.itemId ? itemLabels[e.itemId] : null
                 return (
                   <tr key={e.id} className="hover:bg-gray-50 align-top">
-                    <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(e.date)}</td>
-                    <td className="px-4 py-3 text-sm">
+                    <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">{formatDate(e.date)}</td>
+                    <td className="px-3 py-2 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`inline-flex px-2 py-0.5 rounded border text-xs font-medium ${badge.className}`}>{badge.label}</span>
                         <span className="font-medium text-gray-900">{e.title}</span>
@@ -122,7 +122,7 @@ export default function JobWorkActivitySection({
                       </div>
                       {e.detail && <p className="text-xs text-gray-500 mt-1">{e.detail}</p>}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
+                    <td className="px-3 py-2 text-xs text-gray-700">
                       {label ? (
                         <>
                           {label.item}
@@ -132,7 +132,7 @@ export default function JobWorkActivitySection({
                         e.materialLabel ?? <span className="text-gray-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-right font-mono whitespace-nowrap">
+                    <td className="px-3 py-2 text-xs text-right font-mono whitespace-nowrap">
                       {e.kind === 'output_received' || e.kind === 'output_corrected' ? (
                         <span className="text-indigo-700">{fmt(e.quantity)}</span>
                       ) : (
@@ -141,7 +141,7 @@ export default function JobWorkActivitySection({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-right font-mono text-gray-900">
+                    <td className="px-3 py-2 text-xs text-right font-mono text-gray-900">
                       {e.lineBalanceAfter != null ? fmt(e.lineBalanceAfter) : <span className="text-gray-300">—</span>}
                     </td>
                   </tr>

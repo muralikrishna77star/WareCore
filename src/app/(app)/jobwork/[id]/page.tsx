@@ -181,19 +181,19 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
     new Date(order.expected_return_date) < new Date()
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="w-full max-w-[1920px] mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <Link href="/jobwork" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mb-1">
+          <Link href="/jobwork" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mb-1">
             <ArrowLeft className="h-4 w-4" /> Back to Job Work
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-xl font-bold text-gray-900">
             Job Work Order: {order.reference_number ?? id.slice(0, 8)}
           </h1>
         </div>
         <div className="flex items-center gap-3">
           {isOverdue && (
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
               Overdue
             </span>
           )}
@@ -219,54 +219,54 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       </div>
 
       {/* Order Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+        <h2 className="text-base font-semibold text-gray-900 mb-4">Order Details</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Dispatch Date</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(order.dispatch_date)}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">{formatDate(order.dispatch_date)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Company</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{order.companies?.name ?? '—'}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">{order.companies?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Warehouse</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{order.warehouses?.name ?? '—'}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">{order.warehouses?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Vendor</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{order.suppliers?.name ?? '—'}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">{order.suppliers?.name ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Expected Return</p>
-            <p className={`text-sm font-medium mt-1 ${isOverdue ? 'text-red-600' : 'text-gray-900'}`}>
+            <p className={`text-xs font-medium mt-1 ${isOverdue ? 'text-red-600' : 'text-gray-900'}`}>
               {order.expected_return_date ? formatDate(order.expected_return_date) : '—'}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Actual Return</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">
+            <p className="text-xs font-medium text-gray-900 mt-1">
               {order.actual_return_date ? formatDate(order.actual_return_date) : 'Pending'}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created On</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(order.created_at)}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">{formatDateTime(order.created_at)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>
-            <p className="text-sm font-medium text-gray-900 mt-1">{createdByName ?? '—'}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">{createdByName ?? '—'}</p>
           </div>
           {order.updated_by && (
             <>
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Last Modified On</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{formatDateTime(order.updated_at)}</p>
+                <p className="text-xs font-medium text-gray-900 mt-1">{formatDateTime(order.updated_at)}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Last Modified By</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{updatedByName ?? '—'}</p>
+                <p className="text-xs font-medium text-gray-900 mt-1">{updatedByName ?? '—'}</p>
               </div>
             </>
           )}
@@ -274,17 +274,17 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         {order.notes && (
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-            <p className="text-sm text-gray-700">{order.notes}</p>
+            <p className="text-xs text-gray-700">{order.notes}</p>
           </div>
         )}
       </div>
 
       {/* Output Items — Produced Materials */}
       {outputItems.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+          <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Output Materials <span className="text-sm font-normal text-gray-500">(Produced)</span></h2>
+              <h2 className="text-base font-semibold text-gray-900">Output Materials <span className="text-xs font-normal text-gray-500">(Produced)</span></h2>
               <p className="text-xs text-gray-400 mt-0.5">Items produced / processed by this job work</p>
             </div>
           </div>
@@ -292,15 +292,15 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
             <table className="w-full">
               <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produced Item</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Onward</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produced Item</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Produced</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Onward</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Remaining</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Line ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Received Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -315,13 +315,13 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
 
                   return (
                     <tr key={item.id} className="hover:bg-gray-50 align-top">
-                      <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                      <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      <td className="px-3 py-2 text-xs text-gray-500">{idx + 1}</td>
+                      <td className="px-3 py-2 text-xs font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs font-medium text-gray-900">
                         {item.item_name ?? item.material_types?.description ?? '—'}
                         {item.size_label && <span className="ml-1 text-gray-400 text-xs">{item.size_label}</span>}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 text-right font-mono">
+                      <td className="px-3 py-2 text-xs text-gray-900 text-right font-mono">
                         {showConverted ? formatNumber(converted, 3) : Number(item.quantity).toFixed(3)}
                         {showConverted && (
                           <div className="text-xs text-gray-400 font-normal">
@@ -329,7 +329,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm text-right font-mono">
+                      <td className="px-3 py-2 text-xs text-right font-mono">
                         {consumed > 0 ? (
                           <div>
                             <span className="text-gray-900">{consumed.toFixed(3)}</span>
@@ -344,16 +344,16 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                           </div>
                         ) : <span className="text-gray-300">—</span>}
                       </td>
-                      <td className="px-6 py-4 text-sm text-right font-mono text-gray-900">{remaining.toFixed(3)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{showConverted ? targetUnit : item.unit}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-2 text-xs text-right font-mono text-gray-900">{remaining.toFixed(3)}</td>
+                      <td className="px-3 py-2 text-xs text-gray-600">{showConverted ? targetUnit : item.unit}</td>
+                      <td className="px-3 py-2">
                         {item.source_job_line_id ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
                             {item.source_job_line_id}
                           </span>
                         ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td className="px-3 py-2 text-xs text-gray-600">
                         {item.received_date ? formatDate(item.received_date) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                     </tr>
@@ -370,7 +370,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
 
       <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} />
 
-      <div className="flex gap-3 mt-6">
+      <div className="flex flex-wrap gap-3 mt-4">
         {order.status !== 'cancelled' && (
           <Link href={`/jobwork/${order.id}/edit?mode=returns`} className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700">
             Update Return Quantities
