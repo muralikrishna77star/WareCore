@@ -1136,11 +1136,59 @@ export const JOB_WORK_ORDER_BY_ID_QUERY = `
 export const JOB_WORK_ITEMS_QUERY = `
   query GetJobWorkItems($job_work_order_id: uuid!) {
     job_work_items(where: {job_work_order_id: {_eq: $job_work_order_id}}, order_by: {id: asc}) {
-      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received quantity_transferred_out received_date size_label unit
+      id job_work_order_id purchase_line_id sub_purchase_line_id job_line_id quantity_sent quantity_received quantity_transferred_out received_date size_label unit is_transfer_line
       item_master_id item_name material_type_id material_size_id
       material_types { description }
       material_sizes { size_label }
       item_master { item_code }
+    }
+  }
+`
+
+// Job Work order Activity (src/lib/jobWorkActivity.ts): every ledger row the
+// order owns, the SALE_OUT rows of its vendor-direct dispatches (so a
+// "virtual return" can be shown as the sale it really is), and the transfers
+// it's on either side of (for the counterparty vendor's name).
+export const JOB_WORK_ORDER_LEDGER_QUERY = `
+  query GetJobWorkOrderLedger($id: uuid!) {
+    stock_ledger(
+      where: {reference_type: {_eq: "job_work"}, reference_id: {_eq: $id}}
+      order_by: [{entry_date: asc}, {created_at: asc}]
+    ) {
+      id entry_type quantity entry_date created_at notes
+      material_type_id material_size_id size_label purchase_line_id sub_purchase_line_id
+      material_types { description unit }
+      material_sizes { size_label }
+    }
+  }
+`
+
+export const JOB_WORK_ORDER_DIRECT_DISPATCHES_QUERY = `
+  query GetJobWorkOrderDirectDispatches($id: uuid!) {
+    dispatch_orders(where: {source_job_work_order_id: {_eq: $id}, is_vendor_direct: {_eq: true}}) {
+      id
+      customers { name }
+    }
+  }
+`
+
+export const DISPATCH_SALE_LEDGER_QUERY = `
+  query GetDispatchSaleLedger($ids: [uuid!]!) {
+    stock_ledger(where: {reference_type: {_eq: "dispatch"}, entry_type: {_eq: "SALE_OUT"}, reference_id: {_in: $ids}}) {
+      reference_id reference_number entry_date quantity purchase_line_id
+    }
+  }
+`
+
+export const JOB_WORK_ORDER_TRANSFERS_QUERY = `
+  query GetJobWorkOrderTransfers($id: uuid!) {
+    job_work_transfers(where: {_or: [{from_job_work_order_id: {_eq: $id}}, {to_job_work_order_id: {_eq: $id}}]}) {
+      transfer_number
+      from_job_work_order_id
+      to_job_work_order_id
+      from_vendor { name }
+      to_vendor { name }
+      job_work_transfer_items { purchase_line_id sub_purchase_line_id quantity_transferred }
     }
   }
 `

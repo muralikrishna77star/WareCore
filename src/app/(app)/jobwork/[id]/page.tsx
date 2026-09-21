@@ -5,10 +5,13 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import {
   JOB_WORK_ORDER_BY_ID_QUERY, JOB_WORK_ITEMS_QUERY, JOB_WORK_OUTPUT_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY,
   JOB_WORK_ITEMS_FROM_OUTPUT_QUERY, JOB_WORK_ORDERS_BY_IDS_QUERY,
+  JOB_WORK_ORDER_LEDGER_QUERY, JOB_WORK_ORDER_DIRECT_DISPATCHES_QUERY, DISPATCH_SALE_LEDGER_QUERY, JOB_WORK_ORDER_TRANSFERS_QUERY,
 } from '@/lib/hasura/queries'
+import { buildJobWorkActivity, type ActivityLedgerRow, type ActivityDirectSale, type ActivityTransfer } from '@/lib/jobWorkActivity'
 import { formatDate, formatDateTime, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
+import JobWorkActivitySection from './JobWorkActivitySection'
 
 interface JobWorkOrderDetail {
   id: string
@@ -30,6 +33,10 @@ interface JobWorkOrderDetail {
 interface JobWorkItemDetail {
   id: string
   purchase_line_id: string | null
+  sub_purchase_line_id: string | null
+  material_type_id: string
+  material_size_id: string | null
+  is_transfer_line: boolean | null
   job_line_id: string | null
   quantity_sent: number
   quantity_received: number | null
@@ -75,10 +82,13 @@ interface SentOnwardOrder {
 export default async function JobWorkDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [orderResult, itemsResult, outputItemsResult] = await Promise.all([
+  const [orderResult, itemsResult, outputItemsResult, ledgerResult, directDispatchResult, transfersResult] = await Promise.all([
     hasuraQuery(JOB_WORK_ORDER_BY_ID_QUERY, { id }),
     hasuraQuery(JOB_WORK_ITEMS_QUERY, { job_work_order_id: id }),
     hasuraQuery(JOB_WORK_OUTPUT_ITEMS_QUERY, { job_work_order_id: id }),
+    hasuraQuery(JOB_WORK_ORDER_LEDGER_QUERY, { id }),
+    hasuraQuery(JOB_WORK_ORDER_DIRECT_DISPATCHES_QUERY, { id }, { suppressError: true }),
+    hasuraQuery(JOB_WORK_ORDER_TRANSFERS_QUERY, { id }, { suppressError: true }),
   ])
   const order: JobWorkOrderDetail | null = orderResult.job_work_orders_by_pk
   if (!order) notFound()
@@ -107,6 +117,43 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       }
     }
   }
+  // Activity: the order's ledger rows turned back into what the user did
+  // (a vendor direct sale is one event, not a "virtual return" + a sale).
+  const directDispatches = (directDispatchResult.dispatch_orders ?? []) as { id: string; customers: { name: string } | null }[]
+  let directSales: ActivityDirectSale[] = []
+  if (directDispatches.length > 0) {
+    const customerByDispatch = new Map(directDispatches.map((d) => [d.id, d.customers?.name ?? null]))
+    const saleResult = await hasuraQuery(DISPATCH_SALE_LEDGER_QUERY, { ids: directDispatches.map((d) => d.id) }, { suppressError: true })
+    directSales = ((saleResult.stock_ledger ?? []) as { reference_id: string; reference_number: string | null; entry_date: string; quantity: number; purchase_line_id: string | null }[])
+      .map((r) => ({
+        dispatchId: r.reference_id, documentNumber: r.reference_number, customerName: customerByDispatch.get(r.reference_id) ?? null,
+        entry_date: r.entry_date, quantity: r.quantity, purchase_line_id: r.purchase_line_id,
+      }))
+  }
+  const transfers: ActivityTransfer[] = ((transfersResult.job_work_transfers ?? []) as {
+    transfer_number: string; from_job_work_order_id: string | null; to_job_work_order_id: string | null
+    from_vendor: { name: string } | null; to_vendor: { name: string } | null
+    job_work_transfer_items: ActivityTransfer['items']
+  }[]).map((t) => ({
+    transferNumber: t.transfer_number, fromOrderId: t.from_job_work_order_id, toOrderId: t.to_job_work_order_id,
+    fromVendorName: t.from_vendor?.name ?? null, toVendorName: t.to_vendor?.name ?? null, items: t.job_work_transfer_items ?? [],
+  }))
+  const ledger: ActivityLedgerRow[] = ((ledgerResult.stock_ledger ?? []) as (ActivityLedgerRow & {
+    size_label: string | null; material_types: { description: string } | null; material_sizes: { size_label: string } | null
+  })[]).map((r) => ({
+    ...r,
+    materialLabel: [r.material_types?.description, r.material_sizes?.size_label ?? r.size_label].filter(Boolean).join(' — ') || undefined,
+  }))
+  const activity = buildJobWorkActivity({ orderId: id, items, ledger, directSales, transfers })
+  const itemLabels: Record<string, { item: string; purchaseLine: string | null }> = {}
+  for (const it of items) {
+    const size = it.material_sizes?.size_label ?? it.size_label
+    itemLabels[it.id] = {
+      item: [it.item_master?.item_code, size].filter(Boolean).join(' — ') || (it.item_name ?? it.material_types?.description ?? '—'),
+      purchaseLine: it.purchase_line_id,
+    }
+  }
+
   const hasSendableOutput = outputItems.some((o) => Number(o.quantity) - Number(o.quantity_consumed ?? 0) > 0)
 
   let createdByName: string | null = null
@@ -319,7 +366,9 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       )}
 
       {/* Status + Return Form (client) */}
-      <JobWorkReturnClient order={order} items={items ?? []} outputItems={outputItems} />
+      <JobWorkReturnClient order={order} items={items ?? []} outputItems={outputItems} lineSummaries={activity.lines} />
+
+      <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} />
 
       <div className="flex gap-3 mt-6">
         {order.status !== 'cancelled' && (

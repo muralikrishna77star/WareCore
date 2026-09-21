@@ -1,8 +1,9 @@
 'use client'
 
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, TriangleAlert } from 'lucide-react'
 import { getJobWorkOrderStatusLabel } from '@/lib/utils'
 import { useRecordPreview } from '@/components/RecordPreviewProvider'
+import type { ActivityLineSummary } from '@/lib/jobWorkActivity'
 
 interface JobWorkReturnOrder {
   status: string
@@ -31,11 +32,15 @@ interface JobWorkReturnClientProps {
   order: JobWorkReturnOrder
   items: JobWorkReturnItem[]
   outputItems: JobWorkReturnOutputItem[]
+  lineSummaries: Record<string, ActivityLineSummary>
 }
 
-export default function JobWorkReturnClient({ order, items, outputItems }: JobWorkReturnClientProps) {
+const fmt = (n: number) => (Math.abs(n) < 0.0005 ? 0 : n).toFixed(3)
+
+export default function JobWorkReturnClient({ order, items, outputItems, lineSummaries }: JobWorkReturnClientProps) {
   const { openList } = useRecordPreview()
 
+  const hasOutputs = outputItems.length > 0
   const getReturnedQuantity = (jobLineId: string | null | undefined) => {
     if (!jobLineId) return 0
     return outputItems
@@ -61,6 +66,10 @@ export default function JobWorkReturnClient({ order, items, outputItems }: JobWo
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Input Materials <span className="text-sm font-normal text-gray-500">(Consumed)</span></h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Where each line&apos;s material went. Still at Vendor = Sent Out − Returned − Sold Direct − Transferred Out
+            {hasOutputs ? ' (material converted into Output Materials stays counted here, same as the Stock Statement)' : ''}.
+          </p>
         </div>
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
@@ -73,11 +82,17 @@ export default function JobWorkReturnClient({ order, items, outputItems }: JobWo
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sent Out</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Returned</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sold Direct</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Transferred Out</th>
+                {hasOutputs && <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Output Produced</th>}
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Still at Vendor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items.map((item, idx) => (
+              {items.map((item, idx) => {
+                const line = lineSummaries[item.id]
+                return (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
                   <td className="px-6 py-4 text-sm font-mono text-blue-700">
@@ -104,12 +119,26 @@ export default function JobWorkReturnClient({ order, items, outputItems }: JobWo
                       </button>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                    {item.job_line_id ? getReturnedQuantity(item.job_line_id).toFixed(3) : '—'}
-                    {item.job_line_id && <span className="text-xs font-normal text-gray-400 ml-1">{item.unit ?? 'MT'}</span>}
+                  <td className="px-6 py-4 text-sm text-right text-emerald-700">{line && line.returned > 0.0005 ? fmt(line.returned) : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-6 py-4 text-sm text-right text-amber-700">{line && line.soldDirect > 0.0005 ? fmt(line.soldDirect) : <span className="text-gray-300">—</span>}</td>
+                  <td className="px-6 py-4 text-sm text-right text-purple-700">{line && line.transferredOut > 0.0005 ? fmt(line.transferredOut) : <span className="text-gray-300">—</span>}</td>
+                  {hasOutputs && (
+                    <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                      {item.job_line_id ? getReturnedQuantity(item.job_line_id).toFixed(3) : '—'}
+                    </td>
+                  )}
+                  <td className={`px-6 py-4 text-sm font-semibold text-right ${line && line.atVendor < -0.0005 ? 'text-red-600' : 'text-gray-900'}`}>
+                    {line?.missingLedger ? (
+                      <span className="inline-flex items-center gap-1 text-red-600" title="This line has no stock ledger entries, so stock reports don't count it. Report it for a data check.">
+                        <TriangleAlert className="h-3.5 w-3.5" /> No ledger entry
+                      </span>
+                    ) : (
+                      <>{fmt(line?.atVendor ?? 0)} <span className="text-xs font-normal text-gray-400">{item.unit ?? 'MT'}</span></>
+                    )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
