@@ -78,6 +78,7 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '140_backfill_intercompany_stock_sharing_oct_nov_2024.sql',
   '143_repair_11_open_rec005_exceptions_sep_2026.sql',
   '144_repair_cr1224_intercompany_purchase_lines.sql',
+  '148_cancel_duplicate_jw_mtwvzzut_19g7.sql',
 ])
 
 /** The postmaster's own PID, which Postgres writes as line 1 of postmaster.pid. */
