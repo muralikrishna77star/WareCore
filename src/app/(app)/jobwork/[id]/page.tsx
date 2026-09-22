@@ -33,6 +33,7 @@ interface JobWorkOrderDetail {
 
 interface JobWorkItemDetail {
   id: string
+  item_master_id: string | null
   purchase_line_id: string | null
   sub_purchase_line_id: string | null
   material_type_id: string
@@ -52,6 +53,7 @@ interface JobWorkItemDetail {
 
 interface JobWorkOutputItemDetail {
   id: string
+  item_master_id: string | null
   item_name: string | null
   size_label: string | null
   quantity: number
@@ -154,6 +156,25 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       purchaseLine: it.purchase_line_id,
     }
   }
+
+  // Job Line ID is the order's internal handle that ties an input line to
+  // the Output Materials made from it, so each one links to its counterpart
+  // row on this page: input -> its first output line, output -> its input.
+  const outputAnchorByJobLine: Record<string, string> = {}
+  for (const o of outputItems) {
+    if (o.source_job_line_id && !outputAnchorByJobLine[o.source_job_line_id]) {
+      outputAnchorByJobLine[o.source_job_line_id] = `output-item-${o.id}`
+    }
+  }
+  // Item links open the Item Stock Ledger from this order's dispatch date to
+  // today — its own default is the current month, which would show nothing
+  // for an order keyed in for an earlier year.
+  const ledgerRange = {
+    from: order.dispatch_date ?? new Date().toISOString().split('T')[0],
+    to: new Date().toISOString().split('T')[0],
+  }
+  const itemLedgerHref = (itemMasterId: string | null) =>
+    itemMasterId ? `/reports/item-ledger?item=${itemMasterId}&from=${ledgerRange.from}&to=${ledgerRange.to}` : null
 
   const hasSendableOutput = outputItems.some((o) => Number(o.quantity) - Number(o.quantity_consumed ?? 0) > 0)
 
@@ -315,11 +336,21 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                   const sentOnward = sentOnwardByOutputItem[item.id] ?? []
 
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50 align-top">
+                    <tr key={item.id} id={`output-item-${item.id}`} className="hover:bg-gray-50 align-top scroll-mt-24 target:bg-amber-50">
                       <td className="px-3 py-2 text-xs text-gray-500">{idx + 1}</td>
-                      <td className="px-3 py-2 text-xs font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs font-mono text-gray-700">
+                        {itemLedgerHref(item.item_master_id) ? (
+                          <Link href={itemLedgerHref(item.item_master_id)!} className="text-blue-600 hover:underline" title="Open this item's Stock Ledger">
+                            {item.item_master?.item_code ?? '—'}
+                          </Link>
+                        ) : (item.item_master?.item_code ?? '—')}
+                      </td>
                       <td className="px-3 py-2 text-xs font-medium text-gray-900">
-                        {item.item_name ?? item.material_types?.description ?? '—'}
+                        {itemLedgerHref(item.item_master_id) ? (
+                          <Link href={itemLedgerHref(item.item_master_id)!} className="text-gray-900 hover:text-blue-700 hover:underline" title="Open this item's Stock Ledger">
+                            {item.item_name ?? item.material_types?.description ?? '—'}
+                          </Link>
+                        ) : (item.item_name ?? item.material_types?.description ?? '—')}
                         {item.size_label && <span className="ml-1 text-gray-400 text-xs">{item.size_label}</span>}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900 text-right font-mono">
@@ -349,9 +380,13 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                       <td className="px-3 py-2 text-xs text-gray-600">{showConverted ? targetUnit : item.unit}</td>
                       <td className="px-3 py-2">
                         {item.source_job_line_id ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <a
+                            href={`#job-line-${item.source_job_line_id}`}
+                            title="Go to the input line this was produced from"
+                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:underline"
+                          >
                             {item.source_job_line_id}
-                          </span>
+                          </a>
                         ) : <span className="text-xs text-gray-400">—</span>}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-600">
@@ -367,7 +402,14 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
       )}
 
       {/* Status + Return Form (client) */}
-      <JobWorkReturnClient order={order} items={items ?? []} outputItems={outputItems} lineSummaries={activity.lines} />
+      <JobWorkReturnClient
+        order={order}
+        items={items ?? []}
+        outputItems={outputItems}
+        lineSummaries={activity.lines}
+        outputAnchorByJobLine={outputAnchorByJobLine}
+        ledgerRange={ledgerRange}
+      />
 
       <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} />
 

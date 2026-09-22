@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { ArrowUpRight, TriangleAlert } from 'lucide-react'
 import { getJobWorkOrderStatusLabel, getJobWorkCompletionLabel, formatDate } from '@/lib/utils'
 import { useRecordPreview } from '@/components/RecordPreviewProvider'
@@ -13,6 +14,7 @@ interface JobWorkReturnOrder {
 
 interface JobWorkReturnItem {
   id: string
+  item_master_id: string | null
   purchase_line_id: string | null
   job_line_id: string | null
   item_name: string | null
@@ -35,12 +37,26 @@ interface JobWorkReturnClientProps {
   items: JobWorkReturnItem[]
   outputItems: JobWorkReturnOutputItem[]
   lineSummaries: Record<string, ActivityLineSummary>
+  /** Job Line ID -> the anchor of the first Output Materials row made from it. */
+  outputAnchorByJobLine: Record<string, string>
+  /** Date range for Item Stock Ledger links, so they open on this order's history. */
+  ledgerRange: { from: string; to: string }
 }
 
 const fmt = (n: number) => (Math.abs(n) < 0.0005 ? 0 : n).toFixed(3)
 
-export default function JobWorkReturnClient({ order, items, outputItems, lineSummaries }: JobWorkReturnClientProps) {
+export default function JobWorkReturnClient({
+  order,
+  items,
+  outputItems,
+  lineSummaries,
+  outputAnchorByJobLine,
+  ledgerRange,
+}: JobWorkReturnClientProps) {
   const { openList } = useRecordPreview()
+
+  const itemLedgerHref = (itemMasterId: string | null) =>
+    itemMasterId ? `/reports/item-ledger?item=${itemMasterId}&from=${ledgerRange.from}&to=${ledgerRange.to}` : null
 
   const hasOutputs = outputItems.length > 0
   const getReturnedQuantity = (jobLineId: string | null | undefined) => {
@@ -101,17 +117,51 @@ export default function JobWorkReturnClient({ order, items, outputItems, lineSum
               {items.map((item, idx) => {
                 const line = lineSummaries[item.id]
                 return (
-                <tr key={item.id} className="hover:bg-gray-50">
+                <tr
+                  key={item.id}
+                  id={item.job_line_id ? `job-line-${item.job_line_id}` : undefined}
+                  className="hover:bg-gray-50 scroll-mt-24 target:bg-amber-50"
+                >
                   <td className="px-3 py-2 text-xs text-gray-500">{idx + 1}</td>
                   <td className="px-3 py-2 text-xs font-mono text-blue-700">
-                    {item.purchase_line_id ?? <span className="text-gray-300">—</span>}
+                    {item.purchase_line_id ? (
+                      <Link
+                        href={`/reports/purchase-line-ledger?line=${encodeURIComponent(item.purchase_line_id)}`}
+                        title="Open Purchase Line Movements for this line"
+                        className="hover:underline"
+                      >
+                        {item.purchase_line_id}
+                      </Link>
+                    ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-3 py-2 text-xs font-mono text-indigo-700">
-                    {item.job_line_id ?? <span className="text-gray-300">—</span>}
+                    {item.job_line_id ? (
+                      outputAnchorByJobLine[item.job_line_id] ? (
+                        <a
+                          href={`#${outputAnchorByJobLine[item.job_line_id]}`}
+                          title="Go to the Output Materials produced from this line"
+                          className="hover:underline"
+                        >
+                          {item.job_line_id}
+                        </a>
+                      ) : (
+                        <span title="No Output Materials recorded against this line yet">{item.job_line_id}</span>
+                      )
+                    ) : <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-xs font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                  <td className="px-3 py-2 text-xs font-mono text-gray-700">
+                    {itemLedgerHref(item.item_master_id) ? (
+                      <Link href={itemLedgerHref(item.item_master_id)!} className="text-blue-600 hover:underline" title="Open this item's Stock Ledger">
+                        {item.item_master?.item_code ?? '—'}
+                      </Link>
+                    ) : (item.item_master?.item_code ?? '—')}
+                  </td>
                   <td className="px-3 py-2 text-xs font-medium text-gray-900">
-                    {item.item_name ?? item.material_types?.description ?? '—'}
+                    {itemLedgerHref(item.item_master_id) ? (
+                      <Link href={itemLedgerHref(item.item_master_id)!} className="text-gray-900 hover:text-blue-700 hover:underline" title="Open this item's Stock Ledger">
+                        {item.item_name ?? item.material_types?.description ?? '—'}
+                      </Link>
+                    ) : (item.item_name ?? item.material_types?.description ?? '—')}
                   </td>
                   <td className="px-3 py-2 text-xs text-gray-600">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                   <td className="px-3 py-2 text-xs text-gray-900 text-right">

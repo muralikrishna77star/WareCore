@@ -17,6 +17,10 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   JOB_WORK_RETURN_IN: { label: 'Job Work Return In', color: 'bg-teal-100 text-teal-800' },
   JOB_WORK_OUTPUT_IN: { label: 'Job Work Output In', color: 'bg-teal-100 text-teal-800' },
   JOB_WORK_CANCEL: { label: 'Job Work Cancelled', color: 'bg-gray-100 text-gray-700' },
+  JOB_WORK_TRANSFER_OUT: { label: 'Job Work Transfer Out', color: 'bg-orange-100 text-orange-800' },
+  JOB_WORK_TRANSFER_IN: { label: 'Job Work Transfer In', color: 'bg-blue-100 text-blue-800' },
+  JOB_WORK_TRANSFER: { label: 'Job Transfer', color: 'bg-cyan-100 text-cyan-800' },
+  VENDOR_DIRECT_SALE: { label: 'Vendor Direct Sale', color: 'bg-amber-100 text-amber-800' },
   ADJUSTMENT_IN: { label: 'Adjustment In', color: 'bg-gray-100 text-gray-800' },
   ADJUSTMENT_OUT: { label: 'Adjustment Out', color: 'bg-gray-100 text-gray-800' },
 }
@@ -46,7 +50,15 @@ export type PurchaseLineLedgerRow = {
   material_size_id?: string | null
   material_types?: { description: string; unit: string } | null
   balance: number
+  vendorBalance: number
   itemLabel: string
+  vendorName?: string | null
+  /** The job work order the other leg of a merged row is posted against. */
+  jobWorkReferenceNumber?: string | null
+  jobWorkReferenceType?: string | null
+  jobWorkReferenceId?: string | null
+  /** Processed output attributed to this line through its source job line. */
+  attributed?: boolean
 }
 
 const fmtQ = (n: number) => n.toFixed(3)
@@ -67,6 +79,8 @@ export function PurchaseLineLedgerRows({
     in: (r) => { const q = Number(r.quantity); return q > 0 ? q : null },
     out: (r) => { const q = Number(r.quantity); return q < 0 ? Math.abs(q) : null },
     balance: (r) => r.balance,
+    vendor_balance: (r) => r.vendorBalance,
+    vendor: (r) => r.vendorName ?? '',
     notes: (r) => r.notes ?? '',
   })
 
@@ -84,6 +98,8 @@ export function PurchaseLineLedgerRows({
           <SortableTh label="In" sortKey="in" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-1.5 !normal-case" />
           <SortableTh label="Out" sortKey="out" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-1.5 !normal-case" />
           <SortableTh label="Balance" sortKey="balance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-1.5 !normal-case" />
+          <SortableTh label="Balance at Vendor" sortKey="vendor_balance" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-1.5 !normal-case" />
+          <SortableTh label="Vendor" sortKey="vendor" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-1.5 !normal-case" />
           <SortableTh label="Notes" sortKey="notes" activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-1.5 !normal-case" />
         </tr>
       </thead>
@@ -114,6 +130,22 @@ export function PurchaseLineLedgerRows({
                 ) : (
                   row.reference_number || '—'
                 )}
+                {row.jobWorkReferenceNumber && (
+                  <span className="ml-1 text-gray-400">
+                    (from{' '}
+                    {row.jobWorkReferenceType && row.jobWorkReferenceId ? (
+                      <Link
+                        href={`${referenceBasePath[row.jobWorkReferenceType] ?? ''}/${row.jobWorkReferenceId}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {row.jobWorkReferenceNumber}
+                      </Link>
+                    ) : (
+                      row.jobWorkReferenceNumber
+                    )}
+                    )
+                  </span>
+                )}
               </td>
               <td className="px-2 py-1">
                 {row.sub_purchase_line_id ? (
@@ -129,6 +161,10 @@ export function PurchaseLineLedgerRows({
               <td className={`px-2 py-1 text-right font-semibold ${row.balance < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                 {fmtQ(row.balance)}
               </td>
+              <td className={`px-2 py-1 text-right font-semibold ${row.vendorBalance < 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                {fmtQ(row.vendorBalance)}
+              </td>
+              <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{row.vendorName || '—'}</td>
               <td className="px-2 py-1 text-gray-500 text-[11px]">{row.notes || '—'}</td>
             </tr>
           )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
@@ -249,9 +250,13 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
                   row.reference_number || '—'
                 )}
                 {lineId && (
-                  <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <Link
+                    href={`/reports/purchase-line-ledger?line=${encodeURIComponent(row.purchase_line_id || lineId)}`}
+                    title="Open Purchase Line Movements for this line"
+                    className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:underline"
+                  >
                     {lineId}
-                  </span>
+                  </Link>
                 )}
                 {(row.isVendorDirectSale || row.isJobWorkTransfer) && row.jobWorkReferenceNumber && (
                   <div className="mt-0.5 text-gray-400">

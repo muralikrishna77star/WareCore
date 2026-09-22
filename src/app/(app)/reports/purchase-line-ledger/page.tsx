@@ -1,8 +1,15 @@
 export const dynamic = 'force-dynamic'
 
 import { hasuraQuery } from '@/lib/hasura/server'
-import { PURCHASE_LINE_LEDGER_QUERY, ALL_PURCHASE_LINE_IDS_QUERY, ACTIVE_ITEM_MASTER_QUERY } from '@/lib/hasura/queries'
+import {
+  PURCHASE_LINE_LEDGER_QUERY,
+  ALL_PURCHASE_LINE_IDS_QUERY,
+  ACTIVE_ITEM_MASTER_QUERY,
+  JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
+} from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
+import { fetchPurchaseLineVendorMovements } from '@/lib/vendorMovementRows'
+import { buildPurchaseLineLedger, type PurchaseLineEntry } from '@/lib/purchaseLineLedger'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
@@ -13,6 +20,10 @@ import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProf
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
+  VENDOR_DIRECT_SALE: { label: 'Vendor Direct Sale', color: 'bg-amber-100 text-amber-800' },
+  JOB_WORK_TRANSFER: { label: 'Job Transfer', color: 'bg-cyan-100 text-cyan-800' },
+  JOB_WORK_TRANSFER_OUT: { label: 'Job Work Transfer Out', color: 'bg-orange-100 text-orange-800' },
+  JOB_WORK_TRANSFER_IN: { label: 'Job Work Transfer In', color: 'bg-blue-100 text-blue-800' },
   VENDOR_RETURN_IN: { label: 'Vendor Return In', color: 'bg-green-100 text-green-800' },
   SALE_OUT: { label: 'Sale / Dispatch', color: 'bg-red-100 text-red-800' },
   SALE_CANCEL: { label: 'Sale Cancelled', color: 'bg-gray-100 text-gray-700' },
@@ -32,6 +43,7 @@ type LedgerEntry = {
   entry_type: string
   quantity: number | string
   entry_date: string
+  created_at?: string | null
   reference_number?: string | null
   reference_type?: string | null
   reference_id?: string | null
@@ -105,22 +117,63 @@ export default async function PurchaseLineLedgerPage({
 
   const entries: LedgerEntry[] = entriesResult.entries ?? []
 
-  // Plain accumulator for a one-shot server-side computation — held in an
-  // object (rather than a reassigned `let`) so the running total is mutated
-  // via a property write, not variable reassignment, inside the nested map.
-  const runningBalance = { value: 0 }
-  const rows = entries.map((e) => {
-    runningBalance.value += Number(e.quantity)
-    return { ...e, balance: runningBalance.value, itemLabel: itemLabelFor(e) }
-  })
-  const currentBalance = runningBalance.value
+  // Vendor side of the line: each row's vendor_delta straight from
+  // vw_job_work_vendor_movements, plus any processed-output row that belongs
+  // to this line but carries no purchase_line_id of its own.
+  const { deltaById, attributed } = lineId
+    ? await fetchPurchaseLineVendorMovements(lineId)
+    : { deltaById: new Map<string, number>(), attributed: [] }
 
-  const totalIn = entries
-    .filter((e) => Number(e.quantity) > 0)
-    .reduce((s, e) => s + Number(e.quantity), 0)
-  const totalOut = entries
-    .filter((e) => Number(e.quantity) < 0)
-    .reduce((s, e) => s + Math.abs(Number(e.quantity)), 0)
+  const jobWorkOrderIds = Array.from(
+    new Set(
+      [...entries, ...attributed]
+        .filter((e) => e.reference_type === 'job_work' && e.reference_id)
+        .map((e) => e.reference_id as string),
+    ),
+  )
+  const vendorResult = jobWorkOrderIds.length
+    ? await hasuraQuery(JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY, { ids: jobWorkOrderIds })
+    : { job_work_orders: [] }
+  const vendorByOrderId = new Map<string, string>()
+  for (const o of (vendorResult.job_work_orders ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
+    if (o.suppliers?.name) vendorByOrderId.set(o.id, o.suppliers.name)
+  }
+  const vendorNameFor = (e: { reference_type?: string | null; reference_id?: string | null }) =>
+    e.reference_type === 'job_work' && e.reference_id ? vendorByOrderId.get(e.reference_id) ?? null : null
+
+  const ledgerEntries: PurchaseLineEntry[] = [
+    ...entries.map((e) => ({ ...e, vendorDelta: deltaById.get(e.id) ?? 0, vendorName: vendorNameFor(e) })),
+    ...attributed.map((a) => ({
+      id: a.id,
+      entry_type: a.entry_type,
+      quantity: a.quantity,
+      entry_date: a.entry_date,
+      created_at: a.createdAt,
+      reference_number: a.reference_number,
+      reference_type: a.reference_type,
+      reference_id: a.reference_id,
+      notes: a.notes,
+      material_type_id: a.material_type_id,
+      material_size_id: a.material_size_id,
+      size_label: a.size_label,
+      companies: a.companyName ? { name: a.companyName } : null,
+      warehouses: a.warehouseName ? { name: a.warehouseName } : null,
+      material_types: a.materialDescription ? { description: a.materialDescription, unit: a.unit ?? '' } : null,
+      vendorDelta: a.vendorDelta,
+      vendorName: vendorNameFor(a),
+      attributed: true,
+    })),
+  ].sort((a, b) =>
+    a.entry_date === b.entry_date
+      ? String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
+      : a.entry_date.localeCompare(b.entry_date),
+  )
+
+  const { rows, closingBalance, closingVendorBalance, totalIn, totalOut } = buildPurchaseLineLedger(
+    ledgerEntries,
+    itemLabelFor,
+  )
+  const currentBalance = closingBalance
 
   const first = entries[0]
   const itemLabel = first ? itemLabelFor(first) : null
@@ -155,18 +208,23 @@ export default async function PurchaseLineLedgerPage({
       { header: 'Outward Quantity', key: 'out', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
       { header: 'Balance', key: 'balance', width: 14, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Balance at Vendor', key: 'vendorBalance', width: 18, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'Vendor', key: 'vendor', width: 24, align: 'left' },
       { header: 'Notes', key: 'notes', width: 24, align: 'left' },
     ],
     rows: rows.map((row, idx) => {
       const qty = Number(row.quantity)
       const cfg = entryTypeConfig[row.entry_type] ?? { label: row.entry_type }
       const itemSize = row.material_sizes?.size_label || row.size_label
+      const reference = row.jobWorkReferenceNumber
+        ? `${row.reference_number || ''} (from ${row.jobWorkReferenceNumber})`
+        : row.reference_number || ''
       return {
         sno: idx + 1,
         date: row.entry_date,
         type: cfg.label,
         item: `${row.itemLabel}${itemSize ? ` (${itemSize})` : ''}`,
-        reference: row.reference_number || '',
+        reference,
         linkedLineId: row.sub_purchase_line_id || '',
         company: row.companies?.name || '',
         warehouse: row.warehouses?.name || '',
@@ -174,6 +232,8 @@ export default async function PurchaseLineLedgerPage({
         out: qty < 0 ? Math.abs(qty) : null,
         rate: lineRate || null,
         balance: row.balance,
+        vendorBalance: row.vendorBalance,
+        vendor: row.vendorName || '',
         notes: row.notes || '',
       }
     }),
@@ -244,7 +304,7 @@ export default async function PurchaseLineLedgerPage({
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div className="rounded-lg border bg-green-50 px-3 py-2">
               <p className="text-xs text-gray-500">Total In</p>
               <p className="text-base font-bold text-green-700">+{fmtQ(totalIn)}</p>
@@ -254,9 +314,15 @@ export default async function PurchaseLineLedgerPage({
               <p className="text-base font-bold text-red-700">-{fmtQ(totalOut)}</p>
             </div>
             <div className="rounded-lg border bg-blue-50 px-3 py-2">
-              <p className="text-xs text-gray-500">Current Balance</p>
+              <p className="text-xs text-gray-500">Balance (in warehouse)</p>
               <p className={`text-base font-bold ${currentBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
                 {fmtQ(currentBalance)}
+              </p>
+            </div>
+            <div className="rounded-lg border bg-purple-50 px-3 py-2">
+              <p className="text-xs text-gray-500">Balance at Vendor</p>
+              <p className={`text-base font-bold ${closingVendorBalance < 0 ? 'text-red-600' : 'text-purple-800'}`}>
+                {fmtQ(closingVendorBalance)}
               </p>
             </div>
           </div>
@@ -271,13 +337,16 @@ export default async function PurchaseLineLedgerPage({
                 <PurchaseLineLedgerRows rows={rows} />
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-xs">
-                    <td className="px-2 py-1.5 text-gray-700" colSpan={7}>Current Balance</td>
+                    <td className="px-2 py-1.5 text-gray-700" colSpan={7}>Closing Balance</td>
                     <td className="px-2 py-1.5 text-right text-green-800">+{fmtQ(totalIn)}</td>
                     <td className="px-2 py-1.5 text-right text-red-800">-{fmtQ(totalOut)}</td>
                     <td className={`px-2 py-1.5 text-right font-bold ${currentBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>
                       {fmtQ(currentBalance)}
                     </td>
-                    <td />
+                    <td className={`px-2 py-1.5 text-right font-bold ${closingVendorBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>
+                      {fmtQ(closingVendorBalance)}
+                    </td>
+                    <td colSpan={2} />
                   </tr>
                 </tfoot>
               </table>
