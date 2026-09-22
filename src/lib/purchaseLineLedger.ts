@@ -40,14 +40,6 @@ export interface PurchaseLineEntry {
   vendorDelta?: number
   /** The job work vendor this row is posted against, for the Vendor column. */
   vendorName?: string | null
-  /**
-   * A processed-output row that carries no purchase_line_id of its own but
-   * was produced from this line — fn_job_work_output_item_to_ledger() only
-   * tags the line when its order has exactly one. Attributed via the output
-   * item's source job line, so the line's return is visible rather than
-   * silently leaving the material sitting at the vendor forever.
-   */
-  attributed?: boolean
 }
 
 export type PurchaseLineDisplayRow = PurchaseLineEntry & {

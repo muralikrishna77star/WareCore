@@ -78,11 +78,11 @@ describe('buildPurchaseLineLedger', () => {
     expect(rows.map((r) => r.vendorBalance.toFixed(3))).toEqual(['0.000', '-1.000'])
   })
 
-  it('counts a processed-output return attributed to the line', () => {
+  it('counts a processed-output return against the line it came from', () => {
     const entries = [
       row('PURCHASE_IN', 4.452, '2024-11-27', { reference_type: 'purchase_bill' }),
       jw('JOB_WORK_OUT', -4.452, '2024-11-27', { vendorName: 'Arun Engineering' }),
-      jw('JOB_WORK_OUTPUT_IN', 4.452, '2024-12-04', { vendorName: 'Arun Engineering', attributed: true }),
+      jw('JOB_WORK_OUTPUT_IN', 4.452, '2024-12-04', { vendorName: 'Arun Engineering' }),
     ]
 
     const { closingBalance, closingVendorBalance } = buildPurchaseLineLedger(entries, label)

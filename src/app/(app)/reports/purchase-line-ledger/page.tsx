@@ -8,7 +8,7 @@ import {
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
 } from '@/lib/hasura/queries'
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
-import { fetchPurchaseLineVendorMovements } from '@/lib/vendorMovementRows'
+import { fetchPurchaseLineVendorDeltas } from '@/lib/vendorMovementRows'
 import { buildPurchaseLineLedger, type PurchaseLineEntry } from '@/lib/purchaseLineLedger'
 import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
@@ -118,15 +118,12 @@ export default async function PurchaseLineLedgerPage({
   const entries: LedgerEntry[] = entriesResult.entries ?? []
 
   // Vendor side of the line: each row's vendor_delta straight from
-  // vw_job_work_vendor_movements, plus any processed-output row that belongs
-  // to this line but carries no purchase_line_id of its own.
-  const { deltaById, attributed } = lineId
-    ? await fetchPurchaseLineVendorMovements(lineId)
-    : { deltaById: new Map<string, number>(), attributed: [] }
+  // vw_job_work_vendor_movements, the view the vendor-stock reports read.
+  const deltaById = lineId ? await fetchPurchaseLineVendorDeltas(lineId) : new Map<string, number>()
 
   const jobWorkOrderIds = Array.from(
     new Set(
-      [...entries, ...attributed]
+      entries
         .filter((e) => e.reference_type === 'job_work' && e.reference_id)
         .map((e) => e.reference_id as string),
     ),
@@ -138,36 +135,12 @@ export default async function PurchaseLineLedgerPage({
   for (const o of (vendorResult.job_work_orders ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
     if (o.suppliers?.name) vendorByOrderId.set(o.id, o.suppliers.name)
   }
-  const vendorNameFor = (e: { reference_type?: string | null; reference_id?: string | null }) =>
-    e.reference_type === 'job_work' && e.reference_id ? vendorByOrderId.get(e.reference_id) ?? null : null
 
-  const ledgerEntries: PurchaseLineEntry[] = [
-    ...entries.map((e) => ({ ...e, vendorDelta: deltaById.get(e.id) ?? 0, vendorName: vendorNameFor(e) })),
-    ...attributed.map((a) => ({
-      id: a.id,
-      entry_type: a.entry_type,
-      quantity: a.quantity,
-      entry_date: a.entry_date,
-      created_at: a.createdAt,
-      reference_number: a.reference_number,
-      reference_type: a.reference_type,
-      reference_id: a.reference_id,
-      notes: a.notes,
-      material_type_id: a.material_type_id,
-      material_size_id: a.material_size_id,
-      size_label: a.size_label,
-      companies: a.companyName ? { name: a.companyName } : null,
-      warehouses: a.warehouseName ? { name: a.warehouseName } : null,
-      material_types: a.materialDescription ? { description: a.materialDescription, unit: a.unit ?? '' } : null,
-      vendorDelta: a.vendorDelta,
-      vendorName: vendorNameFor(a),
-      attributed: true,
-    })),
-  ].sort((a, b) =>
-    a.entry_date === b.entry_date
-      ? String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
-      : a.entry_date.localeCompare(b.entry_date),
-  )
+  const ledgerEntries: PurchaseLineEntry[] = entries.map((e) => ({
+    ...e,
+    vendorDelta: deltaById.get(e.id) ?? 0,
+    vendorName: e.reference_type === 'job_work' && e.reference_id ? vendorByOrderId.get(e.reference_id) ?? null : null,
+  }))
 
   const { rows, closingBalance, closingVendorBalance, totalIn, totalOut } = buildPurchaseLineLedger(
     ledgerEntries,
