@@ -8,6 +8,7 @@ import MissingMasterDataBanner from '@/components/MissingMasterDataBanner'
 import { DropdownPortal } from '@/components/DropdownPortal'
 import { PurchaseLineComboBox } from '@/components/PurchaseLineComboBox'
 import { overAllocationFor, purchaseLineOverAllocationWarnings } from '@/lib/dispatch/purchaseLineAllocation'
+import { purchaseLineMatchesItem } from '@/lib/dispatch/purchaseLineMatch'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
@@ -854,17 +855,7 @@ export default function NewDispatchPage() {
                   const sizesForType = materialSizes.filter((s) => !s.material_type_id || s.material_type_id === line.material_type_id)
                   const selectedItem = line.item_master_id ? itemMasters.find(im => im.id === line.item_master_id) : null
                   const purchaseLinesForRow = selectedItem
-                    ? availablePurchaseLines.filter(pl =>
-                        pl.item_master_id === selectedItem.id ||
-                        (
-                          pl.material_type_id === selectedItem.material_type_id &&
-                          (
-                            !selectedItem.material_size_id ||
-                            pl.material_size_id === selectedItem.material_size_id ||
-                            (pl.size_label && selectedItem.size_label && pl.size_label === selectedItem.size_label)
-                          )
-                        )
-                      )
+                    ? availablePurchaseLines.filter(pl => purchaseLineMatchesItem(pl, selectedItem))
                     : availablePurchaseLines
 
                   // Item combo search — searchable by item_name or item_code

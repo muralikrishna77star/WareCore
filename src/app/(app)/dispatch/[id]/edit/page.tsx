@@ -6,6 +6,7 @@ import { ArrowLeft, Check } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { DropdownPortal } from '@/components/DropdownPortal'
 import { PurchaseLineComboBox } from '@/components/PurchaseLineComboBox'
+import { purchaseLineMatchesItem } from '@/lib/dispatch/purchaseLineMatch'
 import {
   ACTIVE_COMPANIES_QUERY, ACTIVE_WAREHOUSES_QUERY, ACTIVE_CUSTOMERS_QUERY,
   ACTIVE_MATERIAL_TYPES_QUERY, ACTIVE_MATERIAL_SIZES_QUERY,
@@ -841,17 +842,7 @@ export default function EditDispatchPage() {
                   const sizesForType = materialSizes.filter((s) => !s.material_type_id || s.material_type_id === line.material_type_id)
                   const selectedItem = line.item_master_id ? itemMasters.find(im => im.id === line.item_master_id) : null
                   const purchaseLinesForRow = selectedItem
-                    ? availablePurchaseLines.filter(pl =>
-                        pl.available_quantity > 0 && (
-                          pl.item_master_id === selectedItem.id ||
-                          (
-                            pl.material_type_id === selectedItem.material_type_id &&
-                            (!selectedItem.material_size_id ||
-                              pl.material_size_id === selectedItem.material_size_id ||
-                              (pl.size_label && selectedItem.size_label && pl.size_label === selectedItem.size_label))
-                          )
-                        )
-                      )
+                    ? availablePurchaseLines.filter(pl => pl.available_quantity > 0 && purchaseLineMatchesItem(pl, selectedItem))
                     : availablePurchaseLines.filter(pl => pl.available_quantity > 0)
 
                   const itemSearchValue = itemSearch[line.rowId] ?? line.item_name
