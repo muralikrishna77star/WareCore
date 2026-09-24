@@ -215,7 +215,7 @@ export function BackupManager() {
     : 'bg-blue-50 border-blue-200 text-blue-800'
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6">
+    <div className="w-full max-w-[1920px] mx-auto space-y-6">
 
       {/* Header */}
       <div>

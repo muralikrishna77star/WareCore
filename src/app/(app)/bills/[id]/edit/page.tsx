@@ -776,12 +776,12 @@ export default function EditBillPage() {
   }
 
   if (pageLoading) {
-    return <div className="max-w-6xl mx-auto p-6 text-gray-500">Loading bill…</div>
+    return <div className="w-full max-w-[1920px] mx-auto p-6 text-gray-500">Loading bill…</div>
   }
 
   if (notFound) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="w-full max-w-[1920px] mx-auto p-6">
         <p className="text-red-600 font-medium">Bill not found or cannot be edited.</p>
         <Link href="/bills" className="mt-2 text-blue-600 hover:underline text-sm inline-flex items-center gap-1">
           <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Bills
@@ -793,7 +793,7 @@ export default function EditBillPage() {
   const isActiveBill = billStatus === 'active'
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-[1920px] mx-auto space-y-4">
       <div>
         <a href={`/bills/${billId}`} className="text-[0.9375rem] text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
           <ArrowLeft className="h-4 w-4 shrink-0" /> Back to {isActiveBill ? 'Bill' : 'Draft'}
@@ -805,11 +805,11 @@ export default function EditBillPage() {
         )}
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Header */}
         <div className="bg-white rounded-xl border px-4 py-3">
           <h2 className="text-[0.875rem] font-semibold text-gray-800 mb-2">Bill Details</h2>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 
             {/* Company */}
             <div>
@@ -932,7 +932,7 @@ export default function EditBillPage() {
         </div>
 
         {/* Line Items */}
-        <div className="bg-white rounded-xl border p-6 flex-1 min-h-[28rem]">
+        <div className="bg-white rounded-xl border p-4 flex-1 min-h-[28rem]">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[0.9375rem] font-semibold text-gray-800">Line Items</h2>
             <div className="flex items-center gap-3">
@@ -1158,7 +1158,7 @@ export default function EditBillPage() {
                       <td className="pr-2 py-0">
                         <input type="text" value={line.notes} onChange={(e) => updateLine(i, 'notes', e.target.value)}
                           placeholder="Notes"
-                          className="block w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
+                          className="block w-full min-w-24 rounded border border-gray-300 px-2 py-px text-[0.8125rem] h-7 focus:border-blue-500 focus:outline-none" />
                       </td>
                       <td className="py-2">
                         <div className="flex gap-1 items-center">

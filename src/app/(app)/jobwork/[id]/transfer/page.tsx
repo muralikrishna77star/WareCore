@@ -222,7 +222,7 @@ export default function JobWorkTransferPage() {
   if (!order) return <div className="p-8 text-center text-gray-400 text-sm">Job work order not found.</div>
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-[1920px] mx-auto">
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border-b border-amber-200">
           <div>

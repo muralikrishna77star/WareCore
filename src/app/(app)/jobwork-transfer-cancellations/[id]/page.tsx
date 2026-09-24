@@ -26,8 +26,8 @@ export default async function JobWorkTransferCancellationDetailPage({ params }: 
   const items: JobWorkTransferCancellationItem[] = record.job_work_transfer_cancellation_items ?? []
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="w-full max-w-[1920px] mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <Link href="/jobwork-transfer-cancellations" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mb-1">
             <ArrowLeft className="h-4 w-4" /> Job Work Transfer Deletions
@@ -42,9 +42,9 @@ export default async function JobWorkTransferCancellationDetailPage({ params }: 
       </div>
 
       {/* Transfer Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 opacity-80">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 opacity-80">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Transfer Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Transfer Date</p>
             <p className="text-sm font-medium text-gray-700 mt-1">{formatDate(record.transfer_date)}</p>
@@ -101,35 +101,35 @@ export default async function JobWorkTransferCancellationDetailPage({ params }: 
       </div>
 
       {/* Items Transferred */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6 opacity-80">
-        <div className="px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4 opacity-80">
+        <div className="px-4 py-3 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Items <span className="text-sm font-normal text-gray-500">(Transferred)</span></h2>
         </div>
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Transferred</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line ID</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty Transferred</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line ID</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400">No line items.</td></tr>
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No line items.</td></tr>
               ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-700">{item.item_name || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.material_type_name || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.size_label || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700 text-right font-mono">{Number(item.quantity_transferred ?? 0).toFixed(3)}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.unit || '—'}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">{item.item_name || '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.material_type_name || '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.size_label || '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-700 text-right font-mono">{Number(item.quantity_transferred ?? 0).toFixed(3)}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.unit || '—'}</td>
+                  <td className="px-3 py-2">
                     {item.purchase_line_id ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
                         {item.purchase_line_id}

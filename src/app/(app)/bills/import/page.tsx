@@ -112,7 +112,7 @@ export default function BillsImportPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full max-w-[1920px] mx-auto">
       <div>
         <h1 className="text-[1.4375rem] font-bold text-gray-900">Import Purchase Bills from Excel</h1>
         <p className="mt-1 text-[0.9375rem] text-gray-500">

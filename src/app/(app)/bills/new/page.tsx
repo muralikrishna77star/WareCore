@@ -704,7 +704,7 @@ export default function NewBillPage() {
   }
 
   return (
-    <div className="max-w-[1800px] mx-auto">
+    <div className="w-full max-w-[1920px] mx-auto">
 
       <MissingMasterDataBanner
         loading={masterDataLoading}

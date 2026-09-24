@@ -701,13 +701,13 @@ export default function EditDispatchPage() {
 
   if (pageLoading) {
     return (
-      <div className="max-w-5xl mx-auto py-12 text-center text-gray-500">Loading…</div>
+      <div className="w-full max-w-[1920px] mx-auto py-12 text-center text-gray-500">Loading…</div>
     )
   }
 
   if (orderStatus === 'cancelled') {
     return (
-      <div className="max-w-5xl mx-auto py-12 text-center">
+      <div className="w-full max-w-[1920px] mx-auto py-12 text-center">
         <p className="text-red-600 font-medium">This sale order is cancelled and cannot be edited.</p>
         <a href={`/dispatch/${orderId}`} className="mt-4 inline-flex items-center gap-1 text-blue-600 hover:underline text-sm">
           <ArrowLeft className="h-4 w-4 shrink-0" /> Back to order
@@ -717,7 +717,7 @@ export default function EditDispatchPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="w-full max-w-[1920px] mx-auto space-y-6">
       <div>
         <a href={`/dispatch/${orderId}`} className="text-sm text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
           <ArrowLeft className="h-4 w-4 shrink-0" /> Back to order
@@ -742,7 +742,7 @@ export default function EditDispatchPage() {
       <div className="space-y-6">
         <div className="bg-white rounded-xl border p-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Dispatch Details</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
               <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}

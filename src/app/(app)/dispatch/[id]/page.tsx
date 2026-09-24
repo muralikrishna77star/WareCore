@@ -53,9 +53,9 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
   const isCancelled = order.status === 'cancelled'
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="w-full max-w-[1920px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <Link href="/dispatch" className="text-sm text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
             <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Dispatch
@@ -88,7 +88,7 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
 
       {/* Cancellation notice */}
       {isCancelled && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
           <p className="text-sm font-semibold text-red-700 mb-1">
             This sale was cancelled on {formatDate(order.cancelled_at)}
           </p>
@@ -102,9 +102,9 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
       )}
 
       {/* Order Info */}
-      <div className={`bg-white rounded-xl border border-gray-200 p-6 mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
+      <div className={`bg-white rounded-xl border border-gray-200 p-4 mb-4 ${isCancelled ? 'opacity-60' : ''}`}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Dispatch Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Dispatch Date</p>
             <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(order.dispatch_date)}</p>
@@ -174,44 +174,44 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
       </div>
 
       {/* Line Items */}
-      <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden mb-6 ${isCancelled ? 'opacity-60' : ''}`}>
-        <div className="px-6 py-4 border-b border-gray-100">
+      <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden mb-4 ${isCancelled ? 'opacity-60' : ''}`}>
+        <div className="px-4 py-3 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Dispatched Items</h2>
         </div>
         <div className="overflow-auto max-h-[70vh]">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Code</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-900">
                     {item.item_name ?? '—'}
                     {item.sale_line_id && (
                       <span className="block text-[10px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1 mt-0.5">{item.sale_line_id}</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.material_types?.description ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-blue-700">{item.purchase_line_id ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.size_label ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 text-right">
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-700">{item.material_types?.description ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-blue-700">{item.purchase_line_id ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-700">{item.size_label ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-gray-900 text-right">
                     {item.rate ? formatCurrency(Number(item.rate)) : '—'}
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
+                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-900 text-right">
                     {item.amount ? formatCurrency(Number(item.amount)) : '—'}
                   </td>
                 </tr>
@@ -219,10 +219,10 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 border-gray-200">
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-sm font-semibold text-gray-900 text-right">Totals</td>
-                <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
+                <td colSpan={6} className="px-3 py-2 text-[0.8125rem] font-semibold text-gray-900 text-right">Totals</td>
+                <td className="px-3 py-2 text-[0.8125rem] font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
                 <td></td>
-                <td className="px-6 py-4 text-sm font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>
+                <td className="px-3 py-2 text-[0.8125rem] font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>
               </tr>
             </tfoot>
           </table>

@@ -108,7 +108,7 @@ export default function NewRolePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-[1920px] mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">New Role</h1>
         <p className="mt-1 text-sm text-gray-500">Define a role and configure per-screen access permissions</p>

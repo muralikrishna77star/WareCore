@@ -18,8 +18,8 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const items = itemsResult.transfer_items ?? []
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="w-full max-w-[1920px] mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <Link href="/transfers" className="text-sm text-blue-600 hover:underline mb-1 inline-flex items-center gap-1">
             <ArrowLeft className="h-4 w-4 shrink-0" /> Back to Transfers
@@ -29,9 +29,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
       </div>
 
       {/* Transfer Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Transfer Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Transfer Date</p>
             <p className="text-sm font-medium text-gray-900 mt-1">{formatDate(transfer.transfer_date)}</p>

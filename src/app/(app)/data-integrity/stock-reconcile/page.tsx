@@ -311,7 +311,7 @@ export default function StockReconcilePage() {
   const stopItemReconcile = () => { itemStopRef.current = true }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full max-w-[1920px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Stock Reconciliation</h1>

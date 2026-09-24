@@ -1230,12 +1230,12 @@ export default function EditJobWorkPage() {
   const selectCls    = "block w-full rounded border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
 
   if (pageLoading) {
-    return <div className="max-w-[1800px] mx-auto py-12 text-center text-gray-500">Loading…</div>
+    return <div className="w-full max-w-[1920px] mx-auto py-12 text-center text-gray-500">Loading…</div>
   }
 
   if (notFound) {
     return (
-      <div className="max-w-[1800px] mx-auto py-12 text-center">
+      <div className="w-full max-w-[1920px] mx-auto py-12 text-center">
         <p className="text-red-600 font-medium">Job work order not found.</p>
         <Link href="/jobwork" className="mt-4 inline-flex items-center gap-1 text-blue-600 hover:underline text-sm"><ArrowLeft className="h-4 w-4" /> Back to Job Work</Link>
       </div>
@@ -1244,7 +1244,7 @@ export default function EditJobWorkPage() {
 
   if (orderStatus === 'cancelled') {
     return (
-      <div className="max-w-[1800px] mx-auto py-12 text-center">
+      <div className="w-full max-w-[1920px] mx-auto py-12 text-center">
         <p className="text-red-600 font-medium">
           This order is {orderStatus} and cannot be edited.
         </p>
@@ -1254,7 +1254,7 @@ export default function EditJobWorkPage() {
   }
 
   return (
-    <div className="max-w-[1800px] mx-auto">
+    <div className="w-full max-w-[1920px] mx-auto">
 
       <div className="mb-3">
         <a href={`/jobwork/${orderId}`} className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Back to order</a>

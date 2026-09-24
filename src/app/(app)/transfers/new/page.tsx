@@ -280,7 +280,7 @@ export default function NewTransferPage() {
   const fieldCls = 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none'
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full max-w-[1920px] mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">New Transfer</h1>
         <p className="mt-1 text-sm text-gray-500">Transfer material between companies or warehouses</p>
