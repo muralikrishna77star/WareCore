@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import JSZip from 'jszip'
 
 // Generalized, professionally-formatted multi-sheet Excel export — same
 // visual language (header block, table styling, totals row, negative-value
@@ -275,7 +276,40 @@ export async function buildProfessionalWorkbookBuffer(
     buildProfessionalSheet(workbook, meta, spec)
   }
 
-  return workbook.xlsx.writeBuffer()
+  const buffer = await workbook.xlsx.writeBuffer()
+  return sheets.some((s) => s.rowOutlineLevels?.length) ? fixSheetPrOrder(buffer) : buffer
+}
+
+// The OOXML schema fixes the order of <sheetPr>'s children: tabColor, then
+// outlinePr, then pageSetUpPr. ExcelJS 4.4 writes pageSetUpPr (our fit-to-page
+// print setup) BEFORE outlinePr (row grouping), so every grouped sheet came
+// out invalid and Excel opened the file with "We found a problem with some
+// content…" and a repair prompt. Reorder the children in the saved file.
+const SHEET_PR_CHILDREN = ['tabColor', 'outlinePr', 'pageSetUpPr']
+
+export function reorderSheetPr(xml: string): string {
+  return xml.replace(/<sheetPr([^>]*)>([\s\S]*?)<\/sheetPr>/, (whole, attrs: string, inner: string) => {
+    const children = inner.match(/<(\w+)\b[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/g) ?? []
+    const rank = (el: string) => {
+      const i = SHEET_PR_CHILDREN.indexOf(el.match(/^<(\w+)/)?.[1] ?? '')
+      return i === -1 ? SHEET_PR_CHILDREN.length : i
+    }
+    if (children.join('') !== inner) return whole // unexpected content: leave untouched
+    const sorted = [...children].sort((a, b) => rank(a) - rank(b))
+    return `<sheetPr${attrs}>${sorted.join('')}</sheetPr>`
+  })
+}
+
+async function fixSheetPrOrder(buffer: ExcelJS.Buffer): Promise<ExcelJS.Buffer> {
+  const zip = await JSZip.loadAsync(buffer as ArrayBuffer)
+  const sheetFiles = Object.keys(zip.files).filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+  for (const name of sheetFiles) {
+    const xml = await zip.file(name)!.async('string')
+    const fixed = reorderSheetPr(xml)
+    if (fixed !== xml) zip.file(name, fixed)
+  }
+  const out = await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })
+  return out as unknown as ExcelJS.Buffer
 }
 
 export async function exportProfessionalWorkbook(

@@ -5,8 +5,10 @@
 // thing that silently does nothing if the properties are wrong.
 import { describe, expect, it } from 'vitest'
 import ExcelJS from 'exceljs'
+import JSZip from 'jszip'
 import {
   buildProfessionalWorkbookBuffer,
+  reorderSheetPr,
   QTY_FMT,
   type ProfessionalExportMeta,
   type ProfessionalSheetSpec,
@@ -117,5 +119,27 @@ describe('combined Daywise + Transactions sheet', () => {
     const wb = await readBack(plain)
     const sheet = wb.worksheets[0]
     sheet.eachRow((row) => expect(row.outlineLevel ?? 0).toBe(0))
+  })
+})
+
+describe('grouped sheet XML is valid for Excel', () => {
+  // ExcelJS writes <pageSetUpPr> before <outlinePr>; the schema requires the
+  // reverse, and Excel then opens the file with a "found a problem with some
+  // content" repair prompt. Checked on the raw XML, since ExcelJS itself reads
+  // the out-of-order file back without complaint.
+  it('writes outlinePr before pageSetUpPr in sheetPr', async () => {
+    const buffer = await buildProfessionalWorkbookBuffer(meta, [combinedSpec()])
+    const zip = await JSZip.loadAsync(buffer as ArrayBuffer)
+    const xml = await zip.file('xl/worksheets/sheet1.xml')!.async('string')
+    const sheetPr = xml.match(/<sheetPr[^>]*>[\s\S]*?<\/sheetPr>/)?.[0] ?? ''
+    expect(sheetPr).toContain('<outlinePr')
+    expect(sheetPr).toContain('<pageSetUpPr')
+    expect(sheetPr.indexOf('<outlinePr')).toBeLessThan(sheetPr.indexOf('<pageSetUpPr'))
+  })
+
+  it('orders sheetPr children as tabColor, outlinePr, pageSetUpPr', () => {
+    expect(
+      reorderSheetPr('<x><sheetPr filterMode="0"><pageSetUpPr fitToPage="1"/><outlinePr summaryBelow="0"/><tabColor rgb="FF0000FF"/></sheetPr></x>'),
+    ).toBe('<x><sheetPr filterMode="0"><tabColor rgb="FF0000FF"/><outlinePr summaryBelow="0"/><pageSetUpPr fitToPage="1"/></sheetPr></x>')
   })
 })
