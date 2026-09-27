@@ -34,6 +34,8 @@ export type ProfessionalSheetSpec = {
    * collapsed in place.
    */
   rowOutlineLevels?: number[]
+  /** Ship grouped rows collapsed (only level-0 rows showing) instead of expanded. */
+  outlineCollapsed?: boolean
 }
 
 export type ProfessionalExportMeta = {
@@ -206,6 +208,8 @@ export function buildProfessionalSheet(workbook: ExcelJS.Workbook, meta: Profess
   // Excel's default, so say so or the +/- controls attach to the wrong row.
   if (spec.rowOutlineLevels?.length) {
     sheet.properties.outlineProperties = { summaryBelow: false, summaryRight: false }
+    // ExcelJS marks a row collapsed only when its level reaches outlineLevelRow.
+    if (spec.outlineCollapsed) sheet.properties.outlineLevelRow = Math.max(...spec.rowOutlineLevels)
   }
 
   for (let r = firstDataRow; r <= lastDataRow; r++) {
@@ -214,8 +218,8 @@ export function buildProfessionalSheet(workbook: ExcelJS.Workbook, meta: Profess
     const outline = spec.rowOutlineLevels?.[r - firstDataRow]
     if (outline) {
       row.outlineLevel = outline
-      // Ship expanded; the reader collapses with the group controls.
-      row.hidden = false
+      // Ship expanded unless asked otherwise; the reader toggles with the group controls.
+      row.hidden = !!spec.outlineCollapsed
     }
     spec.columns.forEach((col, i) => {
       const cell = row.getCell(i + 1)

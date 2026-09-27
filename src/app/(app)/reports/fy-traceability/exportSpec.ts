@@ -1,6 +1,6 @@
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
-import { displayRows, type FyTraceabilityReport, type LineBlock } from '@/lib/fyTraceability'
-import { monthLabel } from './format'
+import { displayRows, type FyTraceabilityReport, type LineBlock, type MonthSummaryRow } from '@/lib/fyTraceability'
+import { fmtDate, monthLabel } from './format'
 
 /**
  * Detail sheet: purchase amounts sit on each line's first row only and Stock
@@ -82,56 +82,7 @@ export function buildExportSheets(report: FyTraceabilityReport, showJobWork: boo
     rows: detailRows,
   }
 
-  const summaryRows = [...report.summary, report.summaryTotal].map((r) => ({
-    month: r.month === 'FYTD' ? 'Financial year to date' : monthLabel(r.month),
-    openingQty: r.openingQty,
-    purchaseQty: r.purchaseQty,
-    purchaseBasic: r.purchaseBasic,
-    purchaseGst: r.purchaseGst,
-    purchaseTotal: r.purchaseTotal,
-    saleQty: r.saleQty,
-    saleValue: r.saleValue,
-    saleGst: r.saleGst,
-    priorSaleQty: r.priorSaleQty,
-    priorSaleValue: r.priorSaleValue,
-    priorSaleGst: r.priorSaleGst,
-    unlinkedSaleQty: r.unlinkedSaleQty,
-    unlinkedSaleValue: r.unlinkedSaleValue,
-    otherQty: r.otherQty,
-    closingQty: r.closingQty,
-    closingWarehouse: r.closingWarehouse,
-    closingVendor: r.closingVendor,
-    closingValue: r.closingValue,
-  }))
-  const summary: ProfessionalSheetSpec = {
-    sheetName: 'Monthly Summary',
-    title: 'Monthly Summary — Financial Year to Date',
-    highlightRowIndexes: [summaryRows.length - 1],
-    columns: [
-      { header: 'Month', key: 'month', width: 20, align: 'left' },
-      { header: 'Opening Qty', key: 'openingQty', width: 13, align: 'right', numFmt: QTY_FMT },
-      { header: 'Purchase Qty', key: 'purchaseQty', width: 13, align: 'right', numFmt: QTY_FMT },
-      { header: 'Purchase Basic', key: 'purchaseBasic', width: 16, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Purchase GST', key: 'purchaseGst', width: 14, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Purchase Total', key: 'purchaseTotal', width: 16, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Sale Qty', key: 'saleQty', width: 12, align: 'right', numFmt: QTY_FMT },
-      { header: 'Sale Value', key: 'saleValue', width: 16, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Sale GST', key: 'saleGst', width: 13, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Prior-FY Stock Sold Qty', key: 'priorSaleQty', width: 14, align: 'right', numFmt: QTY_FMT },
-      { header: 'Prior-FY Stock Sale Value', key: 'priorSaleValue', width: 16, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Prior-FY Stock Sale GST', key: 'priorSaleGst', width: 14, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Unlinked Sale Qty', key: 'unlinkedSaleQty', width: 13, align: 'right', numFmt: QTY_FMT },
-      { header: 'Unlinked Sale Value', key: 'unlinkedSaleValue', width: 16, align: 'right', numFmt: MONEY_FMT },
-      { header: 'Loss / Other Qty', key: 'otherQty', width: 13, align: 'right', numFmt: QTY_FMT },
-      { header: 'Closing Qty', key: 'closingQty', width: 13, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
-      { header: 'In Warehouse', key: 'closingWarehouse', width: 13, align: 'right', numFmt: QTY_FMT },
-      { header: 'At Vendor', key: 'closingVendor', width: 13, align: 'right', numFmt: QTY_FMT },
-      { header: 'Closing Stock Value', key: 'closingValue', width: 17, align: 'right', numFmt: MONEY_FMT },
-    ],
-    rows: summaryRows,
-  }
-
-  const sheets = [detail, summary]
+  const sheets = [buildMonthlySummarySheet(report), detail]
   if (report.unlinkedSales.length > 0) {
     sheets.push({
       sheetName: 'Unlinked Sales',
@@ -150,4 +101,193 @@ export function buildExportSheets(report: FyTraceabilityReport, showJobWork: boo
     })
   }
   return sheets
+}
+
+const SALE_KINDS = new Set(['SALE', 'VENDOR_DIRECT_SALE'])
+
+const summaryFigures = (r: MonthSummaryRow) => ({
+  openingQty: r.openingQty,
+  purchaseQty: r.purchaseQty,
+  purchaseBasic: r.purchaseBasic,
+  purchaseGst: r.purchaseGst,
+  purchaseTotal: r.purchaseTotal,
+  saleQty: r.saleQty,
+  saleValue: r.saleValue,
+  saleGst: r.saleGst,
+  priorSaleQty: r.priorSaleQty,
+  priorSaleValue: r.priorSaleValue,
+  priorSaleGst: r.priorSaleGst,
+  unlinkedSaleQty: r.unlinkedSaleQty,
+  unlinkedSaleValue: r.unlinkedSaleValue,
+  unlinkedSaleGst: r.unlinkedSaleGst,
+  otherQty: r.otherQty,
+  closingQty: r.closingQty,
+  closingWarehouse: r.closingWarehouse,
+  closingVendor: r.closingVendor,
+  closingValue: r.closingValue,
+})
+
+/**
+ * Monthly Summary as an Excel outline: each month is one level-0 row with the
+ * on-screen summary figures, and expands into the transactions behind them —
+ * purchases (and cancellations / re-entries) dated in the month, then every
+ * sale made in the month. A detail row puts its amount in the same column as
+ * its month row, so an expanded month's details add up exactly to it.
+ * Opening Stock expands into the prior-FY lines carried into the year.
+ *
+ * Deliberately no column totals: with months expanded they would count every
+ * month twice. The "Financial year to date" row is the total. Ships collapsed.
+ */
+export function buildMonthlySummarySheet(report: FyTraceabilityReport): ProfessionalSheetSpec {
+  const rows: Record<string, unknown>[] = []
+  const levels: number[] = []
+  const highlight: number[] = []
+  const blocks = [...report.currentFy.flatMap((g) => g.blocks), ...report.priorFy]
+
+  const heading = (label: string, figures: Record<string, unknown>) => {
+    highlight.push(rows.length)
+    levels.push(0)
+    rows.push({ month: label, ...figures })
+  }
+  const detail = (row: Record<string, unknown>) => {
+    levels.push(1)
+    rows.push(row)
+  }
+  const lineInfo = (b: LineBlock) => ({
+    lineId: b.line.purchaseLineId,
+    purchaseDate: b.line.billDate,
+    item: b.line.description,
+    size: b.line.size,
+  })
+
+  heading(`Opening Stock b/f (${fmtDate(report.fyStart)})`, { openingQty: report.summary[0]?.openingQty ?? 0 })
+  for (const b of report.priorFy) {
+    if (Math.abs(b.openingBalance) < 0.0005) continue
+    detail({
+      type: 'Opening stock (prior-FY purchase)',
+      party: b.line.seller,
+      reference: b.line.billNumber,
+      ...lineInfo(b),
+      openingQty: b.openingBalance,
+    })
+  }
+
+  for (const m of report.summary) {
+    heading(monthLabel(m.month), summaryFigures(m))
+    const inMonth = (d: string | null) => !!d && d.startsWith(m.month)
+
+    for (const b of blocks) {
+      if (b.isPriorFy) continue
+      const { line } = b
+      if (inMonth(line.billDate)) {
+        detail({
+          type: 'Purchase',
+          date: line.billDate,
+          party: line.seller,
+          reference: line.billNumber,
+          ...lineInfo(b),
+          purchaseQty: line.billedQty,
+          purchaseBasic: line.basic,
+          purchaseGst: line.gst,
+          purchaseTotal: line.total,
+        })
+      }
+      for (const r of b.rows) {
+        if (r.purchaseQtyChange == null || !inMonth(r.date) || line.billedQty < 0.0005) continue
+        const share = r.purchaseQtyChange / line.billedQty
+        detail({
+          type: r.kind === 'PURCHASE_CANCEL' ? 'Purchase cancelled' : 'Purchase re-entered',
+          date: r.date,
+          party: line.seller,
+          reference: r.reference ?? '',
+          ...lineInfo(b),
+          purchaseQty: r.purchaseQtyChange,
+          purchaseBasic: line.basic * share,
+          purchaseGst: line.gst * share,
+          purchaseTotal: line.total * share,
+        })
+      }
+    }
+
+    const sales: { date: string; row: Record<string, unknown> }[] = []
+    for (const b of blocks) {
+      for (const r of b.rows) {
+        if (!SALE_KINDS.has(r.kind) || !inMonth(r.date)) continue
+        const prior = b.isPriorFy
+        sales.push({
+          date: r.date as string,
+          row: {
+            type: prior ? 'Sale of opening / prior-FY stock' : 'Sale',
+            date: r.date,
+            party: r.remarks,
+            reference: r.reference ?? '',
+            ...lineInfo(b),
+            [prior ? 'priorSaleQty' : 'saleQty']: r.saleQty,
+            [prior ? 'priorSaleValue' : 'saleValue']: r.saleValue,
+            [prior ? 'priorSaleGst' : 'saleGst']: r.saleGst,
+          },
+        })
+      }
+    }
+    for (const s of report.unlinkedSales) {
+      if (!inMonth(s.date)) continue
+      sales.push({
+        date: s.date,
+        row: {
+          type: 'Sale with no purchase line',
+          date: s.date,
+          party: s.customer,
+          reference: s.reference,
+          item: s.description,
+          size: s.size,
+          unlinkedSaleQty: s.qty,
+          unlinkedSaleValue: s.saleValue,
+          unlinkedSaleGst: s.saleGst,
+        },
+      })
+    }
+    sales.sort((a, b) => a.date.localeCompare(b.date))
+    for (const s of sales) detail(s.row)
+  }
+
+  heading('Financial year to date', summaryFigures(report.summaryTotal))
+
+  return {
+    sheetName: 'Monthly Summary',
+    title: 'Monthly Summary — Financial Year to Date (click + to expand a month)',
+    highlightRowIndexes: highlight,
+    rowOutlineLevels: levels,
+    outlineCollapsed: true,
+    columns: [
+      { header: 'Month', key: 'month', width: 26, align: 'left' },
+      { header: 'Type', key: 'type', width: 28, align: 'left' },
+      { header: 'Date', key: 'date', width: 12, align: 'center', isDate: true },
+      { header: 'Seller / Customer', key: 'party', width: 30, align: 'left' },
+      { header: 'Bill / Invoice', key: 'reference', width: 14, align: 'left' },
+      { header: 'Purchase Line ID', key: 'lineId', width: 15, align: 'left' },
+      { header: 'Purchase Date', key: 'purchaseDate', width: 12, align: 'center', isDate: true },
+      { header: 'Item', key: 'item', width: 24, align: 'left' },
+      { header: 'Size', key: 'size', width: 14, align: 'left' },
+      { header: 'Opening Qty', key: 'openingQty', width: 12, align: 'right', numFmt: QTY_FMT },
+      { header: 'Purchase Qty', key: 'purchaseQty', width: 12, align: 'right', numFmt: QTY_FMT },
+      { header: 'Purchase Basic', key: 'purchaseBasic', width: 15, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Purchase GST', key: 'purchaseGst', width: 13, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Purchase Total', key: 'purchaseTotal', width: 15, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Sale Qty', key: 'saleQty', width: 11, align: 'right', numFmt: QTY_FMT },
+      { header: 'Sale Value', key: 'saleValue', width: 15, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Sale GST', key: 'saleGst', width: 13, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Prior-FY Stock Sold Qty', key: 'priorSaleQty', width: 13, align: 'right', numFmt: QTY_FMT },
+      { header: 'Prior-FY Stock Sale Value', key: 'priorSaleValue', width: 15, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Prior-FY Stock Sale GST', key: 'priorSaleGst', width: 13, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Unlinked Sale Qty', key: 'unlinkedSaleQty', width: 12, align: 'right', numFmt: QTY_FMT },
+      { header: 'Unlinked Sale Value', key: 'unlinkedSaleValue', width: 15, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Unlinked Sale GST', key: 'unlinkedSaleGst', width: 13, align: 'right', numFmt: MONEY_FMT },
+      { header: 'Loss / Other Qty', key: 'otherQty', width: 12, align: 'right', numFmt: QTY_FMT },
+      { header: 'Closing Qty', key: 'closingQty', width: 12, align: 'right', numFmt: QTY_FMT, negativeWarning: true },
+      { header: 'In Warehouse', key: 'closingWarehouse', width: 12, align: 'right', numFmt: QTY_FMT },
+      { header: 'At Vendor', key: 'closingVendor', width: 12, align: 'right', numFmt: QTY_FMT },
+      { header: 'Closing Stock Value', key: 'closingValue', width: 16, align: 'right', numFmt: MONEY_FMT },
+    ],
+    rows,
+  }
 }

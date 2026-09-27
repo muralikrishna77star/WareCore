@@ -80,6 +80,7 @@ export type DetailKind =
   | 'JOB_WORK'
   | 'TRANSFER'
   | 'PURCHASE_CANCEL'
+  | 'PURCHASE_REENTRY'
   | 'UNSOLD'
   | 'OTHER'
 
@@ -91,6 +92,8 @@ export interface DetailRow {
   saleQty: number | null
   saleValue: number | null
   saleGst: number | null
+  /** Signed quantity the row changes the purchase by — PURCHASE_CANCEL (negative) and PURCHASE_REENTRY only. */
+  purchaseQtyChange?: number
   /** Warehouse + vendor balance after this row. */
   balance: number
 }
@@ -325,7 +328,8 @@ function buildLine(line: TracePurchaseLine, movements: TraceMovement[], fyStart:
       case 'PURCHASE_IN':
         if (!reEntry) continue // the purchase columns already show it
         rows.push({
-          kind: 'OTHER',
+          kind: 'PURCHASE_REENTRY',
+          purchaseQtyChange: Math.abs(qty),
           date: r.entry_date,
           remarks: `Purchase re-entered after cancellation — ${Math.abs(qty).toFixed(3)}`,
           reference: r.reference_number ?? null,
@@ -362,6 +366,7 @@ function buildLine(line: TracePurchaseLine, movements: TraceMovement[], fyStart:
       case 'PURCHASE_CANCEL':
         rows.push({
           kind: 'PURCHASE_CANCEL',
+          purchaseQtyChange: -Math.abs(qty),
           date: r.entry_date,
           remarks: `Purchase cancelled — ${Math.abs(qty).toFixed(3)} returned to seller`,
           reference: r.reference_number ?? null,

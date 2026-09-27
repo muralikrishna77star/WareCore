@@ -8,6 +8,9 @@ import {
   type TracePurchaseLine,
 } from '@/lib/fyTraceability'
 import { VENDOR_DIRECT_SALE_NOTE } from '@/lib/purchaseLineLedger'
+import ExcelJS from 'exceljs'
+import { buildProfessionalWorkbookBuffer } from '@/lib/exportProfessionalExcel'
+import { buildMonthlySummarySheet } from '@/app/(app)/reports/fy-traceability/exportSpec'
 
 const line = (id: string, billDate: string, qty: number, rate = 50000): TracePurchaseLine => ({
   purchaseLineId: id,
@@ -222,5 +225,72 @@ describe('buildFyTraceability', () => {
       ['2024-07', 0, 6, 5, 0],
     ])
     expect(r.summary[2].closingValue).toBe(6 * 50000 + 5 * 60000)
+  })
+})
+
+describe('Monthly Summary export sheet', () => {
+  const report = () => {
+    const { fyStart } = fyPeriod(7, 2024)
+    return buildFyTraceability({
+      fyStart,
+      cutoff: '2024-07-31',
+      lines: [line('OLD', '2024-03-20', 8, 40000), line('L1', '2024-05-10', 10), line('L2', '2024-06-15', 5, 60000)],
+      movementsByLine: new Map(Object.entries({
+        OLD: [mv('PURCHASE_IN', 8, '2024-03-20'), sale(2, '2024-05-01', 90000)],
+        L1: [mv('PURCHASE_IN', 10, '2024-05-10'), mv('PURCHASE_CANCEL', -1, '2024-06-02'), sale(3, '2024-06-20', 180000)],
+        L2: [mv('PURCHASE_IN', 5, '2024-06-15'), sale(5, '2024-07-10', 300000)],
+      })),
+      unlinkedSales: [{ date: '2024-07-05', reference: 'INV-9', customer: 'Anbu', description: 'CR', size: '1 X 500', qty: 1.5, saleValue: 75000, saleGst: 0 }],
+    })
+  }
+
+  const SUMMED = ['openingQty', 'purchaseQty', 'purchaseBasic', 'purchaseGst', 'purchaseTotal', 'saleQty', 'saleValue',
+    'saleGst', 'priorSaleQty', 'priorSaleValue', 'priorSaleGst', 'unlinkedSaleQty', 'unlinkedSaleValue', 'unlinkedSaleGst']
+
+  it('nests each month’s transactions under it, and they add up to the month row', () => {
+    const spec = buildMonthlySummarySheet(report())
+    const levels = spec.rowOutlineLevels!
+    expect(levels).toHaveLength(spec.rows.length)
+    expect(spec.rows.filter((_, i) => levels[i] === 0).map((r) => r.month)).toEqual([
+      'Opening Stock b/f (01-04-2024)', 'April 2024', 'May 2024', 'June 2024', 'July 2024', 'Financial year to date',
+    ])
+    for (let i = 0; i < spec.rows.length; i++) {
+      if (levels[i] !== 0 || spec.rows[i].month === 'Financial year to date') continue
+      const details: Record<string, unknown>[] = []
+      for (let j = i + 1; j < spec.rows.length && levels[j] === 1; j++) details.push(spec.rows[j])
+      // Opening Qty on a month row is the balance carried in, not a flow — only
+      // the Opening Stock row's details add up to it.
+      const keys = String(spec.rows[i].month).startsWith('Opening') ? SUMMED : SUMMED.filter((k) => k !== 'openingQty')
+      for (const key of keys) {
+        const sum = details.reduce((s, d) => s + Number(d[key] ?? 0), 0)
+        expect(sum, `${spec.rows[i].month} ${key}`).toBeCloseTo(Number(spec.rows[i][key] ?? 0), 6)
+      }
+    }
+    const types = spec.rows.filter((_, i) => levels[i] === 1).map((r) => r.type)
+    expect(types).toEqual([
+      'Opening stock (prior-FY purchase)',
+      'Purchase', 'Sale of opening / prior-FY stock', // May
+      'Purchase cancelled', 'Purchase', 'Sale', // June
+      'Sale with no purchase line', 'Sale', // July, by date
+    ])
+  })
+
+  it('ships with every month collapsed behind a + control', async () => {
+    const buffer = await buildProfessionalWorkbookBuffer(
+      { companyName: 'All', fromDate: '2024-04-01', toDate: '2024-07-31', filterLine: '', generatedBy: 'Tester' },
+      [buildMonthlySummarySheet(report())],
+    )
+    const wb = new ExcelJS.Workbook()
+    await wb.xlsx.load(buffer as ArrayBuffer)
+    const sheet = wb.worksheets[0]
+    expect(sheet.properties.outlineProperties).toMatchObject({ summaryBelow: false })
+    let details = 0
+    sheet.eachRow((row) => {
+      if (!row.outlineLevel) return
+      details++
+      expect(row.outlineLevel).toBe(1)
+      expect(row.hidden).toBe(true)
+    })
+    expect(details).toBe(8)
   })
 })

@@ -19,6 +19,7 @@ const KIND_STYLE: Partial<Record<DetailKind, string>> = {
   JOB_WORK: 'text-purple-700 italic',
   TRANSFER: 'text-indigo-700 italic',
   PURCHASE_CANCEL: 'text-gray-500 italic',
+  PURCHASE_REENTRY: 'text-gray-500 italic',
   OPENING: 'text-teal-700 italic',
   UNSOLD: 'text-gray-400 italic',
   OTHER: 'text-gray-500 italic',
