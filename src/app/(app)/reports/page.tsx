@@ -5,7 +5,7 @@ import { REPORTS_QUERY } from '@/lib/hasura/queries'
 import Link from 'next/link'
 import {
   ChartColumn, Calendar, Receipt, ArrowLeftRight, RefreshCw, Factory, Truck,
-  BookOpen, Compass, HardHat, CalendarRange, type LucideIcon,
+  BookOpen, Compass, HardHat, CalendarRange, Route, type LucideIcon,
 } from 'lucide-react'
 import { InventoryByCompanyRows, StockAtVendorsRows } from './ReportsIndexTables'
 
@@ -61,6 +61,7 @@ const REPORT_LINKS: {
   { href: '/reports/day-wise-item-ledger', icon: CalendarRange, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', hoverBorder: 'hover:border-teal-300', hoverText: 'group-hover:text-teal-700', accentBorder: 'border-l-teal-500', tintBg: 'bg-teal-50/40', title: 'Day-Wise Item Ledger', description: 'Every item transaction by date with size, value, GST breakup and parties' },
   { href: '/reports/item-ledger', icon: BookOpen, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', hoverBorder: 'hover:border-teal-300', hoverText: 'group-hover:text-teal-700', accentBorder: 'border-l-teal-500', tintBg: 'bg-teal-50/40', title: 'Item Stock Ledger', description: 'Opening, movements, and running balance for a single item between two dates' },
   { href: '/reports/purchase-line-ledger', icon: Compass, iconBg: 'bg-pink-100', iconColor: 'text-pink-600', hoverBorder: 'hover:border-pink-300', hoverText: 'group-hover:text-pink-700', accentBorder: 'border-l-pink-500', tintBg: 'bg-pink-50/40', title: 'Purchase Line Movements', description: 'Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns' },
+  { href: '/reports/fy-traceability', icon: Route, iconBg: 'bg-rose-100', iconColor: 'text-rose-600', hoverBorder: 'hover:border-rose-300', hoverText: 'group-hover:text-rose-700', accentBorder: 'border-l-rose-500', tintBg: 'bg-rose-50/40', title: 'FY Purchase & Sales Traceability', description: 'Each purchase line of the financial year with its sales, job work, balance and stock value' },
   { href: '/reports/vendor-movements', icon: HardHat, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', hoverBorder: 'hover:border-amber-300', hoverText: 'group-hover:text-amber-700', accentBorder: 'border-l-amber-500', tintBg: 'bg-amber-50/40', title: 'Vendorwise Stock Movement', description: 'Job work out, direct sales, returns and pending balance, by vendor' },
 ]
 
