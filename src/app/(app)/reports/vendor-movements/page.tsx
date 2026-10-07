@@ -130,6 +130,7 @@ interface VendorJobWorkTransfer {
     purchase_line_id: string | null
     sub_purchase_line_id: string | null
     quantity_transferred: number | string
+    reversed_at: string | null
   }[]
 }
 
@@ -393,6 +394,7 @@ export default async function VendorMovementsPage({
   const transferInCounterparty = new Map<string, { vendorName: string; transferNumber: string }>()
   for (const t of (transferAuditResult.job_work_transfers ?? []) as VendorJobWorkTransfer[]) {
     for (const item of t.job_work_transfer_items ?? []) {
+      if (item.reversed_at) continue // a reversed line's ledger rows were removed (migration 157)
       const lineId = item.sub_purchase_line_id || item.purchase_line_id
       if (!lineId) continue
       const qtyKey = Number(item.quantity_transferred).toFixed(3)

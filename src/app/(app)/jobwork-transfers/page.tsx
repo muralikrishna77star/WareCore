@@ -9,13 +9,13 @@ import { JOB_WORK_TRANSFERS_QUERY } from '@/lib/hasura/queries'
 import JobWorkTransfersTable from './JobWorkTransfersTable'
 import { StatCard } from '@/components/StatCard'
 
-const TRANSFER_DELETE_ROLES = new Set(['admin', 'developer', 'company_manager'])
+const TRANSFER_REVERSE_ROLES = new Set(['admin', 'developer', 'company_manager'])
 
 export default async function JobWorkTransfersPage() {
   const cookieStore = await cookies()
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
   const session = token ? verifySession(token) : null
-  const canDelete = !!session && TRANSFER_DELETE_ROLES.has(session.role)
+  const canReverse = !!session && TRANSFER_REVERSE_ROLES.has(session.role)
 
   const result = await hasuraQuery(JOB_WORK_TRANSFERS_QUERY)
   const records = result.job_work_transfers ?? []
@@ -53,7 +53,7 @@ export default async function JobWorkTransfersPage() {
               <p className="text-sm text-gray-400 mt-1">Transfers appear here after you move pending job work to another vendor from an order&apos;s detail page.</p>
             </div>
           ) : (
-            <JobWorkTransfersTable records={records} canDelete={canDelete} />
+            <JobWorkTransfersTable records={records} canReverse={canReverse} />
           )}
         </div>
       </div>

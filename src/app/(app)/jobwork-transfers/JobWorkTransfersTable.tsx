@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
-import DeleteJobWorkTransferButton from './DeleteJobWorkTransferButton'
+import ReverseJobWorkTransferButton from '@/components/ReverseJobWorkTransferButton'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 
@@ -16,6 +16,22 @@ interface JobWorkTransferItem {
   quantity_transferred: number | string
   unit: string | null
   size_label: string | null
+  reversed_at: string | null
+  reversal_notes: string | null
+}
+
+type TransferStatus = 'Active' | 'Partly Reversed' | 'Reversed'
+
+function transferStatus(items: JobWorkTransferItem[]): TransferStatus {
+  const reversed = items.filter((i) => i.reversed_at).length
+  if (reversed === 0) return 'Active'
+  return reversed === items.length ? 'Reversed' : 'Partly Reversed'
+}
+
+const TRANSFER_STATUS_CLASS: Record<TransferStatus, string> = {
+  Active: '',
+  'Partly Reversed': 'bg-amber-50 text-amber-700 border-amber-200',
+  Reversed: 'bg-gray-100 text-gray-600 border-gray-200',
 }
 
 interface JobWorkTransferRecord {
@@ -50,6 +66,9 @@ type FlatRow = {
   qty: number
   unit: string
   reason: string
+  reversedAt: string | null
+  reversalNotes: string
+  status: TransferStatus
 }
 
 const COLUMNS = [
@@ -82,7 +101,7 @@ function recordSortValue(t: JobWorkTransferRecord, key: string): string | number
   }
 }
 
-export default function JobWorkTransfersTable({ records, canDelete }: { records: JobWorkTransferRecord[]; canDelete: boolean }) {
+export default function JobWorkTransfersTable({ records, canReverse }: { records: JobWorkTransferRecord[]; canReverse: boolean }) {
   const [filters, setFilters] = useState<Record<string, string>>({})
 
   const sortAccessors = useMemo(
@@ -108,6 +127,7 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
         toOrderRef: t.to_job_work_order?.reference_number || '',
         toOrderId: t.to_job_work_order?.id || null,
         reason: t.reason || '',
+        status: transferStatus(items),
       }
       const rows: (JobWorkTransferItem | null)[] = items.length > 0 ? items : [null]
       return rows.map((it, idx) => ({
@@ -119,6 +139,8 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
         qty: it ? Number(it.quantity_transferred) : 0,
         qtyLabel: it ? `${Number(it.quantity_transferred).toFixed(3)} ${it.unit || ''}`.trim() : '',
         unit: it?.unit || '',
+        reversedAt: it?.reversed_at ?? null,
+        reversalNotes: it?.reversal_notes || '',
       }))
     })
   }, [sortedRecords])
@@ -158,6 +180,8 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
     'Unit': row.unit,
     'Rate': '',
     'Reason': row.reason,
+    'Line Status': row.reversedAt ? `Reversed ${formatDate(row.reversedAt)}` : 'Active',
+    'Reversal Reason': row.reversalNotes,
   }))
 
   return (
@@ -174,7 +198,7 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
               <SortableTh key={col.key} label={col.label} sortKey={col.key} activeKey={sortKey} dir={sortDir} onSort={toggleSort} className="!px-2 !py-2" />
             ))}
             <SortableTh label="Qty" sortKey="qty" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" className="!px-2 !py-2" />
-            {canDelete && <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Actions</th>}
+            {canReverse && <th className="px-2 py-2 text-xs font-medium text-gray-500 uppercase">Actions</th>}
           </tr>
           <tr className="border-b bg-white">
             {COLUMNS.map((col) => (
@@ -189,13 +213,13 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
               </th>
             ))}
             <th className="px-2 py-2" />
-            {canDelete && <th className="px-2 py-2" />}
+            {canReverse && <th className="px-2 py-2" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={COLUMNS.length + 1 + (canDelete ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={COLUMNS.length + 1 + (canReverse ? 1 : 0)} className="px-4 py-8 text-center text-gray-400">
                 No transfers match your search.
               </td>
             </tr>
@@ -208,7 +232,14 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
               <tr key={row.key} className={`hover:bg-gray-50 align-top ${!isFirst ? 'border-t border-gray-50' : ''}`}>
                 {isFirst && (
                   <>
-                    <td className="px-2 py-2 font-mono text-xs text-purple-700 whitespace-nowrap" rowSpan={rowCount}>{row.transferNo}</td>
+                    <td className="px-2 py-2 font-mono text-xs text-purple-700 whitespace-nowrap" rowSpan={rowCount}>
+                      {row.transferNo}
+                      {row.status !== 'Active' && (
+                        <span className={`mt-1 block w-fit rounded-full border px-1.5 py-0.5 font-sans text-[10px] font-medium ${TRANSFER_STATUS_CLASS[row.status]}`}>
+                          {row.status}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-gray-600 whitespace-nowrap" rowSpan={rowCount}>{row.date}</td>
                     <td className="px-2 py-2 whitespace-nowrap" rowSpan={rowCount}>
                       <span className="text-gray-700">{row.fromVendor || '—'}</span>
@@ -234,10 +265,21 @@ export default function JobWorkTransfersTable({ records, canDelete }: { records:
                 {isFirst && (
                   <td className="px-2 py-2 text-gray-600" rowSpan={rowCount}>{row.reason || '—'}</td>
                 )}
-                <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">{row.qtyLabel || '—'}</td>
-                {isFirst && canDelete && (
+                <td className="px-2 py-2 text-right whitespace-nowrap">
+                  {row.reversedAt ? (
+                    <>
+                      <span className="text-gray-400 line-through">{row.qtyLabel || '—'}</span>
+                      <span className="block text-[10px] text-gray-500" title={row.reversalNotes || undefined}>
+                        Reversed {formatDate(row.reversedAt)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-gray-700">{row.qtyLabel || '—'}</span>
+                  )}
+                </td>
+                {isFirst && canReverse && (
                   <td className="px-2 py-2" rowSpan={rowCount}>
-                    <DeleteJobWorkTransferButton transferId={row.transferId} />
+                    {row.status !== 'Reversed' && <ReverseJobWorkTransferButton transferId={row.transferId} />}
                   </td>
                 )}
               </tr>

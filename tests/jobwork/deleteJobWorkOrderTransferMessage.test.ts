@@ -62,10 +62,8 @@ describe('delete_job_work_order transfer message (migration 156)', () => {
     const t = await makeTransferPair()
     const res = await deleteOrder(t.dest)
     expect(res.success).toBe(false)
-    expect(res.error).toBe(
-      `This order was created by transfer ${t.transferNumber}, which moved the material here from order JW-SRC-${t.code} (${t.code}-FROM). ` +
-      `To remove it, open Job Work Transfers and delete transfer ${t.transferNumber} — that deletes this order and returns the material to JW-SRC-${t.code}.`
-    )
+    // Exact wording is migration 157's (it now points at Reverse) — see reverseJobWorkTransfer.test.ts.
+    expect(res.error).toContain(`This order was created by transfer ${t.transferNumber}, which moved the material here from order JW-SRC-${t.code} (${t.code}-FROM)`)
     expect(res.error).not.toMatch(/foreign key|constraint/i)
     expect(await exists(t.dest)).toBe(true)
     const { rows } = await client.query(`SELECT 1 FROM job_work_cancellations WHERE original_order_id = $1`, [t.dest])
@@ -76,10 +74,7 @@ describe('delete_job_work_order transfer message (migration 156)', () => {
     const t = await makeTransferPair()
     const res = await deleteOrder(t.source)
     expect(res.success).toBe(false)
-    expect(res.error).toBe(
-      `Material from this order has already been transferred to another vendor (${t.transferNumber} to order JW-DST-${t.code} / ${t.code}-TO). ` +
-      `Open Job Work Transfers and delete that transfer first, then delete this order.`
-    )
+    expect(res.error).toContain(`Material from this order has been transferred to another vendor (${t.transferNumber} to order JW-DST-${t.code} / ${t.code}-TO)`)
     expect(await exists(t.source)).toBe(true)
   })
 

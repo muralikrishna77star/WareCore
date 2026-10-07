@@ -8,9 +8,10 @@ import {
   JOB_WORK_ORDER_LEDGER_QUERY, JOB_WORK_ORDER_DIRECT_DISPATCHES_QUERY, DISPATCH_SALE_LEDGER_QUERY, JOB_WORK_ORDER_TRANSFERS_QUERY,
 } from '@/lib/hasura/queries'
 import { buildJobWorkActivity, type ActivityLedgerRow, type ActivityDirectSale, type ActivityTransfer } from '@/lib/jobWorkActivity'
-import { formatDate, formatDateTime, convertQuantity, isSameUnit, formatNumber } from '@/lib/utils'
+import { formatDate, formatDateTime, convertQuantity, isSameUnit, formatNumber, isJobWorkTransferReversed } from '@/lib/utils'
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
+import ReverseJobWorkTransferButton from '@/components/ReverseJobWorkTransferButton'
 import JobWorkActivitySection from './JobWorkActivitySection'
 
 interface JobWorkOrderDetail {
@@ -74,6 +75,29 @@ interface SentOnwardLine {
   unit: string
 }
 
+interface OrderTransfer {
+  id: string
+  transfer_number: string
+  transfer_date: string
+  from_job_work_order_id: string | null
+  to_job_work_order_id: string | null
+  from_job_work_order: { reference_number: string | null } | null
+  to_job_work_order: { reference_number: string | null } | null
+  from_vendor: { name: string } | null
+  to_vendor: { name: string } | null
+  job_work_transfer_items: {
+    id: string
+    purchase_line_id: string | null
+    sub_purchase_line_id: string | null
+    item_name: string | null
+    size_label: string | null
+    quantity_transferred: number
+    unit: string | null
+    reversed_at: string | null
+    reversal_notes: string | null
+  }[]
+}
+
 interface SentOnwardOrder {
   id: string
   status: string
@@ -133,14 +157,22 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         entry_date: r.entry_date, quantity: r.quantity, purchase_line_id: r.purchase_line_id,
       }))
   }
-  const transfers: ActivityTransfer[] = ((transfersResult.job_work_transfers ?? []) as {
-    transfer_number: string; from_job_work_order_id: string | null; to_job_work_order_id: string | null
-    from_vendor: { name: string } | null; to_vendor: { name: string } | null
-    job_work_transfer_items: ActivityTransfer['items']
-  }[]).map((t) => ({
+  const rawTransfers = (transfersResult.job_work_transfers ?? []) as OrderTransfer[]
+  // A reversed transfer line's ledger rows are gone (migration 157), so only
+  // live lines take part in matching ledger rows to transfers.
+  const transfers: ActivityTransfer[] = rawTransfers.map((t) => ({
     transferNumber: t.transfer_number, fromOrderId: t.from_job_work_order_id, toOrderId: t.to_job_work_order_id,
-    fromVendorName: t.from_vendor?.name ?? null, toVendorName: t.to_vendor?.name ?? null, items: t.job_work_transfer_items ?? [],
+    fromVendorName: t.from_vendor?.name ?? null, toVendorName: t.to_vendor?.name ?? null,
+    items: (t.job_work_transfer_items ?? []).filter((i) => !i.reversed_at),
   }))
+  // The transfer that created this order (if any), and every reversed line
+  // touching this order, in either direction.
+  const createdByTransfer = rawTransfers.find((t) => t.to_job_work_order_id === id) ?? null
+  const canReverseCreatingTransfer = !!createdByTransfer && (createdByTransfer.job_work_transfer_items ?? []).some((i) => !i.reversed_at)
+  const reversedLines = rawTransfers.flatMap((t) =>
+    (t.job_work_transfer_items ?? []).filter((i) => i.reversed_at).map((i) => ({ transfer: t, item: i }))
+  )
+  const transferReversed = isJobWorkTransferReversed(order.status, order.completion_via)
   const ledger: ActivityLedgerRow[] = ((ledgerResult.stock_ledger ?? []) as (ActivityLedgerRow & {
     size_label: string | null; material_types: { description: string } | null; material_sizes: { size_label: string } | null
   })[]).map((r) => ({
@@ -231,6 +263,9 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
               Transfer to Another Vendor
             </Link>
           )}
+          {canReverseCreatingTransfer && createdByTransfer && (
+            <ReverseJobWorkTransferButton transferId={createdByTransfer.id} variant="button" />
+          )}
           {hasSendableOutput && (
             <Link href={`/jobwork/${id}/output-transfer`}
               className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
@@ -239,6 +274,26 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
           )}
         </div>
       </div>
+
+      {transferReversed && (
+        <div className="mb-4 rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          <p className="font-semibold text-gray-900">Transfer reversed — this order is deactivated</p>
+          <p className="mt-0.5">
+            Every line of transfer {createdByTransfer?.transfer_number ?? ''} was reversed back to{' '}
+            {createdByTransfer?.from_vendor?.name ?? 'the original vendor'}
+            {createdByTransfer?.from_job_work_order_id && (
+              <>
+                {' '}(order{' '}
+                <Link href={`/jobwork/${createdByTransfer.from_job_work_order_id}`} className="text-blue-600 hover:underline">
+                  {createdByTransfer.from_job_work_order?.reference_number ?? '—'}
+                </Link>
+                )
+              </>
+            )}
+            . The order is kept as a record of the transfer and can no longer be changed. The reversed lines are listed below.
+          </p>
+        </div>
+      )}
 
       {/* Order Info */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
@@ -413,6 +468,53 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
 
       <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} />
 
+      {reversedLines.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-4">
+          <div className="px-3 py-2 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-900">Reversed Transfer Lines</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Transfer lines that were reversed: the material went back to the vendor it was transferred from, and the line no longer counts as moved.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-gray-500 uppercase">
+                  <th className="px-3 py-2">Transfer</th>
+                  <th className="px-3 py-2">From → To</th>
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Purchase Line</th>
+                  <th className="px-3 py-2 text-right">Qty</th>
+                  <th className="px-3 py-2">Reversed On</th>
+                  <th className="px-3 py-2">Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {reversedLines.map(({ transfer: t, item: i }) => (
+                  <tr key={i.id}>
+                    <td className="px-3 py-2 font-mono text-purple-700 whitespace-nowrap">
+                      {t.transfer_number}
+                      <div className="font-sans text-gray-400">{formatDate(t.transfer_date)}</div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {t.from_vendor?.name ?? '—'} ({t.from_job_work_order?.reference_number ?? '—'}) → {t.to_vendor?.name ?? '—'} ({t.to_job_work_order?.reference_number ?? '—'})
+                    </td>
+                    <td className="px-3 py-2 text-gray-800">
+                      {i.item_name ?? '—'}
+                      {i.size_label && <span className="ml-1 text-gray-400">{i.size_label}</span>}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-blue-700 whitespace-nowrap">{i.sub_purchase_line_id || i.purchase_line_id || '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{Number(i.quantity_transferred).toFixed(3)} {i.unit ?? ''}</td>
+                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{i.reversed_at ? formatDateTime(i.reversed_at) : '—'}</td>
+                    <td className="px-3 py-2 text-gray-600">{i.reversal_notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-3 mt-4">
         {order.status !== 'cancelled' && (
           <Link href={`/jobwork/${order.id}/edit?mode=returns`} className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700">
@@ -430,7 +532,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         <Link href="/jobwork" className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           All Orders
         </Link>
-        <DeleteJobWorkButton orderId={order.id} />
+        {!transferReversed && <DeleteJobWorkButton orderId={order.id} />}
       </div>
     </div>
   )

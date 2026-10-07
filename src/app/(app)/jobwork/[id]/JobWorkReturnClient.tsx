@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowUpRight, TriangleAlert } from 'lucide-react'
-import { getJobWorkOrderStatusLabel, getJobWorkCompletionLabel, formatDate } from '@/lib/utils'
+import { getJobWorkOrderStatusLabel, getJobWorkCompletionLabel, isJobWorkTransferReversed, formatDate } from '@/lib/utils'
 import { useRecordPreview } from '@/components/RecordPreviewProvider'
 import type { ActivityLineSummary } from '@/lib/jobWorkActivity'
 
@@ -76,8 +76,8 @@ export default function JobWorkReturnClient({
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
-          {getJobWorkOrderStatusLabel(order.status)}
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${isJobWorkTransferReversed(order.status, order.completion_via) ? 'bg-gray-100 text-gray-600' : statusColors[order.status] ?? 'bg-gray-100 text-gray-700'}`}>
+          {getJobWorkOrderStatusLabel(order.status, order.completion_via)}
         </span>
         {order.status === 'completed' && order.completion_via && (
           <span className="text-xs text-gray-600">

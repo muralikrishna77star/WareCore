@@ -70,7 +70,14 @@ export function getEntryTypeColor(entryType: string) {
   return inTypes.includes(entryType) ? 'text-green-600' : 'text-red-600'
 }
 
-export function getJobWorkOrderStatusLabel(status: string) {
+/** True for an order created by a vendor transfer whose every line was
+ * reversed — kept as a deactivated record (migration 157). */
+export function isJobWorkTransferReversed(status: string, completionVia?: string | null) {
+  return status === 'cancelled' && completionVia === 'transfer_reversed'
+}
+
+export function getJobWorkOrderStatusLabel(status: string, completionVia?: string | null) {
+  if (isJobWorkTransferReversed(status, completionVia)) return 'Transfer Reversed'
   const labels: Record<string, string> = {
     dispatched: 'In Progress',
     partial_return: 'Partial Return',
@@ -91,6 +98,7 @@ export function getJobWorkCompletionLabel(completionVia: string | null | undefin
     returned: 'Returned to warehouse',
     transferred: 'Transferred to another vendor',
     processed: 'Processed into output',
+    transfer_reversed: 'Every line reversed back to the original vendor',
   }
   if (codes.length === 1) return single[codes[0]] ?? codes[0]
   const short: Record<string, string> = {

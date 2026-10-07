@@ -1183,12 +1183,19 @@ export const DISPATCH_SALE_LEDGER_QUERY = `
 export const JOB_WORK_ORDER_TRANSFERS_QUERY = `
   query GetJobWorkOrderTransfers($id: uuid!) {
     job_work_transfers(where: {_or: [{from_job_work_order_id: {_eq: $id}}, {to_job_work_order_id: {_eq: $id}}]}) {
+      id
       transfer_number
+      transfer_date
       from_job_work_order_id
       to_job_work_order_id
+      from_job_work_order { reference_number }
+      to_job_work_order { reference_number }
       from_vendor { name }
       to_vendor { name }
-      job_work_transfer_items { purchase_line_id sub_purchase_line_id quantity_transferred }
+      job_work_transfer_items {
+        id purchase_line_id sub_purchase_line_id item_name size_label quantity_transferred unit
+        reversed_at reversal_notes
+      }
     }
   }
 `
@@ -1389,7 +1396,7 @@ export const ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY = `
 export const JOB_WORK_TRANSFERS_FOR_ITEM_QUERY = `
   query GetJobWorkTransfersForItem($item_id: uuid!) {
     job_work_transfer_items(
-      where: { from_job_work_item_id: { _eq: $item_id } }
+      where: { from_job_work_item_id: { _eq: $item_id }, reversed_at: { _is_null: true } }
       order_by: { job_work_transfer: { transfer_date: desc } }
     ) {
       id
@@ -1418,6 +1425,7 @@ export const JOB_WORK_TRANSFERS_QUERY = `
       to_vendor { name }
       job_work_transfer_items {
         id purchase_line_id sub_purchase_line_id item_name quantity_transferred unit size_label
+        reversed_at reversal_notes
       }
     }
   }
@@ -1531,6 +1539,7 @@ export const VENDOR_JOB_WORK_TRANSFERS_QUERY = `
         purchase_line_id
         sub_purchase_line_id
         quantity_transferred
+        reversed_at
       }
     }
   }
