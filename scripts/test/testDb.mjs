@@ -79,6 +79,9 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '143_repair_11_open_rec005_exceptions_sep_2026.sql',
   '144_repair_cr1224_intercompany_purchase_lines.sql',
   '148_cancel_duplicate_jw_mtwvzzut_19g7.sql',
+  '152_restore_deleted_purchase_cancels_bill_0125_0428.sql',
+  '154_fix_hr00206_missing_size.sql',
+  '155_repair_17_open_exceptions_oct_2026.sql',
 ])
 
 /** The postmaster's own PID, which Postgres writes as line 1 of postmaster.pid. */

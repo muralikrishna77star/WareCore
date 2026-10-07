@@ -22,18 +22,23 @@ export async function POST(request: NextRequest) {
   }
 
   const idList = validIds.map((id) => `'${id}'`).join(',')
+  const deletedBy = UUID_RE.test(session.userId ?? '') ? `'${session.userId}'::uuid` : 'NULL'
 
+  // delete_stock_ledger_rows() (migration 153) archives every row to
+  // stock_ledger_deletions and refuses — rolling back — any deletion that
+  // would leave stock a still-existing bill/order doesn't account for, e.g.
+  // deleting only the PURCHASE_CANCEL of a removed bill line.
   try {
     const result = await hasuraRunSql(
-      `WITH deleted AS (DELETE FROM stock_ledger WHERE id IN (${idList}) RETURNING id) SELECT COUNT(*) FROM deleted`
+      `SELECT delete_stock_ledger_rows(ARRAY[${idList}]::uuid[], ${deletedBy})`
     )
     const deleted = Number(result.result?.[1]?.[0] ?? 0)
     return NextResponse.json({ success: true, deleted })
   } catch (err) {
-    console.error('[ledger-entries delete]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Delete failed' },
-      { status: 500 }
-    )
+    // hasuraRunSql unwraps the Postgres message, so a refusal reaches the
+    // user as the function's own explanation.
+    const message = err instanceof Error ? err.message : 'Delete failed'
+    console.error('[ledger-entries delete]', message)
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }
