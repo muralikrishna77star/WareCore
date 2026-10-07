@@ -45,9 +45,16 @@ export async function POST(
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('[delete-job-work]', err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Delete failed' },
-      { status: 500 }
-    )
+    const message = err instanceof Error ? err.message : 'Delete failed'
+    // delete_job_work_order() pre-checks the known links (transfers, onward
+    // job work) with business messages; this only covers a link it doesn't
+    // know about yet, so the user never sees raw constraint text.
+    if (/violates foreign key constraint/i.test(message)) {
+      return NextResponse.json(
+        { error: 'This order cannot be deleted because other records still refer to it (for example a transfer or a later job work order). Remove those first, then delete this order.' },
+        { status: 400 }
+      )
+    }
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
