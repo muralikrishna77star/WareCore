@@ -8,6 +8,7 @@ import { ReferenceLink } from '@/components/ReferenceLink'
 import { isReferenceType } from '@/lib/reference'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { VendorLink } from '@/components/ReportLinks'
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
@@ -53,6 +54,7 @@ export type LedgerRow = {
   jobWorkReferenceId?: string | null
   netQuantity?: number
   vendorName?: string | null
+  vendorId?: string | null
   createdByName?: string | null
   createdAt?: string | null
   modifiedAt?: string | null
@@ -281,7 +283,11 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
               <td className={`px-4 py-3 text-right ${row.vendorBalance < 0 ? 'text-red-600' : 'text-purple-800'}`}>
                 {fmtQ(row.vendorBalance)}
               </td>
-              <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{row.vendorName || '—'}</td>
+              <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">
+                <VendorLink vendorId={row.vendorId} fromDate={row.entry_date} className="text-gray-600 hover:text-blue-700 hover:underline">
+                  {row.vendorName || '—'}
+                </VendorLink>
+              </td>
               <td className="px-4 py-3 text-gray-500 text-xs">{row.notes || '—'}</td>
               <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{row.createdByName || '—'}</td>
               <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.createdAt ? formatDateTime(row.createdAt) : '—'}</td>

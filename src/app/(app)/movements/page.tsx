@@ -19,6 +19,7 @@ import {
 import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
+import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
 
 const entryTypeOptions = [
   'PURCHASE_IN',
@@ -189,10 +190,12 @@ export default async function MovementsPage({
     }
   })
   const selectedItem = params.item ? itemOptions.find((i) => i.id === params.item) : undefined
-  const itemLookup = new Map<string, { item_code: string; item_name: string }>()
+  const itemLookup = new Map<string, { id: string; item_code: string; item_name: string }>()
   for (const i of itemRows) {
-    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { item_code: i.item_code, item_name: i.item_name })
+    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { id: i.id, item_code: i.item_code, item_name: i.item_name })
   }
+  const itemIdFor = (row: { material_type_id?: string | null; material_size_id?: string | null }) =>
+    itemLookup.get(`${row.material_type_id ?? ''}|${row.material_size_id ?? ''}`)?.id ?? null
   const itemLabelFor = (row: { material_type_id?: string | null; material_size_id?: string | null; material_types?: { description: string } | null }) => {
     const info = itemLookup.get(`${row.material_type_id ?? ''}|${row.material_size_id ?? ''}`)
     return info ? `${info.item_code} — ${info.item_name}` : row.material_types?.description || '—'
@@ -339,10 +342,13 @@ export default async function MovementsPage({
   for (const b of purchaseBillsResult.purchase_bills ?? []) {
     if (b.suppliers?.name) vendorByBillId.set(b.id, b.suppliers.name)
   }
-  const jobWorkInfoById = new Map<string, { vendor?: string; status?: string }>()
+  const jobWorkInfoById = new Map<string, { vendor?: string; vendorId?: string; status?: string }>()
   for (const o of jobWorkOrdersResult.job_work_orders ?? []) {
-    jobWorkInfoById.set(o.id, { vendor: o.suppliers?.name, status: o.status })
+    jobWorkInfoById.set(o.id, { vendor: o.suppliers?.name, vendorId: o.vendor_id, status: o.status })
   }
+  // Only a job work row's vendor is a job work vendor (a purchase row's is a supplier).
+  const jobWorkVendorIdFor = (row: StockLedgerRow): string | null =>
+    row.reference_type === 'job_work' && row.reference_id ? jobWorkInfoById.get(row.reference_id)?.vendorId ?? null : null
 
   const vendorFor = (row: StockLedgerRow): string | null => {
     if (row.reference_type === 'purchase_bill' && row.reference_id) return vendorByBillId.get(row.reference_id) || null
@@ -597,7 +603,11 @@ export default async function MovementsPage({
                       </td>
                       <td className="px-4 py-2.5 text-gray-700">{m.companies?.code}</td>
                       <td className="px-4 py-2.5 text-gray-600">{m.warehouses?.name}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{itemLabelFor(m)}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">
+                        <ItemLedgerLink itemMasterId={itemIdFor(m)} fromDate={m.entry_date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                          {itemLabelFor(m)}
+                        </ItemLedgerLink>
+                      </td>
                       <td className="px-4 py-2.5 text-gray-600">{m.size_label || m.material_sizes?.size_label || '—'}</td>
                       <td className={`px-4 py-2.5 text-right font-semibold ${isIn ? 'text-green-700' : 'text-red-700'}`}>
                         {isIn ? '+' : '-'}{Math.abs(m.quantity).toFixed(3)} {m.material_types?.unit}
@@ -605,7 +615,11 @@ export default async function MovementsPage({
                       <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
                         {balanceById.has(m.id) ? `${balanceById.get(m.id)!.toFixed(3)} ${m.material_types?.unit ?? ''}` : '—'}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{vendor || '—'}</td>
+                      <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
+                        <VendorLink vendorId={jobWorkVendorIdFor(m)} fromDate={m.entry_date} className="text-gray-600 hover:text-blue-700 hover:underline">
+                          {vendor || '—'}
+                        </VendorLink>
+                      </td>
                       <td className="px-4 py-2.5">
                         {jwStatus ? (
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${jobWorkStatusColor(jwStatus)}`}>
@@ -613,7 +627,11 @@ export default async function MovementsPage({
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{m.reference_number || '—'}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">
+                        {m.reference_type === 'job_work' ? (
+                          <JobWorkLink orderId={m.reference_id}>{m.reference_number || '—'}</JobWorkLink>
+                        ) : (m.reference_number || '—')}
+                      </td>
                       <td className="px-4 py-2.5 text-gray-500 text-xs">{m.notes || '—'}</td>
                     </tr>
                   )

@@ -345,10 +345,12 @@ export default async function StockStatementPage({
     )
   )
   let vendorNameByJobWorkOrderId = new Map<string, string>()
+  let vendorIdByJobWorkOrderId = new Map<string, string>()
   if (jobWorkOrderIds.length > 0) {
     const vendorLookupResult = await hasuraQuery(JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY, { ids: jobWorkOrderIds })
-    const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
+    const rows: { id: string; vendor_id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? 'Unknown Vendor']))
+    vendorIdByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.vendor_id]))
   }
 
   // Which JOB_WORK_OUTPUT_IN / JOB_WORK_CANCEL rows are vendor movements
@@ -660,6 +662,12 @@ export default async function StockStatementPage({
         customerName: row.reference_type === 'dispatch' && row.reference_id
           ? customerNameByDispatchId.get(row.reference_id) ?? ''
           : '',
+        // On-screen links only (not exported): item, job work vendor and order.
+        itemMasterId: itemIdByMaterial.get(itemKey) ?? null,
+        vendorId: isVendorMovement(row) && row.reference_type === 'job_work' && row.reference_id
+          ? vendorIdByJobWorkOrderId.get(row.reference_id) ?? null
+          : null,
+        jobWorkOrderId: row.reference_type === 'job_work' ? row.reference_id ?? null : null,
         itemCode,
         itemName: item.item_name,
         size: item.size,
@@ -771,6 +779,7 @@ export default async function StockStatementPage({
   const tableRows: StatementRow[] = sorted.map((item) => ({
     key: `${item.material_type_id}|${item.material_size_id ?? ''}`,
     itemName: item.item_name,
+    itemHref: ledgerLink(item, { from: fromDate, to: toDate }),
     unit: item.unit,
     openingWarehouse: item.openingWarehouse,
     openingWarehouseHref: ledgerLink(item, { from: '2000-01-01', to: fromDate }),

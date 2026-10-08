@@ -374,19 +374,21 @@ export default async function DaywiseStockStatementPage({
     jobIds.length ? hasuraQuery(JOB_WORK_ORDERS_VENDOR_NAME_LOOKUP_QUERY, { ids: jobIds }) : Promise.resolve({ job_work_orders: [] }),
   ])
 
-  const partyByRef = new Map<string, { name: string; role: string }>()
+  const partyByRef = new Map<string, { name: string; role: string; vendorId?: string }>()
   for (const b of (billPartyRes.purchase_bills ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
     if (b.suppliers?.name) partyByRef.set(b.id, { name: b.suppliers.name, role: 'Supplier' })
   }
   for (const d of (dispatchPartyRes.dispatch_orders ?? []) as { id: string; customers?: { name: string } | null }[]) {
     if (d.customers?.name) partyByRef.set(d.id, { name: d.customers.name, role: 'Customer' })
   }
-  for (const j of (jobPartyRes.job_work_orders ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
-    if (j.suppliers?.name) partyByRef.set(j.id, { name: j.suppliers.name, role: 'Vendor' })
+  for (const j of (jobPartyRes.job_work_orders ?? []) as { id: string; vendor_id: string; suppliers?: { name: string } | null }[]) {
+    if (j.suppliers?.name) partyByRef.set(j.id, { name: j.suppliers.name, role: 'Vendor', vendorId: j.vendor_id })
   }
   // Transfers have no external counterparty — left blank rather than guessed.
-  const partyFor = (referenceId: string | null | undefined) =>
+  const partyFor = (referenceId: string | null | undefined): { name: string; role: string; vendorId?: string } =>
     (referenceId && partyByRef.get(referenceId)) || { name: '', role: '' }
+  // Item master id per material + size, for the Item column's Item Stock Ledger link.
+  const itemIdByScope = new Map(itemRows.map((i) => [`${i.material_type_id}|${i.material_size_id ?? ''}`, i.id]))
 
   // Bucket movements by day first (preserving within-day order), then walk
   // the days in order maintaining running Warehouse/Vendor balances — so
@@ -487,6 +489,10 @@ export default async function DaywiseStockStatementPage({
         reference: m.reference_number ?? '',
         party: partyFor(m.reference_id).name,
         partyRole: partyFor(m.reference_id).role,
+        vendorId: partyFor(m.reference_id).vendorId ?? null,
+        jobWorkOrderId: m.reference_type === 'job_work' ? m.reference_id ?? null : null,
+        itemMasterId: itemIdByScope.get(`${m.material_type_id ?? ''}|${m.material_size_id ?? ''}`) ?? null,
+        date,
       }
     })
 

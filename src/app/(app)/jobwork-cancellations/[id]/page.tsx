@@ -6,9 +6,11 @@ import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_CANCELLATION_BY_ID_QUERY } from '@/lib/hasura/queries'
+import { ItemLedgerLink, PurchaseLineLink, VendorLink } from '@/components/ReportLinks'
 
 interface JobWorkCancellationInputItem {
   id: string
+  item_master_id: string | null
   item_name: string | null
   material_type_name: string | null
   size_label: string | null
@@ -21,6 +23,7 @@ interface JobWorkCancellationInputItem {
 
 interface JobWorkCancellationOutputItem {
   id: string
+  item_master_id: string | null
   item_name: string | null
   material_type_name: string | null
   size_label: string | null
@@ -73,7 +76,9 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Vendor</p>
-            <p className="text-sm font-medium text-gray-700 mt-1">{record.vendor_name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-700 mt-1">
+              <VendorLink vendorId={record.vendor_id} fromDate={record.dispatch_date}>{record.vendor_name ?? '—'}</VendorLink>
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Expected Return</p>
@@ -142,7 +147,11 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
               ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
-                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">{item.item_name || '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={record.dispatch_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                      {item.item_name || '—'}
+                    </ItemLedgerLink>
+                  </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.material_type_name || '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.size_label || '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-700 text-right font-mono">{Number(item.quantity_sent ?? 0).toFixed(3)}</td>
@@ -150,9 +159,10 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.unit || '—'}</td>
                   <td className="px-3 py-2">
                     {item.purchase_line_id ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                        {item.purchase_line_id}
-                      </span>
+                      <PurchaseLineLink
+                        lineId={item.purchase_line_id}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:underline"
+                      />
                     ) : <span className="text-xs text-gray-400">—</span>}
                   </td>
                   <td className="px-3 py-2">
@@ -193,7 +203,11 @@ export default async function JobWorkCancellationDetailPage({ params }: { params
                 {outputItems.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
-                    <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">{item.item_name || '—'}</td>
+                    <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">
+                      <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={record.dispatch_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                        {item.item_name || '—'}
+                      </ItemLedgerLink>
+                    </td>
                     <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.material_type_name || '—'}</td>
                     <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.size_label || '—'}</td>
                     <td className="px-3 py-2 text-[0.8125rem] text-gray-700 text-right font-mono">{Number(item.quantity ?? 0).toFixed(3)}</td>

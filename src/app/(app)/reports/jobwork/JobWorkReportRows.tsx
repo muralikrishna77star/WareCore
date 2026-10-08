@@ -1,8 +1,9 @@
 'use client'
 
-import { formatDate } from '@/lib/utils'
+import { formatDate, isJobWorkTransferReversed } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -20,6 +21,7 @@ type JobWorkItem = {
   quantity_transferred_out: number | string
   size_label: string | null
   purchase_line_id: string | null
+  item_master_id?: string | null
   material_types: { description: string | null; unit?: string | null } | null
   material_sizes: { size_label: string | null } | null
   rate: number
@@ -32,7 +34,9 @@ export type JobWorkOrderRow = {
   expected_return_date: string | null
   actual_return_date: string | null
   status: string | null
+  completion_via?: string | null
   notes?: string | null
+  vendor_id?: string | null
   companies: { name: string; code?: string | null } | null
   warehouses: { name: string } | null
   suppliers: { name: string } | null
@@ -101,11 +105,15 @@ export function JobWorkReportRows({
             <tr key={`${o.id}-${idx}`} className="hover:bg-gray-50">
               {idx === 0 && (
                 <>
-                  <td className="px-4 py-3 font-medium text-purple-700" rowSpan={rows.length}>{o.reference_number}</td>
+                  <td className="px-4 py-3 font-medium text-purple-700" rowSpan={rows.length}>
+                    <JobWorkLink orderId={o.id} className="text-purple-700 hover:underline">{o.reference_number}</JobWorkLink>
+                  </td>
                   <td className="px-4 py-3 text-gray-600" rowSpan={rows.length}>{formatDate(o.dispatch_date)}</td>
                   <td className="px-4 py-3 text-gray-500" rowSpan={rows.length}>{o.expected_return_date ? formatDate(o.expected_return_date) : '—'}</td>
                   <td className="px-4 py-3" rowSpan={rows.length}>{o.companies?.name}</td>
-                  <td className="px-4 py-3" rowSpan={rows.length}>{o.suppliers?.name}</td>
+                  <td className="px-4 py-3" rowSpan={rows.length}>
+                    <VendorLink vendorId={o.vendor_id} fromDate={o.dispatch_date} className="hover:text-blue-700 hover:underline">{o.suppliers?.name}</VendorLink>
+                  </td>
                 </>
               )}
               {item ? (
@@ -116,7 +124,11 @@ export function JobWorkReportRows({
                   const rate = item.rate
                   return (
                     <>
-                      <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={o.dispatch_date} className="hover:text-blue-700 hover:underline">
+                          {item.material_types?.description}
+                        </ItemLedgerLink>
+                      </td>
                       <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                       <td className="px-4 py-3 text-right">{sent.toFixed(3)}</td>
                       <td className="px-4 py-3 text-right text-green-700">{received.toFixed(3)}</td>
@@ -132,8 +144,8 @@ export function JobWorkReportRows({
               )}
               {idx === 0 && (
                 <td className="px-4 py-3" rowSpan={rows.length}>
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[o.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
-                    {o.status?.replace(/_/g, ' ')}
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${isJobWorkTransferReversed(o.status ?? '', o.completion_via) ? 'bg-gray-100 text-gray-600' : statusColors[o.status ?? ''] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {isJobWorkTransferReversed(o.status ?? '', o.completion_via) ? 'Transfer Reversed' : o.status?.replace(/_/g, ' ')}
                   </span>
                 </td>
               )}

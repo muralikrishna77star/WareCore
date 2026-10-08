@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight, TriangleAlert } from 'lucide-react'
 import type { DetailRow, LedgerReport, SummaryGroup, Totals } from '@/lib/dayWiseItemLedger'
+import { ItemLedgerLink, VendorLink } from '@/components/ReportLinks'
 
 const qty = (n: number | null | undefined) => (n == null ? '' : n.toFixed(3))
 const money = (n: number | null | undefined) =>
@@ -92,7 +93,11 @@ function DetailTable({ rows }: { rows: DetailRow[] }) {
               <td className="px-3 py-2 text-right">{money(r.sgstAmount)}</td>
               <td className="px-3 py-2 text-right">{money(r.totalGst)}</td>
               <td className="px-3 py-2 text-right font-medium">{money(r.totalAmount)}</td>
-              <td className="px-3 py-2">{party}</td>
+              <td className="px-3 py-2">
+                {r.jobWorkerName ? (
+                  <VendorLink vendorId={r.jobWorkerId} fromDate={r.entryDate} className="hover:text-blue-700 hover:underline">{party}</VendorLink>
+                ) : party}
+              </td>
               <td className="px-3 py-2 text-gray-600">{route}</td>
               <td className="px-3 py-2">
                 <span
@@ -146,10 +151,16 @@ function SummaryRow({
         <td className="px-3 py-2">
           <span className="inline-flex items-center gap-1 text-gray-500">
             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            <span className="font-medium text-gray-800">{group.itemCode}</span>
+            <ItemLedgerLink itemMasterId={group.itemMasterId} fromDate={group.entryDate} className="font-medium text-gray-800 hover:text-blue-700 hover:underline">
+              {group.itemCode}
+            </ItemLedgerLink>
           </span>
         </td>
-        <td className="px-3 py-2 text-gray-700">{group.itemDescription}</td>
+        <td className="px-3 py-2 text-gray-700">
+          <ItemLedgerLink itemMasterId={group.itemMasterId} fromDate={group.entryDate} className="text-gray-700 hover:text-blue-700 hover:underline">
+            {group.itemDescription}
+          </ItemLedgerLink>
+        </td>
         <td className="px-3 py-2 text-gray-700">{group.itemSize}</td>
         <td className="px-3 py-2 text-center text-gray-500">{group.unit}</td>
         <td className="px-3 py-2 text-right text-gray-500">

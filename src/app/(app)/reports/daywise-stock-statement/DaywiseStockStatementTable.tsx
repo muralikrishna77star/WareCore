@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react'
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
 
 export type Transaction = {
   id: string
@@ -22,6 +23,11 @@ export type Transaction = {
   party: string
   /** Which of the three roles `party` is, so one column can say which. */
   partyRole: string
+  /** Link targets: the job work vendor (Vendor role only), job work order, and item. */
+  vendorId?: string | null
+  jobWorkOrderId?: string | null
+  itemMasterId?: string | null
+  date?: string
 }
 
 export type DayGroup = {
@@ -153,7 +159,11 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
                                   {t.typeLabel}
                                 </span>
                               </td>
-                              <td className="px-2 py-1.5 font-medium text-gray-900">{t.itemName}</td>
+                              <td className="px-2 py-1.5 font-medium text-gray-900">
+                                <ItemLedgerLink itemMasterId={t.itemMasterId} fromDate={t.date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                                  {t.itemName}
+                                </ItemLedgerLink>
+                              </td>
                               <td className="px-2 py-1.5 text-gray-600">{t.company}</td>
                               <td className="px-2 py-1.5 text-gray-500">{t.warehouse}</td>
                               <td className={`px-2 py-1.5 text-right font-medium ${t.isIn ? 'text-green-700' : 'text-red-600'}`}>
@@ -166,14 +176,18 @@ export default function DaywiseStockStatementTable({ groups }: { groups: DayGrou
                               <td className="px-2 py-1.5 text-gray-700">
                                 {t.party ? (
                                   <>
-                                    {t.party}
+                                    <VendorLink vendorId={t.vendorId} fromDate={t.date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                                      {t.party}
+                                    </VendorLink>
                                     <span className="ml-1 text-[10px] uppercase text-gray-400">{t.partyRole}</span>
                                   </>
                                 ) : (
                                   <span className="text-gray-400">—</span>
                                 )}
                               </td>
-                              <td className="px-2 py-1.5 text-gray-500 text-[11px]">{t.reference || '—'}</td>
+                              <td className="px-2 py-1.5 text-gray-500 text-[11px]">
+                                <JobWorkLink orderId={t.jobWorkOrderId}>{t.reference || '—'}</JobWorkLink>
+                              </td>
                             </tr>
                           ))}
                         </tbody>

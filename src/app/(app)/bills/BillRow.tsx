@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
+import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
 
 export interface PurchaseBillLineItem {
   id: string
   item_name?: string | null
+  item_master_id?: string | null
   purchase_line_id?: string | null
 }
 
@@ -94,16 +96,19 @@ export default function BillRow({ bill, highlight }: { bill: PurchaseBillListIte
             <div className="pl-8 space-y-1.5">
               {items.map((item) => (
                 <div key={item.id} className="flex items-center gap-3 text-[0.8125rem]">
-                  <span className="text-gray-600 min-w-[12rem]">{item.item_name || '—'}</span>
-                  <span
-                    className={`inline-flex items-center rounded border px-2 py-0.5 text-[0.75rem] font-mono font-medium whitespace-nowrap select-all ${
+                  <span className="text-gray-600 min-w-[12rem]">
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={bill.bill_date} className="text-gray-600 hover:text-blue-700 hover:underline">
+                      {item.item_name || '—'}
+                    </ItemLedgerLink>
+                  </span>
+                  <PurchaseLineLink
+                    lineId={item.purchase_line_id}
+                    className={`inline-flex items-center rounded border px-2 py-0.5 text-[0.75rem] font-mono font-medium whitespace-nowrap hover:underline ${
                       isMatch(item)
                         ? 'bg-yellow-100 border-yellow-400 text-yellow-800 ring-2 ring-yellow-300'
                         : 'bg-blue-50 border-blue-200 text-blue-700'
                     }`}
-                  >
-                    {item.purchase_line_id ?? '—'}
-                  </span>
+                  />
                 </div>
               ))}
             </div>

@@ -8,10 +8,12 @@ import { hasuraQuery } from '@/lib/hasura/server'
 import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
 import CancelDispatchButton from './CancelDispatchButton'
 import PurgeDispatchButton from './PurgeDispatchButton'
+import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
 
 interface DispatchItemDetail {
   id: string
   dispatch_order_id: string
+  item_master_id: string | null
   item_name: string | null
   purchase_line_id: string | null
   sale_line_id: string | null
@@ -197,15 +199,21 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
               {items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
-                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-gray-700">
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={order.dispatch_date}>{item.item_master?.item_code ?? '—'}</ItemLedgerLink>
+                  </td>
                   <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-900">
-                    {item.item_name ?? '—'}
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={order.dispatch_date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                      {item.item_name ?? '—'}
+                    </ItemLedgerLink>
                     {item.sale_line_id && (
                       <span className="block text-[10px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1 mt-0.5">{item.sale_line_id}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-700">{item.material_types?.description ?? '—'}</td>
-                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-blue-700">{item.purchase_line_id ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-blue-700">
+                    <PurchaseLineLink lineId={item.purchase_line_id} className="text-blue-700 hover:underline" />
+                  </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-700">{item.size_label ?? '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-900 text-right">

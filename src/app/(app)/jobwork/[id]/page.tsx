@@ -12,6 +12,7 @@ import { formatDate, formatDateTime, convertQuantity, isSameUnit, formatNumber, 
 import JobWorkReturnClient from './JobWorkReturnClient'
 import DeleteJobWorkButton from './DeleteJobWorkButton'
 import ReverseJobWorkTransferButton from '@/components/ReverseJobWorkTransferButton'
+import { ItemLedgerLink, JobWorkLink, PurchaseLineLink, VendorLink } from '@/components/ReportLinks'
 import JobWorkActivitySection from './JobWorkActivitySection'
 
 interface JobWorkOrderDetail {
@@ -23,6 +24,7 @@ interface JobWorkOrderDetail {
   status: string
   completion_via: string | null
   notes: string | null
+  vendor_id: string | null
   created_at: string
   created_by: string | null
   updated_at: string
@@ -83,12 +85,15 @@ interface OrderTransfer {
   to_job_work_order_id: string | null
   from_job_work_order: { reference_number: string | null } | null
   to_job_work_order: { reference_number: string | null } | null
+  from_vendor_id: string | null
+  to_vendor_id: string | null
   from_vendor: { name: string } | null
   to_vendor: { name: string } | null
   job_work_transfer_items: {
     id: string
     purchase_line_id: string | null
     sub_purchase_line_id: string | null
+    item_master_id: string | null
     item_name: string | null
     size_label: string | null
     quantity_transferred: number
@@ -180,12 +185,13 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
     materialLabel: [r.material_types?.description, r.material_sizes?.size_label ?? r.size_label].filter(Boolean).join(' — ') || undefined,
   }))
   const activity = buildJobWorkActivity({ orderId: id, items, ledger, directSales, transfers })
-  const itemLabels: Record<string, { item: string; purchaseLine: string | null }> = {}
+  const itemLabels: Record<string, { item: string; purchaseLine: string | null; itemMasterId: string | null }> = {}
   for (const it of items) {
     const size = it.material_sizes?.size_label ?? it.size_label
     itemLabels[it.id] = {
       item: [it.item_master?.item_code, size].filter(Boolean).join(' — ') || (it.item_name ?? it.material_types?.description ?? '—'),
       purchaseLine: it.purchase_line_id,
+      itemMasterId: it.item_master_id,
     }
   }
 
@@ -242,7 +248,10 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
             <ArrowLeft className="h-4 w-4" /> Back to Job Work
           </Link>
           <h1 className="text-xl font-bold text-gray-900">
-            Job Work Order: {order.reference_number ?? id.slice(0, 8)}
+            Job Work Order:{' '}
+            <JobWorkLink orderId={order.id} className="text-gray-900 hover:text-blue-700 hover:underline">
+              {order.reference_number ?? id.slice(0, 8)}
+            </JobWorkLink>
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -313,7 +322,9 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Vendor</p>
-            <p className="text-xs font-medium text-gray-900 mt-1">{order.suppliers?.name ?? '—'}</p>
+            <p className="text-xs font-medium text-gray-900 mt-1">
+              <VendorLink vendorId={order.vendor_id} fromDate={order.dispatch_date}>{order.suppliers?.name ?? '—'}</VendorLink>
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Expected Return</p>
@@ -466,7 +477,7 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         ledgerRange={ledgerRange}
       />
 
-      <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} />
+      <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} ledgerFrom={ledgerRange.from} />
 
       {reversedLines.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-4">
@@ -497,13 +508,24 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
                       <div className="font-sans text-gray-400">{formatDate(t.transfer_date)}</div>
                     </td>
                     <td className="px-3 py-2 text-gray-700">
-                      {t.from_vendor?.name ?? '—'} ({t.from_job_work_order?.reference_number ?? '—'}) → {t.to_vendor?.name ?? '—'} ({t.to_job_work_order?.reference_number ?? '—'})
+                      <VendorLink vendorId={t.from_vendor_id} fromDate={t.transfer_date}>{t.from_vendor?.name ?? '—'}</VendorLink>
+                      {' ('}
+                      <JobWorkLink orderId={t.from_job_work_order_id}>{t.from_job_work_order?.reference_number ?? '—'}</JobWorkLink>
+                      {') → '}
+                      <VendorLink vendorId={t.to_vendor_id} fromDate={t.transfer_date}>{t.to_vendor?.name ?? '—'}</VendorLink>
+                      {' ('}
+                      <JobWorkLink orderId={t.to_job_work_order_id}>{t.to_job_work_order?.reference_number ?? '—'}</JobWorkLink>
+                      {')'}
                     </td>
                     <td className="px-3 py-2 text-gray-800">
-                      {i.item_name ?? '—'}
+                      <ItemLedgerLink itemMasterId={i.item_master_id} fromDate={t.transfer_date} className="text-gray-800 hover:text-blue-700 hover:underline">
+                        {i.item_name ?? '—'}
+                      </ItemLedgerLink>
                       {i.size_label && <span className="ml-1 text-gray-400">{i.size_label}</span>}
                     </td>
-                    <td className="px-3 py-2 font-mono text-blue-700 whitespace-nowrap">{i.sub_purchase_line_id || i.purchase_line_id || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-blue-700 whitespace-nowrap">
+                      <PurchaseLineLink lineId={i.sub_purchase_line_id || i.purchase_line_id} />
+                    </td>
                     <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{Number(i.quantity_transferred).toFixed(3)} {i.unit ?? ''}</td>
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{i.reversed_at ? formatDateTime(i.reversed_at) : '—'}</td>
                     <td className="px-3 py-2 text-gray-600">{i.reversal_notes || '—'}</td>

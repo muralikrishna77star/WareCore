@@ -3,6 +3,7 @@
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, JobWorkLink } from '@/components/ReportLinks'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -46,6 +47,7 @@ export type MovementRow = {
   runningBalance?: number
   rate: number | null
   value: number | null
+  itemMasterId?: string | null
 }
 
 export function MovementsRows({
@@ -108,7 +110,11 @@ export function MovementsRows({
               </td>
               <td className="px-4 py-3">{m.companies?.name}</td>
               <td className="px-4 py-3 text-gray-500">{m.warehouses?.name}</td>
-              <td className="px-4 py-3 font-medium">{m.material_types?.description}</td>
+              <td className="px-4 py-3 font-medium">
+                <ItemLedgerLink itemMasterId={m.itemMasterId} fromDate={m.entry_date} className="hover:text-blue-700 hover:underline">
+                  {m.material_types?.description}
+                </ItemLedgerLink>
+              </td>
               <td className="px-4 py-3 text-gray-500">{m.material_sizes?.size_label ?? m.size_label ?? '—'}</td>
               <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-700' : 'text-red-600'}`}>
                 {isIn ? '+' : '-'}{Math.abs(Number(m.quantity)).toFixed(3)}
@@ -120,7 +126,11 @@ export function MovementsRows({
               <td className={`px-4 py-3 text-right font-medium bg-teal-50/40 ${value != null && value < 0 ? 'text-red-600' : 'text-teal-800'}`}>
                 {value != null ? fmtC(value) : '—'}
               </td>
-              <td className="px-4 py-3 text-gray-500 text-xs">{m.reference_id ?? '—'}</td>
+              <td className="px-4 py-3 text-gray-500 text-xs">
+                {m.reference_type === 'job_work' && m.reference_id ? (
+                  <JobWorkLink orderId={m.reference_id}>{m.reference_number ?? m.reference_id}</JobWorkLink>
+                ) : (m.reference_id ?? '—')}
+              </td>
             </tr>
           )
         })}

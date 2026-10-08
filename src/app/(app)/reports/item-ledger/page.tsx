@@ -351,13 +351,15 @@ export default async function ItemStockLedgerPage({
   // per distinct order id rather than joined in the main query, since
   // reference_id is polymorphic across entry types.
   let vendorNameByJobWorkOrderId = new Map<string, string>()
+  let vendorIdByJobWorkOrderId = new Map<string, string>()
   const jobWorkOrderIds = Array.from(
     new Set(entries.filter((e) => e.reference_type === 'job_work' && e.reference_id).map((e) => e.reference_id as string))
   )
   if (jobWorkOrderIds.length) {
     const vendorLookupResult = await hasuraQuery(JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY, { ids: jobWorkOrderIds })
-    const rows: { id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
+    const rows: { id: string; vendor_id: string; suppliers?: { name: string } | null }[] = vendorLookupResult.job_work_orders ?? []
     vendorNameByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.suppliers?.name ?? '']))
+    vendorIdByJobWorkOrderId = new Map(rows.map((r) => [r.id, r.vendor_id]))
   }
 
   // Creator/editor audit trail per row (Created By/On, Modified On columns)
@@ -476,6 +478,8 @@ export default async function ItemStockLedgerPage({
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
     const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
     const ownVendorName = e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null
+    // The Vendor column links to the vendor this row is posted against.
+    const vendorId = e.reference_type === 'job_work' && e.reference_id ? vendorIdByJobWorkOrderId.get(e.reference_id) || null : null
 
     // Transfers show both sides ("Source → Destination"): the row's own
     // vendor already tells us which end it's posted at, and the audit-trail
@@ -504,6 +508,7 @@ export default async function ItemStockLedgerPage({
       orphaned: e.reference_type && e.reference_id ? orphanedRefs.has(`${e.reference_type}|${e.reference_id}`) : false,
       duplicateCount: dupKey ? dupKeyCounts.get(dupKey) ?? 1 : 1,
       vendorName,
+      vendorId,
       ownVendorName,
       createdByName,
       createdAt,
@@ -610,6 +615,7 @@ export default async function ItemStockLedgerPage({
         jobWorkReferenceType: returnRow.reference_type,
         jobWorkReferenceId: returnRow.reference_id,
         vendorName: returnRow.vendorName,
+        vendorId: returnRow.vendorId,
         // Warehouse nets to ~0 (RETURN_IN + SALE_OUT are exact opposites).
         // Vendor side: only RETURN_IN is a vendor-movement type, so the
         // sale-in-full closes out exactly that much of what was held there.

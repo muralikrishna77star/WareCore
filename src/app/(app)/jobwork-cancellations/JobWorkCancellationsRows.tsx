@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { VendorLink } from '@/components/ReportLinks'
 
 export type JobWorkCancellationRow = {
   id: string
@@ -12,6 +13,7 @@ export type JobWorkCancellationRow = {
   company_name: string | null
   warehouse_name: string | null
   vendor_name: string | null
+  vendor_id?: string | null
   status: string | null
   cancelled_at: string | null
 }
@@ -46,7 +48,11 @@ export function JobWorkCancellationsRows({ records: allRecords }: { records: Job
           <tr key={r.id} className="hover:bg-gray-50">
             <td className="px-6 py-3 font-mono text-xs text-gray-500 line-through whitespace-nowrap">{r.reference_number || '—'}</td>
             <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDate(r.dispatch_date)}</td>
-            <td className="px-6 py-3 text-gray-700">{r.vendor_name || '—'}</td>
+            <td className="px-6 py-3 text-gray-700">
+              <VendorLink vendorId={r.vendor_id} fromDate={r.dispatch_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                {r.vendor_name || '—'}
+              </VendorLink>
+            </td>
             <td className="px-6 py-3 text-gray-700">{r.company_name || '—'}</td>
             <td className="px-6 py-3 text-gray-600">{r.warehouse_name || '—'}</td>
             <td className="px-6 py-3">

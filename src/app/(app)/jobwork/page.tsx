@@ -7,6 +7,7 @@ import { JOB_WORK_ORDERS_QUERY, JOB_WORK_ORDERS_DISPATCH_DATE_BOUNDS_QUERY, VEND
 import { defaultCreatedRange, resolveListingRange, yearOptionsFrom } from '@/lib/dateRange'
 import JobWorkTable, { type JobWorkOrderRow } from './JobWorkTable'
 import { ListingSummary, LISTING_ROW_LIMIT } from '@/components/ListingSummary'
+import { VendorLink } from '@/components/ReportLinks'
 
 export default async function JobWorkPage({
   searchParams,
@@ -119,7 +120,9 @@ async function VendorStockBadge() {
           <div className="flex flex-wrap gap-4">
             {Object.entries(vendorGroups).map(([id, { name, rows }]) => (
               <div key={id} className="min-w-48 rounded-lg border border-amber-200 bg-amber-50/50 px-4 py-3">
-                <p className="text-sm font-semibold text-gray-800">{name}</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  <VendorLink vendorId={id} className="text-gray-800 hover:text-blue-700 hover:underline">{name}</VendorLink>
+                </p>
                 {rows.map((r, i) => (
                   <p key={i} className="mt-1 text-xs text-gray-600">
                     {r.material_type_name} {r.size_label ? `(${r.size_label})` : ''}: <strong>{Number(r.pending_quantity).toFixed(3)}</strong>

@@ -48,6 +48,8 @@ export interface TracePurchaseLine {
   total: number
   /** GST % from the purchase entry (CGST + SGST); null when none was entered. */
   gstRate: number | null
+  /** For the on-screen Item Stock Ledger link. */
+  itemMasterId?: string | null
 }
 
 export interface TraceMovement extends PurchaseLineEntry {

@@ -157,6 +157,8 @@ export type PartyNames = {
   supplierName?: string | null
   customerName?: string | null
   jobWorkerName?: string | null
+  /** The job work vendor's id, for linking to Vendorwise Stock Movement. */
+  jobWorkerId?: string | null
   source?: string | null
   destination?: string | null
 }
@@ -168,6 +170,8 @@ export type RowContext = {
   itemDescription: string
   itemSize: string
   unit: string
+  /** Resolved item master id (when known), for linking to the Item Stock Ledger. */
+  itemMasterId?: string | null
   documentNumber: string
   status: string
   createdByName: string
@@ -216,6 +220,8 @@ export type DetailRow = {
   supplierName: string
   customerName: string
   jobWorkerName: string
+  jobWorkerId: string | null
+  itemMasterId: string | null
   source: string
   destination: string
   status: string
@@ -425,6 +431,8 @@ export function buildDetailRow(row: LedgerRow, ctx: RowContext): DetailRow {
     supplierName: party === 'supplier' ? ctx.parties.supplierName ?? '' : '',
     customerName: party === 'customer' ? ctx.parties.customerName ?? '' : '',
     jobWorkerName: party === 'jobworker' ? ctx.parties.jobWorkerName ?? '' : '',
+    jobWorkerId: party === 'jobworker' ? ctx.parties.jobWorkerId ?? null : null,
+    itemMasterId: ctx.itemMasterId ?? null,
     source: ctx.parties.source ?? '',
     destination: ctx.parties.destination ?? '',
     status: ctx.status,
@@ -495,6 +503,7 @@ export type SummaryGroup = {
   itemDescription: string
   itemSize: string
   unit: string
+  itemMasterId: string | null
   totals: Totals
   rows: DetailRow[]
   /** True when any underlying transaction carries a reconciliation flag. */
@@ -538,6 +547,7 @@ export function buildReport(rows: DetailRow[]): LedgerReport {
         itemDescription: row.itemDescription,
         itemSize: row.itemSize,
         unit: row.unit,
+        itemMasterId: row.itemMasterId,
         totals: emptyTotals(),
         rows: [],
         hasReconciliationIssue: false,

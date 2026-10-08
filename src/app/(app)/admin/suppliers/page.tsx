@@ -6,6 +6,7 @@ import { ArrowLeft, Store } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { SUPPLIERS_LIST_QUERY, UPDATE_SUPPLIER_MUTATION, DELETE_SUPPLIER_MUTATION } from '@/lib/hasura/queries'
 import SearchInput from '@/components/SearchInput'
+import { VendorLink } from '@/components/ReportLinks'
 
 type Supplier = { id: string; name: string; contact_person?: string; phone?: string; email?: string; city?: string; state?: string; gstin?: string; is_active: boolean }
 
@@ -79,7 +80,9 @@ export default function SuppliersPage() {
               <tbody className="divide-y divide-gray-100">
                 {filtered.map(s => (
                   <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium text-gray-900">{s.name}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">
+                      <VendorLink vendorId={s.id} className="text-gray-900 hover:text-blue-700 hover:underline">{s.name}</VendorLink>
+                    </td>
                     <td className="px-5 py-3 text-gray-600">{s.contact_person || '—'}</td>
                     <td className="px-5 py-3 text-gray-600">{s.phone || '—'}</td>
                     <td className="px-5 py-3 text-gray-600">{[s.city, s.state].filter(Boolean).join(', ') || '—'}</td>

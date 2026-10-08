@@ -6,9 +6,11 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { JOB_WORK_TRANSFER_CANCELLATION_BY_ID_QUERY } from '@/lib/hasura/queries'
+import { ItemLedgerLink, JobWorkLink, PurchaseLineLink, VendorLink } from '@/components/ReportLinks'
 
 interface JobWorkTransferCancellationItem {
   id: string
+  item_master_id: string | null
   item_name: string | null
   material_type_name: string | null
   size_label: string | null
@@ -51,19 +53,26 @@ export default async function JobWorkTransferCancellationDetailPage({ params }: 
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">From Order</p>
-            <p className="text-sm font-medium text-gray-700 mt-1">{record.from_reference_number ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-700 mt-1">
+              <JobWorkLink orderId={record.from_job_work_order_id}>{record.from_reference_number ?? '—'}</JobWorkLink>
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">From Vendor</p>
-            <p className="text-sm font-medium text-gray-700 mt-1">{record.from_vendor_name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-700 mt-1">
+              <VendorLink vendorId={record.from_vendor_id} fromDate={record.transfer_date}>{record.from_vendor_name ?? '—'}</VendorLink>
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">To Order</p>
+            {/* Deleted along with the transfer — nothing to link to. */}
             <p className="text-sm font-medium text-gray-700 mt-1">{record.to_reference_number ?? '—'}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">To Vendor</p>
-            <p className="text-sm font-medium text-gray-700 mt-1">{record.to_vendor_name ?? '—'}</p>
+            <p className="text-sm font-medium text-gray-700 mt-1">
+              <VendorLink vendorId={record.to_vendor_id} fromDate={record.transfer_date}>{record.to_vendor_name ?? '—'}</VendorLink>
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Cancelled On</p>
@@ -124,16 +133,21 @@ export default async function JobWorkTransferCancellationDetailPage({ params }: 
               ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
-                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">{item.item_name || '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={record.transfer_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                      {item.item_name || '—'}
+                    </ItemLedgerLink>
+                  </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.material_type_name || '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.size_label || '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-700 text-right font-mono">{Number(item.quantity_transferred ?? 0).toFixed(3)}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.unit || '—'}</td>
                   <td className="px-3 py-2">
                     {item.purchase_line_id ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200">
-                        {item.purchase_line_id}
-                      </span>
+                      <PurchaseLineLink
+                        lineId={item.purchase_line_id}
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:underline"
+                      />
                     ) : <span className="text-xs text-gray-400">—</span>}
                   </td>
                 </tr>

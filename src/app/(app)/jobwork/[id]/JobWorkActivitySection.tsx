@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
 import type { ActivityEvent, ActivityKind, ActivityLineSummary } from '@/lib/jobWorkActivity'
 
 const KIND_BADGE: Record<ActivityKind, { label: string; className: string }> = {
@@ -25,10 +26,12 @@ export default function JobWorkActivitySection({
   events,
   lines,
   itemLabels,
+  ledgerFrom,
 }: {
   events: ActivityEvent[]
   lines: Record<string, ActivityLineSummary>
-  itemLabels: Record<string, { item: string; purchaseLine: string | null }>
+  itemLabels: Record<string, { item: string; purchaseLine: string | null; itemMasterId: string | null }>
+  ledgerFrom?: string
 }) {
   const totals = Object.values(lines).reduce(
     (acc, l) => ({
@@ -125,8 +128,14 @@ export default function JobWorkActivitySection({
                     <td className="px-3 py-2 text-xs text-gray-700">
                       {label ? (
                         <>
-                          {label.item}
-                          {label.purchaseLine && <div className="text-xs font-mono text-blue-700">{label.purchaseLine}</div>}
+                          <ItemLedgerLink itemMasterId={label.itemMasterId} fromDate={ledgerFrom} className="text-gray-700 hover:text-blue-700 hover:underline">
+                            {label.item}
+                          </ItemLedgerLink>
+                          {label.purchaseLine && (
+                            <div className="text-xs font-mono">
+                              <PurchaseLineLink lineId={label.purchaseLine} className="text-blue-700 hover:underline" />
+                            </div>
+                          )}
                         </>
                       ) : (
                         e.materialLabel ?? <span className="text-gray-300">—</span>

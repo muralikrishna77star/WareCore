@@ -6,10 +6,12 @@ import { ArrowLeft } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
 import { PURCHASE_CANCELLATION_BY_ID_QUERY } from '@/lib/hasura/queries'
+import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
 
 interface PurchaseCancellationItem {
   id: string
   purchase_line_id: string | null
+  item_master_id: string | null
   item_name: string | null
   material_type_name: string | null
   size_label: string | null
@@ -108,8 +110,14 @@ export default async function PurchaseCancellationDetailPage({ params }: { param
               ) : items.map((item, idx) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
-                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-gray-500">{item.purchase_line_id || '—'}</td>
-                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">{item.item_name || '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-mono text-gray-500">
+                    <PurchaseLineLink lineId={item.purchase_line_id} className="text-blue-600 hover:underline" />
+                  </td>
+                  <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-700">
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={record.bill_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                      {item.item_name || '—'}
+                    </ItemLedgerLink>
+                  </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.material_type_name || '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-600">{item.size_label || '—'}</td>
                   <td className="px-3 py-2 text-right text-gray-700">{Number(item.quantity).toFixed(3)}</td>

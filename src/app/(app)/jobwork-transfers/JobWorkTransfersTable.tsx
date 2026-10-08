@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import ReverseJobWorkTransferButton from '@/components/ReverseJobWorkTransferButton'
+import { ItemLedgerLink, PurchaseLineLink, VendorLink } from '@/components/ReportLinks'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 
@@ -12,6 +13,7 @@ interface JobWorkTransferItem {
   id: string
   purchase_line_id: string | null
   sub_purchase_line_id: string | null
+  item_master_id: string | null
   item_name: string | null
   quantity_transferred: number | string
   unit: string | null
@@ -41,6 +43,8 @@ interface JobWorkTransferRecord {
   reason: string | null
   notes: string | null
   created_at: string
+  from_vendor_id?: string | null
+  to_vendor_id?: string | null
   from_job_work_order?: { id: string; reference_number: string | null } | null
   to_job_work_order?: { id: string; reference_number: string | null } | null
   from_vendor?: { name: string } | null
@@ -53,13 +57,17 @@ type FlatRow = {
   transferId: string
   transferNo: string
   date: string
+  isoDate: string
   fromVendor: string
+  fromVendorId: string | null
   fromOrderRef: string
   fromOrderId: string | null
   toVendor: string
+  toVendorId: string | null
   toOrderRef: string
   toOrderId: string | null
   purchaseLine: string
+  itemMasterId: string | null
   item: string
   size: string
   qtyLabel: string
@@ -120,6 +128,9 @@ export default function JobWorkTransfersTable({ records, canReverse }: { records
         transferId: t.id,
         transferNo: t.transfer_number || '',
         date: formatDate(t.transfer_date),
+        isoDate: t.transfer_date,
+        fromVendorId: t.from_vendor_id ?? null,
+        toVendorId: t.to_vendor_id ?? null,
         fromVendor: t.from_vendor?.name || '',
         fromOrderRef: t.from_job_work_order?.reference_number || '',
         fromOrderId: t.from_job_work_order?.id || null,
@@ -134,6 +145,7 @@ export default function JobWorkTransfersTable({ records, canReverse }: { records
         key: it?.id ?? `${t.id}-${idx}`,
         ...base,
         purchaseLine: it?.purchase_line_id || '',
+        itemMasterId: it?.item_master_id ?? null,
         item: it?.item_name || '',
         size: it?.size_label || '',
         qty: it ? Number(it.quantity_transferred) : 0,
@@ -242,7 +254,9 @@ export default function JobWorkTransfersTable({ records, canReverse }: { records
                     </td>
                     <td className="px-2 py-2 text-gray-600 whitespace-nowrap" rowSpan={rowCount}>{row.date}</td>
                     <td className="px-2 py-2 whitespace-nowrap" rowSpan={rowCount}>
-                      <span className="text-gray-700">{row.fromVendor || '—'}</span>
+                      <VendorLink vendorId={row.fromVendorId} fromDate={row.isoDate} className="text-gray-700 hover:text-blue-700 hover:underline">
+                        {row.fromVendor || '—'}
+                      </VendorLink>
                       {row.fromOrderId && (
                         <Link href={`/jobwork/${row.fromOrderId}`} className="block text-[10px] font-mono text-blue-600 hover:underline">
                           {row.fromOrderRef}
@@ -250,7 +264,9 @@ export default function JobWorkTransfersTable({ records, canReverse }: { records
                       )}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap" rowSpan={rowCount}>
-                      <span className="text-gray-700">{row.toVendor || '—'}</span>
+                      <VendorLink vendorId={row.toVendorId} fromDate={row.isoDate} className="text-gray-700 hover:text-blue-700 hover:underline">
+                        {row.toVendor || '—'}
+                      </VendorLink>
                       {row.toOrderId && (
                         <Link href={`/jobwork/${row.toOrderId}`} className="block text-[10px] font-mono text-blue-600 hover:underline">
                           {row.toOrderRef}
@@ -259,8 +275,14 @@ export default function JobWorkTransfersTable({ records, canReverse }: { records
                     </td>
                   </>
                 )}
-                <td className="px-2 py-2 font-mono text-xs text-blue-700 whitespace-nowrap">{row.purchaseLine || '—'}</td>
-                <td className="px-2 py-2 text-gray-700 whitespace-nowrap">{row.item || '—'}</td>
+                <td className="px-2 py-2 font-mono text-xs text-blue-700 whitespace-nowrap">
+                  <PurchaseLineLink lineId={row.purchaseLine || null} className="text-blue-700 hover:underline" />
+                </td>
+                <td className="px-2 py-2 text-gray-700 whitespace-nowrap">
+                  <ItemLedgerLink itemMasterId={row.itemMasterId} fromDate={row.isoDate} className="text-gray-700 hover:text-blue-700 hover:underline">
+                    {row.item || '—'}
+                  </ItemLedgerLink>
+                </td>
                 <td className="px-2 py-2 text-gray-600 whitespace-nowrap">{row.size || '—'}</td>
                 {isFirst && (
                   <td className="px-2 py-2 text-gray-600" rowSpan={rowCount}>{row.reason || '—'}</td>

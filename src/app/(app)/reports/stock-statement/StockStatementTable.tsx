@@ -11,6 +11,8 @@ export type BreakdownEntry = { name: string; qty: number }
 export type StatementRow = {
   key: string
   itemName: string
+  /** This item's Item Stock Ledger for the same period and filters. */
+  itemHref?: string | null
   unit: string
   openingWarehouse: number
   openingWarehouseHref: string | null
@@ -177,7 +179,18 @@ export default function StockStatementTable({
                 <td className="px-2 py-3 text-gray-400 text-center">
                   <span className={`inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                 </td>
-                <td className="px-4 py-3 font-medium text-gray-900">{item.itemName}</td>
+                <td className="px-4 py-3 font-medium text-gray-900">
+                  {item.itemHref ? (
+                    <Link
+                      href={item.itemHref}
+                      title="Open this item's Stock Ledger"
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-blue-700 hover:underline"
+                    >
+                      {item.itemName}
+                    </Link>
+                  ) : item.itemName}
+                </td>
                 <td className="px-4 py-3 text-gray-400">{item.unit}</td>
                 <td className="px-4 py-3 text-right text-blue-700 bg-blue-50/40">
                   {item.openingWarehouseHref ? <Link href={item.openingWarehouseHref} className="hover:underline">{fmtQ(item.openingWarehouse)}</Link> : fmtQ(item.openingWarehouse)}

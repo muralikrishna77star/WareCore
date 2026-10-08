@@ -510,7 +510,7 @@ export const PURCHASE_BILLS_QUERY = `
       warehouses { id name }
       suppliers { id name }
       purchase_bill_items(order_by: {id: asc}) {
-        id item_name purchase_line_id
+        id item_name purchase_line_id item_master_id
       }
     }
   }
@@ -531,7 +531,7 @@ export const PURCHASE_BILL_BY_ID_QUERY = `
 export const PURCHASE_BILL_ITEMS_QUERY = `
   query GetPurchaseBillItems($bill_id: uuid!) {
     purchase_bill_items(where: {bill_id: {_eq: $bill_id}}, order_by: {id: asc}) {
-      id bill_id quantity received_quantity rate amount notes size_label item_name purchase_line_id
+      id bill_id quantity received_quantity rate amount notes size_label item_name purchase_line_id item_master_id
       material_types { description }
       item_master { item_code }
     }
@@ -754,7 +754,7 @@ export const DISPATCH_ORDER_BY_ID_QUERY = `
 export const DISPATCH_ITEMS_QUERY = `
   query GetDispatchItems($dispatch_order_id: uuid!) {
     dispatch_items(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: {id: asc}) {
-      id dispatch_order_id item_name purchase_line_id sale_line_id sub_purchase_line_id quantity rate amount notes size_label
+      id dispatch_order_id item_name item_master_id purchase_line_id sale_line_id sub_purchase_line_id quantity rate amount notes size_label
       material_types { description }
       item_master { item_code }
     }
@@ -1109,7 +1109,7 @@ export const JOB_WORK_ORDERS_DISPATCH_DATE_BOUNDS_QUERY = `
 export const JOB_WORK_ORDERS_QUERY = `
   query GetJobWorkOrders($where: job_work_orders_bool_exp = {}) {
     job_work_orders(where: $where, order_by: {dispatch_date: desc}, limit: 500) {
-      id reference_number dispatch_date expected_return_date actual_return_date status completion_via notes created_at
+      id reference_number dispatch_date expected_return_date actual_return_date status completion_via notes created_at vendor_id
       companies { name code }
       suppliers { name }
       job_work_items {
@@ -1190,10 +1190,12 @@ export const JOB_WORK_ORDER_TRANSFERS_QUERY = `
       to_job_work_order_id
       from_job_work_order { reference_number }
       to_job_work_order { reference_number }
+      from_vendor_id
+      to_vendor_id
       from_vendor { name }
       to_vendor { name }
       job_work_transfer_items {
-        id purchase_line_id sub_purchase_line_id item_name size_label quantity_transferred unit
+        id purchase_line_id sub_purchase_line_id item_master_id item_name size_label quantity_transferred unit
         reversed_at reversal_notes
       }
     }
@@ -1418,13 +1420,13 @@ export const JOB_WORK_TRANSFERS_FOR_ITEM_QUERY = `
 export const JOB_WORK_TRANSFERS_QUERY = `
   query GetJobWorkTransfers {
     job_work_transfers(order_by: {transfer_date: desc, created_at: desc}, limit: 500) {
-      id transfer_number transfer_date reason notes created_at
+      id transfer_number transfer_date reason notes created_at from_vendor_id to_vendor_id
       from_job_work_order { id reference_number }
       to_job_work_order { id reference_number }
       from_vendor { name }
       to_vendor { name }
       job_work_transfer_items {
-        id purchase_line_id sub_purchase_line_id item_name quantity_transferred unit size_label
+        id purchase_line_id sub_purchase_line_id item_master_id item_name quantity_transferred unit size_label
         reversed_at reversal_notes
       }
     }
@@ -1504,6 +1506,7 @@ export const JOB_WORK_ORDERS_BY_IDS_QUERY = `
       status
       reference_number
       dispatch_date
+      vendor_id
       suppliers { name }
     }
   }
@@ -1730,7 +1733,7 @@ export const PURCHASE_CANCELLATION_BY_ID_QUERY = `
       total_quantity total_amount
       cancelled_at cancelled_notes purged_at
       purchase_cancellation_items(order_by: {id: asc}) {
-        id purchase_line_id item_name material_type_name size_label
+        id purchase_line_id item_master_id item_name material_type_name size_label
         quantity rate amount notes
         taxable_value cgst_rate cgst_amount sgst_rate sgst_amount
         tds_rate tds_amount total_with_tax
@@ -1749,7 +1752,7 @@ export const BILLING_REPORT_QUERY = `
       warehouses { name }
       suppliers { name }
       purchase_bill_items {
-        quantity rate amount size_label unit
+        quantity rate amount size_label unit item_master_id
         material_types { description unit }
         material_sizes { size_label }
       }
@@ -1768,7 +1771,7 @@ export const TRANSFERS_REPORT_QUERY = `
       warehouses_from { name }
       warehouses_to { name }
       transfer_items {
-        quantity size_label
+        quantity size_label item_master_id
         material_types { description }
         material_sizes { size_label }
       }
@@ -1786,7 +1789,7 @@ export const DISPATCH_REPORT_QUERY = `
       warehouses { name }
       customers { name }
       dispatch_items {
-        quantity rate amount size_label
+        quantity rate amount size_label item_master_id
         material_types { description }
         material_sizes { size_label }
       }
@@ -1799,12 +1802,12 @@ export const DISPATCH_REPORT_QUERY = `
 export const JOB_WORK_REPORT_QUERY = `
   query GetJobWorkReport($where: job_work_orders_bool_exp = {}) {
     job_work_orders(where: $where, order_by: {dispatch_date: asc}) {
-      id reference_number dispatch_date expected_return_date actual_return_date status notes
+      id reference_number dispatch_date expected_return_date actual_return_date status completion_via notes vendor_id
       companies { name code }
       warehouses { name }
       suppliers { name }
       job_work_items {
-        quantity_sent quantity_received quantity_transferred_out size_label purchase_line_id
+        quantity_sent quantity_received quantity_transferred_out size_label purchase_line_id item_master_id
         material_types { description unit }
         material_sizes { size_label }
       }
@@ -1858,6 +1861,7 @@ export const JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY = `
   query GetJobWorkOrdersVendorLookup($ids: [uuid!]!) {
     job_work_orders(where: {id: {_in: $ids}}) {
       id
+      vendor_id
       suppliers { name }
     }
   }
@@ -2136,7 +2140,7 @@ export const DISPATCH_CANCELLATION_BY_ID_QUERY = `
       total_quantity total_amount
       cancelled_at cancelled_notes purged_at
       dispatch_cancellation_items(order_by: {id: asc}) {
-        id sale_line_id item_name material_type_name size_label
+        id sale_line_id item_master_id item_name material_type_name size_label
         quantity rate amount notes
       }
     }
@@ -2149,7 +2153,7 @@ export const JOB_WORK_CANCELLATIONS_QUERY = `
   query GetJobWorkCancellations {
     job_work_cancellations(order_by: {cancelled_at: desc}) {
       id reference_number dispatch_date
-      company_name warehouse_name vendor_name
+      company_name warehouse_name vendor_name vendor_id
       status cancelled_at cancelled_notes
     }
   }
@@ -2159,16 +2163,16 @@ export const JOB_WORK_CANCELLATION_BY_ID_QUERY = `
   query GetJobWorkCancellation($id: uuid!) {
     job_work_cancellations_by_pk(id: $id) {
       id reference_number dispatch_date expected_return_date actual_return_date
-      company_name warehouse_name vendor_name
+      company_name warehouse_name vendor_name vendor_id
       work_description notes status
       cancelled_at cancelled_notes
       job_work_cancellation_items(order_by: {id: asc}) {
-        id item_name material_type_name size_label
+        id item_master_id item_name material_type_name size_label
         quantity_sent quantity_received unit
         purchase_line_id job_line_id
       }
       job_work_cancellation_output_items(order_by: {id: asc}) {
-        id item_name material_type_name size_label
+        id item_master_id item_name material_type_name size_label
         quantity unit source_job_line_id notes
       }
     }
@@ -2181,8 +2185,8 @@ export const JOB_WORK_TRANSFER_CANCELLATIONS_QUERY = `
   query GetJobWorkTransferCancellations {
     job_work_transfer_cancellations(order_by: {cancelled_at: desc}) {
       id transfer_number transfer_date
-      from_reference_number from_vendor_name
-      to_reference_number to_vendor_name
+      from_reference_number from_vendor_name from_vendor_id from_job_work_order_id
+      to_reference_number to_vendor_name to_vendor_id
       reason cancelled_at cancelled_notes
       job_work_cancellation_id
     }
@@ -2193,12 +2197,12 @@ export const JOB_WORK_TRANSFER_CANCELLATION_BY_ID_QUERY = `
   query GetJobWorkTransferCancellation($id: uuid!) {
     job_work_transfer_cancellations_by_pk(id: $id) {
       id transfer_number transfer_date
-      from_reference_number from_vendor_name
-      to_reference_number to_vendor_name
+      from_reference_number from_vendor_name from_vendor_id from_job_work_order_id
+      to_reference_number to_vendor_name to_vendor_id
       reason notes cancelled_at cancelled_notes
       job_work_cancellation_id
       job_work_transfer_cancellation_items(order_by: {id: asc}) {
-        id item_name material_type_name size_label
+        id item_master_id item_name material_type_name size_label
         quantity_transferred unit purchase_line_id
       }
     }
@@ -2364,7 +2368,7 @@ export const DAY_WISE_LEDGER_DISPATCH_ORDERS_QUERY = `
 export const DAY_WISE_LEDGER_JOB_WORK_ORDERS_QUERY = `
   query GetDayWiseLedgerJobWorkOrders($ids: [uuid!]!) {
     job_work_orders(where: {id: {_in: $ids}}) {
-      id reference_number dispatch_date status
+      id reference_number dispatch_date status vendor_id
       suppliers { name }
       companies { name }
       warehouses { name }
@@ -2435,6 +2439,7 @@ export const JOB_WORK_ORDERS_VENDOR_NAME_LOOKUP_QUERY = `
   query GetJobWorkOrdersVendorNameLookup($ids: [uuid!]!) {
     job_work_orders(where: {id: {_in: $ids}}) {
       id
+      vendor_id
       suppliers { name }
     }
   }

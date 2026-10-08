@@ -40,6 +40,7 @@ export interface PurchaseLineEntry {
   vendorDelta?: number
   /** The job work vendor this row is posted against, for the Vendor column. */
   vendorName?: string | null
+  vendorId?: string | null
 }
 
 export type PurchaseLineDisplayRow = PurchaseLineEntry & {
@@ -125,6 +126,7 @@ export function buildPurchaseLineLedger(
         jobWorkReferenceType: returnRow.reference_type,
         jobWorkReferenceId: returnRow.reference_id,
         vendorName: returnRow.vendorName ?? null,
+        vendorId: returnRow.vendorId ?? null,
         itemLabel: itemLabelFor(saleRow),
         // Sold straight from the vendor: the warehouse never sees it (the two
         // legs cancel), and only the return leg closes out vendor stock.

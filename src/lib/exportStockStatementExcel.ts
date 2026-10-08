@@ -65,6 +65,10 @@ export type TransactionDetailRow = {
   destinationWarehouseName: string
   vendorName: string
   customerName: string
+  /** On-screen links only — not exported. */
+  itemMasterId?: string | null
+  vendorId?: string | null
+  jobWorkOrderId?: string | null
   itemCode: string
   itemName: string
   size: string

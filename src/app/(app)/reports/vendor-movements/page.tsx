@@ -229,9 +229,9 @@ export default async function VendorMovementsPage({
     }
   })
   const selectedItem = params.item ? itemOptions.find((i) => i.id === params.item) : undefined
-  const itemLookup = new Map<string, { item_code: string; item_name: string }>()
+  const itemLookup = new Map<string, { id: string; item_code: string; item_name: string }>()
   for (const i of itemRows) {
-    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { item_code: i.item_code, item_name: i.item_name })
+    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { id: i.id, item_code: i.item_code, item_name: i.item_name })
   }
   const itemLabelFor = (materialTypeId: string, materialSizeId: string | null, fallback: string) => {
     const info = itemLookup.get(`${materialTypeId}|${materialSizeId ?? ''}`)
@@ -546,7 +546,7 @@ export default async function VendorMovementsPage({
       g.jobWorkOut += Math.abs(Number(m.quantity))
       g.transactions.push({
         id: m.id, date: m.entry_date, type: 'Job Work Out',
-        quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+        quantity: Number(m.quantity), reference_number: m.reference_number, jobWorkOrderId: m.reference_id, notes: m.notes,
         purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
     } else if (m.entry_type === 'JOB_WORK_RETURN_IN') {
@@ -557,7 +557,7 @@ export default async function VendorMovementsPage({
       g.transactions.push({
         id: m.id, date: m.entry_date,
         type: isVirtual ? 'Return (paired with direct sale)' : 'Return',
-        quantity: Number(m.quantity), reference_number: m.reference_number, notes: m.notes,
+        quantity: Number(m.quantity), reference_number: m.reference_number, jobWorkOrderId: m.reference_id, notes: m.notes,
         purchaseDate: purchaseInfo?.date ?? null, rate: purchaseInfo?.rate ?? null,
       })
     } else {
@@ -624,7 +624,7 @@ export default async function VendorMovementsPage({
       const counterparty = lineId ? transferOutCounterparty.get(`${m.reference_id}|${lineId}|${qtyKey}`) : undefined
       g.transactions.push({
         id: m.id, date: m.entry_date, type: 'Transfer Out',
-        quantity: Number(m.quantity), reference_number: m.reference_number,
+        quantity: Number(m.quantity), reference_number: m.reference_number, jobWorkOrderId: m.reference_id,
         notes: counterparty ? `Transferred to ${counterparty.vendorName} (${counterparty.transferNumber})` : m.notes,
         purchaseDate: null, rate: null,
         counterpartyVendor: counterparty?.vendorName ?? null,
@@ -635,7 +635,7 @@ export default async function VendorMovementsPage({
       const counterparty = lineId ? transferInCounterparty.get(`${m.reference_id}|${lineId}|${qtyKey}`) : undefined
       g.transactions.push({
         id: m.id, date: m.entry_date, type: 'Transfer In',
-        quantity: Number(m.quantity), reference_number: m.reference_number,
+        quantity: Number(m.quantity), reference_number: m.reference_number, jobWorkOrderId: m.reference_id,
         notes: counterparty ? `Transferred from ${counterparty.vendorName} (${counterparty.transferNumber})` : m.notes,
         purchaseDate: null, rate: null,
         counterpartyVendor: counterparty?.vendorName ?? null,
@@ -855,8 +855,10 @@ export default async function VendorMovementsPage({
 
   const tableRows = rows.map((g) => ({
     key: g.key,
+    vendorId: g.vendorId,
     vendorName: g.vendorName,
     companyName: g.companyName,
+    itemMasterId: itemLookup.get(`${g.materialTypeId}|${g.materialSizeId ?? ''}`)?.id ?? null,
     itemLabel: itemLabelFor(g.materialTypeId, g.materialSizeId, g.materialName),
     sizeLabel: g.sizeLabel,
     unit: g.unit,
@@ -1098,7 +1100,7 @@ export default async function VendorMovementsPage({
           <span className="text-xs text-gray-500">{rows.length} row{rows.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">
-          <VendorMovementsTable rows={tableRows} sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} />
+          <VendorMovementsTable rows={tableRows} sortHrefs={sortHrefs} activeSort={activeSort} activeDir={activeDir} fromDate={fromDate} />
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { PrintButton } from '@/components/PrintButton'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { SearchForm, type ItemOption, type PurchaseLineRef } from './SearchForm'
 import { PurchaseLineLedgerRows } from './PurchaseLineLedgerRows'
+import { ItemLedgerLink } from '@/components/ReportLinks'
 import Link from 'next/link'
 import { ArrowLeft, Search, CircleHelp } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
@@ -106,9 +107,9 @@ export default async function PurchaseLineLedgerPage({
   })
   const selectedItem = itemId ? itemOptions.find((i) => i.id === itemId) : undefined
 
-  const itemLookup = new Map<string, { item_code: string; item_name: string }>()
+  const itemLookup = new Map<string, { id: string; item_code: string; item_name: string }>()
   for (const i of itemRows) {
-    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { item_code: i.item_code, item_name: i.item_name })
+    itemLookup.set(`${i.material_type_id}|${i.material_size_id ?? ''}`, { id: i.id, item_code: i.item_code, item_name: i.item_name })
   }
   const itemLabelFor = (row: Pick<LedgerEntry, 'material_type_id' | 'material_size_id' | 'material_types'>) => {
     const info = itemLookup.get(`${row.material_type_id ?? ''}|${row.material_size_id ?? ''}`)
@@ -132,20 +133,31 @@ export default async function PurchaseLineLedgerPage({
     ? await hasuraQuery(JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY, { ids: jobWorkOrderIds })
     : { job_work_orders: [] }
   const vendorByOrderId = new Map<string, string>()
-  for (const o of (vendorResult.job_work_orders ?? []) as { id: string; suppliers?: { name: string } | null }[]) {
+  const vendorIdByOrderId = new Map<string, string>()
+  for (const o of (vendorResult.job_work_orders ?? []) as { id: string; vendor_id: string; suppliers?: { name: string } | null }[]) {
     if (o.suppliers?.name) vendorByOrderId.set(o.id, o.suppliers.name)
+    vendorIdByOrderId.set(o.id, o.vendor_id)
   }
 
-  const ledgerEntries: PurchaseLineEntry[] = entries.map((e) => ({
-    ...e,
-    vendorDelta: deltaById.get(e.id) ?? 0,
-    vendorName: e.reference_type === 'job_work' && e.reference_id ? vendorByOrderId.get(e.reference_id) ?? null : null,
-  }))
+  const ledgerEntries: PurchaseLineEntry[] = entries.map((e) => {
+    const jobWorkOrderId = e.reference_type === 'job_work' && e.reference_id ? e.reference_id : null
+    return {
+      ...e,
+      vendorDelta: deltaById.get(e.id) ?? 0,
+      vendorName: jobWorkOrderId ? vendorByOrderId.get(jobWorkOrderId) ?? null : null,
+      vendorId: jobWorkOrderId ? vendorIdByOrderId.get(jobWorkOrderId) ?? null : null,
+    }
+  })
 
-  const { rows, closingBalance, closingVendorBalance, totalIn, totalOut } = buildPurchaseLineLedger(
+  const { rows: ledgerRows, closingBalance, closingVendorBalance, totalIn, totalOut } = buildPurchaseLineLedger(
     ledgerEntries,
     itemLabelFor,
   )
+  // Item master id per row, so the Item column links to the Item Stock Ledger.
+  const rows = ledgerRows.map((r) => ({
+    ...r,
+    itemMasterId: itemLookup.get(`${r.material_type_id ?? ''}|${r.material_size_id ?? ''}`)?.id ?? null,
+  }))
   const currentBalance = closingBalance
 
   const first = entries[0]
@@ -269,7 +281,14 @@ export default async function PurchaseLineLedgerPage({
             <div>
               <p className="font-semibold text-gray-900 font-mono text-sm">{lineId}</p>
               <p className="text-xs text-gray-500">
-                {itemLabel || '—'}{sizeLabel ? ` (${sizeLabel})` : ''} · Unit: {unit}
+                <ItemLedgerLink
+                  itemMasterId={first ? itemLookup.get(`${first.material_type_id ?? ''}|${first.material_size_id ?? ''}`)?.id : null}
+                  fromDate={first?.entry_date}
+                  className="text-gray-500 hover:text-blue-700 hover:underline"
+                >
+                  {itemLabel || '—'}
+                </ItemLedgerLink>
+                {sizeLabel ? ` (${sizeLabel})` : ''} · Unit: {unit}
                 <span className="ml-1 text-gray-400">— originating item, may differ after job work conversion</span>
               </p>
             </div>

@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { JobWorkReportRows } from './JobWorkReportRows'
+import { UUID_RE } from '@/lib/reportLinks'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -77,20 +78,25 @@ interface LedgerRow {
 export default async function JobWorkReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ company?: string; status?: string; from?: string; to?: string }>
+  searchParams: Promise<{ company?: string; status?: string; from?: string; to?: string; order?: string }>
 }) {
   const params = await searchParams
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
   const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
   const toDate = params.to || today.toISOString().split('T')[0]
+  // ?order=<id>: a Job Work reference link elsewhere in the app opens this
+  // report on that one order, whatever its dispatch date.
+  const orderFilter = params.order && UUID_RE.test(params.order) ? params.order : null
 
-  const conditions: Record<string, unknown>[] = [
-    { dispatch_date: { _gte: fromDate } },
-    { dispatch_date: { _lte: toDate } },
-  ]
-  if (params.company) conditions.push({ company_id: { _eq: params.company } })
-  if (params.status) conditions.push({ status: { _eq: params.status } })
+  const conditions: Record<string, unknown>[] = orderFilter
+    ? [{ id: { _eq: orderFilter } }]
+    : [
+        { dispatch_date: { _gte: fromDate } },
+        { dispatch_date: { _lte: toDate } },
+      ]
+  if (!orderFilter && params.company) conditions.push({ company_id: { _eq: params.company } })
+  if (!orderFilter && params.status) conditions.push({ status: { _eq: params.status } })
 
   const [result, compResult] = await Promise.all([
     hasuraQuery(JOB_WORK_REPORT_QUERY, { where: { _and: conditions } }),
@@ -278,6 +284,15 @@ export default async function JobWorkReportPage({
         <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
       </div>
 
+      {orderFilter && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2 text-sm text-purple-900 print:hidden">
+          <span>
+            Showing Job Work order <span className="font-mono font-semibold">{orders[0]?.reference_number ?? '—'}</span> only.
+          </span>
+          <Link href="/reports/jobwork" className="text-blue-600 hover:underline">Show all orders</Link>
+        </div>
+      )}
+
       {/* Filters */}
       <form className="bg-white rounded-xl border p-4 print:hidden">
         <div className="flex flex-wrap gap-3 items-end">
@@ -338,7 +353,7 @@ export default async function JobWorkReportPage({
       {/* Table */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
-          <span className="font-semibold text-gray-700 text-sm">{fromDate} → {toDate}</span>
+          <span className="font-semibold text-gray-700 text-sm">{orderFilter ? `Order ${orders[0]?.reference_number ?? ''}` : `${fromDate} → ${toDate}`}</span>
           <span className="text-xs text-gray-500">{orders.length} order{orders.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">

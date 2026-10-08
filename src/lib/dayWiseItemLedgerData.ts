@@ -61,6 +61,7 @@ export type StockPosition = {
   itemDescription: string
   itemSize: string
   unit: string
+  itemMasterId?: string | null
   opening: number
   periodInward: number
   periodOutward: number
@@ -441,6 +442,7 @@ export async function loadDayWiseItemLedger(
     id: string
     reference_number: string | null
     status: string | null
+    vendor_id?: string | null
     suppliers?: { name: string } | null
     companies?: { name: string } | null
     warehouses?: { name: string } | null
@@ -597,6 +599,7 @@ export async function loadDayWiseItemLedger(
           documentNumber = order.reference_number ?? documentNumber
           status = normalizeStatus(order.status)
           parties.jobWorkerName = order.suppliers?.name ?? null
+          parties.jobWorkerId = order.vendor_id ?? null
           href = `/jobwork/${order.id}`
           if (row.entry_type === 'JOB_WORK_TRANSFER_IN') {
             parties.destination = order.suppliers?.name ?? null
@@ -676,6 +679,7 @@ export async function loadDayWiseItemLedger(
       itemDescription,
       itemSize,
       unit,
+      itemMasterId: item?.id ?? null,
       documentNumber,
       status,
       createdByName: row.created_by ? userNameById.get(row.created_by) ?? '' : '',
@@ -735,6 +739,7 @@ export async function loadDayWiseItemLedger(
       itemDescription: sample?.itemDescription ?? item?.item_name ?? '',
       itemSize: sample?.itemSize ?? item?.size_label ?? '',
       unit: sample?.unit ?? item?.unit ?? 'MT',
+      itemMasterId: sample?.itemMasterId ?? item?.id ?? null,
       opening: roundQty(agg.opening),
       periodInward: roundQty(agg.periodInward),
       periodOutward: roundQty(agg.periodOutward),

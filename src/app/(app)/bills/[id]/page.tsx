@@ -9,10 +9,12 @@ import { PURCHASE_BILL_BY_ID_QUERY, PURCHASE_BILL_ITEMS_QUERY, USER_PROFILE_BY_I
 import CancelBillButton from './CancelBillButton'
 import SubmitBillButton from './SubmitBillButton'
 import PurgeBillButton from './PurgeBillButton'
+import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
 
 interface BillLineItem {
   id: string
   purchase_line_id?: string | null
+  item_master_id?: string | null
   item_name?: string | null
   material_types?: { description?: string | null } | null
   item_master?: { item_code?: string | null } | null
@@ -211,13 +213,17 @@ export default async function BillDetailPage({ params }: { params: Promise<{ id:
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-500">{idx + 1}</td>
                   <td className="px-3 py-2 text-[0.8125rem] font-mono text-blue-700">
-                    {item.purchase_line_id ?? '—'}
+                    <PurchaseLineLink lineId={item.purchase_line_id} className="text-blue-700 hover:underline" />
                   </td>
                   <td className="px-3 py-2 text-[0.8125rem] font-mono text-gray-700">
-                    {item.item_master?.item_code ?? '—'}
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={bill.bill_date}>
+                      {item.item_master?.item_code ?? '—'}
+                    </ItemLedgerLink>
                   </td>
                   <td className="px-3 py-2 text-[0.8125rem] font-medium text-gray-900">
-                    {item.item_name ?? item.material_types?.description ?? '—'}
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={bill.bill_date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                      {item.item_name ?? item.material_types?.description ?? '—'}
+                    </ItemLedgerLink>
                   </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-700">
                     {item.size_label ?? '—'}

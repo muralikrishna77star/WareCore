@@ -3,6 +3,7 @@
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink } from '@/components/ReportLinks'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -16,6 +17,7 @@ type DispatchItem = {
   rate: number | string | null
   amount: number | string | null
   size_label: string | null
+  item_master_id?: string | null
   material_types: { description: string | null } | null
   material_sizes: { size_label: string | null } | null
 }
@@ -92,7 +94,11 @@ export function DispatchReportRows({ orders }: { orders: DispatchOrderRow[] }) {
               )}
               {item ? (
                 <>
-                  <td className="px-4 py-3 font-medium">{item.material_types?.description}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={o.dispatch_date} className="hover:text-blue-700 hover:underline">
+                      {item.material_types?.description}
+                    </ItemLedgerLink>
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>
                   <td className="px-4 py-3 text-right">{Number(item.quantity).toFixed(3)}</td>
                   <td className="px-4 py-3 text-right">{item.rate ? `₹${Number(item.rate).toLocaleString('en-IN')}` : '—'}</td>

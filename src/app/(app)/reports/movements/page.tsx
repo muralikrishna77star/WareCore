@@ -253,7 +253,14 @@ export default async function MovementsReportPage({
   // Precomputed onto each row (rather than passing rateFor/valueFor
   // themselves) — a function can't cross the Server -> Client Component
   // boundary.
-  const movementsWithValues = movements.map((m) => ({ ...m, rate: rateFor(m), value: valueFor(m) }))
+  // Item master id per material + size, so each row's Material links to its Item Stock Ledger.
+  const itemIdByScope = new Map(itemRows.map((i) => [`${i.material_type_id}|${i.material_size_id ?? ''}`, i.id]))
+  const movementsWithValues = movements.map((m) => ({
+    ...m,
+    rate: rateFor(m),
+    value: valueFor(m),
+    itemMasterId: itemIdByScope.get(`${m.material_type_id ?? ''}|${m.material_size_id ?? ''}`) ?? null,
+  }))
 
   const exportMeta = {
     companyName: companies.find((c) => c.id === params.company)?.name || 'All Companies',

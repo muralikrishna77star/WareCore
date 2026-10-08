@@ -8,6 +8,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 import { UUID_RE, CAN_PROPOSE_REPAIR } from '@/lib/dataIntegrity/auth'
 import StatusForm from './StatusForm'
 import ProposeRepairForm from './ProposeRepairForm'
+import { JobWorkLink, PurchaseLineLink } from '@/components/ReportLinks'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -19,6 +20,8 @@ function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
 // text output format — 't'/'f' — not 'true'/'false'. See
 // src/lib/purchaseImport/db.ts's toBool() for the same fix elsewhere.
 const isTrue = (v: string | undefined) => v === 'true' || v === 't'
+// run_sql also returns SQL NULL as the text 'NULL' — never link to that.
+const present = (v: string | undefined | null) => (v && v !== 'NULL' ? v : null)
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: 'bg-red-100 text-red-800',
@@ -87,7 +90,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
     const [movementResult, dupResult, reversalResult, lineResult, missingInflowResult] = await Promise.all([
       hasuraRunSql(`
         SELECT sl.id, sl.entry_type, sl.quantity, sl.entry_date, sl.created_at,
-               sl.reference_type, sl.reference_number, sl.purchase_line_id, sl.sub_purchase_line_id,
+               sl.reference_type, sl.reference_id, sl.reference_number, sl.purchase_line_id, sl.sub_purchase_line_id,
                sl.notes,
                SUM(sl.quantity) OVER (
                  ORDER BY sl.entry_date, sl.quantity DESC, sl.created_at
@@ -214,7 +217,14 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
           <dt className="text-gray-500">Document type</dt><dd className="text-gray-900">{exception.source_document_type ?? '—'}</dd>
           <dt className="text-gray-500">Document id</dt><dd className="text-gray-900 font-mono text-xs">{exception.source_document_id ?? '—'}</dd>
-          <dt className="text-gray-500">Line</dt><dd className="text-gray-900">{exception.source_line_id ?? exception.purchase_line_id ?? '—'}</dd>
+          <dt className="text-gray-500">Line</dt>
+          <dd className="text-gray-900">
+            {/* Linked only when the line shown is the purchase line itself. */}
+            {(() => {
+              const shown = present(exception.source_line_id) ?? present(exception.purchase_line_id)
+              return shown && shown === present(exception.purchase_line_id) ? <PurchaseLineLink lineId={shown} /> : (shown ?? '—')
+            })()}
+          </dd>
           <dt className="text-gray-500">Reference</dt><dd className="text-gray-900">{exception.reference_number ?? '—'}</dd>
         </dl>
       </div>
@@ -239,7 +249,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
               <p className="text-sm font-medium text-red-700">Purchase line has activity but no purchase-in was ever posted</p>
               <ul className="mt-1 text-sm text-gray-700 space-y-1">
                 {diagnosis.missingPurchaseInflow.map((l, i) => (
-                  <li key={i}>Line {l.purchase_line_id}: {l.total_other_activity} of outflow activity, but 0 purchased in this exact material/size scope — likely posted under a different size, or never invoiced.</li>
+                  <li key={i}>Line <PurchaseLineLink lineId={present(l.purchase_line_id)} />: {l.total_other_activity} of outflow activity, but 0 purchased in this exact material/size scope — likely posted under a different size, or never invoiced.</li>
                 ))}
               </ul>
             </div>
@@ -252,7 +262,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
                 {diagnosis.duplicates.map((d, i) => (
                   <li key={i}>
                     {d.dup_count}× <span className="font-mono text-xs">{d.entry_type}</span> rows of quantity {d.quantity}
-                    {d.purchase_line_id ? ` on line ${d.purchase_line_id}` : ''} — reference numbers {d.reference_numbers}
+                    {present(d.purchase_line_id) ? <> on line <PurchaseLineLink lineId={d.purchase_line_id} /></> : ''} — reference numbers {d.reference_numbers}
                   </li>
                 ))}
               </ul>
@@ -264,7 +274,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
               <p className="text-sm font-medium text-red-700">Cancellation exceeds what was ever purchased</p>
               <ul className="mt-1 text-sm text-gray-700 space-y-1">
                 {diagnosis.reversalExceedsOriginal.map((r, i) => (
-                  <li key={i}>Line {r.purchase_line_id}: purchased {r.total_in}, cancelled {r.total_cancelled}</li>
+                  <li key={i}>Line <PurchaseLineLink lineId={present(r.purchase_line_id)} />: purchased {r.total_in}, cancelled {r.total_cancelled}</li>
                 ))}
               </ul>
             </div>
@@ -275,7 +285,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
               <p className="text-sm font-medium text-red-700">Specific purchase line(s) actually negative</p>
               <ul className="mt-1 text-sm text-gray-700 space-y-1">
                 {diagnosis.negativeLines.map((l, i) => (
-                  <li key={i}>Line {l.purchase_line_id}: net {l.net_balance}</li>
+                  <li key={i}>Line <PurchaseLineLink lineId={present(l.purchase_line_id)} />: net {l.net_balance}</li>
                 ))}
               </ul>
             </div>
@@ -306,8 +316,12 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
                   <tr key={m.id} className={Number(m.running_balance) < 0 ? 'bg-red-50' : undefined}>
                     <td className="px-4 py-2 whitespace-nowrap">{m.entry_date}</td>
                     <td className="px-4 py-2 font-mono text-xs">{m.entry_type}</td>
-                    <td className="px-4 py-2">{m.reference_number ?? '—'}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{m.purchase_line_id ?? m.sub_purchase_line_id ?? '—'}</td>
+                    <td className="px-4 py-2">
+                      <JobWorkLink orderId={m.reference_type === 'job_work' ? present(m.reference_id) : null}>{m.reference_number ?? '—'}</JobWorkLink>
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs">
+                      <PurchaseLineLink lineId={present(m.purchase_line_id) ?? present(m.sub_purchase_line_id)} />
+                    </td>
                     <td className="px-4 py-2 text-right">{m.quantity}</td>
                     <td className={`px-4 py-2 text-right font-medium ${Number(m.running_balance) < 0 ? 'text-red-600' : 'text-gray-900'}`}>{m.running_balance}</td>
                     <td className="px-4 py-2 text-gray-500">{m.notes ?? ''}</td>

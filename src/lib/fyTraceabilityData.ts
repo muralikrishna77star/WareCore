@@ -70,7 +70,8 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
              l.quantity::text, COALESCE(l.rate, 0)::text,
              COALESCE(l.taxable_value, l.amount, l.quantity * l.rate, 0)::text,
              COALESCE(l.total_with_tax, l.taxable_value, l.amount, 0)::text,
-             COALESCE(l.cgst_rate + l.sgst_rate, tr.cgst_rate + tr.sgst_rate)::text
+             COALESCE(l.cgst_rate + l.sgst_rate, tr.cgst_rate + tr.sgst_rate)::text,
+             l.item_master_id::text
       FROM lines l
       LEFT JOIN suppliers s ON s.id = l.supplier_id
       LEFT JOIN companies c ON c.id = l.bill_company_id
@@ -175,6 +176,7 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
     gst: num(r[13]) - num(r[12]),
     total: num(r[13]),
     gstRate: r[14] && r[14] !== 'NULL' ? Number(r[14]) : null,
+    itemMasterId: r[15] && r[15] !== 'NULL' ? r[15] : null,
   }))
 
   const movementsByLine = new Map<string, TraceMovement[]>()

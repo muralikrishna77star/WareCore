@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useState } from 'react'
+import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
 
 export type Transaction = {
   id: string
@@ -8,6 +9,8 @@ export type Transaction = {
   type: 'Job Work Out' | 'Direct Sale' | 'Return' | 'Return (paired with direct sale)' | 'Transfer Out' | 'Transfer In'
   quantity: number
   reference_number: string | null
+  /** The job work order a job-work transaction is posted against. */
+  jobWorkOrderId?: string | null
   notes: string | null
   purchaseDate: string | null
   rate: number | null
@@ -17,8 +20,10 @@ export type Transaction = {
 
 export type GroupRow = {
   key: string
+  vendorId?: string | null
   vendorName: string
   companyName: string
+  itemMasterId?: string | null
   itemLabel: string
   sizeLabel: string
   unit: string
@@ -126,11 +131,14 @@ export default function VendorMovementsTable({
   sortHrefs,
   activeSort,
   activeDir,
+  fromDate,
 }: {
   rows: GroupRow[]
   sortHrefs: Record<string, string>
   activeSort: string
   activeDir: 'asc' | 'desc'
+  /** The report's period start — vendor and item links open from the same date. */
+  fromDate?: string
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -179,9 +187,13 @@ export default function VendorMovementsTable({
                 <td className="px-2 py-2.5 text-gray-400 text-center">
                   <span className={`inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                 </td>
-                <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{g.vendorName}</td>
+                <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">
+                  <VendorLink vendorId={g.vendorId} fromDate={fromDate} className="text-gray-900 hover:text-blue-700 hover:underline">{g.vendorName}</VendorLink>
+                </td>
                 <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">{g.companyName}</td>
-                <td className="px-4 py-2.5 text-gray-900 whitespace-nowrap">{g.itemLabel}</td>
+                <td className="px-4 py-2.5 text-gray-900 whitespace-nowrap">
+                  <ItemLedgerLink itemMasterId={g.itemMasterId} fromDate={fromDate} className="text-gray-900 hover:text-blue-700 hover:underline">{g.itemLabel}</ItemLedgerLink>
+                </td>
                 <td className="px-4 py-2.5 text-gray-600">{g.sizeLabel}</td>
                 <td className="px-4 py-2.5 text-right font-medium text-slate-700">{g.openingBalance.toFixed(3)} {g.unit}</td>
                 <td className="px-4 py-2.5 text-right font-medium text-purple-700">{g.jobWorkOut.toFixed(3)} {g.unit}</td>
@@ -254,7 +266,9 @@ export default function VendorMovementsTable({
                                 <td className={`px-3 py-2 text-right font-medium ${runningBalanceEffect[t.type] > 0 ? 'text-green-700' : 'text-red-700'}`}>
                                   {runningBalanceEffect[t.type] > 0 ? '+' : '−'}{Math.abs(t.quantity).toFixed(3)} {g.unit}
                                 </td>
-                                <td className="px-3 py-2 font-mono text-gray-500">{t.reference_number || '—'}</td>
+                                <td className="px-3 py-2 font-mono text-gray-500">
+                                  <JobWorkLink orderId={t.jobWorkOrderId}>{t.reference_number || '—'}</JobWorkLink>
+                                </td>
                                 <td className="px-3 py-2 text-gray-500">{t.notes || '—'}</td>
                                 <td className="px-3 py-2 text-teal-700 whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
                                 <td className="px-3 py-2 text-right text-teal-700">{t.rate ? fmtC(t.rate) : '—'}</td>

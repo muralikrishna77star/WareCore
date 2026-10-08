@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { JobWorkLink, VendorLink } from '@/components/ReportLinks'
 
 export type JobWorkTransferCancellationRow = {
   id: string
@@ -11,8 +12,11 @@ export type JobWorkTransferCancellationRow = {
   transfer_date: string
   from_reference_number: string | null
   from_vendor_name: string | null
+  from_vendor_id?: string | null
+  from_job_work_order_id?: string | null
   to_reference_number: string | null
   to_vendor_name: string | null
+  to_vendor_id?: string | null
   cancelled_at: string | null
 }
 
@@ -43,12 +47,29 @@ export function JobWorkTransferCancellationsRows({ records: allRecords }: { reco
             <td className="px-6 py-3 font-mono text-xs text-gray-500 line-through whitespace-nowrap">{r.transfer_number || '—'}</td>
             <td className="px-6 py-3 text-gray-600 whitespace-nowrap">{formatDate(r.transfer_date)}</td>
             <td className="px-6 py-3 text-gray-700">
-              {r.from_reference_number || '—'}
-              {r.from_vendor_name ? <span className="text-gray-400"> — {r.from_vendor_name}</span> : null}
+              <JobWorkLink orderId={r.from_job_work_order_id} className="text-gray-700 hover:text-blue-700 hover:underline">
+                {r.from_reference_number || '—'}
+              </JobWorkLink>
+              {r.from_vendor_name ? (
+                <span className="text-gray-400">
+                  {' — '}
+                  <VendorLink vendorId={r.from_vendor_id} fromDate={r.transfer_date} className="text-gray-400 hover:text-blue-700 hover:underline">
+                    {r.from_vendor_name}
+                  </VendorLink>
+                </span>
+              ) : null}
             </td>
             <td className="px-6 py-3 text-gray-700">
+              {/* The destination order was deleted with the transfer, so only its vendor links. */}
               {r.to_reference_number || '—'}
-              {r.to_vendor_name ? <span className="text-gray-400"> — {r.to_vendor_name}</span> : null}
+              {r.to_vendor_name ? (
+                <span className="text-gray-400">
+                  {' — '}
+                  <VendorLink vendorId={r.to_vendor_id} fromDate={r.transfer_date} className="text-gray-400 hover:text-blue-700 hover:underline">
+                    {r.to_vendor_name}
+                  </VendorLink>
+                </span>
+              ) : null}
             </td>
             <td className="px-6 py-3 text-gray-500 text-xs whitespace-nowrap">{r.cancelled_at ? formatDate(r.cancelled_at) : '—'}</td>
             <td className="px-6 py-3">

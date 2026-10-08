@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Coins, Banknote, CircleArrowDown, CircleArrowUp, Scale, BookOpen } from 'lucide-react'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
+import { PurchaseLineLink } from '@/components/ReportLinks'
 import {
   ACTIVE_COMPANIES_QUERY,
   ACTIVE_SUPPLIERS_QUERY,
@@ -452,8 +453,12 @@ export default function AccountsPage() {
                       </td>
                       <td className="px-5 py-3 font-medium text-gray-900 whitespace-nowrap">{party || '—'}</td>
                       <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{entry.reference_number || '—'}</td>
-                      <td className="px-5 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{entry.purchase_line_id || '—'}</td>
-                      <td className="px-5 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{entry.sub_purchase_line_id || '—'}</td>
+                      <td className="px-5 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
+                        <PurchaseLineLink lineId={entry.purchase_line_id} />
+                      </td>
+                      <td className="px-5 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
+                        <PurchaseLineLink lineId={entry.sub_purchase_line_id} />
+                      </td>
                       <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{entry.payment_mode || '—'}</td>
                       <td className="px-5 py-3 text-right font-semibold whitespace-nowrap">
                         <span className={isReceipt ? 'text-emerald-700' : 'text-rose-700'}>

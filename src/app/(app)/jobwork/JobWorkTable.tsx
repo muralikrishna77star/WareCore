@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { TriangleAlert } from 'lucide-react'
 import { formatDate, getJobWorkOrderStatusLabel, getJobWorkCompletionLabel, isJobWorkTransferReversed } from '@/lib/utils'
 import { ReferenceLink } from '@/components/ReferenceLink'
+import { VendorLink } from '@/components/ReportLinks'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { MonthYearFilter } from '@/components/MonthYearFilter'
@@ -36,6 +37,7 @@ export type JobWorkOrderRow = {
   status: string
   completion_via?: string | null
   notes: string | null
+  vendor_id?: string | null
   companies: { name: string; code: string } | null
   suppliers: { name: string } | null
   job_work_items: JobWorkOrderItem[]
@@ -368,7 +370,11 @@ export default function JobWorkTable({
                   {o.companies?.code}
                 </span>
               </td>
-              <td className="px-6 py-3 font-medium text-gray-900">{o.suppliers?.name || '—'}</td>
+              <td className="px-6 py-3 font-medium text-gray-900">
+                <VendorLink vendorId={o.vendor_id} fromDate={o.dispatch_date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                  {o.suppliers?.name || '—'}
+                </VendorLink>
+              </td>
               <td className="px-6 py-3">
                 <p className="text-gray-700">{items.length} item{items.length !== 1 ? 's' : ''}</p>
                 <p className="text-xs text-gray-500">

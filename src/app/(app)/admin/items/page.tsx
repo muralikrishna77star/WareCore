@@ -9,6 +9,7 @@ import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { ITEM_MASTERS_QUERY, ACTIVE_MATERIAL_TYPES_QUERY } from '@/lib/hasura/queries'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink } from '@/components/ReportLinks'
 
 interface ItemMasterRow {
   id: string
@@ -136,8 +137,12 @@ export default function ItemMastersPage() {
               <tbody className="divide-y divide-gray-100">
                 {sortedRows.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-mono font-medium text-gray-900">{item.item_code}</td>
-                    <td className="px-5 py-3 text-gray-800">{item.item_name}</td>
+                    <td className="px-5 py-3 font-mono font-medium text-gray-900">
+                      <ItemLedgerLink itemMasterId={item.id} className="text-gray-900 hover:text-blue-700 hover:underline">{item.item_code}</ItemLedgerLink>
+                    </td>
+                    <td className="px-5 py-3 text-gray-800">
+                      <ItemLedgerLink itemMasterId={item.id} className="text-gray-800 hover:text-blue-700 hover:underline">{item.item_name}</ItemLedgerLink>
+                    </td>
                     <td className="px-5 py-3">
                       {item.material_types ? (
                         <span className="inline-flex items-center gap-1">

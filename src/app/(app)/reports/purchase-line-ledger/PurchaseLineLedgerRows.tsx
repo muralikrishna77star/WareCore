@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, PurchaseLineLink, VendorLink } from '@/components/ReportLinks'
 
 const entryTypeConfig: Record<string, { label: string; color: string }> = {
   PURCHASE_IN: { label: 'Purchase In', color: 'bg-green-100 text-green-800' },
@@ -53,6 +54,8 @@ export type PurchaseLineLedgerRow = {
   vendorBalance: number
   itemLabel: string
   vendorName?: string | null
+  vendorId?: string | null
+  itemMasterId?: string | null
   /** The job work order the other leg of a merged row is posted against. */
   jobWorkReferenceNumber?: string | null
   jobWorkReferenceType?: string | null
@@ -117,7 +120,9 @@ export function PurchaseLineLedgerRows({
                 </span>
               </td>
               <td className="px-2 py-1 text-gray-700 whitespace-nowrap">
-                {row.itemLabel}
+                <ItemLedgerLink itemMasterId={row.itemMasterId} fromDate={row.entry_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                  {row.itemLabel}
+                </ItemLedgerLink>
                 {(row.material_sizes?.size_label || row.size_label) && (
                   <span className="ml-1 text-[11px] text-gray-400">({row.material_sizes?.size_label || row.size_label})</span>
                 )}
@@ -149,9 +154,10 @@ export function PurchaseLineLedgerRows({
               </td>
               <td className="px-2 py-1">
                 {row.sub_purchase_line_id ? (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    {row.sub_purchase_line_id}
-                  </span>
+                  <PurchaseLineLink
+                    lineId={row.sub_purchase_line_id}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:underline"
+                  />
                 ) : <span className="text-[11px] text-gray-300">—</span>}
               </td>
               <td className="px-2 py-1 text-gray-700">{row.companies?.name || '—'}</td>
@@ -164,7 +170,11 @@ export function PurchaseLineLedgerRows({
               <td className={`px-2 py-1 text-right font-semibold ${row.vendorBalance < 0 ? 'text-red-600' : 'text-gray-700'}`}>
                 {fmtQ(row.vendorBalance)}
               </td>
-              <td className="px-2 py-1 text-gray-600 whitespace-nowrap">{row.vendorName || '—'}</td>
+              <td className="px-2 py-1 text-gray-600 whitespace-nowrap">
+                <VendorLink vendorId={row.vendorId} fromDate={row.entry_date} className="text-gray-600 hover:text-blue-700 hover:underline">
+                  {row.vendorName || '—'}
+                </VendorLink>
+              </td>
               <td className="px-2 py-1 text-gray-500 text-[11px]">{row.notes || '—'}</td>
             </tr>
           )

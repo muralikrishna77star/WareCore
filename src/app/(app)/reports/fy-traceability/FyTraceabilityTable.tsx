@@ -12,6 +12,7 @@ import {
   type LineBlock,
 } from '@/lib/fyTraceability'
 import { fmtDate, fmtM, fmtQ, monthLabel } from './format'
+import { ItemLedgerLink } from '@/components/ReportLinks'
 
 const KIND_STYLE: Partial<Record<DetailKind, string>> = {
   SALE: 'text-gray-900',
@@ -75,7 +76,11 @@ function Block({ block, showJobWork }: { block: LineBlock; showJobWork: boolean 
                 <td className={`whitespace-nowrap ${purchaseCls}`} rowSpan={rows.length}>{fmtDate(line.billDate)}</td>
                 <td className={`min-w-[8rem] max-w-[12rem] ${purchaseCls}`} rowSpan={rows.length}>{line.seller}</td>
                 <td className="min-w-[11rem] max-w-[16rem]" rowSpan={rows.length}>
-                  <div className={purchaseCls}>{line.description}</div>
+                  <div className={purchaseCls}>
+                    <ItemLedgerLink itemMasterId={line.itemMasterId} fromDate={line.billDate} className="hover:text-blue-700 hover:underline">
+                      {line.description}
+                    </ItemLedgerLink>
+                  </div>
                   <Link
                     href={`/reports/purchase-line-ledger?line=${encodeURIComponent(line.purchaseLineId)}`}
                     className="font-mono text-[0.6875rem] text-blue-600 hover:underline"

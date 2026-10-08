@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { hasuraFetch } from '@/lib/hasura/fetcher'
 import { UPDATE_TRANSFER_STATUS_MUTATION } from '@/lib/hasura/queries'
+import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
 
 interface Transfer {
   id: string
@@ -128,12 +129,16 @@ export default function TransferDetailClient({ transfer, items }: TransferDetail
             {items.map((item: TransferItem, idx: number) => (
               <tr key={item.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
-                <td className="px-6 py-4 text-sm font-mono text-gray-700">{item.item_master?.item_code ?? '—'}</td>
+                <td className="px-6 py-4 text-sm font-mono text-gray-700">
+                  <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={transfer.transfer_date}>{item.item_master?.item_code ?? '—'}</ItemLedgerLink>
+                </td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                  {item.item_name ?? item.material_types?.description ?? '—'}
+                  <ItemLedgerLink itemMasterId={item.item_master_id} fromDate={transfer.transfer_date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                    {item.item_name ?? item.material_types?.description ?? '—'}
+                  </ItemLedgerLink>
                 </td>
                 <td className="px-6 py-4 text-sm font-mono text-blue-700">
-                  {item.purchase_line_id ?? '—'}
+                  <PurchaseLineLink lineId={item.purchase_line_id} className="text-blue-700 hover:underline" />
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.material_types?.description ?? '—'}</td>
                 <td className="px-6 py-4 text-sm text-gray-700">{item.material_sizes?.size_label ?? item.size_label ?? '—'}</td>

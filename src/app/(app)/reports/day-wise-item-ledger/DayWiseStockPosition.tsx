@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Info, Package } from 'lucide-react'
 import type { StockPosition } from '@/lib/dayWiseItemLedgerData'
+import { ItemLedgerLink } from '@/components/ReportLinks'
 
 const qty = (n: number) => n.toFixed(3)
 
@@ -109,8 +110,12 @@ export function DayWiseStockPosition({
                     key={`${p.materialTypeId}|${p.materialSizeId ?? ''}`}
                     className="border-b border-gray-100 last:border-0"
                   >
-                    <td className="px-3 py-2 font-medium text-gray-800">{p.itemCode}</td>
-                    <td className="px-3 py-2 text-gray-700">{p.itemDescription}</td>
+                    <td className="px-3 py-2 font-medium text-gray-800">
+                      <ItemLedgerLink itemMasterId={p.itemMasterId} className="text-gray-800 hover:text-blue-700 hover:underline">{p.itemCode}</ItemLedgerLink>
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      <ItemLedgerLink itemMasterId={p.itemMasterId} className="text-gray-700 hover:text-blue-700 hover:underline">{p.itemDescription}</ItemLedgerLink>
+                    </td>
                     <td className="px-3 py-2 text-gray-700">{p.itemSize}</td>
                     <td className="px-3 py-2 text-center text-gray-500">{p.unit}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{qty(p.opening)}</td>

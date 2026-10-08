@@ -5,6 +5,7 @@ import { X, TriangleAlert } from 'lucide-react'
 import type { TransactionDetailRow } from '@/lib/exportStockStatementExcel'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
 
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
@@ -171,7 +172,9 @@ export default function TransactionDetailsTable({
                     </span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-gray-500">{t.documentNumber || '—'}</td>
+                <td className="px-2 py-2 text-gray-500">
+                  <JobWorkLink orderId={t.jobWorkOrderId}>{t.documentNumber || '—'}</JobWorkLink>
+                </td>
                 <td className="px-2 py-2 text-gray-600">
                   {t.warehouseName || '—'}
                   {(t.sourceWarehouseName || t.destinationWarehouseName) && (
@@ -180,9 +183,16 @@ export default function TransactionDetailsTable({
                     </span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-gray-600">{t.vendorName || t.customerName || '—'}</td>
+                <td className="px-2 py-2 text-gray-600">
+                  {t.vendorName ? (
+                    <VendorLink vendorId={t.vendorId} fromDate={t.date} className="text-gray-600 hover:text-blue-700 hover:underline">{t.vendorName}</VendorLink>
+                  ) : (t.customerName || '—')}
+                </td>
                 <td className="px-2 py-2 font-medium text-gray-900">
-                  {t.itemName}{t.size ? ` (${t.size})` : ''}
+                  <ItemLedgerLink itemMasterId={t.itemMasterId} fromDate={t.date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                    {t.itemName}
+                  </ItemLedgerLink>
+                  {t.size ? ` (${t.size})` : ''}
                 </td>
                 <td className="px-2 py-2 text-right text-green-700 bg-green-50/40">{t.inwardQty ? fmtQ(t.inwardQty) : '—'}</td>
                 <td className="px-2 py-2 text-right text-red-700 bg-red-50/40">{t.outwardQty ? fmtQ(t.outwardQty) : '—'}</td>

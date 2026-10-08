@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/utils'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { ItemLedgerLink, VendorLink } from '@/components/ReportLinks'
 
 type JobWorkItem = {
   id: string
@@ -208,13 +209,19 @@ export default function VendorDirectSaleBrowseTable({
                       {o.reference_number ?? o.id.slice(0, 8)}
                     </Link>
                   </td>
-                  <td className="px-6 py-3 text-gray-900">{o.suppliers?.name ?? '—'}</td>
+                  <td className="px-6 py-3 text-gray-900">
+                    <VendorLink vendorId={o.vendor_id} fromDate={o.dispatch_date} className="text-gray-900 hover:text-blue-700 hover:underline">
+                      {o.suppliers?.name ?? '—'}
+                    </VendorLink>
+                  </td>
                   <td className="px-6 py-3 text-gray-600">{o.companies?.name ?? '—'}</td>
                   <td className="px-6 py-3 text-gray-700 whitespace-nowrap">{formatDate(o.dispatch_date)}</td>
                   <td className="px-6 py-3">
                     {pendingItems.map((i) => (
                       <p key={i.id} className="text-xs text-gray-700">
-                        {i.item_name || i.material_types?.description || '—'}
+                        <ItemLedgerLink itemMasterId={i.item_master_id} fromDate={o.dispatch_date} className="text-gray-700 hover:text-blue-700 hover:underline">
+                          {i.item_name || i.material_types?.description || '—'}
+                        </ItemLedgerLink>
                         {i.size_label ? ` (${i.size_label})` : ''}: <strong>{pendingQty(i).toFixed(3)} {i.unit}</strong>
                       </p>
                     ))}
