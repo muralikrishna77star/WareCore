@@ -271,6 +271,68 @@ describe('Dispatch lifecycle', () => {
       expect(result.success).toBe(true)
       expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(0)
     })
+
+    // REGRESSION (migration 158): the clean-up matched every virtual return
+    // on the source order + purchase line, so editing one vendor sale wiped
+    // the returns of OTHER sales on the same line (GI00132: -7.150), and
+    // cancelling never matched at all (sub_purchase_line_id NULL), leaving
+    // the cancelled sale's return behind (JW-MU6RYYXX-1R1B).
+    it('editing one sale keeps the virtual returns of other sales on the same order and line', async () => {
+      const f = await makeVendorDirectFixtures()
+      await makeVendorDirectDispatch(f, 'PL-0158A', f.materialTypeAId, 2.980)
+      const scrapSale = await makeVendorDirectDispatch(f, 'PL-0158A', f.materialTypeAId, 0.074)
+      expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(2)
+
+      const result = await editDispatch(scrapSale, [{ materialTypeId: f.materialTypeAId, purchaseLineId: 'PL-0158A', quantity: 0.074 }])
+      expect(result.success).toBe(true)
+
+      const quantities = (await virtualReturns(f.jobWorkOrderId)).map((r) => Number(r.quantity)).sort()
+      expect(quantities).toEqual([0.074, 2.98])
+    })
+
+    it('cancelling one sale removes only its own virtual return', async () => {
+      const f = await makeVendorDirectFixtures()
+      await makeVendorDirectDispatch(f, 'PL-0158B', f.materialTypeAId, 0.910)
+      const cancelled = await makeVendorDirectDispatch(f, 'PL-0158B', f.materialTypeAId, 0.160)
+      expect(await virtualReturns(f.jobWorkOrderId)).toHaveLength(2)
+
+      const { rows: [r] } = await client.query(`SELECT cancel_dispatch_order($1, 'test') AS r`, [cancelled])
+      expect(r.r.success).toBe(true)
+
+      const returns = await virtualReturns(f.jobWorkOrderId)
+      expect(returns).toHaveLength(1)
+      expect(Number(returns[0].quantity)).toBeCloseTo(0.910, 3)
+      const { rows: [audit] } = await client.query(
+        `SELECT count(*)::int AS n FROM stock_ledger_deletions WHERE ledger_row->>'reference_id' = $1`, [f.jobWorkOrderId]
+      )
+      expect(audit.n).toBe(1)
+    })
+
+    it('an edit keeps the link to the job work line the sale came from', async () => {
+      const f = await makeVendorDirectFixtures()
+      const { rows: [line] } = await client.query(
+        `INSERT INTO job_work_items (purchase_line_id, job_work_order_id, material_type_id, quantity_sent, quantity_received, unit)
+         VALUES ('PL-0158C', $1, $2, 5, 0, 'MT') RETURNING id`,
+        [f.jobWorkOrderId, f.materialTypeAId]
+      )
+      const { rows: [order] } = await client.query(
+        `INSERT INTO dispatch_orders (invoice_number, customer_id, company_id, warehouse_id, dispatch_date, status, is_vendor_direct, source_job_work_order_id)
+         VALUES ($1, $2, $3, $4, '2024-06-05', 'active', true, $5) RETURNING id`,
+        [`INV-VD-158C-${Date.now()}`, f.customerId, f.companyId, f.warehouseId, f.jobWorkOrderId]
+      )
+      await client.query(
+        `INSERT INTO dispatch_items (dispatch_order_id, material_type_id, purchase_line_id, quantity, unit, rate, amount, source_job_work_item_id)
+         VALUES ($1, $2, 'PL-0158C', 2, 'tons', 150, 300, $3)`,
+        [order.id, f.materialTypeAId, line.id]
+      )
+
+      expect((await editDispatch(order.id, [{ materialTypeId: f.materialTypeAId, purchaseLineId: 'PL-0158C', quantity: 2.5 }])).success).toBe(true)
+
+      const { rows: [item] } = await client.query(`SELECT source_job_work_item_id FROM dispatch_items WHERE dispatch_order_id = $1`, [order.id])
+      expect(item.source_job_work_item_id).toBe(line.id)
+      const { rows: [jw] } = await client.query(`SELECT quantity_received FROM job_work_items WHERE id = $1`, [line.id])
+      expect(Number(jw.quantity_received)).toBeCloseTo(2.5, 3)
+    })
   })
 
   it('a backdated order (dispatch_date before entry) posts with the business date, not the insert date', async () => {
