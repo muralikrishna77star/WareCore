@@ -97,8 +97,9 @@ export async function GET(request: NextRequest) {
     const result = await hasuraRunSql(`
       SELECT
         b.id, b.batch_number, b.file_name, b.status, b.row_count, b.created_at, b.imported_at,
-        (SELECT COUNT(*) FROM purchase_import_rows r WHERE r.batch_id = b.id AND r.is_valid) AS valid_rows,
-        (SELECT COUNT(*) FROM purchase_import_rows r WHERE r.batch_id = b.id AND r.reviewed) AS reviewed_rows
+        (SELECT COUNT(*) FROM purchase_import_rows r WHERE r.batch_id = b.id AND r.is_valid AND NOT r.excluded) AS valid_rows,
+        (SELECT COUNT(*) FROM purchase_import_rows r WHERE r.batch_id = b.id AND r.reviewed AND NOT r.excluded) AS reviewed_rows,
+        (SELECT COUNT(*) FROM purchase_import_rows r WHERE r.batch_id = b.id AND r.excluded) AS skipped_rows
       FROM purchase_import_batches b
       ${statusFilter}
       ORDER BY b.created_at DESC

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const result = await hasuraRunSql(`
       UPDATE purchase_import_rows SET reviewed = true, reviewed_by = '${session.userId}'::uuid, reviewed_at = NOW()
-      WHERE batch_id = '${id}'::uuid AND is_valid = true AND reviewed = false
+      WHERE batch_id = '${id}'::uuid AND is_valid = true AND reviewed = false AND excluded = false
       RETURNING id
     `)
     return NextResponse.json({ reviewedCount: rowsToObjects(result).length })

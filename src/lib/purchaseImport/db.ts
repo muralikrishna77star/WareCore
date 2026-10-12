@@ -34,6 +34,13 @@ function toBool(v: unknown): boolean {
   return v === true || v === 'true' || v === 't'
 }
 
+// run_sql also returns SQL NULL as the text 'NULL'; LOCAL_MODE returns
+// native values (a Date for timestamps).
+function textOrNull(v: unknown): string | null {
+  if (v instanceof Date) return v.toISOString()
+  return typeof v === 'string' && v !== '' && v !== 'NULL' ? v : null
+}
+
 export interface StagingRowRecord {
   id: string
   batch_id: string
@@ -51,6 +58,24 @@ export interface StagingRowRecord {
   updated_at: string
   purchase_bill_id: string | null
   purchase_bill_number: string | null
+  /** Skipped by the user — left out of the import (migration 161). */
+  excluded: boolean
+  excluded_by: string | null
+  excluded_at: string | null
+  exclusion_reason: string | null
+}
+
+/** Which rows of a staged batch go into the import, and whether it can run. */
+export function selectRowsForImport(rows: StagingRowRecord[]) {
+  const included = rows.filter((r) => !r.excluded)
+  const skipped = rows.filter((r) => r.excluded)
+  const notReady = included.filter((r) => !r.is_valid || !r.reviewed)
+  return {
+    included,
+    skipped,
+    notReady,
+    readyToImport: included.length > 0 && notReady.length === 0,
+  }
 }
 
 export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
@@ -71,5 +96,9 @@ export function parseStagingRow(raw: Record<string, string>): StagingRowRecord {
     updated_at: raw.updated_at,
     purchase_bill_id: raw.purchase_bill_id || null,
     purchase_bill_number: raw.purchase_bill_number || null,
+    excluded: toBool(raw.excluded),
+    excluded_by: textOrNull(raw.excluded_by),
+    excluded_at: textOrNull(raw.excluded_at),
+    exclusion_reason: textOrNull(raw.exclusion_reason),
   }
 }

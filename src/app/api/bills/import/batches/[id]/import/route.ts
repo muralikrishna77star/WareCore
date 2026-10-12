@@ -5,13 +5,14 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 import { UUID_RE } from '@/lib/dataIntegrity/auth'
 import { sqlTextOrNull } from '@/lib/dataIntegrity/sqlSafe'
 import { ALLOWED_ROLES } from '@/lib/purchaseImport/auth'
-import { rowsToObjects, parseStagingRow, sqlJsonb, sqlBool } from '@/lib/purchaseImport/db'
+import { rowsToObjects, parseStagingRow, selectRowsForImport, sqlJsonb, sqlBool } from '@/lib/purchaseImport/db'
 import { resolveImport, resolveRowIndependent, resolveNewItems } from '@/lib/purchaseImport/resolve'
 import { fetchMasterDataSnapshot } from '@/lib/purchaseImport/fetchSnapshot'
 import { buildInsertScript, buildNewItemsInsertScript } from '@/lib/purchaseImport/buildInsertScript'
 
-// Final commit. Requires the batch STAGED and EVERY row valid+reviewed —
-// all-or-nothing, no partial import. Re-resolves everything fresh against
+// Final commit. Requires the batch STAGED and every row that isn't skipped
+// valid+reviewed — all-or-nothing across those rows; skipped rows are never
+// imported. Re-resolves everything fresh against
 // current master data (resolveImport() is the single authoritative gate,
 // same function the original one-shot commit route used) rather than
 // trusting whatever was cached at staging time, since staging can sit for a
@@ -31,13 +32,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (batches[0].status !== 'STAGED') return NextResponse.json({ error: `Batch is ${batches[0].status}, not STAGED` }, { status: 400 })
 
     const rowsResult = await hasuraRunSql(`SELECT * FROM purchase_import_rows WHERE batch_id = '${id}'::uuid ORDER BY row_number`)
-    const rows = rowsToObjects(rowsResult).map(parseStagingRow)
-    if (!rows.length) return NextResponse.json({ error: 'Batch has no rows' }, { status: 400 })
+    const allRows = rowsToObjects(rowsResult).map(parseStagingRow)
+    if (!allRows.length) return NextResponse.json({ error: 'Batch has no rows' }, { status: 400 })
 
-    const notReady = rows.filter((r) => !r.is_valid || !r.reviewed)
+    // Skipped rows (migration 161) are left out entirely — they don't have
+    // to be valid or reviewed, and never become bill lines. All-or-nothing
+    // still applies to every row that isn't skipped.
+    const { included: rows, skipped, notReady } = selectRowsForImport(allRows)
+    if (!rows.length) {
+      return NextResponse.json({ error: 'Every row in this batch is skipped — there is nothing to import.' }, { status: 400 })
+    }
     if (notReady.length) {
       return NextResponse.json(
-        { error: `${notReady.length} row(s) are not both valid and reviewed yet — nothing was imported.`, rowNumbers: notReady.map((r) => r.row_number) },
+        { error: `${notReady.length} row(s) are not both valid and reviewed yet — fix or skip them. Nothing was imported.`, rowNumbers: notReady.map((r) => r.row_number) },
         { status: 400 }
       )
     }
@@ -132,6 +139,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       totalQuantity: Number(billsWithIds.reduce((s, b) => s + b.totalQuantity, 0).toFixed(3)),
       totalAmount: Number(billsWithIds.reduce((s, b) => s + b.totalAmount, 0).toFixed(2)),
       newItemsCreated: newItems.map((i) => ({ itemCode: i.itemCode, itemName: i.itemName })),
+      skippedRows: skipped.length,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Import failed — nothing was committed.'

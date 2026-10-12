@@ -12,6 +12,7 @@ interface BatchSummary {
   row_count: string
   valid_rows: string
   reviewed_rows: string
+  skipped_rows?: string
   created_at: string
   imported_at: string | null
 }
@@ -215,8 +216,12 @@ export default function BillsImportPage() {
                   <td className="px-4 py-2">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[b.status] ?? 'bg-gray-100'}`}>{b.status}</span>
                   </td>
-                  <td className="px-4 py-2 text-right text-gray-600">{b.valid_rows}/{b.row_count}</td>
-                  <td className="px-4 py-2 text-right text-gray-600">{b.reviewed_rows}/{b.row_count}</td>
+                  {/* Skipped rows aren't imported, so they're left out of the denominators. */}
+                  <td className="px-4 py-2 text-right text-gray-600">
+                    {b.valid_rows}/{Number(b.row_count) - Number(b.skipped_rows || 0)}
+                    {Number(b.skipped_rows || 0) > 0 && <span className="block text-[11px] text-gray-400">{b.skipped_rows} skipped</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right text-gray-600">{b.reviewed_rows}/{Number(b.row_count) - Number(b.skipped_rows || 0)}</td>
                   <td className="px-4 py-2 text-gray-500">{new Date(b.created_at).toLocaleString()}</td>
                   <td className="px-4 py-2 text-right">
                     {b.status !== 'IMPORTED' && (

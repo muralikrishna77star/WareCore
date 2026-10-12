@@ -3,7 +3,7 @@ import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
 import { UUID_RE } from '@/lib/dataIntegrity/auth'
 import { ALLOWED_ROLES } from '@/lib/purchaseImport/auth'
-import { rowsToObjects, parseStagingRow } from '@/lib/purchaseImport/db'
+import { rowsToObjects, parseStagingRow, selectRowsForImport } from '@/lib/purchaseImport/db'
 import { findDuplicateLines, type DuplicateCheckEntry } from '@/lib/purchaseImport/resolve'
 
 // Batch + every staging row + non-blocking cross-row duplicate warnings
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const rows = rowsToObjects(rowsResult).map(parseStagingRow)
 
     const duplicateEntries: DuplicateCheckEntry[] = rows
-      .filter((r) => r.is_valid && r.resolved_field_ids)
+      .filter((r) => !r.excluded && r.is_valid && r.resolved_field_ids)
       .map((r) => ({
         rowNumber: r.row_number,
         companyId: r.resolved_field_ids!.companyId!,
@@ -47,11 +47,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }))
     const batchWarnings = findDuplicateLines(duplicateEntries)
 
+    // Counts cover the rows that will be imported; skipped rows (migration
+    // 161) are reported separately and never block the import.
+    const { included, skipped, readyToImport } = selectRowsForImport(rows)
     const counts = {
-      total: rows.length,
-      valid: rows.filter((r) => r.is_valid).length,
-      reviewed: rows.filter((r) => r.reviewed).length,
-      readyToImport: rows.length > 0 && rows.every((r) => r.is_valid && r.reviewed),
+      total: included.length,
+      valid: included.filter((r) => r.is_valid).length,
+      reviewed: included.filter((r) => r.reviewed).length,
+      skipped: skipped.length,
+      readyToImport,
     }
 
     return NextResponse.json({ batch: batches[0], rows, batchWarnings, counts })
