@@ -7,7 +7,7 @@
 //
 // Usage: node scripts/desktop/start.mjs   (after `npm run build`)
 //
-// Env overrides: WARECORE_DATA_DIR, WARECORE_PG_PORT, PORT
+// Env overrides: WARECORE_DATA_DIR, WARECORE_PG_PORT, PORT, WARECORE_NO_BROWSER
 
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +16,7 @@ import { spawn, execSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import EmbeddedPostgres from 'embedded-postgres'
 import { runPendingMigrations } from './migrate.mjs'
+import { PRODUCTION_DATA_DEPENDENT_MIGRATIONS } from './productionDataMigrations.mjs'
 import { ensureDefaultUser } from './seed-default-user.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -240,11 +241,18 @@ async function main() {
 
   try {
     console.log('Applying database migrations...')
-    const { appliedCount, alreadyAppliedCount, totalFiles } = await runPendingMigrations({
+    const { appliedCount, alreadyAppliedCount, totalFiles, bestEffortSkipped } = await runPendingMigrations({
       connectionString,
       migrationsDir,
+      // One-off repairs of live-system rows: skipped with a note when they
+      // don't apply to this database, rather than stopping the app.
+      bestEffortFilenames: PRODUCTION_DATA_DEPENDENT_MIGRATIONS,
     })
-    console.log(`Migrations: ${appliedCount} applied, ${alreadyAppliedCount} already up to date (${totalFiles} total).`)
+    console.log(
+      `Migrations: ${appliedCount} applied, ${alreadyAppliedCount} already up to date` +
+      (bestEffortSkipped.length ? `, ${bestEffortSkipped.length} live-system repair(s) not applicable here` : '') +
+      ` (${totalFiles} total).`
+    )
 
     await ensureDefaultUser({ connectionString })
   } catch (err) {
@@ -293,7 +301,8 @@ async function main() {
     return
   }
   console.log(`WareCore is ready at ${appUrl}`)
-  browserProcess = openBrowser(appUrl, join(dataDir, 'browser-profile'))
+  // WARECORE_NO_BROWSER=1: headless launch for automated checks of a build.
+  if (!process.env.WARECORE_NO_BROWSER) browserProcess = openBrowser(appUrl, join(dataDir, 'browser-profile'))
 }
 
 main().catch((err) => {

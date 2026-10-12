@@ -1,5 +1,5 @@
 import { FieldNode } from 'graphql'
-import { getPool } from './pool'
+import { getGraphqlPool } from './pool'
 import { buildWhere } from './where'
 import { RELATIONSHIPS } from './relationships'
 import { evalArgs, fieldSelections, resultKey } from './ast'
@@ -46,7 +46,7 @@ export async function shapeRow(table: string, row: Row, field: FieldNode, variab
       continue
     }
 
-    const pool = getPool()
+    const pool = getGraphqlPool()
     if (rel.kind === 'object') {
       const fk = row[rel.localKey]
       if (fk === null || fk === undefined) {
@@ -80,7 +80,7 @@ export async function selectMany(table: string, args: Record<string, unknown>, f
   }
   const limitSql = args.limit != null ? ` LIMIT ${Number(args.limit)}` : ''
 
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(
     `SELECT ${distinctSql}* FROM "${table}" WHERE ${whereSql}${orderSql}${limitSql}`,
     params
@@ -89,7 +89,7 @@ export async function selectMany(table: string, args: Record<string, unknown>, f
 }
 
 export async function selectByPk(table: string, args: Record<string, unknown>, field: FieldNode, variables: Record<string, unknown>) {
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(`SELECT * FROM "${table}" WHERE id = $1 LIMIT 1`, [args.id])
   return res.rows[0] ? shapeRow(table, res.rows[0], field, variables) : null
 }
@@ -107,7 +107,7 @@ export async function selectAggregate(table: string, args: Record<string, unknow
 
   const params: unknown[] = []
   const whereSql = buildWhere(table, args.where, params)
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(`SELECT ${selectParts.join(', ')} FROM "${table}" WHERE ${whereSql}`, params)
   const row = res.rows[0] ?? {}
 

@@ -23,6 +23,7 @@ import { dirname } from 'node:path'
 import { createServer } from 'node:net'
 import EmbeddedPostgres from 'embedded-postgres'
 import { runPendingMigrations } from '../desktop/migrate.mjs'
+import { PRODUCTION_DATA_DEPENDENT_MIGRATIONS } from '../desktop/productionDataMigrations.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const migrationsDir = join(__dirname, '..', '..', 'supabase', 'migrations')
@@ -43,46 +44,9 @@ const migrationsDir = join(__dirname, '..', '..', 'supabase', 'migrations')
 // this throwaway test database's schema baseline, so new Phase 1 objects
 // (which don't depend on any of this backfilled data) can be verified
 // against a representative, non-production database.
-export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
-  '063_restore_job_work_transfer_ledger.sql',
-  '064_fix_backfilled_transfer_ledger_timestamps.sql',
-  '071_repair_vendor_direct_sale_duplicates.sql',
-  '073_backfill_missing_2024_ledger_entries.sql',
-  '077_backfill_missing_job_work_transfer_out.sql',
-  '078_repair_jw_msa5jkmm_feg0_transfer.sql',
-  '079_fix_078_transfer_out_date.sql',
-  '080_fix_jw_msa5jkmm_feg0_vendor.sql',
-  '082_redo_jw_msa5jkmm_feg0_repair.sql',
-  '083_fix_082_transfer_out_date.sql',
-  '084_repair_cr00700_duplicate_cancel.sql',
-  // Found while adding tests/data-integrity/vendor-movements-report.test.ts
-  // (2026-08-27): four more one-off forensic repairs added after this list
-  // was last updated, same shape as the ones above (hardcoded production
-  // UUIDs for companies/vendors/orders that don't exist in a blank schema).
-  // Confirmed via a full from-scratch migration run that this set (plus the
-  // ones above) is exactly what's needed for every migration to apply
-  // cleanly to a fresh embedded Postgres — re-verify with the same method
-  // (run scripts/test/run-migration-check.mjs, or startTestDb with
-  // skipProductionDataMigrations: false) if a new repair migration is added.
-  '113_repair_gi00069_dedicated_transfer_order.sql',
-  '119_repair_missing_transfer_jwt_0826_0012.sql',
-  '121_backfill_intercompany_stock_sharing.sql',
-  '122_correct_cr0524_0065_misattribution.sql',
-  '124_fix_jwt_0826_0012_qty_sent_corruption.sql',
-  // Found while verifying migration 136 (2026-09-02): same shape as the
-  // ones above, added after this list was last updated.
-  '133_backfill_intercompany_stock_sharing_reverse.sql',
-  '137_repair_jw_mtbes07o_sbt8_noop_ledger_pairs.sql',
-  // Added 2026-09-08: same shape (production-only row ids / one-off repairs).
-  '139_repair_ga00190_ga00193_output_size_mixup.sql',
-  '140_backfill_intercompany_stock_sharing_oct_nov_2024.sql',
-  '143_repair_11_open_rec005_exceptions_sep_2026.sql',
-  '144_repair_cr1224_intercompany_purchase_lines.sql',
-  '148_cancel_duplicate_jw_mtwvzzut_19g7.sql',
-  '152_restore_deleted_purchase_cancels_bill_0125_0428.sql',
-  '154_fix_hr00206_missing_size.sql',
-  '155_repair_17_open_exceptions_oct_2026.sql',
-])
+// The list itself lives in scripts/desktop/productionDataMigrations.mjs so the
+// desktop launcher (which runs these best-effort) and this harness share it.
+export { PRODUCTION_DATA_DEPENDENT_MIGRATIONS }
 
 /** The postmaster's own PID, which Postgres writes as line 1 of postmaster.pid. */
 function readPostmasterPid(dataDir) {

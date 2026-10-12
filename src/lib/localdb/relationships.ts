@@ -30,6 +30,8 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
     companies: { kind: 'object', table: 'companies', localKey: 'company_id' },
     warehouses: { kind: 'object', table: 'warehouses', localKey: 'warehouse_id' },
     suppliers: { kind: 'object', table: 'suppliers', localKey: 'supplier_id' },
+    // Same FK as `suppliers`, under the singular name Hasura also tracks.
+    supplier: { kind: 'object', table: 'suppliers', localKey: 'supplier_id' },
     purchase_bill_items: { kind: 'array', table: 'purchase_bill_items', foreignKey: 'bill_id' },
   },
   purchase_bill_items: {
@@ -37,6 +39,8 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
     material_sizes: { kind: 'object', table: 'material_sizes', localKey: 'material_size_id' },
     // Filter-only — used in `where: { purchase_bill: { status: ... } }`, never selected.
     purchase_bill: { kind: 'object', table: 'purchase_bills', localKey: 'bill_id' },
+    // Same FK as `purchase_bill`, under the plural name Hasura also tracks.
+    purchase_bills: { kind: 'object', table: 'purchase_bills', localKey: 'bill_id' },
     item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
   },
   transfers: {
@@ -88,8 +92,11 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
     item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
   },
   job_work_transfers: {
+    from_vendor: { kind: 'object', table: 'suppliers', localKey: 'from_vendor_id' },
     to_vendor: { kind: 'object', table: 'suppliers', localKey: 'to_vendor_id' },
+    from_job_work_order: { kind: 'object', table: 'job_work_orders', localKey: 'from_job_work_order_id' },
     to_job_work_order: { kind: 'object', table: 'job_work_orders', localKey: 'to_job_work_order_id' },
+    job_work_transfer_items: { kind: 'array', table: 'job_work_transfer_items', foreignKey: 'job_work_transfer_id' },
   },
   job_work_transfer_items: {
     job_work_transfer: { kind: 'object', table: 'job_work_transfers', localKey: 'job_work_transfer_id' },

@@ -1,11 +1,11 @@
 import { FieldNode } from 'graphql'
-import { getPool } from './pool'
+import { getGraphqlPool } from './pool'
 import { buildWhere } from './where'
 import { fieldSelections, resultKey } from './ast'
 import { shapeRow } from './compile-select'
 
 export async function deleteByPk(table: string, args: Record<string, unknown>, field: FieldNode, variables: Record<string, unknown>) {
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(`DELETE FROM "${table}" WHERE id = $1 RETURNING *`, [args.id])
   return res.rows[0] ? shapeRow(table, res.rows[0], field, variables) : null
 }
@@ -13,7 +13,7 @@ export async function deleteByPk(table: string, args: Record<string, unknown>, f
 export async function deleteMany(table: string, args: Record<string, unknown>, field: FieldNode) {
   const params: unknown[] = []
   const whereSql = buildWhere(table, args.where, params)
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(`DELETE FROM "${table}" WHERE ${whereSql} RETURNING *`, params)
 
   const out: Record<string, unknown> = {}

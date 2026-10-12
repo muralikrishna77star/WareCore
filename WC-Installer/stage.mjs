@@ -49,6 +49,7 @@ const managedPaths = [
   'node_modules',
   '.env.desktop',
   'Start WareCore.bat',
+  'WareCore.ico',
 ]
 for (const p of managedPaths) {
   rmSync(join(distDir, p), { recursive: true, force: true })
@@ -60,6 +61,8 @@ copy(join(appDir, '.next', 'static'), '.next/standalone/.next/static')
 copy(join(appDir, 'supabase', 'migrations'), 'supabase/migrations')
 copy(join(appDir, 'scripts', 'desktop'), 'scripts/desktop')
 copy(join(appDir, 'package.json'), 'package.json')
+// The app icon, for a Desktop / Start-menu shortcut to "Start WareCore.bat".
+copy(join(appDir, 'src', 'app', 'favicon.ico'), 'WareCore.ico', false)
 
 // embedded-postgres downloads its native Postgres binaries into
 // node_modules/@embedded-postgres/<platform> on `npm install` — ship them so

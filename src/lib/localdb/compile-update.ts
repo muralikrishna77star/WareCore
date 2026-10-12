@@ -1,5 +1,5 @@
 import { FieldNode } from 'graphql'
-import { getPool } from './pool'
+import { getGraphqlPool } from './pool'
 import { buildWhere } from './where'
 import { fieldSelections, resultKey } from './ast'
 import { shapeRow } from './compile-select'
@@ -19,7 +19,7 @@ export async function updateMany(table: string, args: Record<string, unknown>, f
 
   const whereSql = buildWhere(table, args.where, params)
 
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(`UPDATE "${table}" SET ${setSql} WHERE ${whereSql} RETURNING *`, params)
 
   const out: Record<string, unknown> = {}
@@ -54,7 +54,7 @@ export async function updateByPk(table: string, args: Record<string, unknown>, f
     })
     .join(' AND ')
 
-  const pool = getPool()
+  const pool = getGraphqlPool()
   const res = await pool.query(`UPDATE "${table}" SET ${setSql} WHERE ${whereSql} RETURNING *`, params)
   return res.rows[0] ? shapeRow(table, res.rows[0], field, variables) : null
 }
