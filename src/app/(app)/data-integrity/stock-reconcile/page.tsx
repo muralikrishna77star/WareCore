@@ -2,11 +2,12 @@
 
 import { Fragment, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, ChevronDown, Search, Copy, Check } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ChevronDown, Search, Copy, Check, Wrench } from 'lucide-react'
 import { ProfessionalExportButton } from '@/components/ProfessionalExportButton'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import type { ReconcileFix, ReconcileFixRequest } from '@/lib/reconcileFix'
 
 type TotalRow = {
   category: string
@@ -45,6 +46,7 @@ type DuplicateGroup = {
   sizeLabel: string | null
   rowCount: number
   netQty: number
+  orderQty: number
   latestEntryDate: string
   rate: number | null
 }
@@ -66,9 +68,12 @@ type ItemReconcileResult = {
 }
 type DiagnosisFinding = {
   pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive' | 'missing_dispatch_ledger' | 'warehouse_overdraw'
+    | 'vendor_sale_timing' | 'output_dated_before_dispatch'
   title: string
   detail: string
+  fix?: ReconcileFix
 }
+type FixState = { status: 'applying' | 'done' | 'error'; message: string }
 type DiagnosisResult = {
   itemCode: string
   itemName: string
@@ -197,6 +202,7 @@ export default function StockReconcilePage() {
     line: (g) => `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
     rows: (g) => g.rowCount,
     net_qty: (g) => g.netQty,
+    order_qty: (g) => g.orderQty,
     latest_date: (g) => g.latestEntryDate,
   })
 
@@ -214,15 +220,16 @@ export default function StockReconcilePage() {
   const itemStopRef = useRef(false)
 
   // ── Review & Fix diagnosis panel: detects known root-cause patterns for a
-  // mismatched item (read-only — no writes) so the user can decide what to
-  // do without a manual investigation each time. ──────────────────────────
+  // mismatched item so the user can decide what to do without a manual
+  // investigation each time. Findings with a known, mechanical repair carry
+  // a fix that can be applied here (163) — the database re-checks it first
+  // and logs it; everything else stays read-only. ─────────────────────────
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
   const [diagnoses, setDiagnoses] = useState<Record<string, DiagnosisResult | 'loading' | 'error'>>({})
+  const [fixStates, setFixStates] = useState<Record<string, FixState>>({})
+  const [fixDates, setFixDates] = useState<Record<string, string>>({})
 
-  const toggleDiagnosis = async (id: string) => {
-    if (expandedItemId === id) { setExpandedItemId(null); return }
-    setExpandedItemId(id)
-    if (diagnoses[id]) return
+  const loadDiagnosis = async (id: string) => {
     setDiagnoses((prev) => ({ ...prev, [id]: 'loading' }))
     try {
       const res = await fetch(`/api/stock/reconcile-items/diagnose?id=${id}`)
@@ -231,6 +238,52 @@ export default function StockReconcilePage() {
       setDiagnoses((prev) => ({ ...prev, [id]: data as DiagnosisResult }))
     } catch {
       setDiagnoses((prev) => ({ ...prev, [id]: 'error' }))
+    }
+  }
+
+  const toggleDiagnosis = async (id: string) => {
+    if (expandedItemId === id) { setExpandedItemId(null); return }
+    setExpandedItemId(id)
+    if (diagnoses[id]) return
+    await loadDiagnosis(id)
+  }
+
+  // Re-check one item after a fix, replacing its row in place.
+  const recheckItem = async (id: string) => {
+    const res = await fetch(`/api/stock/reconcile-items?from=${itemFrom}&to=${itemTo}&item=${id}`)
+    const data = await res.json().catch(() => ({}))
+    const fresh: ItemReconcileResult | undefined = data.items?.[0]
+    if (res.ok && fresh) setItemResults((prev) => prev.map((r) => (r.id === id ? fresh : r)))
+  }
+
+  const applyFix = async (itemId: string, itemCode: string, key: string, fix: ReconcileFix) => {
+    let request: ReconcileFixRequest
+    let question: string
+    if (fix.kind === 'align_pair_timestamp') {
+      request = { kind: fix.kind, itemId, ledgerId: fix.ledgerId, partnerId: fix.partnerId }
+      question = `Give both legs of this movement the same timestamp on ${itemCode}? Quantities and dates stay as they are.`
+    } else {
+      const newDate = fixDates[key] ?? fix.proposedDate
+      request = { kind: fix.kind, itemId, outputItemId: fix.outputItemId, newDate }
+      question = `Change this output's received date from ${fix.currentDate} to ${newDate} on ${itemCode}?`
+    }
+    if (!window.confirm(`${question}\n\nThis changes saved data and is recorded in the fix log.`)) return
+    setFixStates((prev) => ({ ...prev, [key]: { status: 'applying', message: '' } }))
+    try {
+      const res = await fetch('/api/stock/reconcile-items/fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setFixStates((prev) => ({ ...prev, [key]: { status: 'error', message: data.error || `Server error (${res.status})` } }))
+        return
+      }
+      setFixStates((prev) => ({ ...prev, [key]: { status: 'done', message: data.summary || 'Fixed.' } }))
+      await Promise.all([recheckItem(itemId), loadDiagnosis(itemId)])
+    } catch (err) {
+      setFixStates((prev) => ({ ...prev, [key]: { status: 'error', message: err instanceof Error ? err.message : 'Network error' } }))
     }
   }
 
@@ -660,7 +713,8 @@ export default function StockReconcilePage() {
                       { header: 'Type', key: 'type', width: 18, align: 'left' },
                       { header: 'Line', key: 'line', width: 20, align: 'left' },
                       { header: 'Rows', key: 'rows', width: 10, align: 'right' },
-                      { header: 'Net Qty', key: 'netQty', width: 14, align: 'right', numFmt: QTY_FMT },
+                      { header: 'Ledger Net Qty', key: 'netQty', width: 14, align: 'right', numFmt: QTY_FMT },
+                      { header: 'Order Qty', key: 'orderQty', width: 14, align: 'right', numFmt: QTY_FMT },
                       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
                       { header: 'Latest Transaction Date', key: 'date', width: 18, align: 'center', isDate: true },
                     ],
@@ -671,6 +725,7 @@ export default function StockReconcilePage() {
                       line: `${g.purchaseLineId ?? ''}${g.sizeLabel ? ` (${g.sizeLabel})` : ''}`,
                       rows: g.rowCount,
                       netQty: g.netQty,
+                      orderQty: g.orderQty,
                       rate: g.rate ?? null,
                       date: g.latestEntryDate,
                     })),
@@ -683,12 +738,16 @@ export default function StockReconcilePage() {
               )}
             </div>
             {duplicateGroups.length === 0 ? (
-              <p className="text-sm text-green-700">None found — every order line has exactly one in-type ledger row.</p>
+              <p className="text-sm text-green-700">
+                None found — wherever an order line has several Purchase In / Sale Out / Job Work Out rows
+                (two sale lines from one purchase line, an Edit Order correction, a purchase edit&apos;s cancel and
+                re-post), they add up to exactly the order&apos;s quantity.
+              </p>
             ) : (
               <>
                 <p className="text-sm text-gray-600 mb-2">
-                  Lines with more than one Purchase In / Sale Out / Job Work Out row — usually leftover from
-                  repeated edits before migrations 041/052.
+                  Order lines whose Purchase In / Sale Out / Job Work Out rows add up to a different quantity than
+                  the order itself — usually a row posted twice by repeated edits.
                 </p>
                 <div className="overflow-auto max-h-80 rounded-lg border">
                   <table className="w-full text-sm">
@@ -698,7 +757,8 @@ export default function StockReconcilePage() {
                         <SortableTh label="Type" sortKey="type" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
                         <SortableTh label="Line" sortKey="line" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
                         <SortableTh label="Rows" sortKey="rows" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} align="right" />
-                        <SortableTh label="Net Qty" sortKey="net_qty" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} align="right" />
+                        <SortableTh label="Ledger Net" sortKey="net_qty" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} align="right" />
+                        <SortableTh label="Order Qty" sortKey="order_qty" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} align="right" />
                         <SortableTh label="Latest" sortKey="latest_date" activeKey={duplicatesSort.sortKey} dir={duplicatesSort.sortDir} onSort={duplicatesSort.toggleSort} />
                       </tr>
                     </thead>
@@ -708,8 +768,9 @@ export default function StockReconcilePage() {
                           <td className="px-4 py-2 font-mono text-xs">{g.referenceNumber || '—'}</td>
                           <td className="px-4 py-2">{g.entryType}</td>
                           <td className="px-4 py-2">{g.purchaseLineId || '—'}{g.sizeLabel ? ` (${g.sizeLabel})` : ''}</td>
-                          <td className="px-4 py-2 text-right font-semibold text-orange-700">{g.rowCount}</td>
-                          <td className="px-4 py-2 text-right">{fmt(g.netQty)}</td>
+                          <td className="px-4 py-2 text-right">{g.rowCount}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-orange-700">{fmt(g.netQty)}</td>
+                          <td className="px-4 py-2 text-right">{fmt(g.orderQty)}</td>
                           <td className="px-4 py-2 whitespace-nowrap">{g.latestEntryDate}</td>
                         </tr>
                       ))}
@@ -731,13 +792,14 @@ export default function StockReconcilePage() {
             transaction up to the end date, and checks the resulting balance never dips negative and —
             when the end date is today — agrees with the vendor-held quantity computed independently from
             job work records. Processes items in visible batches; each one is marked Valid or flagged as it
-            completes. Read-only — makes no changes.
+            completes. The check itself is read-only.
           </p>
           <p className="text-sm text-gray-500 mt-2">
-            &quot;Review &amp; Fix&quot; on a mismatch opens that item&apos;s Item Stock Ledger, where admin/developer
-            accounts can select the specific offending row(s) and delete them (with a confirmation and a
-            net-effect warning) — there&apos;s no blind auto-fix here, each mismatch has a different real cause
-            and needs a look before anything is changed.
+            &quot;Review &amp; Fix&quot; on a mismatch checks it against the known causes. Where the cause has a safe,
+            mechanical repair — two legs of one movement recorded at different times, or a job work output dated
+            before the job was sent — it offers a Fix button: it shows what will change, asks you to confirm, is
+            checked again by the database before anything is saved, and is recorded in the fix log. Anything else
+            needs a look in the item&apos;s Item Stock Ledger before it is changed.
           </p>
         </div>
 
@@ -937,7 +999,14 @@ export default function StockReconcilePage() {
                     {expanded && (
                       <tr className="bg-blue-50/40">
                         <td colSpan={7} className="px-4 py-3">
-                          {diagnosis === 'loading' ? (
+                          {Object.entries(fixStates).filter(([k, s]) => k.startsWith(`${r.id}:`) && s.status === 'done').map(([k, s]) => (
+                            <p key={k} className="mb-2 flex items-center gap-1 text-xs text-green-700">
+                              <Check className="h-3 w-3" /> Fixed: {s.message}
+                            </p>
+                          ))}
+                          {r.valid && diagnosis !== 'loading' ? (
+                            <p className="text-xs font-medium text-green-700">All clear — {r.itemCode} now reconciles for this period.</p>
+                          ) : diagnosis === 'loading' ? (
                             <p className="text-xs text-gray-500">Checking known patterns…</p>
                           ) : diagnosis === 'error' || !diagnosis ? (
                             <p className="text-xs text-red-600">Couldn&apos;t run diagnosis. Try again, or open the Item Ledger to investigate manually.</p>
@@ -954,14 +1023,52 @@ export default function StockReconcilePage() {
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              {diagnosis.findings.map((f, i) => (
+                              {diagnosis.findings.map((f, i) => {
+                                const fixKey = `${r.id}:${f.fix?.kind === 'output_received_date' ? f.fix.outputItemId : f.fix?.kind === 'align_pair_timestamp' ? f.fix.ledgerId : i}`
+                                const fixState = fixStates[fixKey]
+                                return (
                                 <div key={i} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                                   <p className="text-xs font-semibold text-amber-900">{f.title}</p>
                                   <p className="mt-0.5 text-xs text-amber-800">{f.detail}</p>
+                                  {f.fix && fixState?.status !== 'done' && (
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      {f.fix.kind === 'output_received_date' && (
+                                        <label className="inline-flex items-center gap-1.5 text-xs text-amber-900">
+                                          Correct received date
+                                          <input
+                                            type="date"
+                                            value={fixDates[fixKey] ?? f.fix.proposedDate}
+                                            min={f.fix.minDate}
+                                            max={todayStr()}
+                                            onChange={(e) => setFixDates((prev) => ({ ...prev, [fixKey]: e.target.value }))}
+                                            className="rounded border border-amber-300 bg-white px-1.5 py-0.5 text-xs"
+                                          />
+                                        </label>
+                                      )}
+                                      <button
+                                        type="button"
+                                        disabled={fixState?.status === 'applying'}
+                                        onClick={() => applyFix(r.id, r.itemCode, fixKey, f.fix!)}
+                                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                                      >
+                                        <Wrench className="h-3 w-3" />
+                                        {fixState?.status === 'applying' ? 'Fixing…' : f.fix.kind === 'output_received_date' ? 'Fix date' : 'Fix timestamps'}
+                                      </button>
+                                    </div>
+                                  )}
+                                  {fixState?.status === 'error' && <p className="mt-1 text-xs text-red-700">{fixState.message}</p>}
+                                  {fixState?.status === 'done' && (
+                                    <p className="mt-1 inline-flex items-center gap-1 text-xs text-green-700">
+                                      <Check className="h-3 w-3" /> {fixState.message}
+                                    </p>
+                                  )}
                                 </div>
-                              ))}
+                                )
+                              })}
                               <p className="text-[11px] text-gray-500">
-                                Diagnosis only — nothing has been changed. Verify against the physical/paperwork records before making a fix.
+                                {diagnosis.findings.some((f) => f.fix)
+                                  ? 'Fix buttons change saved data after you confirm — each is re-checked by the database first and recorded in the fix log. Findings without one need a look against the physical/paperwork records.'
+                                  : 'Diagnosis only — nothing has been changed. Verify against the physical/paperwork records before making a fix.'}
                               </p>
                               <Link
                                 href={`/reports/item-ledger?item=${r.id}&from=${itemFrom}&to=${itemTo}`}

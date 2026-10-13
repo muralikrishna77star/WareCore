@@ -124,25 +124,54 @@ export async function GET(request: NextRequest) {
       LIMIT 500
     `
 
-    // ── Duplicate rows: more than one IN-type ledger row for the same order
-    // line (the edit-dedup bug class fixed in migrations 041/052) ────────────
+    // ── Duplicate rows: an order line whose Purchase In / Sale Out / Job Work
+    // Out rows add up to more than the order says (the edit-dedup bug class
+    // fixed in migrations 041/052). Several rows alone are not a duplicate —
+    // two sale lines can draw on one purchase line, Edit Order posts a
+    // correction row for a changed Qty Sent, and a purchase edit posts
+    // PURCHASE_CANCEL + a fresh PURCHASE_IN — so the net is compared with the
+    // order's own quantity. ──────────────────────────────────────────────────
     const duplicatesSql = `
       WITH dup AS (
-        SELECT reference_type, reference_number, entry_type, purchase_line_id, size_label,
-               count(*) AS row_count, sum(quantity) AS net_qty, max(entry_date) AS latest_entry_date
-        FROM stock_ledger
-        WHERE entry_type IN ('PURCHASE_IN', 'SALE_OUT', 'JOB_WORK_OUT')
-          AND entry_date BETWEEN '${from}' AND '${to}'
-        GROUP BY reference_type, reference_id, reference_number, entry_type, purchase_line_id, size_label
-        HAVING count(*) > 1
+        SELECT sl.reference_type, sl.reference_id, max(sl.reference_number) AS reference_number,
+               CASE WHEN sl.entry_type = 'PURCHASE_CANCEL' THEN 'PURCHASE_IN' ELSE sl.entry_type END AS entry_type,
+               sl.purchase_line_id, sl.material_size_id, max(sl.size_label) AS size_label,
+               count(*) FILTER (WHERE sl.entry_type <> 'PURCHASE_CANCEL') AS row_count,
+               sum(sl.quantity) AS net_qty, max(sl.entry_date) AS latest_entry_date
+        FROM stock_ledger sl
+        WHERE sl.entry_type IN ('PURCHASE_IN', 'PURCHASE_CANCEL', 'SALE_OUT', 'JOB_WORK_OUT')
+          AND sl.entry_date BETWEEN '${from}' AND '${to}'
+        GROUP BY 1, 2, 4, 5, 6
+        HAVING count(*) FILTER (WHERE sl.entry_type <> 'PURCHASE_CANCEL') > 1
+      ), src AS (
+        SELECT dup.*,
+          CASE dup.entry_type
+            WHEN 'PURCHASE_IN' THEN (SELECT COALESCE(SUM(COALESCE(p.received_quantity, p.quantity)), 0)
+              FROM purchase_bill_items p JOIN purchase_bills b ON b.id = p.bill_id
+              WHERE p.bill_id = dup.reference_id AND b.status <> 'cancelled'
+                AND p.purchase_line_id IS NOT DISTINCT FROM dup.purchase_line_id
+                AND p.material_size_id IS NOT DISTINCT FROM dup.material_size_id)
+            WHEN 'SALE_OUT' THEN -(SELECT COALESCE(SUM(di.quantity), 0)
+              FROM dispatch_items di JOIN dispatch_orders d ON d.id = di.dispatch_order_id
+              WHERE di.dispatch_order_id = dup.reference_id AND d.status <> 'cancelled'
+                AND di.purchase_line_id IS NOT DISTINCT FROM dup.purchase_line_id
+                AND di.material_size_id IS NOT DISTINCT FROM dup.material_size_id)
+            WHEN 'JOB_WORK_OUT' THEN -(SELECT COALESCE(SUM(ji.quantity_sent), 0)
+              FROM job_work_items ji
+              WHERE ji.job_work_order_id = dup.reference_id AND NOT COALESCE(ji.is_transfer_line, false)
+                AND ji.purchase_line_id IS NOT DISTINCT FROM dup.purchase_line_id
+                AND ji.material_size_id IS NOT DISTINCT FROM dup.material_size_id)
+          END AS source_qty
+        FROM dup
       )
-      SELECT dup.reference_type, dup.reference_number, dup.entry_type, dup.purchase_line_id, dup.size_label,
-             dup.row_count, dup.net_qty, dup.latest_entry_date, pbi.rate
-      FROM dup
+      SELECT src.reference_type, src.reference_number, src.entry_type, src.purchase_line_id, src.size_label,
+             src.row_count, src.net_qty, src.latest_entry_date, pbi.rate, src.source_qty
+      FROM src
       LEFT JOIN LATERAL (
-        SELECT rate FROM purchase_bill_items WHERE purchase_line_id = dup.purchase_line_id LIMIT 1
+        SELECT rate FROM purchase_bill_items WHERE purchase_line_id = src.purchase_line_id LIMIT 1
       ) pbi ON true
-      ORDER BY dup.latest_entry_date DESC
+      WHERE abs(src.net_qty - src.source_qty) > 0.0005
+      ORDER BY src.latest_entry_date DESC
       LIMIT 500
     `
 
@@ -205,10 +234,11 @@ export async function GET(request: NextRequest) {
     )
 
     const duplicateGroups = parseRows(dupRes).map(
-      ([referenceType, referenceNumber, entryType, purchaseLineId, sizeLabel, rowCount, netQty, latestEntryDate, rate]) => ({
+      ([referenceType, referenceNumber, entryType, purchaseLineId, sizeLabel, rowCount, netQty, latestEntryDate, rate, sourceQty]) => ({
         referenceType, referenceNumber, entryType, purchaseLineId, sizeLabel,
         rowCount: Number(rowCount), netQty: Number(netQty), latestEntryDate,
-        rate: rate ? Number(rate) : null,
+        rate: rate && rate !== 'NULL' ? Number(rate) : null,
+        orderQty: Number(sourceQty),
       })
     )
 

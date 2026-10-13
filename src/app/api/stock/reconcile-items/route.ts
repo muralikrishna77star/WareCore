@@ -4,6 +4,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const TOLERANCE = 0.001
 
 type Row = string[]
@@ -42,6 +43,12 @@ export async function GET(request: NextRequest) {
 
     const offset = Math.max(0, parseInt(searchParams.get('offset') || '0', 10) || 0)
     const limit = Math.min(300, Math.max(1, parseInt(searchParams.get('limit') || '100', 10) || 100))
+    // One item only — Review & Fix re-checks the row it just fixed.
+    const onlyItem = searchParams.get('item') || ''
+    if (onlyItem && !UUID_RE.test(onlyItem)) {
+      return NextResponse.json({ error: 'item must be a UUID' }, { status: 400 })
+    }
+    const onlyItemSql = onlyItem ? `AND im.id = '${onlyItem}'` : ''
 
     // A "today" `to` date value is the only case where the vendor cross-check
     // (against v_stock_at_vendors, a live/current job_work_items aggregate)
@@ -54,15 +61,34 @@ export async function GET(request: NextRequest) {
         -- Only items with at least one stock_ledger row on or before 'to' —
         -- catalog entries never purchased/used yet have nothing to
         -- reconcile and would just be noise in the results list.
-        SELECT DISTINCT im.id, im.item_code, im.item_name, im.material_type_id, im.material_size_id, im.size_label, im.unit
+        SELECT im.id, im.item_code, im.item_name, im.material_type_id, im.material_size_id,
+          COALESCE(im.size_label, ms.size_label) AS size_label, im.unit,
+          -- Another active item with the same material + size: the ledger
+          -- can't tell them apart by material, so rows are attributed per
+          -- item (162) — e.g. OT00007 SUSPENSE / OTH00002 All Others.
+          EXISTS (
+            SELECT 1 FROM item_master tw
+            WHERE tw.is_active AND tw.id <> im.id
+              AND tw.material_type_id = im.material_type_id
+              AND tw.material_size_id IS NOT DISTINCT FROM im.material_size_id
+          ) AS is_shared
         FROM item_master im
-        JOIN stock_ledger sl
-          ON sl.material_type_id = im.material_type_id
-         AND sl.material_size_id IS NOT DISTINCT FROM im.material_size_id
-        WHERE im.is_active = true
-          AND sl.entry_date <= '${to}'
+        LEFT JOIN material_sizes ms ON ms.id = im.material_size_id
+        WHERE im.is_active = true ${onlyItemSql}
+          AND EXISTS (
+            SELECT 1 FROM stock_ledger sl
+            WHERE sl.material_type_id = im.material_type_id
+              AND sl.material_size_id IS NOT DISTINCT FROM im.material_size_id
+              AND sl.entry_date <= '${to}'
+          )
         ORDER BY im.item_code
         LIMIT ${limit} OFFSET ${offset}
+      ),
+      attributed AS (
+        SELECT ti.id AS item_id, a.ledger_id
+        FROM target_items ti
+        CROSS JOIN LATERAL fn_item_attributed_ledger_rows(ti.id) a
+        WHERE ti.is_shared
       ),
       ledger AS (
         -- Vendor delta per row from vw_job_work_vendor_movements (142),
@@ -84,6 +110,7 @@ export async function GET(request: NextRequest) {
          AND v.material_type_id = ti.material_type_id
          AND v.material_size_id IS NOT DISTINCT FROM ti.material_size_id
         WHERE sl.entry_date <= '${to}'
+          AND (NOT ti.is_shared OR EXISTS (SELECT 1 FROM attributed a WHERE a.item_id = ti.id AND a.ledger_id = sl.id))
         UNION ALL
         -- Output Materials rows posted under a DIFFERENT item that consumed
         -- one of this item's job-work lines (source_job_line_id): a vendor
@@ -100,6 +127,7 @@ export async function GET(request: NextRequest) {
          AND v.material_type_id = ti.material_type_id
          AND v.material_size_id IS NOT DISTINCT FROM ti.material_size_id
         WHERE v.entry_date <= '${to}'
+          AND (NOT ti.is_shared OR EXISTS (SELECT 1 FROM attributed a WHERE a.item_id = ti.id AND a.ledger_id = v.id))
       ),
       opening_closing AS (
         SELECT
@@ -155,6 +183,27 @@ export async function GET(request: NextRequest) {
         LEFT JOIN v_stock_at_vendors v
           ON v.material_type_id = ti.material_type_id
          AND v.size_label IS NOT DISTINCT FROM ti.size_label
+        WHERE NOT ti.is_shared
+        GROUP BY ti.id
+        UNION ALL
+        -- Shared material + size: the same pending figure, split the way the
+        -- ledger rows are — by the item the job line's purchase line was
+        -- bought as; a line whose purchase line names no item of the
+        -- combination counts for each of them, like a shared ledger row.
+        SELECT ti.id, COALESCE(SUM(jwi.quantity_sent - COALESCE(jwi.quantity_received, 0) - COALESCE(jwi.quantity_transferred_out, 0)), 0)
+        FROM target_items ti
+        LEFT JOIN (job_work_items jwi
+          JOIN job_work_orders jwo ON jwo.id = jwi.job_work_order_id AND jwo.status IN ('dispatched', 'partial_return'))
+          ON jwi.material_type_id = ti.material_type_id
+         AND jwi.material_size_id IS NOT DISTINCT FROM ti.material_size_id
+         AND COALESCE((
+               SELECT p.item_master_id FROM purchase_bill_items p
+               JOIN item_master g ON g.id = p.item_master_id AND g.is_active
+                AND g.material_type_id = ti.material_type_id AND g.material_size_id IS NOT DISTINCT FROM ti.material_size_id
+               WHERE p.purchase_line_id = COALESCE(jwi.sub_purchase_line_id, jwi.purchase_line_id)
+               LIMIT 1
+             ), ti.id) = ti.id
+        WHERE ti.is_shared
         GROUP BY ti.id
       )
       SELECT
@@ -180,7 +229,7 @@ export async function GET(request: NextRequest) {
       JOIN stock_ledger sl
         ON sl.material_type_id = im.material_type_id
        AND sl.material_size_id IS NOT DISTINCT FROM im.material_size_id
-      WHERE im.is_active = true
+      WHERE im.is_active = true ${onlyItemSql}
         AND sl.entry_date <= '${to}'
     `
 

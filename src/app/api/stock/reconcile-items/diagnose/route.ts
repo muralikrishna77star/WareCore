@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
+import { proposeReceivedDate, type ReconcileFix } from '@/lib/reconcileFix'
 
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -23,8 +24,11 @@ function sqlLiteral(v: string): string {
 
 export interface DiagnosisFinding {
   pattern: 'missing_transfer_leg' | 'purchase_variance' | 'phantom_return' | 'transfer_timing_false_positive' | 'missing_dispatch_ledger' | 'warehouse_overdraw'
+    | 'vendor_sale_timing' | 'output_dated_before_dispatch'
   title: string
   detail: string
+  // Present when Review & Fix can repair this finding from the website (163).
+  fix?: ReconcileFix
 }
 
 type PendingVendorLine = { ref: string; line: string; vendor: string; dispatched: string; pending: number }
@@ -48,7 +52,7 @@ export async function GET(request: NextRequest) {
     const materialSizeSql = materialSizeId ? sqlLiteral(materialSizeId) : 'NULL'
     const sizeLabelSql = sizeLabel ? sqlLiteral(sizeLabel) : 'NULL'
 
-    const [aggRes, timingRes, transferLegRes, phantomRes, purchaseRes, dispatchLedgerRes, overdrawRes] = await Promise.all([
+    const [aggRes, timingRes, transferLegRes, phantomRes, purchaseRes, dispatchLedgerRes, overdrawRes, saleTimingRes, outputDateRes] = await Promise.all([
       // Basic aggregates, for context in the response.
       hasuraRunSql(`
         WITH ledger AS (
@@ -76,7 +80,9 @@ export async function GET(request: NextRequest) {
       hasuraRunSql(`
         SELECT src_ledger.reference_number AS out_ref, dest_ledger.reference_number AS in_ref,
           dest.quantity_sent, src_ledger.created_at AS out_created_at, dest_ledger.created_at AS in_created_at,
-          ABS(EXTRACT(EPOCH FROM (dest_ledger.created_at - src_ledger.created_at))) / 3600.0 AS hours_apart
+          ABS(EXTRACT(EPOCH FROM (dest_ledger.created_at - src_ledger.created_at))) / 3600.0 AS hours_apart,
+          src_ledger.id AS out_ledger_id, dest_ledger.id AS in_ledger_id,
+          (src_ledger.entry_date = dest_ledger.entry_date) AS same_date
         FROM job_work_items dest
         JOIN job_work_items src ON src.id = dest.source_job_work_item_id
         JOIN job_work_orders dest_order ON dest_order.id = dest.job_work_order_id
@@ -229,6 +235,48 @@ export async function GET(request: NextRequest) {
         WHERE l.balance_after < l.prior_low - ${TOLERANCE}
         ORDER BY l.entry_date, l.created_at
       `),
+      // Pattern: a vendor direct sale's two legs (SALE_OUT + its virtual
+      // JOB_WORK_RETURN_IN) recorded at different moments. The app posts
+      // them together; a repair that re-posted one leg (159) left them apart,
+      // so on that date the sale sorts before the return and the warehouse
+      // looks negative (GI00132, 2026-10-13).
+      hasuraRunSql(`
+        SELECT rin.id, so.id, rin.reference_number, so.reference_number, rin.quantity, rin.entry_date,
+          rin.created_at, so.created_at
+        FROM stock_ledger rin
+        JOIN LATERAL (
+          SELECT so.* FROM stock_ledger so
+          JOIN dispatch_items di ON di.dispatch_order_id = so.reference_id
+          JOIN job_work_items jwi ON jwi.id = di.source_job_work_item_id
+          WHERE so.entry_type = 'SALE_OUT' AND so.reference_type = 'dispatch'
+            AND jwi.job_work_order_id = rin.reference_id
+            AND so.purchase_line_id IS NOT DISTINCT FROM rin.purchase_line_id
+            AND so.entry_date = rin.entry_date AND so.quantity = -rin.quantity
+            AND so.material_type_id = rin.material_type_id AND so.material_size_id IS NOT DISTINCT FROM rin.material_size_id
+          ORDER BY ABS(EXTRACT(EPOCH FROM so.created_at - rin.created_at)) LIMIT 1
+        ) so ON true
+        WHERE rin.entry_type = 'JOB_WORK_RETURN_IN' AND rin.notes = 'Vendor direct sale — virtual return'
+          AND rin.material_type_id = '${materialTypeId}' AND rin.material_size_id IS NOT DISTINCT FROM ${materialSizeSql}
+          AND rin.created_at <> so.created_at
+        ORDER BY rin.entry_date
+      `),
+      // Pattern: an Output Materials line received before its job work was
+      // even sent — usually a mistyped year (GA00192: 14-Feb-2024 on a job
+      // sent 12-Feb-2025). Covers outputs of this item and outputs that
+      // consumed one of this item's job lines.
+      hasuraRunSql(`
+        SELECT oi.id, jwo.reference_number, oi.received_date, jwo.dispatch_date, oi.quantity, COALESCE(oi.size_label, ''),
+          COALESCE(oi.source_job_line_id, '')
+        FROM job_work_output_items oi
+        JOIN job_work_orders jwo ON jwo.id = oi.job_work_order_id
+        LEFT JOIN job_work_items src ON src.job_work_order_id = oi.job_work_order_id AND src.job_line_id = oi.source_job_line_id
+        WHERE oi.received_date < jwo.dispatch_date
+          AND (
+            (oi.material_type_id = '${materialTypeId}' AND oi.material_size_id IS NOT DISTINCT FROM ${materialSizeSql})
+            OR (src.material_type_id = '${materialTypeId}' AND src.material_size_id IS NOT DISTINCT FROM ${materialSizeSql})
+          )
+        ORDER BY jwo.reference_number, oi.received_date
+      `),
     ])
 
     const aggRow = parseRows(aggRes)[0] ?? ['0', '0', '0']
@@ -238,12 +286,39 @@ export async function GET(request: NextRequest) {
 
     const findings: DiagnosisFinding[] = []
 
+    // Fixable findings first — they are usually what produces the others
+    // (a mis-timed pair is exactly what makes the warehouse "overdraw").
+    for (const r of parseRows(outputDateRes)) {
+      const [outputItemId, refNumber, receivedDate, dispatchDate, qty, size, sourceLine] = r
+      const today = new Date().toISOString().slice(0, 10)
+      const proposedDate = proposeReceivedDate(receivedDate, dispatchDate, today)
+      findings.push({
+        pattern: 'output_dated_before_dispatch',
+        title: `${refNumber}: output ${size} ${num(qty).toFixed(3)} MT dated ${receivedDate}, before the job work was sent on ${dispatchDate}`,
+        detail: `Material can't come back from the vendor before it was sent, so this date is almost certainly mistyped (often the year)${sourceLine ? ` — output of job line ${sourceLine}` : ''}. Because it sorts before the dispatch, the vendor looks to hold less than nothing until the dispatch date. The fix moves the output to the date you confirm (suggested: ${proposedDate}) and keeps a single ledger row on that date. Check the vendor's delivery challan for the real date.`,
+        fix: { kind: 'output_received_date', outputItemId, currentDate: receivedDate, proposedDate, minDate: dispatchDate },
+      })
+    }
+
+    for (const r of parseRows(saleTimingRes)) {
+      const [returnId, saleId, jobRef, saleRef, qty, entryDate, returnCreated, saleCreated] = r
+      findings.push({
+        pattern: 'vendor_sale_timing',
+        title: `Vendor direct sale ${saleRef} (${num(qty).toFixed(3)} MT on ${entryDate}): its two legs were recorded at different times`,
+        detail: `A sale made straight from the vendor posts a sale and a matching "virtual return" on ${jobRef} together. Here the return was recorded ${returnCreated} and the sale ${saleCreated}, so on ${entryDate} one sorts ahead of the other and the balance briefly shows ${num(qty).toFixed(3)} MT ${returnCreated > saleCreated ? 'missing from the warehouse' : 'extra in the warehouse'}. Quantities are correct. The fix gives both legs the same timestamp — nothing else changes.`,
+        fix: { kind: 'align_pair_timestamp', ledgerId: returnId, partnerId: saleId },
+      })
+    }
+
     for (const r of parseRows(timingRes)) {
-      const [outRef, inRef, qty, outCreated, inCreated, hours] = r
+      const [outRef, inRef, qty, outCreated, inCreated, hours, outLedgerId, inLedgerId, sameDate] = r
       findings.push({
         pattern: 'transfer_timing_false_positive',
         title: `Transfer legs recorded ${num(hours).toFixed(1)}h apart (${outRef} → ${inRef})`,
         detail: `${qty} MT transferred out on ${outRef} (recorded ${outCreated}) and received on ${inRef} (recorded ${inCreated}) — if a mismatch reason mentions "went negative during the period" but closing/vendor balances already agree below, this is likely a false positive from the two legs being entered far apart in time, not a real quantity problem. Fixed before for CR00640/GI00057 by aligning the later leg's created_at with the earlier one's.`,
+        // Only when both legs are on one date — otherwise the timestamps
+        // aren't what orders them, and this fix wouldn't help.
+        ...(sameDate === 't' ? { fix: { kind: 'align_pair_timestamp' as const, ledgerId: outLedgerId, partnerId: inLedgerId } } : {}),
       })
     }
 
