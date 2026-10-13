@@ -55,6 +55,8 @@ export type LedgerRow = {
   netQuantity?: number
   vendorName?: string | null
   vendorId?: string | null
+  /** The row's item wasn't recorded — shown under every item sharing this material + size. */
+  sharedItemRow?: boolean
   createdByName?: string | null
   createdAt?: string | null
   modifiedAt?: string | null
@@ -232,6 +234,14 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
                     className="ml-1 inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
                   >
                     {row.duplicateCount}×
+                  </span>
+                )}
+                {row.sharedItemRow && (
+                  <span
+                    title="This entry doesn't record which item it was — it's shown under every item that shares this material and size."
+                    className="ml-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                  >
+                    shared
                   </span>
                 )}
                 {row.vendorOnly && (

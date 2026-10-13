@@ -82,12 +82,23 @@ async function fetchVendorBalanceAsOf(
   materialTypeId: string,
   materialSizeId: string,
   companyId: string,
-  asOfDate: string
+  asOfDate: string,
+  // For an item sharing its material + size: SQL selecting the ledger row
+  // ids that belong to it (fn_item_attributed_ledger_rows) — the balance is
+  // then limited to those rows.
+  attributedRowsSql: string | null = null
 ): Promise<number> {
   if (!UUID_RE.test(materialTypeId) || !/^\d{4}-\d{2}-\d{2}$/.test(asOfDate)) return 0
   const sizeSql = materialSizeId && UUID_RE.test(materialSizeId) ? `'${materialSizeId}'::uuid` : 'NULL'
   const companySql = companyId && UUID_RE.test(companyId) ? `'${companyId}'::uuid` : 'NULL'
-  const sql = `SELECT fn_vendor_balance_as_of('${materialTypeId}'::uuid, ${sizeSql}, ${companySql}, '${asOfDate}'::date)`
+  const sql = attributedRowsSql
+    ? `SELECT COALESCE(SUM(v.vendor_delta), 0) FROM vw_job_work_vendor_movements v
+       WHERE v.id IN (${attributedRowsSql})
+         AND v.material_type_id = '${materialTypeId}'::uuid
+         AND v.material_size_id IS NOT DISTINCT FROM ${sizeSql}
+         AND (${companySql} IS NULL OR v.company_id = ${companySql})
+         AND v.entry_date <= '${asOfDate}'::date`
+    : `SELECT fn_vendor_balance_as_of('${materialTypeId}'::uuid, ${sizeSql}, ${companySql}, '${asOfDate}'::date)`
   const result = await hasuraRunSql(sql)
   return Number(result.result?.[1]?.[0] ?? 0)
 }
@@ -247,6 +258,35 @@ export default async function ItemStockLedgerPage({
 
   const selectedSizeId = params.size || selectedItem?.material_size_id || ''
 
+  // Several active items can share one material + size (e.g. HR00028 "HR
+  // Channel 2.50 inches" and HR00116 "HRPO 2.50 inches"). stock_ledger only
+  // records material + size, so on its own this report would show each of
+  // them the combination's whole stock. For such an item, every figure below
+  // is limited to the rows that belong to it (migration 162: by the item its
+  // purchase line was bought as, else the item on the row's own sale /
+  // transfer / output line; rows neither identifies are shown on every item
+  // of the combination, flagged as shared).
+  const sharedWithItems = selectedItem
+    ? items.filter((i) =>
+        i.id !== selectedItem.id &&
+        i.material_type_id === selectedItem.material_type_id &&
+        (i.material_size_id ?? '') === (selectedItem.material_size_id ?? ''))
+    : []
+  const attributeToItem = !!selectedItem && sharedWithItems.length > 0 && selectedSizeId === (selectedItem.material_size_id ?? '')
+  const attributedRowsSql = selectedItem && attributeToItem && UUID_RE.test(selectedItem.id)
+    ? `SELECT ledger_id FROM fn_item_attributed_ledger_rows('${selectedItem.id}'::uuid)`
+    : null
+  let attributedIds: Set<string> | null = null
+  const sharedRowIds = new Set<string>()
+  if (attributedRowsSql) {
+    const res = await hasuraRunSql(`SELECT ledger_id::text, shared FROM fn_item_attributed_ledger_rows('${selectedItem!.id}'::uuid)`)
+    attributedIds = new Set<string>()
+    for (const [id, shared] of res.result?.slice(1) ?? []) {
+      attributedIds.add(id)
+      if (shared === 't' || shared === 'true' || (shared as unknown) === true) sharedRowIds.add(id)
+    }
+  }
+
   let openingBalance = 0
   let vendorOpeningBalance = 0
   let entries: LedgerEntry[] = []
@@ -264,6 +304,7 @@ export default async function ItemStockLedgerPage({
     ]
     if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
     if (params.warehouse) baseConditions.push({ warehouse_id: { _eq: params.warehouse } })
+    if (attributedIds) baseConditions.push({ id: { _in: [...attributedIds] } })
     // Cancellation rows are real, legitimate offsets against the
     // PURCHASE_IN/SALE_OUT/JOB_WORK_OUT they reverse — always fetched and
     // always shown inline (not just netted into the totals), so the running
@@ -284,7 +325,7 @@ export default async function ItemStockLedgerPage({
 
     const [result, vendorOpening] = await Promise.all([
       hasuraQuery(ITEM_STOCK_LEDGER_QUERY, { opening_where: openingWhere, period_where: periodWhere }),
-      fetchVendorBalanceAsOf(selectedItem.material_type_id, selectedSizeId, params.company || '', prevDay(fromDate)),
+      fetchVendorBalanceAsOf(selectedItem.material_type_id, selectedSizeId, params.company || '', prevDay(fromDate), attributedRowsSql),
     ])
     openingBalance = Number(result.opening_agg?.aggregate?.sum?.quantity ?? 0)
     vendorOpeningBalance = vendorOpening
@@ -293,10 +334,12 @@ export default async function ItemStockLedgerPage({
     const vendorMovementRows = await fetchVendorMovementRows(
       selectedItem.material_type_id, selectedSizeId, params.company || '', params.warehouse || '', fromDate, toDate
     )
-    for (const id of vendorMovementRows.ownIds) vendorMovementIds.add(id)
-    const crossRows = typeFilter?.length
-      ? vendorMovementRows.crossItemRows.filter((r) => typeFilter.includes(r.entry_type))
-      : vendorMovementRows.crossItemRows
+    for (const id of vendorMovementRows.ownIds) {
+      if (!attributedIds || attributedIds.has(id)) vendorMovementIds.add(id)
+    }
+    const crossRows = vendorMovementRows.crossItemRows.filter(
+      (r) => (!typeFilter?.length || typeFilter.includes(r.entry_type)) && (!attributedIds || attributedIds.has(r.id))
+    )
     if (crossRows.length) {
       // Same order as ITEM_STOCK_LEDGER_QUERY's entries: entry_date, quantity DESC, created_at.
       entries = [...entries, ...crossRows].sort(
@@ -307,12 +350,26 @@ export default async function ItemStockLedgerPage({
       )
     }
 
-    const currentVendorStockWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
-    currentVendorStockWhere.material_size_id = selectedSizeId ? { _eq: selectedSizeId } : { _is_null: true }
-    if (params.company) currentVendorStockWhere.company_id = { _eq: params.company }
-    const currentVendorStockResult = await hasuraQuery(CURRENT_VENDOR_STOCK_QUERY, { where: currentVendorStockWhere })
-    const currentVendorStockRows: { vendor_id: string; current_vendor_stock: number | string }[] =
-      currentVendorStockResult.vw_current_vendor_stock ?? []
+    let currentVendorStockRows: { vendor_id: string; current_vendor_stock: number | string }[]
+    if (attributedRowsSql) {
+      // Same figure vw_current_vendor_stock gives, limited to this item's rows.
+      const sizeSql = selectedSizeId && UUID_RE.test(selectedSizeId) ? `'${selectedSizeId}'::uuid` : 'NULL'
+      const res = await hasuraRunSql(`
+        SELECT v.vendor_id::text, SUM(v.vendor_delta)::text
+        FROM vw_job_work_vendor_movements v
+        WHERE v.id IN (${attributedRowsSql})
+          AND v.material_type_id = '${selectedItem.material_type_id}'::uuid
+          AND v.material_size_id IS NOT DISTINCT FROM ${sizeSql}
+          ${params.company && UUID_RE.test(params.company) ? `AND v.company_id = '${params.company}'::uuid` : ''}
+        GROUP BY v.vendor_id`)
+      currentVendorStockRows = (res.result?.slice(1) ?? []).map(([vendor_id, qty]) => ({ vendor_id, current_vendor_stock: qty }))
+    } else {
+      const currentVendorStockWhere: Record<string, unknown> = { material_type_id: { _eq: selectedItem.material_type_id } }
+      currentVendorStockWhere.material_size_id = selectedSizeId ? { _eq: selectedSizeId } : { _is_null: true }
+      if (params.company) currentVendorStockWhere.company_id = { _eq: params.company }
+      const currentVendorStockResult = await hasuraQuery(CURRENT_VENDOR_STOCK_QUERY, { where: currentVendorStockWhere })
+      currentVendorStockRows = currentVendorStockResult.vw_current_vendor_stock ?? []
+    }
 
     const vendorIds = Array.from(new Set(currentVendorStockRows.map((r) => r.vendor_id)))
     const vendorNameById = new Map<string, string>()
@@ -510,6 +567,9 @@ export default async function ItemStockLedgerPage({
       vendorName,
       vendorId,
       ownVendorName,
+      // Item not recorded anywhere for this row — shown under every item
+      // sharing this material + size (migration 162).
+      sharedItemRow: sharedRowIds.has(e.id),
       createdByName,
       createdAt,
       modifiedAt,
@@ -972,6 +1032,27 @@ export default async function ItemStockLedgerPage({
             </div>
             <p className="text-sm text-gray-500">{fromDate} → {toDate}</p>
           </div>
+
+          {attributeToItem && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p>
+                <span className="font-semibold">{selectedItem.item_code}</span> has the same material and size as{' '}
+                {sharedWithItems.map((twin, i) => (
+                  <span key={twin.id}>
+                    {i > 0 && (i === sharedWithItems.length - 1 ? ' and ' : ', ')}
+                    <Link
+                      href={`/reports/item-ledger?item=${twin.id}&from=${fromDate}&to=${toDate}`}
+                      className="font-medium text-blue-700 hover:underline"
+                    >
+                      {twin.item_code} {twin.item_name}
+                    </Link>
+                  </span>
+                ))}
+                . This ledger shows only the stock bought as {selectedItem.item_code}
+                {sharedRowIds.size > 0 && ', plus any entry that doesn\'t record its item (marked "shared")'}.
+              </p>
+            </div>
+          )}
 
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
