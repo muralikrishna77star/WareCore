@@ -78,6 +78,11 @@ export async function POST(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Edit failed'
     console.error('[jobwork-save-edit]', message)
+    // A database guard refused the save (e.g. 164: re-pointing a line that
+    // already has returns, or 163: a received date before dispatch) — show
+    // its sentence, not the "query execution failed:" wrapper. Nothing was saved.
+    const guard = message.replace(/^[^:]*query execution failed:\s*/i, '')
+    if (guard !== message) return NextResponse.json({ error: `${guard} Nothing was saved.` }, { status: 400 })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
