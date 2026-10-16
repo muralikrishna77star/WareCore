@@ -1,10 +1,13 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { ArrowRight, CircleCheck, TriangleAlert, OctagonAlert, CircleAlert, Info } from 'lucide-react'
 import { hasuraRunSql } from '@/lib/hasura/server'
+import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import { StatCard } from '@/components/StatCard'
 import { OpenByRuleRows } from './OpenByRuleRows'
+import { OpenExceptionCards, type OpenExceptionCard } from './OpenExceptionCards'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -20,6 +23,7 @@ export default async function DataIntegrityDashboardPage() {
     openByRuleResult,
     recentlyResolvedResult,
     trendResult,
+    openDetailResult,
   ] = await Promise.all([
     hasuraRunSql(`SELECT run_number, completed_at, status, exceptions_found FROM reconciliation_runs WHERE run_type = 'NIGHTLY_FULL' AND status IN ('COMPLETED', 'COMPLETED_WITH_EXCEPTIONS') ORDER BY completed_at DESC LIMIT 1`),
     hasuraRunSql(`SELECT run_number, completed_at, status, exceptions_found FROM reconciliation_runs WHERE run_type = 'INCREMENTAL' AND status IN ('COMPLETED', 'COMPLETED_WITH_EXCEPTIONS') ORDER BY completed_at DESC LIMIT 1`),
@@ -33,7 +37,62 @@ export default async function DataIntegrityDashboardPage() {
     `),
     hasuraRunSql(`SELECT exception_number, summary, resolved_at FROM reconciliation_exceptions WHERE status = 'RESOLVED' ORDER BY resolved_at DESC LIMIT 8`),
     hasuraRunSql(`SELECT run_number, completed_at, exceptions_found, critical_count, high_count FROM reconciliation_runs WHERE status IN ('COMPLETED', 'COMPLETED_WITH_EXCEPTIONS') ORDER BY completed_at DESC LIMIT 10`),
+    // Open exceptions in full, most severe first, for the cards under the
+    // summary — with the items that share the exception's material + size.
+    hasuraRunSql(`
+      SELECT e.id, e.exception_number, e.severity, e.status, r.rule_code, r.rule_name,
+             c.name AS company, mt.description AS material, ms.size_label, e.summary,
+             e.first_detected_at, e.occurrence_count,
+             -- The stored summary is written when first detected; for
+             -- negative stock show today's figures too.
+             CASE WHEN r.rule_code = 'REC-005' AND e.company_id IS NOT NULL THEN
+               fn_rec005_scope_min_balance(e.company_id, e.material_type_id, e.material_size_id)::text END AS live_min,
+             CASE WHEN r.rule_code = 'REC-005' AND e.company_id IS NOT NULL THEN (
+               SELECT COALESCE(SUM(sl.quantity), 0) FROM stock_ledger sl
+               WHERE sl.company_id = e.company_id AND sl.material_type_id = e.material_type_id
+                 AND sl.material_size_id IS NOT DISTINCT FROM e.material_size_id)::text END AS live_current,
+             COALESCE((
+               SELECT json_agg(json_build_object('id', im.id, 'code', im.item_code, 'name', im.item_name) ORDER BY im.item_code)
+               FROM item_master im
+               WHERE im.is_active AND e.material_type_id IS NOT NULL
+                 AND im.material_type_id = e.material_type_id
+                 AND im.material_size_id IS NOT DISTINCT FROM e.material_size_id
+             ), '[]'::json)::text AS items
+      FROM reconciliation_exceptions e
+      LEFT JOIN reconciliation_rules r ON r.id = e.rule_id
+      LEFT JOIN companies c ON c.id = e.company_id
+      LEFT JOIN material_types mt ON mt.id = e.material_type_id
+      LEFT JOIN material_sizes ms ON ms.id = e.material_size_id
+      WHERE e.status NOT IN ('RESOLVED', 'IGNORED')
+      ORDER BY CASE e.severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END,
+               e.exception_number
+      LIMIT 50
+    `),
   ])
+
+  const cookieStore = await cookies()
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  const session = token ? verifySession(token) : null
+  const canFix = session?.role === 'admin' || session?.role === 'developer'
+
+  const present = (v: string | undefined) => (v && v !== 'NULL' ? v : null)
+  const openExceptions: OpenExceptionCard[] = rowsToObjects(openDetailResult).map((e) => ({
+    id: e.id,
+    exceptionNumber: e.exception_number,
+    severity: e.severity,
+    status: e.status,
+    ruleCode: e.rule_code,
+    ruleName: e.rule_name,
+    company: present(e.company),
+    material: present(e.material),
+    sizeLabel: present(e.size_label),
+    items: JSON.parse(e.items || '[]'),
+    summary: e.summary,
+    liveMin: present(e.live_min) ? Number(e.live_min) : null,
+    liveCurrent: present(e.live_current) ? Number(e.live_current) : null,
+    firstDetected: e.first_detected_at,
+    occurrences: Number(e.occurrence_count),
+  }))
 
   const lastFull = rowsToObjects(lastFullResult)[0]
   const lastIncremental = rowsToObjects(lastIncrementalResult)[0]
@@ -79,6 +138,18 @@ export default async function DataIntegrityDashboardPage() {
         <StatCard icon={TriangleAlert} iconBg="bg-orange-100" iconColor="text-orange-600" value={String(high)} label="High" />
         <StatCard icon={CircleAlert} iconBg="bg-amber-100" iconColor="text-amber-600" value={String(medium)} label="Medium" />
         <StatCard icon={Info} iconBg="bg-gray-100" iconColor="text-gray-600" value={String(low)} label="Low / Info" />
+      </div>
+
+      <div className="rounded-xl border bg-white overflow-hidden">
+        <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
+          <span className="font-semibold text-gray-700 text-sm">Open exceptions{totalOpen > 0 ? ` (${totalOpen})` : ''}</span>
+          {totalOpen > openExceptions.length && (
+            <Link href="/data-integrity/exceptions?openOnly=1" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+              Showing {openExceptions.length} — view all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+        <OpenExceptionCards exceptions={openExceptions} canFix={canFix} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

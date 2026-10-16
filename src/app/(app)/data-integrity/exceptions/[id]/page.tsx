@@ -9,6 +9,7 @@ import { UUID_RE, CAN_PROPOSE_REPAIR } from '@/lib/dataIntegrity/auth'
 import StatusForm from './StatusForm'
 import ProposeRepairForm from './ProposeRepairForm'
 import { JobWorkLink, PurchaseLineLink } from '@/components/ReportLinks'
+import { ExceptionReviewPanel } from '../../ExceptionReviewPanel'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -196,6 +197,13 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
           <p className="mt-2 text-sm text-gray-500"><span className="font-medium text-gray-700">Suspected cause: </span>{exception.suspected_cause}</p>
         )}
       </div>
+
+      {!['RESOLVED', 'IGNORED'].includes(exception.status) && (
+        <div className="rounded-xl border bg-white p-4">
+          <p className="text-sm font-semibold text-gray-700 mb-2">Review &amp; Fix</p>
+          <ExceptionReviewPanel exceptionId={id} exceptionNumber={exception.exception_number} canFix={!!canClose} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border bg-white p-4">
