@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Settings, DatabaseBackup, ShieldCheck, ClipboardList, Undo2,
   Wallet, Package, RefreshCw, ArrowLeftRight, Factory, Shuffle, Receipt,
-  ChartColumn, Truck, KeyRound, LogOut, Search, X, type LucideIcon,
+  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
@@ -67,6 +67,7 @@ const navItems: NavItem[] = [
   { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { title: 'Admin', href: '/admin', icon: Settings },
   { title: 'Backup & Restore', href: '/admin/backups', icon: DatabaseBackup },
+  { title: 'About WareCore', href: '/admin/about', icon: Info },
   { title: 'Data Integrity & Stock Recon', href: '/data-integrity', icon: ShieldCheck },
   { title: 'Purchase Entry', href: '/bills', icon: ClipboardList },
   { title: 'Purchase Cancellations', href: '/purchase-cancellations', icon: Undo2 },
