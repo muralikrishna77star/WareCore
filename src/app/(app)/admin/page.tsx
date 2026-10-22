@@ -1,9 +1,12 @@
 export const dynamic = 'force-dynamic'
 
+import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { hasuraQuery } from '@/lib/hasura/server'
+import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import {
   Building2, Factory, Store, Users, Package, Ruler, ClipboardList, Receipt,
-  User, KeyRound, CircleCheck, CircleX,
+  User, KeyRound, CircleCheck, CircleX, Info,
 } from 'lucide-react'
 import {
   COMPANIES_QUERY,
@@ -158,11 +161,27 @@ export default async function AdminPage() {
     },
   ]
 
+  // About WareCore shows plans and billing, so it's gated to admin/developer
+  // (admin/about/layout.tsx) — company managers reach this panel but not that page.
+  const sessionToken = (await cookies()).get(SESSION_COOKIE_NAME)?.value
+  const role = sessionToken ? verifySession(sessionToken)?.role : undefined
+  const canSeeAbout = role === 'admin' || role === 'developer'
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
-        <p className="mt-1 text-sm text-gray-500">Manage master data and system settings</p>
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
+          <p className="mt-1 text-sm text-gray-500">Manage master data and system settings</p>
+        </div>
+        {canSeeAbout && (
+          <Link
+            href="/admin/about"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Info className="h-4 w-4 text-blue-600" /> About WareCore
+          </Link>
+        )}
       </div>
 
       {adminWarnings.length > 0 && (
