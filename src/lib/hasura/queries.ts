@@ -1671,12 +1671,15 @@ export const REPORTS_QUERY = `
 // movements), not a separate all-time "live" query. See stock-statement's
 // closingWarehouse/closingVendor calc: a historical report must be
 // reproducible for any past To Date, so nothing here can depend on "now".
+// No row limit on either: the closing balances are sums over every row, so a
+// cap silently drops the newest movements once a range outgrows it (the old
+// limit of 5000 cut FY 2024-25 off at 06-Mar-2025, 5577 rows).
 export const STOCK_STATEMENT_QUERY = `
   query GetStockStatement(
     $opening_where: stock_ledger_bool_exp = {},
     $period_where: stock_ledger_bool_exp = {}
   ) {
-    opening: stock_ledger(where: $opening_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
+    opening: stock_ledger(where: $opening_where, order_by: [{entry_date: asc}, {created_at: asc}]) {
       id entry_type quantity entry_date created_at
       material_type_id material_size_id size_label warehouse_id company_id
       reference_type reference_id reference_number notes
@@ -1686,7 +1689,7 @@ export const STOCK_STATEMENT_QUERY = `
       warehouses { name }
       companies { name }
     }
-    period: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}], limit: 5000) {
+    period: stock_ledger(where: $period_where, order_by: [{entry_date: asc}, {created_at: asc}]) {
       id entry_type quantity entry_date created_at
       material_type_id material_size_id size_label warehouse_id company_id
       reference_type reference_id reference_number notes
