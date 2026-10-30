@@ -117,7 +117,7 @@ export function ItemLedgerRows({ rows: allRows, canManage }: { rows: LedgerRow[]
       ? `\n\nWarning: the selected rows do NOT net to zero (net ${fmtQ(netEffect)}) — deleting them will change this item's current stock balance.`
       : ''
     const ok = window.confirm(
-      `Permanently delete ${idsToDelete.length} ledger row${idsToDelete.length !== 1 ? 's' : ''}? This cannot be undone.${netWarning}`
+      `Permanently delete ${idsToDelete.length} ledger row${idsToDelete.length !== 1 ? 's' : ''}? This cannot be undone — a copy is kept under Deleted Ledger Rows.${netWarning}`
     )
     if (!ok) return
 

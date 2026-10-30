@@ -1029,6 +1029,8 @@ export default async function ItemStockLedgerPage({
         <Link href="/purchase-cancellations" className="text-blue-600 hover:underline">Purchase</Link>,{' '}
         <Link href="/sale-cancellations" className="text-blue-600 hover:underline">Sale</Link>, or{' '}
         <Link href="/jobwork-cancellations" className="text-blue-600 hover:underline">Job Work</Link> Cancellations.
+        Rows removed here with Delete are kept in{' '}
+        <Link href="/ledger-deletions" className="text-blue-600 hover:underline">Deleted Ledger Rows</Link>.
       </p>
 
       {!selectedItem ? (

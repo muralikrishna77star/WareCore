@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Settings, DatabaseBackup, ShieldCheck, ClipboardList, Undo2,
   Wallet, Package, RefreshCw, ArrowLeftRight, Factory, Shuffle, Receipt,
-  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, type LucideIcon,
+  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
@@ -80,6 +80,7 @@ const navItems: NavItem[] = [
   { title: 'Job Work Cancellations', href: '/jobwork-cancellations', icon: Undo2 },
   { title: 'Sale Entry', href: '/dispatch', icon: Receipt },
   { title: 'Sale Cancellations', href: '/sale-cancellations', icon: Undo2 },
+  { title: 'Deleted Ledger Rows', href: '/ledger-deletions', icon: Trash2 },
   { title: 'Reports', href: '/reports', icon: ChartColumn },
 ]
 

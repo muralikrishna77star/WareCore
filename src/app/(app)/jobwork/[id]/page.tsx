@@ -367,6 +367,16 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
         )}
       </div>
 
+      {/* Status + Return Form (client) */}
+      <JobWorkReturnClient
+        order={order}
+        items={items ?? []}
+        outputItems={outputItems}
+        lineSummaries={activity.lines}
+        outputAnchorByJobLine={outputAnchorByJobLine}
+        ledgerRange={ledgerRange}
+      />
+
       {/* Output Items — Produced Materials */}
       {outputItems.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
@@ -466,16 +476,6 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
       )}
-
-      {/* Status + Return Form (client) */}
-      <JobWorkReturnClient
-        order={order}
-        items={items ?? []}
-        outputItems={outputItems}
-        lineSummaries={activity.lines}
-        outputAnchorByJobLine={outputAnchorByJobLine}
-        ledgerRange={ledgerRange}
-      />
 
       <JobWorkActivitySection events={activity.events} lines={activity.lines} itemLabels={itemLabels} ledgerFrom={ledgerRange.from} />
 
