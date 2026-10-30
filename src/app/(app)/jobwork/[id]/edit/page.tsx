@@ -215,6 +215,7 @@ function InputLineRow({
   companyId,
   companies,
   savedReturned,
+  savedConsumed,
   flash,
 }: {
   line: InputLine
@@ -238,14 +239,20 @@ function InputLineRow({
   // Qty Returned for this Job Line as last saved — the row is highlighted
   // while the on-screen value differs, i.e. until Save Changes re-posts stock.
   savedReturned: number
+  // Qty Consumed as last saved, or null for a new line / one re-pointed to a
+  // different purchase line (its stock effect is then no longer a delta).
+  savedConsumed: number | null
   // Briefly pulses the row just after an output row feeding it was removed.
   flash: boolean
 }) {
   const anchorRef = useRef<HTMLDivElement | null>(null)
   const returned = getReturnedQuantity(line.job_line_id, outputLines)
   const returnedChanged = !!line.job_line_id && Math.abs(returned - savedReturned) > 0.0005
+  const consumed = parseFloat(line.quantity) || 0
+  const consumedChanged = savedConsumed != null && Math.abs(consumed - savedConsumed) > 0.0005
+  const exceedsStock = !!line.available_quantity && consumed > parseFloat(line.available_quantity)
   return (
-    <tr className={returnedChanged ? 'bg-amber-50 hover:bg-amber-100/60' : 'hover:bg-blue-50/30'}>
+    <tr className={returnedChanged || consumedChanged ? 'bg-amber-50 hover:bg-amber-100/60' : 'hover:bg-blue-50/30'}>
       {/* Item */}
       <td className="px-2 py-2">
         <div className="relative" ref={anchorRef}>
@@ -347,6 +354,16 @@ function InputLineRow({
         {line.available_quantity
           ? <span className="text-sm font-semibold text-green-700">{Number(line.available_quantity).toFixed(3)} <span className="text-xs font-normal text-green-600">{line.unit}</span></span>
           : <span className="text-gray-300 text-xs">—</span>}
+        {/* Avail Stock already counts what this order holds at the vendor (it's
+            the most this line can consume), so it doesn't move — the stock
+            effect of a Qty Consumed change is shown as the delta instead. */}
+        {consumedChanged && savedConsumed != null && (
+          <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+            {savedConsumed > consumed
+              ? `+${(savedConsumed - consumed).toFixed(3)} back to stock on save`
+              : `−${(consumed - savedConsumed).toFixed(3)} from stock on save`}
+          </p>
+        )}
       </td>
 
       {/* Qty Consumed */}
@@ -356,10 +373,15 @@ function InputLineRow({
           onChange={e => updateInputLine(index, 'quantity', e.target.value)}
           step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
           className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
-            line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)
-              ? 'border-red-400 bg-red-50' : disabled ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'}`} />
-        {line.available_quantity && line.quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity) && (
+            exceedsStock ? 'border-red-400 bg-red-50'
+              : consumedChanged ? 'border-amber-400 bg-amber-100 text-amber-900 font-medium'
+              : disabled ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'
+          } ${flash && consumedChanged ? 'ring-2 ring-amber-400 animate-pulse' : ''}`} />
+        {exceedsStock && line.quantity && (
           <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
+        )}
+        {!exceedsStock && consumedChanged && savedConsumed != null && (
+          <p className="text-[10px] text-amber-700 mt-0.5 text-right">was {savedConsumed.toFixed(3)} · unsaved</p>
         )}
       </td>
 
@@ -618,6 +640,7 @@ export default function EditJobWorkPage() {
   // Qty Returned per Job Line ID as loaded — the input rows highlight any
   // live difference from this until the edit is saved.
   const [savedReturnedByJobLine, setSavedReturnedByJobLine] = useState<Record<string, number>>({})
+  const [savedInputById, setSavedInputById] = useState<Record<string, { quantity: number; purchase_line_id: string }>>({})
   // Job Line IDs whose input row pulses just after one of their output rows
   // was removed, so the user sees which consumption line just changed.
   const [flashJobLineIds, setFlashJobLineIds] = useState<string[]>([])
@@ -839,6 +862,11 @@ export default function EditJobWorkPage() {
         if (l.job_line_id) savedReturned[l.job_line_id] = getReturnedQuantity(l.job_line_id, finalOutputs)
       }
       setSavedReturnedByJobLine(savedReturned)
+      const savedInputs: Record<string, { quantity: number; purchase_line_id: string }> = {}
+      for (const l of loadedInputs) {
+        if (l.id) savedInputs[l.id] = { quantity: parseFloat(l.quantity) || 0, purchase_line_id: l.purchase_line_id }
+      }
+      setSavedInputById(savedInputs)
 
       const outSearch: Record<number, string> = {}
       finalOutputs.forEach((l, i) => { if (l.item_name) outSearch[i] = l.item_name })
@@ -889,14 +917,31 @@ export default function EditJobWorkPage() {
   // whose only output was entered by mistake can still have it cleared. The
   // Job Line it fed recalculates on screen at once (Qty Returned / Remaining);
   // stock itself is only re-posted when Save Changes runs edit_job_work_order().
+  //
+  // Removing a SAVED output row also takes its Qty Produced off the Job
+  // Line's Qty Consumed — that material is treated as never processed, so it
+  // goes back to warehouse stock on save rather than staying at the vendor.
+  // Never below what the line still has transferred, sold direct or produced
+  // against it. Skipped for transfer-in lines (those quantities belong to
+  // the transfer) and in the returns-only view, where Input Materials are
+  // locked. A row added and removed in this same edit changes nothing.
   const removeOutputLine = (index: number) => {
     const removed = outputLines[index]
-    setOutputLines(p => {
-      const next = p.filter((_, idx) => idx !== index)
-      return next.length ? next : [emptyOutput()]
-    })
+    const remainingOutputs = outputLines.filter((_, idx) => idx !== index)
+    setOutputLines(remainingOutputs.length ? remainingOutputs : [emptyOutput()])
     setOutputItemSearch(p => dropIndex(p, index))
     setOutputItemOpen(p => dropIndex(p, index))
+    const removedQty = parseFloat(removed?.quantity) || 0
+    if (!returnsOnly && removed?.id && removed.job_line_id && removed.item_master_id && removedQty > 0) {
+      setInputLines(p => p.map(l => {
+        if (l.job_line_id !== removed.job_line_id || l.is_transfer_line) return l
+        const current = parseFloat(l.quantity) || 0
+        const floor = (l.quantity_transferred_out || 0) + l.vendor_direct_baseline
+          + getReturnedQuantity(l.job_line_id, remainingOutputs)
+        const next = Math.min(current, Math.max(floor, current - removedQty))
+        return { ...l, quantity: String(Number(next.toFixed(3))) }
+      }))
+    }
     if (removed?.job_line_id && removed.item_master_id) {
       setFlashJobLineIds(p => [...new Set([...p, removed.job_line_id])])
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
@@ -1481,6 +1526,11 @@ export default function EditJobWorkPage() {
                       companyId={companyId}
                       companies={companies}
                       savedReturned={savedReturnedByJobLine[line.job_line_id] ?? 0}
+                      savedConsumed={
+                        line.id && savedInputById[line.id]?.purchase_line_id === line.purchase_line_id
+                          ? savedInputById[line.id].quantity
+                          : null
+                      }
                       flash={!!line.job_line_id && flashJobLineIds.includes(line.job_line_id)}
                     />
                   ))}
