@@ -138,6 +138,27 @@ type LedgerEntry = {
   vendorOnly?: boolean
 }
 
+// Rows sharing the same reference + line ID + entry type are flagged for
+// review — usually leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs
+// from repeated edits. entry_type must match too: a job work line's
+// original JOB_WORK_OUT and a later JOB_WORK_TRANSFER_OUT legitimately
+// share the same reference_id + purchase_line_id (the transfer-out is
+// recorded against the source order), and aren't duplicates.
+//
+// Job work output rows also need the same quantity, size and date: one Job
+// Line routinely yields several products (a coil slit into 121 and 140
+// widths), each its own JOB_WORK_OUTPUT_IN, and removing one in Edit Order
+// posts its own JOB_WORK_CANCEL — none of those are repeats.
+const OUTPUT_ENTRY_TYPES = new Set(['JOB_WORK_OUTPUT_IN', 'JOB_WORK_CANCEL'])
+function duplicateKey(e: LedgerEntry): string | null {
+  const lineId = e.sub_purchase_line_id || e.purchase_line_id
+  if (!e.reference_id || !lineId) return null
+  const key = `${e.reference_id}|${lineId}|${e.entry_type}`
+  if (!OUTPUT_ENTRY_TYPES.has(e.entry_type)) return key
+  const size = e.size_label || e.material_sizes?.size_label || ''
+  return `${key}|${Number(e.quantity).toFixed(3)}|${size}|${e.entry_date}`
+}
+
 // Vendor-movement classification for one item, from
 // vw_job_work_vendor_movements (migration 142) — the row-level view every
 // vendor-held-stock figure derives from (vw_current_vendor_stock,
@@ -509,18 +530,11 @@ export default async function ItemStockLedgerPage({
     }
   }
 
-  // Rows sharing the same reference + line ID + entry type are flagged for
-  // review — usually leftover PURCHASE_IN/CANCEL (or SALE_/JOB_WORK_) pairs
-  // from repeated edits. entry_type must match too: a job work line's
-  // original JOB_WORK_OUT and a later JOB_WORK_TRANSFER_OUT legitimately
-  // share the same reference_id + purchase_line_id (the transfer-out is
-  // recorded against the source order), and aren't duplicates.
+  // See duplicateKey() for what counts as a repeat.
   const dupKeyCounts = new Map<string, number>()
   for (const e of entries) {
-    const lineId = e.sub_purchase_line_id || e.purchase_line_id
-    if (!e.reference_id || !lineId) continue
-    const key = `${e.reference_id}|${lineId}|${e.entry_type}`
-    dupKeyCounts.set(key, (dupKeyCounts.get(key) ?? 0) + 1)
+    const key = duplicateKey(e)
+    if (key) dupKeyCounts.set(key, (dupKeyCounts.get(key) ?? 0) + 1)
   }
 
   // Plain accumulators for a one-shot server-side computation — held in an
@@ -533,7 +547,7 @@ export default async function ItemStockLedgerPage({
     if (!e.vendorOnly) runningBalance.warehouse += Number(e.quantity)
     if (isVendorMovement(e)) runningBalance.vendor -= Number(e.quantity)
     const lineId = e.sub_purchase_line_id || e.purchase_line_id
-    const dupKey = e.reference_id && lineId ? `${e.reference_id}|${lineId}|${e.entry_type}` : null
+    const dupKey = duplicateKey(e)
     const ownVendorName = e.reference_type === 'job_work' && e.reference_id ? vendorNameByJobWorkOrderId.get(e.reference_id) || null : null
     // The Vendor column links to the vendor this row is posted against.
     const vendorId = e.reference_type === 'job_work' && e.reference_id ? vendorIdByJobWorkOrderId.get(e.reference_id) || null : null

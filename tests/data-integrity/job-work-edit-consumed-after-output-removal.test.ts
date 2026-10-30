@@ -103,6 +103,20 @@ describe('edit_job_work_order — Qty Consumed after removing output (migration 
     const after = await state(s)
     expect(after).toMatchObject({ sent: 6, received: 6, outputRows: 1 })
     expect(after.dispatchedNet).toBeCloseTo(-6, 6)
+
+    // Migration 167: the removed output's reversal is tagged with the same
+    // purchase line as the JOB_WORK_OUTPUT_IN it reverses.
+    const { rows: tags } = await client.query(
+      `SELECT entry_type, purchase_line_id, quantity::float AS qty FROM stock_ledger
+       WHERE reference_type = 'job_work' AND reference_id = $1 AND entry_type IN ('JOB_WORK_OUTPUT_IN', 'JOB_WORK_CANCEL')
+       ORDER BY entry_type, quantity`,
+      [s.orderId]
+    )
+    expect(tags).toEqual([
+      { entry_type: 'JOB_WORK_CANCEL', purchase_line_id: 'TEST-PL-001', qty: -4 },
+      { entry_type: 'JOB_WORK_OUTPUT_IN', purchase_line_id: 'TEST-PL-001', qty: 4 },
+      { entry_type: 'JOB_WORK_OUTPUT_IN', purchase_line_id: 'TEST-PL-001', qty: 6 },
+    ])
   })
 
   it('refuses Qty Consumed below what is still produced against the line, and saves nothing', async () => {
