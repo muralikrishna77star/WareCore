@@ -175,6 +175,19 @@ function getReturnedQuantity(jobLineId: string, outputLines: OutputLine[]): numb
     .reduce((total, line) => total + (parseFloat(line.quantity) || 0), 0)
 }
 
+// Per-row UI state (item search text, dropdown open) is keyed by row index,
+// so removing a row has to shift every later entry down by one — otherwise
+// the rows below the removed one show the removed row's item name.
+function dropIndex<T>(rec: Record<number, T>, removed: number): Record<number, T> {
+  const out: Record<number, T> = {}
+  for (const [k, v] of Object.entries(rec)) {
+    const n = Number(k)
+    if (n < removed) out[n] = v
+    else if (n > removed) out[n - 1] = v
+  }
+  return out
+}
+
 type SelectableItem = ItemMaster & { availableStock: number }
 
 // Each row gets its own plain useRef() (declared here, not in a shared keyed
@@ -201,6 +214,8 @@ function InputLineRow({
   disabled,
   companyId,
   companies,
+  savedReturned,
+  flash,
 }: {
   line: InputLine
   index: number
@@ -220,10 +235,17 @@ function InputLineRow({
   disabled?: boolean
   companyId: string
   companies: Company[]
+  // Qty Returned for this Job Line as last saved — the row is highlighted
+  // while the on-screen value differs, i.e. until Save Changes re-posts stock.
+  savedReturned: number
+  // Briefly pulses the row just after an output row feeding it was removed.
+  flash: boolean
 }) {
   const anchorRef = useRef<HTMLDivElement | null>(null)
+  const returned = getReturnedQuantity(line.job_line_id, outputLines)
+  const returnedChanged = !!line.job_line_id && Math.abs(returned - savedReturned) > 0.0005
   return (
-    <tr className="hover:bg-blue-50/30">
+    <tr className={returnedChanged ? 'bg-amber-50 hover:bg-amber-100/60' : 'hover:bg-blue-50/30'}>
       {/* Item */}
       <td className="px-2 py-2">
         <div className="relative" ref={anchorRef}>
@@ -274,14 +296,13 @@ function InputLineRow({
               {line.job_line_id}
             </span>
             {(() => {
-              const allocated = getReturnedQuantity(line.job_line_id, outputLines)
               const remaining = (parseFloat(line.quantity) || 0)
                 - (line.quantity_transferred_out || 0)
                 - line.vendor_direct_baseline
-                - allocated
+                - returned
               return remaining < -0.0005
                 ? <p className="text-[10px] text-red-500 mt-0.5">Over by {Math.abs(remaining).toFixed(3)} {line.unit}</p>
-                : <p className="text-[10px] text-green-600 mt-0.5">Remaining: {remaining.toFixed(3)} {line.unit}</p>
+                : <p className={`text-[10px] mt-0.5 ${returnedChanged ? 'text-amber-700 font-semibold' : 'text-green-600'}`}>Remaining: {remaining.toFixed(3)} {line.unit}</p>
             })()}
           </>
         ) : (
@@ -345,9 +366,18 @@ function InputLineRow({
       {/* Qty Returned */}
       <td className="px-2 py-2 text-right">
         {line.job_line_id ? (
-          <span className="block rounded border border-gray-200 bg-gray-50 px-2 py-2 text-sm font-medium text-gray-700">
-            {getReturnedQuantity(line.job_line_id, outputLines).toFixed(3)}
-          </span>
+          <>
+            <span className={`block rounded border px-2 py-2 text-sm font-medium ${
+              returnedChanged ? 'border-amber-400 bg-amber-100 text-amber-900' : 'border-gray-200 bg-gray-50 text-gray-700'
+            } ${flash ? 'ring-2 ring-amber-400 animate-pulse' : ''}`}>
+              {returned.toFixed(3)}
+            </span>
+            {returnedChanged && (
+              <p className="text-[10px] text-amber-700 mt-0.5" title="Stock is recalculated when you click Save Changes">
+                was {savedReturned.toFixed(3)} · unsaved
+              </p>
+            )}
+          </>
         ) : (
           <span className="text-xs text-gray-300">—</span>
         )}
@@ -585,6 +615,14 @@ export default function EditJobWorkPage() {
   // completely untouched by edit_job_work_order().
   const [originalInputIds, setOriginalInputIds] = useState<string[]>([])
   const [originalOutputIds, setOriginalOutputIds] = useState<string[]>([])
+  // Qty Returned per Job Line ID as loaded — the input rows highlight any
+  // live difference from this until the edit is saved.
+  const [savedReturnedByJobLine, setSavedReturnedByJobLine] = useState<Record<string, number>>({})
+  // Job Line IDs whose input row pulses just after one of their output rows
+  // was removed, so the user sees which consumption line just changed.
+  const [flashJobLineIds, setFlashJobLineIds] = useState<string[]>([])
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (flashTimerRef.current) clearTimeout(flashTimerRef.current) }, [])
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -796,6 +834,11 @@ export default function EditJobWorkPage() {
       })
       setOutputLines(finalOutputs.length ? finalOutputs : [emptyOutput()])
       setOriginalOutputIds(finalOutputs.map(l => l.id).filter(Boolean))
+      const savedReturned: Record<string, number> = {}
+      for (const l of loadedInputs) {
+        if (l.job_line_id) savedReturned[l.job_line_id] = getReturnedQuantity(l.job_line_id, finalOutputs)
+      }
+      setSavedReturnedByJobLine(savedReturned)
 
       const outSearch: Record<number, string> = {}
       finalOutputs.forEach((l, i) => { if (l.item_name) outSearch[i] = l.item_name })
@@ -835,6 +878,31 @@ export default function EditJobWorkPage() {
     setStockByItem(itemStockMap)
     setRefreshingItemMasters(false)
   }, [])
+
+  const removeInputLine = (index: number) => {
+    setInputLines(p => p.filter((_, idx) => idx !== index))
+    setInputItemSearch(p => dropIndex(p, index))
+    setInputItemOpen(p => dropIndex(p, index))
+  }
+
+  // Removing the last output row leaves a blank one in its place, so an order
+  // whose only output was entered by mistake can still have it cleared. The
+  // Job Line it fed recalculates on screen at once (Qty Returned / Remaining);
+  // stock itself is only re-posted when Save Changes runs edit_job_work_order().
+  const removeOutputLine = (index: number) => {
+    const removed = outputLines[index]
+    setOutputLines(p => {
+      const next = p.filter((_, idx) => idx !== index)
+      return next.length ? next : [emptyOutput()]
+    })
+    setOutputItemSearch(p => dropIndex(p, index))
+    setOutputItemOpen(p => dropIndex(p, index))
+    if (removed?.job_line_id && removed.item_master_id) {
+      setFlashJobLineIds(p => [...new Set([...p, removed.job_line_id])])
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
+      flashTimerRef.current = setTimeout(() => setFlashJobLineIds([]), 2500)
+    }
+  }
 
   const updateInputLine = useCallback((index: number, field: keyof InputLine, value: string) => {
     setInputLines(prev => {
@@ -1396,7 +1464,7 @@ export default function EditJobWorkPage() {
                       updateInputLine={updateInputLine}
                       openNewItemDialog={openNewItemDialog}
                       filteredInputItems={filteredInputItems}
-                      onRemove={() => setInputLines(p => p.filter((_, idx) => idx !== i))}
+                      onRemove={() => removeInputLine(i)}
                       canRemove={inputLines.length > 1}
                       blockedReason={
                         line.is_transfer_line
@@ -1412,6 +1480,8 @@ export default function EditJobWorkPage() {
                       disabled={returnsOnly}
                       companyId={companyId}
                       companies={companies}
+                      savedReturned={savedReturnedByJobLine[line.job_line_id] ?? 0}
+                      flash={!!line.job_line_id && flashJobLineIds.includes(line.job_line_id)}
                     />
                   ))}
                 </tbody>
@@ -1425,6 +1495,14 @@ export default function EditJobWorkPage() {
             <div className="flex items-center justify-between px-4 py-2 bg-emerald-50 border-b border-emerald-100">
               <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">
                 Output Materials <span className="font-normal normal-case text-emerald-600">(Produced)</span>
+                {(() => {
+                  const removedCount = originalOutputIds.filter(id => !outputLines.some(l => l.id === id)).length
+                  return removedCount > 0 ? (
+                    <span className="ml-2 font-medium normal-case text-amber-700">
+                      {removedCount} row{removedCount > 1 ? 's' : ''} removed — stock is reversed when you click Save Changes
+                    </span>
+                  ) : null
+                })()}
               </span>
               <button type="button" onClick={() => setOutputLines(p => [...p, emptyOutput()])}
                 className="text-xs font-medium text-emerald-700 hover:text-emerald-900 border border-emerald-300 rounded px-2 py-0.5 hover:bg-emerald-100">
@@ -1466,8 +1544,8 @@ export default function EditJobWorkPage() {
                       updateOutputLine={updateOutputLine}
                       openNewItemDialog={openNewItemDialog}
                       filteredAllItems={filteredAllItems}
-                      onRemove={() => setOutputLines(p => p.filter((_, idx) => idx !== i))}
-                      canRemove={outputLines.length > 1}
+                      onRemove={() => removeOutputLine(i)}
+                      canRemove={outputLines.length > 1 || !!(line.id || line.item_master_id || line.quantity)}
                       inputFieldCls={inputFieldCls}
                       selectCls={selectCls}
                     />
