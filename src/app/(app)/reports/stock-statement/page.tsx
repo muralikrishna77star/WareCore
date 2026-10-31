@@ -531,7 +531,7 @@ export default async function StockStatementPage({
     else if (bucket === 'dispatch_out') {
       if (row.entry_type === 'SALE_OUT') item.dispatch_out += Math.abs(qty)
       else item.dispatch_out -= qty // SALE_CANCEL: qty is positive — nets out the original SALE_OUT
-    } else if (bucket === 'jw_out') item.jw_out += Math.abs(qty)
+    } else if (bucket === 'jw_out') item.jw_out -= qty // a positive "Qty Sent corrected" JOB_WORK_OUT nets it down
     else if (bucket === 'jw_return') item.jw_return += qty
     else if (row.entry_type === 'ADJUSTMENT_IN' || qty > 0) item.other_in += qty
     else item.other_out += Math.abs(qty)

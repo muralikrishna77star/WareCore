@@ -543,7 +543,9 @@ export default async function VendorMovementsPage({
     const purchaseInfo = m.purchase_line_id ? lineDateRateMap.get(m.purchase_line_id) : undefined
     if (m.entry_type === 'JOB_WORK_OUT') {
       const g = ensureGroup(info.vendor_id, info.vendor_name, info.company_name, m)
-      g.jobWorkOut += Math.abs(Number(m.quantity))
+      // Signed, not Math.abs: Edit Order lowering Qty Consumed posts a
+      // positive "Qty Sent corrected" JOB_WORK_OUT that takes material back.
+      g.jobWorkOut -= Number(m.quantity)
       g.transactions.push({
         id: m.id, date: m.entry_date, type: 'Job Work Out',
         quantity: Number(m.quantity), reference_number: m.reference_number, jobWorkOrderId: m.reference_id, notes: m.notes,
@@ -710,7 +712,10 @@ export default async function VendorMovementsPage({
     const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
     const qty = Number(m.quantity)
     if (m.entry_type === 'JOB_WORK_OUT') {
-      cumulativeLedgerOutByKey.set(key, (cumulativeLedgerOutByKey.get(key) ?? 0) + Math.abs(qty))
+      // -qty, not Math.abs(qty): a positive "Qty Sent corrected" row (Edit
+      // Order lowering Qty Consumed) reduces what was sent — abs() counted
+      // it as more sent, e.g. GA00109 at Arun Engineering 5.490 vs 0.250.
+      cumulativeLedgerOutByKey.set(key, (cumulativeLedgerOutByKey.get(key) ?? 0) - qty)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
       cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) + Math.abs(qty))
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
@@ -747,7 +752,7 @@ export default async function VendorMovementsPage({
     const key = groupKey(info.vendor_id, m.material_type_id, m.material_size_id ?? null)
     const qty = Number(m.quantity)
     if (m.entry_type === 'JOB_WORK_OUT') {
-      openingLedgerOutByKey.set(key, (openingLedgerOutByKey.get(key) ?? 0) + Math.abs(qty))
+      openingLedgerOutByKey.set(key, (openingLedgerOutByKey.get(key) ?? 0) - qty)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
       openingTransferOutByKey.set(key, (openingTransferOutByKey.get(key) ?? 0) + Math.abs(qty))
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
