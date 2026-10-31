@@ -1203,9 +1203,19 @@ export default function EditJobWorkPage() {
       return
     }
 
+    // Only lines this edit changes are checked below — a problem on a line
+    // left as loaded (e.g. one partly transferred to another vendor, whose
+    // purchase line now holds less in the warehouse than it originally sent)
+    // must not stop returns being saved for another line. Migration 168
+    // scopes the database guards the same way.
+    const keepsSavedPick = (l: InputLine) =>
+      !!l.id && savedInputById[l.id]?.purchase_line_id === l.purchase_line_id
+    const sendsMore = (l: InputLine) =>
+      !keepsSavedPick(l) || (parseFloat(l.quantity) || 0) > savedInputById[l.id].quantity + 0.0005
+
     // Validate quantities against available stock (already adjusted for this order's own reversal)
     for (const line of validInputs) {
-      if (line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)) {
+      if (sendsMore(line) && line.available_quantity && parseFloat(line.quantity) > parseFloat(line.available_quantity)) {
         setError(`Quantity for "${line.item_name}" (${line.quantity}) exceeds available stock (${line.available_quantity}).`)
         setLoading(false)
         return
@@ -1220,7 +1230,7 @@ export default function EditJobWorkPage() {
     if (companyId) {
       const crossCompanyWarnings = validInputs
         .map((l) => {
-          if (!l.purchase_line_id) return null
+          if (!l.purchase_line_id || keepsSavedPick(l)) return null
           const opt = l.purchase_line_options.find((o) => o.purchase_line_id === l.purchase_line_id)
           if (!opt) return null
           const otherCompanyId = crossCompanyOwner(opt.companyQuantities, companyId)
@@ -1251,7 +1261,10 @@ export default function EditJobWorkPage() {
       const sent = parseFloat(line.quantity) || 0
       const ceiling = sent - (line.quantity_transferred_out || 0) - line.vendor_direct_baseline
       const received = getReturnedQuantity(line.job_line_id, validOutputs)
-      if (received > ceiling + 0.0005) {
+      const unchanged = keepsSavedPick(line)
+        && Math.abs(sent - savedInputById[line.id].quantity) < 0.0005
+        && Math.abs(received - (savedReturnedByJobLine[line.job_line_id] ?? 0)) < 0.0005
+      if (!unchanged && received > ceiling + 0.0005) {
         setError(`Qty Returned for "${line.item_name}" (${received.toFixed(3)}) exceeds remaining pending quantity (${ceiling.toFixed(3)}).`)
         setLoading(false)
         return
