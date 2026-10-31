@@ -250,7 +250,10 @@ function InputLineRow({
   const returnedChanged = !!line.job_line_id && Math.abs(returned - savedReturned) > 0.0005
   const consumed = parseFloat(line.quantity) || 0
   const consumedChanged = savedConsumed != null && Math.abs(consumed - savedConsumed) > 0.0005
-  const exceedsStock = !!line.available_quantity && consumed > parseFloat(line.available_quantity)
+  // Only a new line, a re-pointed one, or a raised Qty Consumed takes more
+  // from stock — a line left as saved can't exceed it (handleSubmit agrees).
+  const takesMore = savedConsumed == null || consumed > savedConsumed + 0.0005
+  const exceedsStock = takesMore && !!line.available_quantity && consumed > parseFloat(line.available_quantity)
   return (
     <tr className={returnedChanged || consumedChanged ? 'bg-amber-50 hover:bg-amber-100/60' : 'hover:bg-blue-50/30'}>
       {/* Item */}
@@ -653,8 +656,8 @@ export default function EditJobWorkPage() {
 
   // Fetch purchase line options for a given item master. When `preservePurchaseLineId`
   // is set (initial load of an existing line), keep that selection and add `extraQty`
-  // (the net quantity this order currently holds out at the vendor) back onto its
-  // available stock — that's what edit_job_work_order will restore on save.
+  // (the line's saved Qty Sent, already deducted from that purchase line's stock)
+  // back onto its available stock, so it shows the most this line can consume.
   const fetchPurchaseLinesForItem = useCallback(async (
     itemMasterId: string,
     index: number,
@@ -822,12 +825,14 @@ export default function EditJobWorkPage() {
       setHasTransfers(anyTransfers)
       setOriginalInputIds(loadedInputs.map(l => l.id).filter(Boolean))
 
-      // Net quantity still held at the vendor for each loaded input line (sent
-      // minus already-transferred-out), aligned by index with `loadedInputs` —
-      // used below to restore each line's purchase-line stock on load.
-      const netQtyByInput: number[] = rawInputs.map((it) =>
-        (Number(it.quantity_sent) || 0) - (Number(it.quantity_transferred_out) || 0)
-      )
+      // What each loaded input line has already taken out of its purchase
+      // line's warehouse stock — its full Qty Sent, aligned by index with
+      // `loadedInputs`. Added back on load so Avail Stock is the most this
+      // line can consume. Not net of quantity_transferred_out: a vendor-to-
+      // vendor transfer's two ledger legs cancel on the purchase line, so the
+      // transferred part never came back to the warehouse (JW-MVP4B87R-U6XW
+      // HR00219 showed Avail 0.070 against 1.940 consumed, 1.870 transferred).
+      const sentQtyByInput: number[] = rawInputs.map((it) => Number(it.quantity_sent) || 0)
 
       const finalInputs: InputLine[] = loadedInputs.length ? loadedInputs : [emptyInput()]
       setInputLines(finalInputs)
@@ -877,7 +882,7 @@ export default function EditJobWorkPage() {
       // Fetch purchase line options for each loaded input line, preserving its current selection
       loadedInputs.forEach((l, idx) => {
         if (l.item_master_id) {
-          fetchPurchaseLinesForItem(l.item_master_id, idx, l.purchase_line_id || undefined, netQtyByInput[idx])
+          fetchPurchaseLinesForItem(l.item_master_id, idx, l.purchase_line_id || undefined, sentQtyByInput[idx])
         }
       })
     }
