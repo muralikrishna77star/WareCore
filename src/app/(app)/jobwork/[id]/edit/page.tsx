@@ -254,9 +254,10 @@ function InputLineRow({
   // from stock — a line left as saved can't exceed it (handleSubmit agrees).
   const takesMore = savedConsumed == null || consumed > savedConsumed + 0.0005
   const exceedsStock = takesMore && !!line.available_quantity && consumed > parseFloat(line.available_quantity)
-  // A received transfer line's quantity is the transfer's: changing it here
-  // would leave the source order and transfer behind (migration 171).
-  const qtyLocked = disabled || line.is_transfer_line
+  // A received transfer line's item, purchase line and quantity are the
+  // transfer's: changing them here would leave the source order, transfer and
+  // ledger behind (migrations 171/172).
+  const transferLocked = disabled || line.is_transfer_line
   return (
     <tr className={returnedChanged || consumedChanged ? 'bg-amber-50 hover:bg-amber-100/60' : 'hover:bg-blue-50/30'}>
       {/* Item */}
@@ -264,14 +265,14 @@ function InputLineRow({
         <div className="relative" ref={anchorRef}>
           <input type="text"
             value={itemSearch}
-            disabled={disabled}
+            disabled={transferLocked}
             onChange={e => { setInputItemSearch(p => ({ ...p, [index]: e.target.value })); setInputItemOpen(p => ({ ...p, [index]: true })) }}
             onFocus={() => setInputItemOpen(p => ({ ...p, [index]: true }))}
             onBlur={() => setInputItemOpen(p => ({ ...p, [index]: false }))}
             placeholder="Search item…"
-            className={`${inputFieldCls} ${disabled ? 'bg-gray-50 text-gray-500' : ''}`} />
+            className={`${inputFieldCls} ${transferLocked ? 'bg-gray-50 text-gray-500' : ''}`} />
           {line.item_code && <div className="text-[10px] font-mono text-blue-600 mt-0.5">{line.item_code}</div>}
-          <DropdownPortal anchorRef={anchorRef} open={!disabled && isOpen} className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
+          <DropdownPortal anchorRef={anchorRef} open={!transferLocked && isOpen} className="w-80 overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg max-h-56">
               <button type="button" onMouseDown={e => e.preventDefault()}
                 onClick={() => openNewItemDialog(index, 'input', line.material_type_id, line.material_size_id)}
                 className="w-full text-left px-3 py-2 text-xs text-blue-600 hover:bg-blue-50 font-semibold border-b border-gray-100">
@@ -325,7 +326,9 @@ function InputLineRow({
 
       {/* Purchase Line ID */}
       <td className="px-2 py-2">
-        {!line.item_master_id
+        {line.is_transfer_line
+          ? <span className="text-sm font-mono text-gray-500">{line.purchase_line_id}</span>
+          : !line.item_master_id
           ? <span className="text-xs text-gray-400 italic">Select item first</span>
           : line.purchase_lines_loading
           ? <span className="text-xs text-gray-400">Loading…</span>
@@ -375,13 +378,13 @@ function InputLineRow({
       {/* Qty Consumed */}
       <td className="px-2 py-2">
         <input type="number" value={line.quantity}
-          disabled={qtyLocked}
+          disabled={transferLocked}
           onChange={e => updateInputLine(index, 'quantity', e.target.value)}
           step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
           className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
             exceedsStock ? 'border-red-400 bg-red-50'
               : consumedChanged ? 'border-amber-400 bg-amber-100 text-amber-900 font-medium'
-              : qtyLocked ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'
+              : transferLocked ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'
           } ${flash && consumedChanged ? 'ring-2 ring-amber-400 animate-pulse' : ''}`} />
         {exceedsStock && line.quantity && (
           <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
@@ -390,7 +393,7 @@ function InputLineRow({
           <p className="text-[10px] text-amber-700 mt-0.5 text-right">was {savedConsumed.toFixed(3)} · unsaved</p>
         )}
         {line.is_transfer_line && !disabled && (
-          <p className="text-[10px] text-gray-500 mt-0.5 text-right">Received by transfer. To change it, use Reverse Transfer, then transfer again.</p>
+          <p className="text-[10px] text-gray-500 mt-0.5 text-right">Set by the transfer. To change the item, purchase line or quantity, use Reverse Transfer, then transfer again.</p>
         )}
       </td>
 

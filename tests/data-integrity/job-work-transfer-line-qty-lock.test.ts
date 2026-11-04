@@ -73,9 +73,9 @@ async function makeTransfer() {
 type Scope = Awaited<ReturnType<typeof makeTransfer>>
 
 // The same call /api/jobwork/[id]/save-edit makes.
-function saveEdit(s: Scope, line: { sent: number; notes?: string }) {
+function saveEdit(s: Scope, line: { sent: number; notes?: string; pl?: string; itemId?: string }) {
   const input = [{
-    id: s.lineId, purchase_line_id: s.pl, job_line_id: 'JL-D', item_master_id: s.itemId, material_type_id: s.materialTypeId,
+    id: s.lineId, purchase_line_id: line.pl ?? s.pl, job_line_id: 'JL-D', item_master_id: line.itemId ?? s.itemId, material_type_id: s.materialTypeId,
     quantity_sent: line.sent, quantity_received: 0, unit: 'MT', notes: line.notes ?? null,
   }]
   return client.query(
@@ -101,6 +101,22 @@ describe('received transfer line quantity lock (migration 171)', () => {
     await expect(saveEdit(s, { sent: 4 })).rejects.toThrow(/JL-D was received by transfer.*Reverse Transfer/)
     await expect(saveEdit(s, { sent: 7 })).rejects.toThrow(/JL-D was received by transfer.*Reverse Transfer/)
     expect(await savedQty(s)).toBe(6)
+    expect(await netLedger(s)).toBe(before)
+  })
+
+  it('refuses re-pointing the line to another purchase line or item (migration 172)', async () => {
+    const s = await makeTransfer()
+    const before = await netLedger(s)
+    const { rows: [other] } = await client.query(
+      `INSERT INTO item_master (item_code, item_name, material_type_id, unit, is_active)
+       VALUES ($1, $1, $2, 'MT', true) RETURNING id`,
+      [`O${Date.now().toString(36).slice(-6)}`.toUpperCase(), s.materialTypeId]
+    )
+    await expect(saveEdit(s, { sent: 6, pl: 'OTHER-PL' })).rejects.toThrow(/JL-D was received by transfer.*item or purchase line/)
+    await expect(saveEdit(s, { sent: 6, itemId: other.id })).rejects.toThrow(/JL-D was received by transfer.*item or purchase line/)
+    const { rows: [line] } = await client.query(`SELECT purchase_line_id, item_master_id FROM job_work_items WHERE id = $1`, [s.lineId])
+    expect(line.purchase_line_id).toBe(s.pl)
+    expect(line.item_master_id).toBe(s.itemId)
     expect(await netLedger(s)).toBe(before)
   })
 
