@@ -254,6 +254,9 @@ function InputLineRow({
   // from stock — a line left as saved can't exceed it (handleSubmit agrees).
   const takesMore = savedConsumed == null || consumed > savedConsumed + 0.0005
   const exceedsStock = takesMore && !!line.available_quantity && consumed > parseFloat(line.available_quantity)
+  // A received transfer line's quantity is the transfer's: changing it here
+  // would leave the source order and transfer behind (migration 171).
+  const qtyLocked = disabled || line.is_transfer_line
   return (
     <tr className={returnedChanged || consumedChanged ? 'bg-amber-50 hover:bg-amber-100/60' : 'hover:bg-blue-50/30'}>
       {/* Item */}
@@ -372,19 +375,22 @@ function InputLineRow({
       {/* Qty Consumed */}
       <td className="px-2 py-2">
         <input type="number" value={line.quantity}
-          disabled={disabled}
+          disabled={qtyLocked}
           onChange={e => updateInputLine(index, 'quantity', e.target.value)}
           step="0.001" min="0" max={line.available_quantity || undefined} placeholder="0.000"
           className={`block w-full rounded border px-2 py-2 text-sm text-right focus:outline-none focus:border-blue-500 ${
             exceedsStock ? 'border-red-400 bg-red-50'
               : consumedChanged ? 'border-amber-400 bg-amber-100 text-amber-900 font-medium'
-              : disabled ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'
+              : qtyLocked ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-300'
           } ${flash && consumedChanged ? 'ring-2 ring-amber-400 animate-pulse' : ''}`} />
         {exceedsStock && line.quantity && (
           <p className="text-[10px] text-red-500 mt-0.5 text-right">Exceeds stock</p>
         )}
         {!exceedsStock && consumedChanged && savedConsumed != null && (
           <p className="text-[10px] text-amber-700 mt-0.5 text-right">was {savedConsumed.toFixed(3)} · unsaved</p>
+        )}
+        {line.is_transfer_line && !disabled && (
+          <p className="text-[10px] text-gray-500 mt-0.5 text-right">Received by transfer. To change it, use Reverse Transfer, then transfer again.</p>
         )}
       </td>
 
@@ -1531,9 +1537,9 @@ export default function EditJobWorkPage() {
                       canRemove={inputLines.length > 1}
                       blockedReason={
                         line.is_transfer_line
-                          ? 'Transferred in from another vendor order — use Delete Transfer instead'
+                          ? 'Transferred in from another vendor order — use Reverse Transfer instead'
                           : line.quantity_transferred_out > 0
-                          ? 'Transferred to another vendor — use Delete Transfer instead'
+                          ? 'Transferred to another vendor — use Reverse Transfer instead'
                           : line.vendor_direct_baseline > 0 || getReturnedQuantity(line.job_line_id, outputLines) > 0
                           ? 'Has recorded returns/sales — clear Output Materials for this line, or cancel the Vendor Direct Sale, first'
                           : null
