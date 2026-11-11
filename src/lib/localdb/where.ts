@@ -63,6 +63,14 @@ export function buildWhere(table: string, boolExp: unknown, params: unknown[], a
         case '_nin':
           params.push(opVal)
           return `"${alias}"."${key}" != ALL($${params.length})`
+        case '_like':
+          return `"${alias}"."${key}" LIKE ${rhs()}`
+        case '_nlike':
+          return `"${alias}"."${key}" NOT LIKE ${rhs()}`
+        case '_ilike':
+          return `"${alias}"."${key}" ILIKE ${rhs()}`
+        case '_nilike':
+          return `"${alias}"."${key}" NOT ILIKE ${rhs()}`
         case '_is_null':
           return opVal ? `"${alias}"."${key}" IS NULL` : `"${alias}"."${key}" IS NOT NULL`
         default:

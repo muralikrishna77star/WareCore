@@ -1,7 +1,7 @@
 import { FieldNode } from 'graphql'
 import { getGraphqlPool } from './pool'
 import { fieldSelections, resultKey } from './ast'
-import { shapeRow } from './compile-select'
+import { shapeRow, shapeRows } from './compile-select'
 
 interface OnConflict {
   constraint: string
@@ -36,11 +36,15 @@ export async function insertMany(table: string, args: Record<string, unknown>, f
   const objects = args.objects as Record<string, unknown>[]
   if (!objects?.length) return buildResult(field, 0, [])
 
-  const cols = Object.keys(objects[0])
+  // Columns = union over ALL objects (Hasura allows objects with different
+  // keys). A column an object leaves out gets the column DEFAULT, as in
+  // Hasura — not NULL, which would break e.g. a defaulted id or created_at.
+  const cols = [...new Set(objects.flatMap((o) => Object.keys(o)))]
   const params: unknown[] = []
   const rowsSql = objects.map((obj) => {
     const placeholders = cols.map((c) => {
-      params.push(obj[c] ?? null)
+      if (!(c in obj) || obj[c] === undefined) return 'DEFAULT'
+      params.push(obj[c])
       return `$${params.length}`
     })
     return `(${placeholders.join(', ')})`
@@ -55,7 +59,7 @@ export async function insertMany(table: string, args: Record<string, unknown>, f
 
   const returningField = fieldSelections(field.selectionSet).find((f) => f.name.value === 'returning')
   const returning = returningField
-    ? await Promise.all(res.rows.map((r) => shapeRow(table, r, returningField, variables)))
+    ? await shapeRows(table, res.rows, returningField, variables)
     : []
 
   return buildResult(field, res.rowCount ?? res.rows.length, returning)

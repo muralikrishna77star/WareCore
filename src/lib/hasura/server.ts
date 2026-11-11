@@ -1,11 +1,11 @@
 import { hasuraFetchEnvelope } from './transport'
 import { runSqlLocal } from '@/lib/localdb/sql'
 import { firstGraphQLErrorMessage } from './errors'
+import { DIRECT_DB } from '@/lib/dbMode'
 
 const HASURA_URL = process.env.NEXT_PUBLIC_HASURA_URL || 'http://localhost:8080/v1/graphql'
 const HASURA_SECRET = process.env.HASURA_ADMIN_SECRET || process.env.NEXT_PUBLIC_HASURA_ADMIN_SECRET || ''
 const HASURA_SQL_URL = HASURA_URL.replace('/v1/graphql', '/v2/query')
-const LOCAL_MODE = process.env.LOCAL_MODE === 'true'
 
 export async function hasuraQuery(
   query: string,
@@ -30,7 +30,7 @@ export async function hasuraMutation(query: string, variables?: Record<string, u
 
 /** Call a PostgreSQL function via Hasura's admin SQL endpoint (fully transactional). */
 export async function hasuraRunSql(sql: string): Promise<{ result: string[][] }> {
-  if (LOCAL_MODE) {
+  if (DIRECT_DB) {
     return runSqlLocal(sql) as Promise<{ result: string[][] }>
   }
 

@@ -8,8 +8,9 @@ import type { ItemMaster } from '@/types'
 
 type ItemMasterEditData = ItemMaster & { material_types?: { code: string; description: string } }
 
-export default async function EditItemMasterPage({ params }: { params: { id: string } }) {
-  const data = await hasuraQuery(ITEM_MASTER_BY_ID_QUERY, { id: params.id }).catch(() => null)
+export default async function EditItemMasterPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const data = await hasuraQuery(ITEM_MASTER_BY_ID_QUERY, { id }).catch(() => null)
   const item = data?.item_master_by_pk as ItemMasterEditData | undefined
 
   if (!item) notFound()

@@ -2,7 +2,7 @@ import { FieldNode } from 'graphql'
 import { getGraphqlPool } from './pool'
 import { buildWhere } from './where'
 import { fieldSelections, resultKey } from './ast'
-import { shapeRow } from './compile-select'
+import { shapeRow, shapeRows } from './compile-select'
 
 export async function updateMany(table: string, args: Record<string, unknown>, field: FieldNode, variables: Record<string, unknown>) {
   const set = args._set as Record<string, unknown>
@@ -26,7 +26,7 @@ export async function updateMany(table: string, args: Record<string, unknown>, f
   for (const sub of fieldSelections(field.selectionSet)) {
     if (sub.name.value === 'affected_rows') out[resultKey(sub)] = res.rowCount ?? res.rows.length
     if (sub.name.value === 'returning') {
-      out[resultKey(sub)] = await Promise.all(res.rows.map((row) => shapeRow(table, row, sub, variables)))
+      out[resultKey(sub)] = await shapeRows(table, res.rows, sub, variables)
     }
   }
   return out
