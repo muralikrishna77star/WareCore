@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Settings, DatabaseBackup, ShieldCheck, ClipboardList, Undo2,
   Wallet, Package, RefreshCw, ArrowLeftRight, Factory, Shuffle, Receipt,
-  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, PackageOpen, type LucideIcon,
+  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, PackageOpen, LifeBuoy, CircleQuestionMark, type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
@@ -83,6 +83,7 @@ const navItems: NavItem[] = [
   { title: 'Sale Cancellations', href: '/sale-cancellations', icon: Undo2 },
   { title: 'Deleted Ledger Rows', href: '/ledger-deletions', icon: Trash2 },
   { title: 'Reports', href: '/reports', icon: ChartColumn },
+  { title: 'Help & How-To', href: '/help', icon: LifeBuoy },
 ]
 
 const MOBILE_NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
@@ -334,6 +335,15 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
             {view === 'modern' && (
               <span className="hidden sm:inline text-xs font-mono text-gray-400">{today}</span>
             )}
+            <Link
+              href={pathname.startsWith('/help') ? '/help' : `/help?from=${encodeURIComponent(pathname)}`}
+              title="Help for this screen"
+              aria-label="Help for this screen"
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:border-blue-300 hover:text-blue-700 transition-colors print:hidden"
+            >
+              <CircleQuestionMark className="h-4 w-4" />
+              <span className="hidden sm:inline">Help</span>
+            </Link>
             <span className="hidden sm:inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-mono font-medium text-blue-600">
               v{APP_VERSION}
             </span>
