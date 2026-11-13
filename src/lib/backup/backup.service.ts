@@ -46,6 +46,8 @@ export const TABLES = [
   'dispatch_items',
   'dispatch_cancellations',
   'dispatch_cancellation_items',
+  'sale_returns',
+  'sale_return_items',
   'purchase_bills',
   'purchase_bill_items',
   'purchase_cancellations',
@@ -306,6 +308,20 @@ export async function restoreFromBackup(
   // options.tables (when given) selects WHICH tables to restore — never
   // dictates the order they're restored in. See restoreOrderFor()'s comment.
   const tablesToRestore = restoreOrderFor(backupData, options.tables)
+
+  // When the backup brings its own stock_ledger, the document tables must NOT
+  // post stock as they're re-inserted — the ledger rows come from the backup.
+  // Inserting a sale/purchase/job work/transfer line fires its ledger-posting
+  // trigger, which (before migration 174) posted every movement a second time
+  // on top of the restored ledger. Those triggers now stay silent while the
+  // transaction-local 'warecore.restoring' setting is on; it's set in the same
+  // statement batch as each INSERT, so it never leaks to other requests. A
+  // restore WITHOUT the ledger leaves the triggers on, so the restored
+  // documents still get their stock.
+  const ledgerFromBackup = tablesToRestore.includes('stock_ledger') && (backupData.stock_ledger?.length ?? 0) > 0
+  const insertSQL = (table: string, rows: BackupRow[]) =>
+    (ledgerFromBackup ? "SELECT set_config('warecore.restoring', 'on', true);\n" : '') + rowsToInsertSQL(table, rows)
+
   let restoredCount = 0
   const tableResults: Record<string, RestoreTableResult> = {}
 
@@ -331,7 +347,7 @@ export async function restoreFromBackup(
     for (let i = 0; i < data.length; i += batchSize) {
       const batch = data.slice(i, i + batchSize)
       try {
-        await runSQL(rowsToInsertSQL(table, batch))
+        await runSQL(insertSQL(table, batch))
         result.restored += batch.length
         restoredCount += batch.length
       } catch {
@@ -347,7 +363,7 @@ export async function restoreFromBackup(
         // with only a single swallowed console.error to show for it.
         for (const row of batch) {
           try {
-            await runSQL(rowsToInsertSQL(table, [row]))
+            await runSQL(insertSQL(table, [row]))
             result.restored += 1
             restoredCount += 1
           } catch (rowErr) {
