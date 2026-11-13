@@ -761,6 +761,50 @@ export const DISPATCH_ITEMS_QUERY = `
   }
 `
 
+// Customer returns (migration 173). Only create_sale_return() /
+// cancel_sale_return() write these tables — never insert/update them from
+// the client, that would bypass the stock posting and its guards.
+export const SALE_RETURNS_BY_DISPATCH_QUERY = `
+  query GetSaleReturnsByDispatch($dispatch_order_id: uuid!) {
+    sale_returns(where: {dispatch_order_id: {_eq: $dispatch_order_id}}, order_by: [{return_date: desc}, {created_at: desc}]) {
+      id return_number return_date reason status total_quantity total_amount created_at cancelled_at cancelled_notes
+      sale_return_items(order_by: {created_at: asc}) {
+        id dispatch_item_id quantity unit
+      }
+    }
+  }
+`
+
+export const SALE_RETURNS_LIST_QUERY = `
+  query GetSaleReturns {
+    sale_returns(order_by: [{return_date: desc}, {created_at: desc}]) {
+      id return_number dispatch_order_id invoice_number return_date reason status
+      total_quantity total_amount created_at cancelled_at
+      companies { name }
+      warehouses { name }
+      customers { name }
+    }
+  }
+`
+
+export const SALE_RETURN_BY_ID_QUERY = `
+  query GetSaleReturnById($id: uuid!) {
+    sale_returns_by_pk(id: $id) {
+      id return_number dispatch_order_id invoice_number return_date reason notes status
+      total_quantity total_amount created_at created_by cancelled_at cancelled_notes cancelled_by
+      companies { name }
+      warehouses { name }
+      customers { name }
+      sale_return_items(order_by: {created_at: asc}) {
+        id dispatch_item_id item_master_id item_name sale_line_id purchase_line_id size_label
+        quantity unit rate amount taxable_value total_with_tax notes
+        material_types { description }
+        item_master { item_code }
+      }
+    }
+  }
+`
+
 export const PURCHASE_LINE_STOCK_QUERY = `
   query GetPurchaseLineStock($purchase_line_id: String!) {
     stock_ledger_aggregate(where: {purchase_line_id: {_eq: $purchase_line_id}}) {
@@ -1911,6 +1955,16 @@ export const DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY = `
   query GetDispatchOrdersCustomerLookup($ids: [uuid!]!) {
     dispatch_orders(where: {id: {_in: $ids}}) {
       id
+      customers { name }
+    }
+  }
+`
+
+// SALE_RETURN_IN rows reference sale_returns.id, which carries the customer.
+export const SALE_RETURNS_CUSTOMER_LOOKUP_QUERY = `
+  query GetSaleReturnsCustomerLookup($ids: [uuid!]!) {
+    sale_returns(where: {id: {_in: $ids}}) {
+      id return_number status dispatch_order_id invoice_number
       customers { name }
     }
   }

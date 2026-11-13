@@ -28,6 +28,7 @@ const entryTypeConfig: Record<string, { label: string; color: string }> = {
   VENDOR_RETURN_IN: { label: 'Vendor Return In', color: 'bg-green-100 text-green-800' },
   SALE_OUT: { label: 'Sale / Dispatch', color: 'bg-red-100 text-red-800' },
   SALE_CANCEL: { label: 'Sale Cancelled', color: 'bg-gray-100 text-gray-700' },
+  SALE_RETURN_IN: { label: 'Sales Return', color: 'bg-amber-100 text-amber-800' },
   PURCHASE_CANCEL: { label: 'Purchase Cancelled', color: 'bg-gray-100 text-gray-700' },
   TRANSFER_OUT: { label: 'Transfer Out', color: 'bg-orange-100 text-orange-800' },
   TRANSFER_IN: { label: 'Transfer In', color: 'bg-blue-100 text-blue-800' },

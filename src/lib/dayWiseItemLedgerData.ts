@@ -17,6 +17,7 @@ import {
   DAY_WISE_LEDGER_PURCHASE_LINES_QUERY,
   DAY_WISE_LEDGER_DISPATCH_ITEMS_QUERY,
   DAY_WISE_LEDGER_DISPATCH_ORDERS_QUERY,
+  SALE_RETURNS_CUSTOMER_LOOKUP_QUERY,
   DAY_WISE_LEDGER_JOB_WORK_ORDERS_QUERY,
   DAY_WISE_LEDGER_TRANSFERS_QUERY,
   DAY_WISE_LEDGER_ITEM_MASTER_QUERY,
@@ -254,6 +255,10 @@ export async function loadDayWiseItemLedger(
   // empty — filtering nulls out keeps the uuid! variable valid.
   const transferIds = uuidOnly(rows.filter((r) => r.reference_type === 'transfer').map((r) => r.reference_id))
   const createdByIds = uuidOnly(rows.map((r) => r.created_by))
+  const saleReturnIds = uuidOnly(rows.filter((r) => r.reference_type === 'sale_return').map((r) => r.reference_id))
+  const saleReturnsPromise = saleReturnIds.length
+    ? hasuraQuery(SALE_RETURNS_CUSTOMER_LOOKUP_QUERY, { ids: saleReturnIds })
+    : Promise.resolve({ sale_returns: [] })
 
   const [purchaseLines, dispatchItems, dispatchOrders, jobWorkOrders, transfers, itemMasters, users] =
     await Promise.all([
@@ -435,6 +440,10 @@ export async function loadDayWiseItemLedger(
     companies?: { name: string } | null
     warehouses?: { name: string } | null
   }
+  const saleReturnMap = new Map<string, { id: string; return_number: string | null; status: string | null; customers?: { name: string } | null }>()
+  for (const r of ((await saleReturnsPromise).sale_returns ?? []) as { id: string; return_number: string | null; status: string | null; customers?: { name: string } | null }[]) {
+    saleReturnMap.set(r.id, r)
+  }
   const dispatchOrderMap = new Map<string, DispatchOrder>()
   for (const o of (dispatchOrders.dispatch_orders ?? []) as DispatchOrder[]) dispatchOrderMap.set(o.id, o)
 
@@ -550,6 +559,19 @@ export async function loadDayWiseItemLedger(
         break
       }
       case 'customer': {
+        // A customer return (SALE_RETURN_IN) references the return, not the
+        // sale; it carries its own number and customer, and no sale
+        // financials are attached to it.
+        const saleReturn = row.reference_type === 'sale_return' && row.reference_id ? saleReturnMap.get(row.reference_id) : undefined
+        if (row.reference_type === 'sale_return') {
+          if (saleReturn) {
+            documentNumber = saleReturn.return_number ?? documentNumber
+            status = normalizeStatus(saleReturn.status)
+            parties.customerName = saleReturn.customers?.name ?? null
+            href = `/sale-returns/${saleReturn.id}`
+          }
+          break
+        }
         const order = row.reference_id ? dispatchOrderMap.get(row.reference_id) : undefined
         if (order) {
           documentNumber = order.invoice_number ?? order.sale_ref_id ?? documentNumber

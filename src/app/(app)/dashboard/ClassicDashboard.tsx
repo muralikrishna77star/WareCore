@@ -15,6 +15,7 @@ const ENTRY_TYPE_LABELS: Record<string, string> = {
   ADJUSTMENT_IN: 'Adj. In',
   SALE_OUT: 'Sale Out',
   SALE_CANCEL: 'Sale Reversal',
+  SALE_RETURN_IN: 'Sales Return',
   PURCHASE_CANCEL: 'Purchase Cancel',
   JOB_WORK_OUT: 'JW Out',
   TRANSFER_OUT: 'Transfer Out',

@@ -53,9 +53,10 @@ export interface TracePurchaseLine {
 }
 
 export interface TraceMovement extends PurchaseLineEntry {
-  /** Customer for SALE_OUT rows. */
+  /** Customer for SALE_OUT / SALE_RETURN_IN rows. */
   customerName?: string | null
-  /** Sale taxable value / GST for SALE_OUT rows, already apportioned per ledger row. */
+  /** Sale taxable value / GST for SALE_OUT rows, already apportioned per ledger row;
+   * for SALE_RETURN_IN rows, the returned line's value (positive — subtracted by buildLine). */
   saleValue?: number | null
   saleGst?: number | null
   /** Item label for job-work output rows (the item the line became). */
@@ -79,6 +80,7 @@ export type DetailKind =
   | 'OPENING'
   | 'SALE'
   | 'VENDOR_DIRECT_SALE'
+  | 'SALE_RETURN'
   | 'JOB_WORK'
   | 'TRANSFER'
   | 'PURCHASE_CANCEL'
@@ -376,6 +378,30 @@ function buildLine(line: TracePurchaseLine, movements: TraceMovement[], fyStart:
           balance,
         })
         continue
+      case 'SALE_RETURN_IN': {
+        // Customer return (migration 173): stock comes back and the sale is
+        // reduced — sold qty, value and GST are all net of returns.
+        const q = Math.abs(qty)
+        const v = Number(src.saleValue ?? 0)
+        const recorded = Number(src.saleGst ?? 0)
+        const g: number | null =
+          recorded > EPS ? recorded : line.gstRate != null ? (v * line.gstRate) / 100 : null
+        soldQty -= q
+        saleValue -= v
+        saleGst -= g ?? 0
+        periodSales.push({ date: r.entry_date, qty: -q, value: -v, gst: -(g ?? 0) })
+        rows.push({
+          kind: 'SALE_RETURN',
+          date: r.entry_date,
+          remarks: `${src.customerName || 'Customer'} — returned${r.notes ? ` (${r.notes.replace(/^Customer return of sale /, 'sale ')})` : ''}`,
+          reference: r.reference_number ?? null,
+          saleQty: -q,
+          saleValue: -v,
+          saleGst: g == null ? null : -g,
+          balance,
+        })
+        continue
+      }
       case 'JOB_WORK_TRANSFER':
         rows.push({
           kind: 'JOB_WORK',

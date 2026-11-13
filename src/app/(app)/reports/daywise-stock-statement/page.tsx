@@ -37,6 +37,7 @@ const STOCK_MOVEMENT_BY_TYPE: Record<string, 'INWARD' | 'OUTWARD' | 'TRANSFER' |
   PURCHASE_CANCEL: 'OUTWARD',
   SALE_OUT: 'OUTWARD',
   SALE_CANCEL: 'INWARD',
+  SALE_RETURN_IN: 'INWARD',
   JOB_WORK_OUT: 'OUTWARD',
   JOB_WORK_RETURN_IN: 'INWARD',
   JOB_WORK_CANCEL: 'INWARD',
@@ -64,6 +65,7 @@ const entryTypeConfig: Record<string, { label: string; color: string; isIn: bool
   TRANSFER_OUT:          { label: 'Transfer Out',     color: 'bg-orange-100 text-orange-800', isIn: false },
   SALE_OUT:              { label: 'Dispatch',         color: 'bg-red-100 text-red-800',     isIn: false },
   SALE_CANCEL:           { label: 'Dispatch Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
+  SALE_RETURN_IN:        { label: 'Sales Return',     color: 'bg-amber-100 text-amber-800', isIn: true },
   JOB_WORK_OUT:          { label: 'Job Work Out',     color: 'bg-purple-100 text-purple-800', isIn: false },
   JOB_WORK_RETURN_IN:    { label: 'Job Work Return',  color: 'bg-teal-100 text-teal-800',   isIn: true },
   JOB_WORK_CANCEL:       { label: 'Job Work Cancel',  color: 'bg-gray-100 text-gray-800',   isIn: true },
@@ -443,7 +445,7 @@ export default async function DaywiseStockStatementPage({
       if (!isCrossItem) runningBalance.warehouse += rawQty
       runningBalance.vendor += vendorChange
       if (m.entry_type === 'PURCHASE_IN' || m.entry_type === 'PURCHASE_CANCEL') dayTotals.purchasesRaw += rawQty
-      if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL') dayTotals.salesRaw += rawQty
+      if (m.entry_type === 'SALE_OUT' || m.entry_type === 'SALE_CANCEL' || m.entry_type === 'SALE_RETURN_IN') dayTotals.salesRaw += rawQty
       if (m.entry_type === 'TRANSFER_IN') dayTotals.transferIn += rawQty
       if (m.entry_type === 'TRANSFER_OUT') dayTotals.transferOutRaw += rawQty
       if (m.entry_type === 'JOB_WORK_OUT') dayTotals.jobWorkOutRaw += rawQty

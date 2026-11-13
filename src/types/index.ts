@@ -4,6 +4,7 @@ export type StockEntryType =
   | 'PURCHASE_IN'
   | 'VENDOR_RETURN_IN'
   | 'SALE_OUT'
+  | 'SALE_RETURN_IN'
   | 'JOB_WORK_OUT'
   | 'JOB_WORK_RETURN_IN'
   | 'TRANSFER_OUT'

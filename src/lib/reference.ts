@@ -1,10 +1,11 @@
-export type ReferenceType = 'purchase_bill' | 'dispatch' | 'job_work' | 'transfer'
+export type ReferenceType = 'purchase_bill' | 'dispatch' | 'job_work' | 'transfer' | 'sale_return'
 
 export const REFERENCE_ROUTE: Record<ReferenceType, string> = {
   purchase_bill: '/bills',
   dispatch: '/dispatch',
   job_work: '/jobwork',
   transfer: '/transfers',
+  sale_return: '/sale-returns',
 }
 
 export const REFERENCE_LABEL: Record<ReferenceType, string> = {
@@ -12,8 +13,9 @@ export const REFERENCE_LABEL: Record<ReferenceType, string> = {
   dispatch: 'Sale / Dispatch',
   job_work: 'Job Work Order',
   transfer: 'Transfer',
+  sale_return: 'Sales Return',
 }
 
 export function isReferenceType(value: unknown): value is ReferenceType {
-  return value === 'purchase_bill' || value === 'dispatch' || value === 'job_work' || value === 'transfer'
+  return value === 'purchase_bill' || value === 'dispatch' || value === 'job_work' || value === 'transfer' || value === 'sale_return'
 }

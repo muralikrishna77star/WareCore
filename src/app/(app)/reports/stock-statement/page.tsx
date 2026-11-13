@@ -15,6 +15,7 @@ import {
   JOB_WORK_ORDER_IDS_QUERY,
   JOB_WORK_ORDERS_VENDOR_LOOKUP_QUERY,
   DISPATCH_ORDERS_CUSTOMER_LOOKUP_QUERY,
+  SALE_RETURNS_CUSTOMER_LOOKUP_QUERY,
   TRANSFERS_WAREHOUSE_LOOKUP_QUERY,
   AVERAGE_PURCHASE_RATES_QUERY,
   USER_PROFILES_QUERY,
@@ -70,7 +71,8 @@ const ENTRY_TYPE_INFO: Record<string, { label: string; movement: 'INWARD' | 'OUT
   TRANSFER_IN: { label: 'Stock Transfer In', movement: 'TRANSFER' },
   TRANSFER_OUT: { label: 'Stock Transfer Out', movement: 'TRANSFER' },
   SALE_OUT: { label: 'Sales Dispatch', movement: 'OUTWARD' },
-  SALE_CANCEL: { label: 'Sales Return', movement: 'INWARD' },
+  SALE_CANCEL: { label: 'Sale Cancelled', movement: 'INWARD' },
+  SALE_RETURN_IN: { label: 'Sales Return', movement: 'INWARD' },
   JOB_WORK_OUT: { label: 'Job Work Out', movement: 'OUTWARD' },
   JOB_WORK_RETURN_IN: { label: 'Job Work Return', movement: 'INWARD' },
   VENDOR_RETURN_IN: { label: 'Vendor Return', movement: 'INWARD' },
@@ -87,6 +89,7 @@ const SOURCE_MODULE_LABEL: Record<string, string> = {
   dispatch: 'Dispatch Orders',
   job_work: 'Job Work Orders',
   transfer: 'Transfers',
+  sale_return: 'Sales Returns',
 }
 
 type StockItem = {
@@ -130,6 +133,7 @@ const WAREHOUSE_BUCKET: Record<string, 'purchase_in' | 'transfer_in' | 'transfer
   TRANSFER_OUT: 'transfer_out',
   SALE_OUT: 'dispatch_out',
   SALE_CANCEL: 'dispatch_out',
+  SALE_RETURN_IN: 'dispatch_out',
   JOB_WORK_OUT: 'jw_out',
   JOB_WORK_RETURN_IN: 'jw_return',
   VENDOR_RETURN_IN: 'jw_return',
@@ -379,6 +383,20 @@ export default async function StockStatementPage({
     const rows: { id: string; customers?: { name: string } | null }[] = custResult.dispatch_orders ?? []
     customerNameByDispatchId = new Map(rows.map((r) => [r.id, r.customers?.name ?? '']))
   }
+  // SALE_RETURN_IN rows reference the return, which carries the customer.
+  const saleReturnIds = Array.from(
+    new Set(
+      [...openingRows, ...periodRows]
+        .filter((r) => r.reference_type === 'sale_return' && r.reference_id)
+        .map((r) => r.reference_id as string)
+    )
+  )
+  if (saleReturnIds.length > 0) {
+    const retResult = await hasuraQuery(SALE_RETURNS_CUSTOMER_LOOKUP_QUERY, { ids: saleReturnIds })
+    for (const r of (retResult.sale_returns ?? []) as { id: string; customers?: { name: string } | null }[]) {
+      customerNameByDispatchId.set(r.id, r.customers?.name ?? '')
+    }
+  }
 
   // Source/Destination Warehouse for the Transaction Details extract —
   // TRANSFER_IN/OUT reference a transfers.id, which carries both warehouses.
@@ -530,7 +548,7 @@ export default async function StockStatementPage({
     else if (bucket === 'transfer_out') item.transfer_out += Math.abs(qty)
     else if (bucket === 'dispatch_out') {
       if (row.entry_type === 'SALE_OUT') item.dispatch_out += Math.abs(qty)
-      else item.dispatch_out -= qty // SALE_CANCEL: qty is positive — nets out the original SALE_OUT
+      else item.dispatch_out -= qty // SALE_CANCEL / SALE_RETURN_IN: qty is positive — Dispatch is net of customer returns
     } else if (bucket === 'jw_out') item.jw_out -= qty // a positive "Qty Sent corrected" JOB_WORK_OUT nets it down
     else if (bucket === 'jw_return') item.jw_return += qty
     else if (row.entry_type === 'ADJUSTMENT_IN' || qty > 0) item.other_in += qty
@@ -659,7 +677,7 @@ export default async function StockStatementPage({
         vendorName: isVendorMovement(row) && row.reference_type === 'job_work' && row.reference_id
           ? vendorNameByJobWorkOrderId.get(row.reference_id) ?? 'Unknown Vendor'
           : '',
-        customerName: row.reference_type === 'dispatch' && row.reference_id
+        customerName: (row.reference_type === 'dispatch' || row.reference_type === 'sale_return') && row.reference_id
           ? customerNameByDispatchId.get(row.reference_id) ?? ''
           : '',
         // On-screen links only (not exported): item, job work vendor and order.

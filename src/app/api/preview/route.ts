@@ -10,6 +10,7 @@ import {
   JOB_WORK_ITEMS_QUERY,
   TRANSFER_BY_ID_QUERY,
   TRANSFER_ITEMS_QUERY,
+  SALE_RETURN_BY_ID_QUERY,
 } from '@/lib/hasura/queries'
 import { isReferenceType, REFERENCE_ROUTE, REFERENCE_LABEL } from '@/lib/reference'
 
@@ -119,6 +120,37 @@ async function loadDispatch(id: string) {
   }
 }
 
+async function loadSaleReturn(id: string) {
+  const res = await hasuraQuery(SALE_RETURN_BY_ID_QUERY, { id })
+  const ret = res.sale_returns_by_pk
+  if (!ret) return null
+  const rows: DispatchItemRow[] = ret.sale_return_items ?? []
+  const items: Item[] = rows.map((i) => ({
+    name: i.item_name || i.material_types?.description || '—',
+    size: i.size_label ?? undefined,
+    quantity: fmtQ(i.quantity),
+    rate: i.rate != null ? fmtAmt(i.rate) : undefined,
+    amount: i.amount != null ? fmtAmt(i.amount) : undefined,
+  }))
+  const totalQuantity = items.reduce((s, i) => s + Number(i.quantity), 0)
+  const totalAmount = rows.reduce((s, i) => s + Number(i.amount || 0), 0)
+  const fields: Field[] = [
+    { label: 'Customer', value: ret.customers?.name || '—' },
+    { label: 'Date', value: fmtDate(ret.return_date) },
+    { label: 'Sale Invoice', value: ret.invoice_number || '—' },
+    { label: 'Returned To', value: ret.warehouses?.name || '—' },
+    { label: 'Reason', value: ret.reason || '—' },
+  ]
+  return {
+    title: `Sales Return ${ret.return_number}`,
+    status: ret.status,
+    fields,
+    items,
+    totalQuantity: fmtQ(totalQuantity),
+    totalAmount: fmtAmt(totalAmount),
+  }
+}
+
 async function loadJobWork(id: string) {
   const [orderRes, itemsRes] = await Promise.all([
     hasuraQuery(JOB_WORK_ORDER_BY_ID_QUERY, { id }),
@@ -193,6 +225,7 @@ export async function GET(request: NextRequest) {
       dispatch: loadDispatch,
       job_work: loadJobWork,
       transfer: loadTransfer,
+      sale_return: loadSaleReturn,
     }[type]
     const data = await loader(id)
     if (!data) return NextResponse.json({ error: `${REFERENCE_LABEL[type]} not found` }, { status: 404 })

@@ -84,7 +84,9 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
     // Every ledger row of those lines up to the cutoff, in the order Purchase
     // Line Movements reads them. A sale's value comes from its dispatch line
     // and is apportioned by quantity when one dispatch line posted several
-    // ledger rows.
+    // ledger rows. A customer return (SALE_RETURN_IN, migration 173) posts
+    // exactly one row per return line, so it carries that line's value/GST
+    // directly; buildLine() subtracts it from the sales.
     hasuraRunSql(`
       WITH ${cte},
       sale_value AS (
@@ -105,9 +107,12 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
              sl.created_at::text, sl.reference_number, sl.reference_type, sl.reference_id::text, sl.notes,
              COALESCE(v.vendor_delta, 0)::text,
              vs.name AS vendor_name,
-             cu.name AS customer_name,
-             CASE WHEN sl.entry_type = 'SALE_OUT' AND sq.qty <> 0 THEN (sv.value * sl.quantity / sq.qty)::text END,
-             CASE WHEN sl.entry_type = 'SALE_OUT' AND sq.qty <> 0 THEN (sv.gst * sl.quantity / sq.qty)::text END,
+             COALESCE(cu.name, rcu.name) AS customer_name,
+             CASE WHEN sl.entry_type = 'SALE_OUT' AND sq.qty <> 0 THEN (sv.value * sl.quantity / sq.qty)::text
+                  WHEN sl.entry_type = 'SALE_RETURN_IN' THEN COALESCE(ri.taxable_value, ri.amount, 0)::text END,
+             CASE WHEN sl.entry_type = 'SALE_OUT' AND sq.qty <> 0 THEN (sv.gst * sl.quantity / sq.qty)::text
+                  WHEN sl.entry_type = 'SALE_RETURN_IN' AND ri.total_with_tax IS NOT NULL
+                    THEN (ri.total_with_tax - COALESCE(ri.taxable_value, ri.amount, 0))::text END,
              TRIM(BOTH ' ' FROM COALESCE(oi.item_name, '') || ' ' || COALESCE(ms.size_label, sl.size_label, '')),
              co.name, wh.name
       FROM stock_ledger sl
@@ -116,6 +121,9 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
       LEFT JOIN suppliers vs ON vs.id = jwo.vendor_id
       LEFT JOIN dispatch_orders d ON sl.reference_type = 'dispatch' AND d.id = sl.reference_id
       LEFT JOIN customers cu ON cu.id = d.customer_id
+      LEFT JOIN sale_return_items ri ON sl.entry_type = 'SALE_RETURN_IN' AND ri.id = sl.sale_return_item_id
+      LEFT JOIN sale_returns sr ON sl.reference_type = 'sale_return' AND sr.id = sl.reference_id
+      LEFT JOIN customers rcu ON rcu.id = sr.customer_id
       LEFT JOIN sale_value sv ON sv.dispatch_order_id = sl.reference_id AND sv.purchase_line_id = sl.purchase_line_id
       LEFT JOIN sale_qty sq ON sq.reference_id = sl.reference_id AND sq.purchase_line_id = sl.purchase_line_id
       LEFT JOIN material_sizes ms ON ms.id = sl.material_size_id
@@ -134,11 +142,13 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
 
     // Sales that name no purchase line can't reduce any line's balance; they
     // are listed on their own so sales totals still reconcile. They have no
-    // seller, so a seller filter excludes them.
+    // seller, so a seller filter excludes them. Active customer returns of
+    // such lines are listed too, as negative quantities/values.
     f.supplierIds.length > 0
       ? Promise.resolve({ result: [] as string[][] })
       : hasuraRunSql(`
-      SELECT d.dispatch_date::text, COALESCE(d.invoice_number, ''), COALESCE(cu.name, ''),
+      SELECT * FROM (
+      SELECT d.dispatch_date::text AS date, COALESCE(d.invoice_number, '') AS reference, COALESCE(cu.name, ''),
              COALESCE(NULLIF(di.item_name, ''), im.item_name, mt.description, ''),
              COALESCE(ms.size_label, di.size_label, ''),
              di.quantity::text,
@@ -156,7 +166,27 @@ export async function loadFyTraceability(f: FyTraceabilityFilters): Promise<FyTr
         ${uuidList(f.companyIds) ? `AND d.company_id IN (${uuidList(f.companyIds)})` : ''}
         ${uuidList(f.warehouseIds) ? `AND d.warehouse_id IN (${uuidList(f.warehouseIds)})` : ''}
         ${uuidList(f.itemMasterIds) ? `AND di.item_master_id IN (${uuidList(f.itemMasterIds)})` : ''}
-      ORDER BY d.dispatch_date, d.invoice_number`),
+      UNION ALL
+      SELECT r.return_date::text, r.return_number || ' (return of ' || r.invoice_number || ')', COALESCE(cu.name, ''),
+             COALESCE(NULLIF(ri.item_name, ''), im.item_name, mt.description, ''),
+             COALESCE(ms.size_label, ri.size_label, ''),
+             (-ri.quantity)::text,
+             (-COALESCE(ri.taxable_value, ri.amount, 0))::text,
+             (-(COALESCE(ri.total_with_tax, 0) - COALESCE(ri.taxable_value, ri.amount, 0)))::text
+      FROM sale_return_items ri
+      JOIN sale_returns r ON r.id = ri.sale_return_id
+      LEFT JOIN customers cu ON cu.id = r.customer_id
+      LEFT JOIN item_master im ON im.id = ri.item_master_id
+      LEFT JOIN material_types mt ON mt.id = ri.material_type_id
+      LEFT JOIN material_sizes ms ON ms.id = ri.material_size_id
+      WHERE ri.purchase_line_id IS NULL
+        AND r.status = 'active'
+        AND r.return_date BETWEEN '${f.fyStart}' AND '${f.cutoff}'
+        ${uuidList(f.companyIds) ? `AND r.company_id IN (${uuidList(f.companyIds)})` : ''}
+        ${uuidList(f.warehouseIds) ? `AND r.warehouse_id IN (${uuidList(f.warehouseIds)})` : ''}
+        ${uuidList(f.itemMasterIds) ? `AND ri.item_master_id IN (${uuidList(f.itemMasterIds)})` : ''}
+      ) u
+      ORDER BY 1, 2`),
   ])
 
   const lines: TracePurchaseLine[] = rowsOf(linesRes).map((r) => ({

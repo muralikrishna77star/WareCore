@@ -116,6 +116,16 @@ export const RELATIONSHIPS: Record<string, Record<string, Relationship>> = {
   dispatch_cancellations: {
     dispatch_cancellation_items: { kind: 'array', table: 'dispatch_cancellation_items', foreignKey: 'cancellation_id' },
   },
+  sale_returns: {
+    companies: { kind: 'object', table: 'companies', localKey: 'company_id' },
+    warehouses: { kind: 'object', table: 'warehouses', localKey: 'warehouse_id' },
+    customers: { kind: 'object', table: 'customers', localKey: 'customer_id' },
+    sale_return_items: { kind: 'array', table: 'sale_return_items', foreignKey: 'sale_return_id' },
+  },
+  sale_return_items: {
+    material_types: { kind: 'object', table: 'material_types', localKey: 'material_type_id' },
+    item_master: { kind: 'object', table: 'item_master', localKey: 'item_master_id' },
+  },
   job_work_cancellations: {
     job_work_cancellation_items: { kind: 'array', table: 'job_work_cancellation_items', foreignKey: 'cancellation_id' },
     job_work_cancellation_output_items: { kind: 'array', table: 'job_work_cancellation_output_items', foreignKey: 'cancellation_id' },

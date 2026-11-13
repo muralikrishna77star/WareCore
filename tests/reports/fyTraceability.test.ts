@@ -226,6 +226,46 @@ describe('buildFyTraceability', () => {
     ])
     expect(r.summary[2].closingValue).toBe(6 * 50000 + 5 * 60000)
   })
+
+  it('nets a customer return out of sold qty, sale value and GST — line, month and FY totals', () => {
+    const ret = (qty: number, date: string, value: number) =>
+      mv('SALE_RETURN_IN', qty, date, { customerName: 'Ravi', saleValue: value, saleGst: null, reference_type: 'sale_return', notes: 'Customer return of sale 0624-0001' })
+    const r = run('2024-08-31', [line('L1', '2024-05-10', 10)], {
+      L1: [mv('PURCHASE_IN', 10, '2024-05-10'), sale(4, '2024-06-01', 240000), ret(1.5, '2024-07-05', 90000)],
+    })
+    const [block] = r.currentFy[0].blocks
+    expect(block.rows.map((x) => [x.kind, x.saleQty, x.saleValue, x.balance])).toEqual([
+      ['SALE', 4, 240000, 6],
+      ['SALE_RETURN', -1.5, -90000, 7.5],
+    ])
+    expect(block.rows[1].saleGst).toBeCloseTo(-16200, 2) // 18% of the returned value
+    expect(block.rows[1].remarks).toBe('Ravi — returned (sale 0624-0001)')
+    expect(block.soldQty).toBeCloseTo(2.5, 6)
+    expect(block.saleValue).toBe(150000)
+    expect(block.saleGst).toBeCloseTo(150000 * 0.18, 2)
+    expect(r.currentFyTotals.soldQty).toBeCloseTo(2.5, 6)
+    // July: −1.5 sold, stock back up, nothing unexplained.
+    const july = r.summary.find((s) => s.month === '2024-07')!
+    expect(july.saleQty).toBeCloseTo(-1.5, 6)
+    expect(july.saleValue).toBe(-90000)
+    expect(july.closingQty).toBeCloseTo(7.5, 6)
+    expect(july.otherQty).toBeCloseTo(0, 6)
+    expect(r.summaryTotal.saleQty).toBeCloseTo(2.5, 6)
+  })
+
+  it('a sale returned in full leaves nothing sold', () => {
+    const r = run('2024-08-31', [line('L1', '2024-05-10', 10)], {
+      L1: [
+        mv('PURCHASE_IN', 10, '2024-05-10'),
+        sale(4, '2024-06-01', 240000),
+        mv('SALE_RETURN_IN', 4, '2024-06-03', { saleValue: 240000, reference_type: 'sale_return' }),
+      ],
+    })
+    const [block] = r.currentFy[0].blocks
+    expect(block.soldQty).toBeCloseTo(0, 6)
+    expect(block.saleValue).toBe(0)
+    expect(block.closingBalance).toBe(10)
+  })
 })
 
 describe('Monthly Summary export sheet', () => {

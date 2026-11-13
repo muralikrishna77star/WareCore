@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 import { hasuraQuery } from '@/lib/hasura/server'
-import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY } from '@/lib/hasura/queries'
+import { DISPATCH_ORDER_BY_ID_QUERY, DISPATCH_ITEMS_QUERY, USER_PROFILE_BY_ID_QUERY, SALE_RETURNS_BY_DISPATCH_QUERY } from '@/lib/hasura/queries'
 import CancelDispatchButton from './CancelDispatchButton'
 import PurgeDispatchButton from './PurgeDispatchButton'
 import { ItemLedgerLink, PurchaseLineLink } from '@/components/ReportLinks'
@@ -27,12 +27,24 @@ interface DispatchItemDetail {
   item_master?: { item_code: string | null } | null
 }
 
+interface SaleReturnSummary {
+  id: string
+  return_number: string
+  return_date: string
+  reason: string | null
+  status: string
+  total_quantity: number | string
+  total_amount: number | string
+  sale_return_items: { dispatch_item_id: string | null; quantity: number | string }[]
+}
+
 export default async function DispatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
-  const [orderResult, itemsResult] = await Promise.all([
+  const [orderResult, itemsResult, returnsResult] = await Promise.all([
     hasuraQuery(DISPATCH_ORDER_BY_ID_QUERY, { id }),
     hasuraQuery(DISPATCH_ITEMS_QUERY, { dispatch_order_id: id }),
+    hasuraQuery(SALE_RETURNS_BY_DISPATCH_QUERY, { dispatch_order_id: id }),
   ])
   const order = orderResult.dispatch_orders_by_pk
   if (!order) notFound()
@@ -53,6 +65,20 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
   const totalQty = items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
 
   const isCancelled = order.status === 'cancelled'
+
+  // Customer returns against this sale (migration 173). While any is
+  // active the sale can't be edited or cancelled — the database refuses it.
+  const saleReturns: SaleReturnSummary[] = returnsResult.sale_returns ?? []
+  const activeReturns = saleReturns.filter((r) => r.status === 'active')
+  const returnedByLine = new Map<string, number>()
+  for (const r of activeReturns) {
+    for (const li of r.sale_return_items) {
+      if (li.dispatch_item_id) returnedByLine.set(li.dispatch_item_id, (returnedByLine.get(li.dispatch_item_id) ?? 0) + Number(li.quantity))
+    }
+  }
+  const totalReturned = [...returnedByLine.values()].reduce((s, q) => s + q, 0)
+  const anythingLeftToReturn = items.some((i) => (Number(i.quantity) || 0) - (returnedByLine.get(i.id) ?? 0) > 0.0005)
+  const canRecordReturn = order.status === 'active' && anythingLeftToReturn
 
   return (
     <div className="w-full max-w-[1920px] mx-auto">
@@ -191,6 +217,9 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purchase Line</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity (MT)</th>
+                {totalReturned > 0 && (
+                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Returned (MT)</th>
+                )}
                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rate (₹/MT)</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
               </tr>
@@ -216,6 +245,11 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
                   </td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-700">{item.size_label ?? '—'}</td>
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-900 text-right">{Number(item.quantity).toFixed(3)}</td>
+                  {totalReturned > 0 && (
+                    <td className="px-3 py-2 text-[0.8125rem] text-amber-700 text-right">
+                      {returnedByLine.get(item.id) ? returnedByLine.get(item.id)!.toFixed(3) : '—'}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-[0.8125rem] text-gray-900 text-right">
                     {item.rate ? formatCurrency(Number(item.rate)) : '—'}
                   </td>
@@ -229,6 +263,9 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
               <tr>
                 <td colSpan={6} className="px-3 py-2 text-[0.8125rem] font-semibold text-gray-900 text-right">Totals</td>
                 <td className="px-3 py-2 text-[0.8125rem] font-bold text-gray-900 text-right">{totalQty.toFixed(3)} MT</td>
+                {totalReturned > 0 && (
+                  <td className="px-3 py-2 text-[0.8125rem] font-bold text-amber-700 text-right">{totalReturned.toFixed(3)} MT</td>
+                )}
                 <td></td>
                 <td className="px-3 py-2 text-[0.8125rem] font-bold text-blue-700 text-right">{formatCurrency(totalAmount)}</td>
               </tr>
@@ -236,6 +273,46 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
           </table>
         </div>
       </div>
+
+      {/* Customer returns */}
+      {saleReturns.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">Customer Returns</h2>
+            {activeReturns.length > 0 && (
+              <p className="text-xs text-gray-500 mt-0.5">
+                This sale can&apos;t be edited or cancelled while it has an active return. To change it, cancel the return(s) first, then enter them again.
+              </p>
+            )}
+          </div>
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Return No.</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty (MT)</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount (₹)</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {saleReturns.map((r) => (
+                <tr key={r.id} className={`hover:bg-gray-50 ${r.status !== 'active' ? 'text-gray-400' : ''}`}>
+                  <td className="px-3 py-2 text-[0.8125rem] font-mono">
+                    <Link href={`/sale-returns/${r.id}`} className="text-blue-700 hover:underline">{r.return_number}</Link>
+                  </td>
+                  <td className="px-3 py-2 text-[0.8125rem]">{formatDate(r.return_date)}</td>
+                  <td className="px-3 py-2 text-[0.8125rem]">{r.reason ?? '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-right">{Number(r.total_quantity).toFixed(3)}</td>
+                  <td className="px-3 py-2 text-[0.8125rem] text-right">{Number(r.total_amount) ? formatCurrency(Number(r.total_amount)) : '—'}</td>
+                  <td className="px-3 py-2 text-[0.8125rem]">{r.status === 'active' ? 'Active' : 'Cancelled'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-3 flex-wrap">
@@ -245,12 +322,17 @@ export default async function DispatchDetailPage({ params }: { params: Promise<{
         <Link href="/dispatch" className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50">
           All Dispatches
         </Link>
-        {(order.status === 'draft' || order.status === 'active') && !isCancelled && (
+        {canRecordReturn && (
+          <Link href={`/dispatch/${order.id}/return`} className="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600">
+            Record Customer Return
+          </Link>
+        )}
+        {(order.status === 'draft' || order.status === 'active') && !isCancelled && activeReturns.length === 0 && (
           <Link href={`/dispatch/${order.id}/edit`} className="px-4 py-2 bg-yellow-500 text-white text-sm font-medium rounded-lg hover:bg-yellow-600">
             {order.status === 'active' ? 'Edit Sale' : 'Edit Draft'}
           </Link>
         )}
-        {!isCancelled && <CancelDispatchButton orderId={order.id} />}
+        {!isCancelled && activeReturns.length === 0 && <CancelDispatchButton orderId={order.id} />}
         {isCancelled && <PurgeDispatchButton orderId={order.id} />}
       </div>
     </div>

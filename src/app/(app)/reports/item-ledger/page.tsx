@@ -805,6 +805,7 @@ export default async function ItemStockLedgerPage({
     VENDOR_RETURN_IN: 'Vendor Return In',
     SALE_OUT: 'Sale / Dispatch',
     SALE_CANCEL: 'Sale Cancelled',
+    SALE_RETURN_IN: 'Sales Return',
     PURCHASE_CANCEL: 'Purchase Cancelled',
     TRANSFER_OUT: 'Transfer Out',
     TRANSFER_IN: 'Transfer In',

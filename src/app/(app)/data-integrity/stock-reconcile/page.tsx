@@ -86,6 +86,7 @@ type DiagnosisResult = {
 const categoryLabels: Record<string, string> = {
   purchases: 'Purchases',
   sales: 'Sales / Dispatch',
+  sale_returns: 'Sales Returns (from customers)',
   job_work: 'Job Work (Out)',
   purchase_cancellations: 'Purchase Cancellations',
   sale_cancellations: 'Sale Cancellations',

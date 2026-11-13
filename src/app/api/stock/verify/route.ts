@@ -39,6 +39,12 @@ export async function GET(request: NextRequest) {
         (SELECT COALESCE(SUM(total_quantity), 0) FROM dispatch_orders WHERE status = 'active' AND dispatch_date BETWEEN '${from}' AND '${to}'),
         (SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_ledger WHERE entry_type = 'SALE_OUT' AND entry_date BETWEEN '${from}' AND '${to}')
       UNION ALL
+      -- Customer returns (migration 173): active return lines vs their
+      -- SALE_RETURN_IN rows. Cancelled returns have no ledger rows.
+      SELECT 'sale_returns',
+        (SELECT COALESCE(SUM(fn_convert_quantity(ri.quantity, ri.unit, mt.unit)), 0) FROM sale_return_items ri JOIN sale_returns r ON r.id = ri.sale_return_id LEFT JOIN material_types mt ON mt.id = ri.material_type_id WHERE r.status = 'active' AND r.return_date BETWEEN '${from}' AND '${to}'),
+        (SELECT COALESCE(SUM(quantity), 0) FROM stock_ledger WHERE entry_type = 'SALE_RETURN_IN' AND entry_date BETWEEN '${from}' AND '${to}')
+      UNION ALL
       -- is_transfer_line = false excludes destination lines created by a vendor
       -- transfer (migration 056) — those post JOB_WORK_TRANSFER_IN, not
       -- JOB_WORK_OUT, so counting their quantity_sent here double-counted

@@ -103,7 +103,7 @@ export function buildExportSheets(report: FyTraceabilityReport, showJobWork: boo
   return sheets
 }
 
-const SALE_KINDS = new Set(['SALE', 'VENDOR_DIRECT_SALE'])
+const SALE_KINDS = new Set(['SALE', 'VENDOR_DIRECT_SALE', 'SALE_RETURN'])
 
 const summaryFigures = (r: MonthSummaryRow) => ({
   openingQty: r.openingQty,
@@ -217,7 +217,9 @@ export function buildMonthlySummarySheet(report: FyTraceabilityReport): Professi
         sales.push({
           date: r.date as string,
           row: {
-            type: prior ? 'Sale of opening / prior-FY stock' : 'Sale',
+            type: r.kind === 'SALE_RETURN'
+              ? (prior ? 'Customer return of opening / prior-FY stock' : 'Customer return')
+              : prior ? 'Sale of opening / prior-FY stock' : 'Sale',
             date: r.date,
             party: r.remarks,
             reference: r.reference ?? '',
@@ -234,7 +236,7 @@ export function buildMonthlySummarySheet(report: FyTraceabilityReport): Professi
       sales.push({
         date: s.date,
         row: {
-          type: 'Sale with no purchase line',
+          type: s.qty < 0 ? 'Customer return (sale had no purchase line)' : 'Sale with no purchase line',
           date: s.date,
           party: s.customer,
           reference: s.reference,

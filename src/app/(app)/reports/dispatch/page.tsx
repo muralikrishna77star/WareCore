@@ -13,6 +13,7 @@ import { DispatchReportRows } from './DispatchReportRows'
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   SALE_OUT: 'Sale / Dispatch',
   SALE_CANCEL: 'Sale Cancelled',
+  SALE_RETURN_IN: 'Sales Return',
 }
 
 interface Company {

@@ -17,6 +17,7 @@ import { ItemLedgerLink } from '@/components/ReportLinks'
 const KIND_STYLE: Partial<Record<DetailKind, string>> = {
   SALE: 'text-gray-900',
   VENDOR_DIRECT_SALE: 'text-amber-800',
+  SALE_RETURN: 'text-red-700',
   JOB_WORK: 'text-purple-700 italic',
   TRANSFER: 'text-indigo-700 italic',
   PURCHASE_CANCEL: 'text-gray-500 italic',
