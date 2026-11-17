@@ -238,14 +238,21 @@ export default async function VendorMovementsPage({
     return info ? `${info.item_code} — ${info.item_name}` : fallback
   }
 
-  const baseConditions: Record<string, unknown>[] = []
-  if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
+  // Item conditions apply to both stock_ledger and job_work_items. The
+  // company condition is per table: job_work_items has no company_id (the
+  // order carries it), and filtering on it there made the whole page fail
+  // with "column job_work_items.company_id does not exist".
+  const itemConditions: Record<string, unknown>[] = []
   if (selectedItem) {
-    baseConditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
+    itemConditions.push({ material_type_id: { _eq: selectedItem.material_type_id } })
     if (selectedItem.material_size_id) {
-      baseConditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
+      itemConditions.push({ material_size_id: { _eq: selectedItem.material_size_id } })
     }
   }
+  const baseConditions: Record<string, unknown>[] = [...itemConditions]
+  if (params.company) baseConditions.push({ company_id: { _eq: params.company } })
+  const jobWorkItemConditions: Record<string, unknown>[] = [...itemConditions]
+  if (params.company) jobWorkItemConditions.push({ job_work_orders: { company_id: { _eq: params.company } } })
 
   // Purchase rate lookup: same result set resolves both the exact purchase
   // behind a specific movement's purchase_line_id, and the latest purchase
@@ -310,7 +317,7 @@ export default async function VendorMovementsPage({
     hasuraQuery(VENDOR_JOB_WORK_ITEM_BALANCES_QUERY, {
       where: {
         _and: [
-          ...baseConditions,
+          ...jobWorkItemConditions,
           { job_work_orders: { status: { _neq: 'cancelled' } } },
           { job_work_orders: { dispatch_date: { _lte: toDate } } },
         ],
@@ -631,7 +638,8 @@ export default async function VendorMovementsPage({
         purchaseDate: null, rate: null,
         counterpartyVendor: counterparty?.vendorName ?? null,
       })
-      g.transferOutQty += Math.abs(Number(m.quantity))
+      // Signed, not Math.abs — same reason as Transfer In below.
+      g.transferOutQty -= Number(m.quantity)
       if (counterparty && !g.transferOutTo.includes(counterparty.vendorName)) g.transferOutTo.push(counterparty.vendorName)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
       const counterparty = lineId ? transferInCounterparty.get(`${m.reference_id}|${lineId}|${qtyKey}`) : undefined
@@ -642,7 +650,12 @@ export default async function VendorMovementsPage({
         purchaseDate: null, rate: null,
         counterpartyVendor: counterparty?.vendorName ?? null,
       })
-      g.transferInQty += Math.abs(Number(m.quantity))
+      // Signed, not Math.abs: Edit Order lowering Qty Sent on a received
+      // transfer line posts a negative "Qty Sent corrected" TRANSFER_IN.
+      // abs() counted it as more received — D A Industries CR 0.70 X 175
+      // showed Transfers In 1.750 for a 0.950 balance, and the summary
+      // "Not reconciled" by 0.800.
+      g.transferInQty += Number(m.quantity)
       if (counterparty && !g.transferInFrom.includes(counterparty.vendorName)) g.transferInFrom.push(counterparty.vendorName)
     }
   }
@@ -717,7 +730,7 @@ export default async function VendorMovementsPage({
       // it as more sent, e.g. GA00109 at Arun Engineering 5.490 vs 0.250.
       cumulativeLedgerOutByKey.set(key, (cumulativeLedgerOutByKey.get(key) ?? 0) - qty)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
-      cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) + Math.abs(qty))
+      cumulativeTransferOutByKey.set(key, (cumulativeTransferOutByKey.get(key) ?? 0) - qty)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
       cumulativeTransferInByKey.set(key, (cumulativeTransferInByKey.get(key) ?? 0) + qty)
     } else {
@@ -754,7 +767,7 @@ export default async function VendorMovementsPage({
     if (m.entry_type === 'JOB_WORK_OUT') {
       openingLedgerOutByKey.set(key, (openingLedgerOutByKey.get(key) ?? 0) - qty)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_OUT') {
-      openingTransferOutByKey.set(key, (openingTransferOutByKey.get(key) ?? 0) + Math.abs(qty))
+      openingTransferOutByKey.set(key, (openingTransferOutByKey.get(key) ?? 0) - qty)
     } else if (m.entry_type === 'JOB_WORK_TRANSFER_IN') {
       openingTransferInByKey.set(key, (openingTransferInByKey.get(key) ?? 0) + qty)
     } else {
