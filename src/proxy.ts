@@ -6,7 +6,7 @@ import { verifySessionCookie } from '@/lib/auth/session'
 // of sync with the sidebar (missing /accounts, /purchase-cancellations,
 // /sale-cancellations, /profile), so new modules stayed unprotected by
 // default instead of protected by default.
-const PUBLIC_PAGE_PATHS = ['/', '/setup', '/offline']
+const PUBLIC_PAGE_PATHS = ['/', '/tour', '/setup', '/offline']
 
 function isPublicPath(pathname: string): boolean {
   return (

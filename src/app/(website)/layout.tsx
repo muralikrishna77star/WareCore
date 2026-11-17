@@ -3,15 +3,19 @@ import Link from 'next/link'
 export default function WebsiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b">
+      <header className="border-b print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">W</span>
             </div>
             <span className="font-bold text-lg text-gray-900">WareCore</span>
-          </div>
+          </Link>
+          <Link href="/tour" className="md:hidden inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors">
+            Product Tour
+          </Link>
           <nav className="hidden md:flex items-center gap-6">
+            <Link href="/tour" className="text-sm font-medium text-blue-700 hover:text-blue-900">Product Tour</Link>
             <Link href="/#features" className="text-sm text-gray-600 hover:text-gray-900">Features</Link>
             <Link href="/#products" className="text-sm text-gray-600 hover:text-gray-900">Products</Link>
             <Link href="/#contact" className="text-sm text-gray-600 hover:text-gray-900">Contact</Link>
@@ -22,7 +26,7 @@ export default function WebsiteLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       {children}
-      <footer className="border-t py-8 mt-16">
+      <footer className="border-t py-8 mt-16 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-sm text-gray-500">© {new Date().getFullYear()} WareCore. All rights reserved.</p>
         </div>

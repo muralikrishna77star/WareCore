@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import {
   ArrowRight, ClipboardList, Package, ArrowLeftRight, Factory, Truck,
-  TrendingUp, ShieldCheck, Smartphone, Cloud, type LucideIcon,
+  TrendingUp, ShieldCheck, Smartphone, Cloud, PlayCircle, type LucideIcon,
 } from 'lucide-react'
+import { SALES_CONTACT, TOUR_SLIDES } from '@/lib/marketing/productTour'
 
 export default function HomePage() {
   return (
@@ -18,13 +19,41 @@ export default function HomePage() {
             Centralized inventory tracking, inter-company transfers, job work management, and dispatch — for steel processing businesses.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/login" className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white text-blue-700 font-semibold px-8 py-3 hover:bg-blue-50 transition-colors">
+            <Link href="/tour" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-blue-700 font-semibold px-8 py-3 hover:bg-blue-50 transition-colors">
+              <PlayCircle className="h-5 w-5" /> Take the Product Tour
+            </Link>
+            <Link href="/login" className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-400 text-white font-semibold px-8 py-3 hover:bg-blue-700 transition-colors">
               Staff Login <ArrowRight className="h-4 w-4" />
             </Link>
-            <a href="#features" className="inline-flex items-center justify-center rounded-xl border border-blue-400 text-white font-semibold px-8 py-3 hover:bg-blue-700 transition-colors">
-              Learn More
-            </a>
           </div>
+          <p className="mt-4 text-sm text-blue-200">{TOUR_SLIDES.length} slides · about 3 minutes · no sign-up needed</p>
+        </div>
+      </section>
+
+      {/* Product tour teaser */}
+      <section className="py-16 px-4">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-2">See it in action</p>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">From purchase bill to vendor balance, in one guided tour</h2>
+            <p className="text-gray-600 mb-6">
+              Walk through the screens your team will use every day — live inventory, job work, vendor-to-vendor
+              transfers, direct sales from vendors, stock statements and the data integrity control centre.
+            </p>
+            <Link href="/tour" className="inline-flex items-center gap-2 rounded-xl bg-blue-600 text-white font-semibold px-6 py-3 hover:bg-blue-700 transition-colors">
+              Go through the tour <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <Link href="/tour" className="group block rounded-xl border shadow-lg overflow-hidden" aria-label="Open the Product Tour">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/assets/tour/vendor-movements.jpg"
+              alt="Vendorwise Stock Movement report from the WareCore demo"
+              width={1440}
+              height={900}
+              className="w-full h-auto group-hover:scale-[1.02] transition-transform duration-300"
+            />
+          </Link>
         </div>
       </section>
 
@@ -46,7 +75,7 @@ export default function HomePage() {
                 { icon: TrendingUp, iconBg: 'bg-teal-100', iconColor: 'text-teal-600', title: 'Reports', desc: 'Comprehensive reports on stock, movements, and business performance.' },
                 { icon: ShieldCheck, iconBg: 'bg-purple-100', iconColor: 'text-purple-600', title: 'Role-based Access', desc: 'Fine-grained permissions: Admin, Company Manager, Warehouse Manager, and more.' },
                 { icon: Smartphone, iconBg: 'bg-cyan-100', iconColor: 'text-cyan-600', title: 'Mobile Ready', desc: 'Works on phone and tablet. Install as an app on Android and iOS.' },
-                { icon: Cloud, iconBg: 'bg-sky-100', iconColor: 'text-sky-600', title: 'Cloud Hosted', desc: 'Hosted on Vercel and Supabase. Always available, always backed up.' },
+                { icon: Cloud, iconBg: 'bg-sky-100', iconColor: 'text-sky-600', title: 'Cloud Hosted', desc: 'Use it from any browser, with full backup and restore. A desktop edition can also run on a single PC.' },
               ] satisfies { icon: LucideIcon; iconBg: string; iconColor: string; title: string; desc: string }[]
             ).map((f) => (
               <div key={f.title} className="bg-white rounded-xl border p-6 hover:shadow-md transition-shadow">
@@ -86,11 +115,11 @@ export default function HomePage() {
           <div className="bg-white rounded-xl border p-8 space-y-4 text-left">
             <div>
               <p className="text-xs font-medium text-gray-400 uppercase mb-1">Email</p>
-              <p className="text-gray-700">makfreelancer77@gmail.com</p>
+              <a href={`mailto:${SALES_CONTACT.email}`} className="text-gray-700 hover:text-blue-700">{SALES_CONTACT.email}</a>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-400 uppercase mb-1">Phone</p>
-              <p className="text-gray-700">+91 77080 80484</p>
+              <a href={SALES_CONTACT.phoneHref} className="text-gray-700 hover:text-blue-700">{SALES_CONTACT.phone}</a>
             </div>
           </div>
         </div>
