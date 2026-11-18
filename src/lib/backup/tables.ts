@@ -1,0 +1,81 @@
+// The one list of tables a backup covers. It lives in its own file, free of
+// server imports, so the Backup screen and the backup service share it: the
+// screen used to keep a separate short list, which silently replaced this one
+// and left 32 of the 50 tables out of every backup made there.
+//
+// Parents come before the tables that reference them, so a restore can insert
+// in this order. That's why job_work_output_items comes before job_work_items:
+// a job work line can be sourced from an earlier order's output.
+//
+// schema_migrations is deliberately excluded: it's migration-runner
+// bookkeeping, not business data, and restoring rows into it on a desktop
+// install could desync it from which migrations that install has actually run.
+export const BACKUP_TABLES: string[] = [
+  'companies',
+  'warehouses',
+  'user_profiles',
+  'custom_roles',
+  'role_permissions',
+  'suppliers',
+  'customers',
+  'material_types',
+  'material_sizes',
+  'item_master',
+  'tax_rates',
+  'ai_conversations',
+  'ai_messages',
+  'backup_history',
+  'backup_logs',
+  'job_work_orders',
+  'job_work_output_items',
+  'job_work_items',
+  'job_work_cancellations',
+  'job_work_cancellation_items',
+  'job_work_cancellation_output_items',
+  'job_work_transfers',
+  'job_work_transfer_items',
+  'job_work_transfer_cancellations',
+  'job_work_transfer_cancellation_items',
+  'dispatch_orders',
+  'dispatch_items',
+  'dispatch_cancellations',
+  'dispatch_cancellation_items',
+  'sale_returns',
+  'sale_return_items',
+  'purchase_bills',
+  'purchase_bill_items',
+  'purchase_cancellations',
+  'purchase_cancellation_items',
+  'purchase_import_batches',
+  'purchase_import_rows',
+  'financial_entries',
+  'transfers',
+  'transfer_items',
+  'stock_ledger',
+  'stock_ledger_deletions',
+  'stock_reconcile_fix_log',
+  'reconciliation_rules',
+  'reconciliation_runs',
+  'reconciliation_exceptions',
+  'reconciliation_exception_rows',
+  'reconciliation_settings',
+  'repair_batches',
+  'repair_audit_rows',
+]
+
+// A point-in-time export filters on created_at, so these tables can't take part in one.
+export const TABLES_WITHOUT_CREATED_AT: string[] = [
+  'dispatch_cancellation_items',
+  'dispatch_cancellations',
+  'job_work_cancellation_items',
+  'job_work_cancellation_output_items',
+  'job_work_cancellations',
+  'job_work_transfer_cancellation_items',
+  'job_work_transfer_cancellations',
+  'job_work_transfer_items',
+  'purchase_cancellation_items',
+  'purchase_cancellations',
+  'reconciliation_settings',
+  'stock_ledger_deletions',
+  'stock_reconcile_fix_log',
+]

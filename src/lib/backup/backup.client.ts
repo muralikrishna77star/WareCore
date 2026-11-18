@@ -62,7 +62,15 @@ export async function createAndDownloadBackup(
       throw new Error(error.error || 'Failed to create backup')
     }
 
-    const { data, backup } = await response.json()
+    // The server streams the backup, so a failure part-way through shows up
+    // here as incomplete JSON rather than as an error status.
+    let payload: { data: BackupData; backup: BackupMetadata }
+    try {
+      payload = await response.json()
+    } catch {
+      throw new Error('The backup stopped before it finished, so no file was saved. Please try again.')
+    }
+    const { data, backup } = payload
 
     // Download as JSON
     const json = JSON.stringify(

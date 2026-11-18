@@ -1,71 +1,9 @@
 // Backup service — uses Hasura run_sql API (no Supabase client needed)
 
 import { hasuraRunSql } from '@/lib/hasura/server'
+import { BACKUP_TABLES } from './tables'
 
-// Every table that actually exists in the schema, in FK-dependency order (a
-// parent table always appears before anything that references it — verified
-// against a full information_schema foreign-key graph, not hand-guessed).
-// This list had drifted badly out of date: it still listed 'item_groups'
-// (dropped by migration 022, silently producing an empty backup section for
-// years) and never picked up job_work_output_items, job_work_transfers +
-// their cancellation tables, purchase/dispatch cancellations, purchase
-// import, the Data Integrity module (reconciliation_*/repair_*), custom
-// roles, financial_entries, or the AI Copilot conversation history — a
-// "full backup" was silently missing roughly half the schema's tables.
-// schema_migrations is deliberately excluded: it's migration-runner
-// bookkeeping, not business data, and restoring rows into it on a desktop
-// install could desync it from which migrations that install has actually
-// run.
-export const TABLES = [
-  'companies',
-  'warehouses',
-  'user_profiles',
-  'custom_roles',
-  'role_permissions',
-  'suppliers',
-  'customers',
-  'material_types',
-  'material_sizes',
-  'item_master',
-  'tax_rates',
-  'ai_conversations',
-  'ai_messages',
-  'backup_history',
-  'backup_logs',
-  'job_work_orders',
-  'job_work_items',
-  'job_work_output_items',
-  'job_work_cancellations',
-  'job_work_cancellation_items',
-  'job_work_cancellation_output_items',
-  'job_work_transfers',
-  'job_work_transfer_items',
-  'job_work_transfer_cancellations',
-  'job_work_transfer_cancellation_items',
-  'dispatch_orders',
-  'dispatch_items',
-  'dispatch_cancellations',
-  'dispatch_cancellation_items',
-  'sale_returns',
-  'sale_return_items',
-  'purchase_bills',
-  'purchase_bill_items',
-  'purchase_cancellations',
-  'purchase_cancellation_items',
-  'purchase_import_batches',
-  'purchase_import_rows',
-  'financial_entries',
-  'transfers',
-  'transfer_items',
-  'stock_ledger',
-  'reconciliation_rules',
-  'reconciliation_runs',
-  'reconciliation_exceptions',
-  'reconciliation_exception_rows',
-  'reconciliation_settings',
-  'repair_batches',
-  'repair_audit_rows',
-]
+export const TABLES = BACKUP_TABLES
 
 export interface BackupMetadata {
   id: string
@@ -173,28 +111,34 @@ export async function getAllTableData(
   return backupData
 }
 
-export async function createBackup(
-  tables: string[] = TABLES,
+/**
+ * One table's rows for a backup. Unlike getAllTableData() this throws on a
+ * failed read, so a backup stops with an error rather than quietly saving
+ * that table as empty.
+ */
+export async function readTableForBackup(table: string): Promise<BackupRow[]> {
+  const { result } = await runSQL(`SELECT * FROM ${table}`)
+  return toObjects<BackupRow>(result)
+}
+
+export function buildBackupMetadata(
+  tables: string[],
+  totalRows: number,
   backupName?: string
-): Promise<{ filename: string; metadata: BackupMetadata; backupData: BackupData }> {
+): BackupMetadata {
   const timestamp = new Date().toISOString()
   const formattedDate = timestamp.replace(/[:.]/g, '-')
   const filename = `backup_${backupName ? esc(backupName) : formattedDate}.json`
 
-  const backupData = await getAllTableData(tables)
-  const totalRows = Object.values(backupData).reduce((sum, rows) => sum + rows.length, 0)
-
-  const metadata: BackupMetadata = {
+  return {
     id: crypto.randomUUID(),
     name: backupName || `Backup ${timestamp}`,
     timestamp,
-    tables: Object.keys(backupData),
+    tables,
     totalRows,
     backupPath: `backups/${filename}`,
     createdBy: 'system',
   }
-
-  return { filename, metadata, backupData }
 }
 
 export async function saveBackupMetadata(metadata: BackupMetadata): Promise<void> {
@@ -217,8 +161,7 @@ export async function saveBackupMetadata(metadata: BackupMetadata): Promise<void
 
 // Raw backup_history columns as they come back from run_sql — `tables` is a
 // Postgres TEXT[] rendered as its text literal (e.g. "{a,b}"), not a JSON
-// array; BackupMetadata.tables expects a real string[], so it's asserted
-// below same as the pre-existing (previously untyped) behavior.
+// array, so toBackupMetadata() splits it into the real string[] callers expect.
 interface BackupHistoryRow {
   id: string
   name: string
@@ -235,7 +178,7 @@ function toBackupMetadata(r: BackupHistoryRow): BackupMetadata {
     id: r.id,
     name: r.name,
     timestamp: r.timestamp,
-    tables: (r.tables as unknown as string[]) ?? [],
+    tables: (r.tables ?? '').replace(/^\{|\}$/g, '').split(',').filter(Boolean),
     totalRows: Number(r.total_rows ?? 0),
     backupPath: r.backup_path,
     createdBy: r.created_by,
@@ -287,6 +230,20 @@ function rowsToInsertSQL(table: string, rows: BackupRow[]): string {
   return `INSERT INTO ${table} (${cols}) VALUES ${vals} ON CONFLICT DO NOTHING`
 }
 
+// Columns pointing at another row of the same table, which may not have been
+// restored yet.
+const LATER_ROW_COLUMNS: Record<string, string[]> = {
+  job_work_items: ['source_job_work_item_id'],
+  purchase_import_batches: ['duplicate_of_batch_id'],
+}
+
+function pointsAtLaterRow(table: string, row: BackupRow): boolean {
+  return (LATER_ROW_COLUMNS[table] ?? []).some((column) => {
+    const value = row[column]
+    return value !== null && value !== undefined && value !== 'NULL'
+  })
+}
+
 export interface RestoreTableResult {
   attempted: number
   restored: number
@@ -324,28 +281,44 @@ export async function restoreFromBackup(
 
   let restoredCount = 0
   const tableResults: Record<string, RestoreTableResult> = {}
+  const tablesWithRows = tablesToRestore.filter((table) => backupData[table]?.length)
+  for (const table of tablesWithRows) {
+    tableResults[table] = { attempted: backupData[table].length, restored: 0, failed: 0, sampleErrors: [] }
+  }
 
-  for (const table of tablesToRestore) {
-    const data = backupData[table]
-    if (!data?.length) continue
-
-    const result: RestoreTableResult = { attempted: data.length, restored: 0, failed: 0, sampleErrors: [] }
-    tableResults[table] = result
-
-    if (options.truncateFirst) {
-      try {
-        await runSQL(`TRUNCATE TABLE ${table} CASCADE`)
-      } catch (err) {
-        result.failed = data.length
-        result.sampleErrors.push(err instanceof Error ? err.message : String(err))
-        console.error(`Restore: error truncating ${table}:`, err)
-        continue
+  // Everything is emptied in ONE statement, before anything is inserted.
+  // Truncating table by table between inserts is unsafe: CASCADE also empties
+  // every table that references the one being truncated, including any that
+  // had already been restored.
+  if (options.truncateFirst && tablesWithRows.length) {
+    try {
+      await runSQL(`TRUNCATE TABLE ${tablesWithRows.join(', ')} CASCADE`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Restore: error truncating tables:', err)
+      for (const table of tablesWithRows) {
+        tableResults[table].failed = tableResults[table].attempted
+        tableResults[table].sampleErrors.push(message)
       }
+      return { success: false, message: `Restore stopped before any data changed: ${message}`, restored: 0, tableResults }
+    }
+  }
+
+  // Rows that can't go in yet because the row they point at comes later.
+  // They're retried once every table has had its turn.
+  let waiting: { table: string; row: BackupRow; error?: string }[] = []
+
+  for (const table of tablesWithRows) {
+    const result = tableResults[table]
+    const ready: BackupRow[] = []
+    for (const row of backupData[table]) {
+      if (pointsAtLaterRow(table, row)) waiting.push({ table, row })
+      else ready.push(row)
     }
 
     const batchSize = 500
-    for (let i = 0; i < data.length; i += batchSize) {
-      const batch = data.slice(i, i + batchSize)
+    for (let i = 0; i < ready.length; i += batchSize) {
+      const batch = ready.slice(i, i + batchSize)
       try {
         await runSQL(insertSQL(table, batch))
         result.restored += batch.length
@@ -367,15 +340,39 @@ export async function restoreFromBackup(
             result.restored += 1
             restoredCount += 1
           } catch (rowErr) {
-            result.failed += 1
-            if (result.sampleErrors.length < 5) {
-              result.sampleErrors.push(rowErr instanceof Error ? rowErr.message : String(rowErr))
-            }
+            waiting.push({ table, row, error: rowErr instanceof Error ? rowErr.message : String(rowErr) })
           }
         }
       }
     }
+  }
 
+  // Each pass can unblock the next (a line sourced from another line that was
+  // itself waiting), so keep going until a full pass makes no progress.
+  // Whatever is left then is a row that really can't be restored.
+  while (waiting.length) {
+    const stillWaiting: typeof waiting = []
+    for (const item of waiting) {
+      try {
+        await runSQL(insertSQL(item.table, [item.row]))
+        tableResults[item.table].restored += 1
+        restoredCount += 1
+      } catch (rowErr) {
+        stillWaiting.push({ ...item, error: rowErr instanceof Error ? rowErr.message : String(rowErr) })
+      }
+    }
+    const noProgress = stillWaiting.length === waiting.length
+    waiting = stillWaiting
+    if (noProgress) break
+  }
+
+  for (const { table, error } of waiting) {
+    const result = tableResults[table]
+    result.failed += 1
+    if (error && result.sampleErrors.length < 5) result.sampleErrors.push(error)
+  }
+  for (const table of tablesWithRows) {
+    const result = tableResults[table]
     if (result.failed > 0) {
       console.error(`Restore: ${table} — ${result.restored}/${result.attempted} restored, ${result.failed} row(s) failed:`, result.sampleErrors)
     }

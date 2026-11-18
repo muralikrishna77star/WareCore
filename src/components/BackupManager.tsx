@@ -12,6 +12,7 @@ import {
   restoreBackup,
 } from '@/lib/backup/backup.client'
 import type { BackupData } from '@/lib/backup/backup.service'
+import { BACKUP_TABLES as TABLES, TABLES_WITHOUT_CREATED_AT } from '@/lib/backup/tables'
 
 // Shape of an uploaded backup JSON file (same envelope backup.client.ts's
 // createAndDownloadBackup() writes: { backup: <metadata>, data: <tables> }).
@@ -19,15 +20,6 @@ interface RestoreFilePayload {
   backup?: { timestamp?: string; [key: string]: unknown }
   data: BackupData
 }
-
-const TABLES = [
-  'companies', 'warehouses', 'suppliers', 'customers',
-  'material_types', 'material_sizes', 'item_groups', 'item_master',
-  'user_profiles', 'purchase_bills', 'purchase_bill_items',
-  'stock_ledger', 'transfers', 'transfer_items',
-  'job_work_orders', 'job_work_items', 'dispatch_orders', 'dispatch_items',
-  'financial_entries',
-]
 
 interface Backup {
   id: string
@@ -177,8 +169,12 @@ export function BackupManager() {
     try {
       setLoading(true)
       showMsg('Exporting selected tables…', 'info')
-      await exportTablesToCSV(selectedTables, pointInTime || undefined)
-      showMsg('Export complete!', 'success')
+      const tablesToExport = pointInTime
+        ? selectedTables.filter((table) => !TABLES_WITHOUT_CREATED_AT.includes(table))
+        : selectedTables
+      await exportTablesToCSV(tablesToExport, pointInTime || undefined)
+      const skipped = selectedTables.length - tablesToExport.length
+      showMsg(skipped ? `Export complete. ${skipped} selected tables were skipped because they have no creation date to filter on.` : 'Export complete!', 'success')
     } catch (error) {
       showMsg(`Error exporting: ${error instanceof Error ? error.message : String(error)}`, 'error')
     } finally {
@@ -495,7 +491,8 @@ export function BackupManager() {
                     <button
                       key={table}
                       onClick={() => handleExportTable(table)}
-                      disabled={loading}
+                      disabled={loading || (!!pointInTime && TABLES_WITHOUT_CREATED_AT.includes(table))}
+                      title={pointInTime && TABLES_WITHOUT_CREATED_AT.includes(table) ? 'This table has no creation date, so it cannot be exported as of a past time' : undefined}
                       className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:border-blue-400 disabled:opacity-50 transition-colors text-left"
                     >
                       <span className="inline-flex items-center gap-1"><FileText className="inline h-3.5 w-3.5" /> {table}</span>
