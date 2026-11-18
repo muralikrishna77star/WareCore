@@ -101,7 +101,9 @@ const SESSION_SCOPED_OPERATIONS: Record<string, string> = {
 // Queries otherwise pass through unrestricted by name in this app — without
 // this check, an anonymous or relabeled query touching these tables would skip
 // the owner_id injection above and read any user's conversations.
-const GUARDED_QUERY_TABLES = ['ai_conversations', 'ai_messages']
+// tracking_ tables are read only through /api/tracking, which applies each
+// user's company and warehouse limits.
+const GUARDED_QUERY_TABLES = ['ai_conversations', 'ai_messages', 'tracking_']
 
 /** Returns the operation type and name from a GraphQL query string. */
 function parseOperation(query: string): { type: string; name: string | null } {

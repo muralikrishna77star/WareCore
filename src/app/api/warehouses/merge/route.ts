@@ -50,6 +50,17 @@ export async function POST(request: NextRequest) {
         SET warehouse_id = '${targetId}'
         WHERE warehouse_id = '${sourceId}';
 
+      -- The surviving warehouse keeps its own QR tracking switch.
+      DO $tracking$
+      BEGIN
+        IF to_regclass('public.tracking_units') IS NOT NULL THEN
+          UPDATE tracking_units SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+          UPDATE tracking_printers SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+          DELETE FROM tracking_feature_flags WHERE warehouse_id = '${sourceId}';
+        END IF;
+      END
+      $tracking$;
+
       DELETE FROM warehouses WHERE id = '${sourceId}';
 
       COMMIT;

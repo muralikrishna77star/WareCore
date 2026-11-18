@@ -6,10 +6,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Settings, DatabaseBackup, ShieldCheck, ClipboardList, Undo2,
   Wallet, Package, RefreshCw, ArrowLeftRight, Factory, Shuffle, Receipt,
-  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, PackageOpen, LifeBuoy, CircleQuestionMark, type LucideIcon,
+  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, PackageOpen, LifeBuoy, CircleQuestionMark, QrCode, type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
+import { isTrackingMasterEnabled } from '@/lib/tracking/constants'
 import { RecordPreviewProvider } from '@/components/RecordPreviewProvider'
 import { Copilot } from '@/components/ai/Copilot'
 import { DashboardViewProvider, useDashboardView } from '@/components/DashboardViewProvider'
@@ -73,6 +74,7 @@ const navItems: NavItem[] = [
   { title: 'Purchase Cancellations', href: '/purchase-cancellations', icon: Undo2 },
   { title: 'Accounts', href: '/accounts', icon: Wallet },
   { title: 'Inventory', href: '/inventory', icon: Package },
+  ...(isTrackingMasterEnabled() ? [{ title: 'QR Tracking', href: '/tracking', icon: QrCode }] : []),
   { title: 'Movements', href: '/movements', icon: RefreshCw },
   { title: 'Transfers', href: '/transfers', icon: ArrowLeftRight },
   { title: 'Job Work', href: '/jobwork', icon: Factory },
