@@ -41,4 +41,6 @@ export const PRODUCTION_DATA_DEPENDENT_MIGRATIONS = new Set([
   '152_restore_deleted_purchase_cancels_bill_0125_0428.sql',
   '154_fix_hr00206_missing_size.sql',
   '155_repair_17_open_exceptions_oct_2026.sql',
+  // Its trigger is reinstalled by 177, which every database runs.
+  '175_job_work_dispatch_date_moves_ledger.sql',
 ])

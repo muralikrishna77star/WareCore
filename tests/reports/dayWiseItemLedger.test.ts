@@ -55,7 +55,7 @@ describe('entry type coverage', () => {
       expect(ENTRY_TYPE_META[t], t).toBeDefined()
       expect(ENTRY_TYPE_META[t].label.length).toBeGreaterThan(0)
     }
-    expect(ENTRY_TYPES).toHaveLength(15)
+    expect(ENTRY_TYPES).toHaveLength(16)
   })
 
   it('marks exactly the three cancellation types as reversals', () => {
