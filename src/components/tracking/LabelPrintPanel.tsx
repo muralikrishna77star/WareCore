@@ -85,10 +85,21 @@ export function LabelPrintPanel({ units, reprint = false, onChanged }: {
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>
   if (!printers) return <p className="text-sm text-gray-500">Loading printers…</p>
   if (printers.length === 0) {
+    // Still list the labels, so staff can see what was created and print later.
     return (
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-        No printer is set up for this warehouse. An admin can add one in QR Tracking Settings.
-      </p>
+      <div className="space-y-3">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          No printer is set up for this warehouse. An admin can add one in QR Tracking Settings.
+        </p>
+        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+          {units.map((unit) => (
+            <li key={unit.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span className="font-mono text-gray-800">{unit.stock_tracking_id}</span>
+              <span className="text-gray-500">{unit.quantity} {unit.unit}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     )
   }
 

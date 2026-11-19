@@ -58,6 +58,16 @@ export async function POST(request: NextRequest) {
           UPDATE tracking_printers SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
           DELETE FROM tracking_feature_flags WHERE warehouse_id = '${sourceId}';
         END IF;
+        IF to_regclass('public.tracking_locations') IS NOT NULL THEN
+          -- A code already used in the surviving warehouse gets a unique suffix.
+          UPDATE tracking_locations s
+             SET code = left(s.code, 25) || '-' || upper(substr(md5(s.id::text), 1, 6))
+           WHERE s.warehouse_id = '${sourceId}'
+             AND EXISTS (SELECT 1 FROM tracking_locations t WHERE t.warehouse_id = '${targetId}' AND t.code = s.code);
+          UPDATE tracking_locations SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+          UPDATE tracking_pickups SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+          -- tracking_verifications is a permanent record of where stock was checked, so it stays as written.
+        END IF;
       END
       $tracking$;
 

@@ -1,5 +1,5 @@
 import { readJson, trackingRoute } from '@/lib/tracking/http'
-import { getSettings, requestTestPrint, savePrinter, setFeatureFlag, TrackingError } from '@/lib/tracking/service'
+import { getSettings, requestTestPrint, savePrinter, setFeatureFlag, setGpsFlag, TrackingError } from '@/lib/tracking/service'
 
 export const GET = trackingRoute('settings', async ({ actor }) => getSettings(actor))
 
@@ -8,6 +8,9 @@ export const POST = trackingRoute('settings', async ({ request, actor }) => {
   switch (body.action) {
     case 'set_flag':
       await setFeatureFlag(actor, body.company_id, body.warehouse_id, body.enabled)
+      return { success: true }
+    case 'set_gps':
+      await setGpsFlag(actor, body.company_id, body.enabled)
       return { success: true }
     case 'save_printer':
       await savePrinter(actor, body)

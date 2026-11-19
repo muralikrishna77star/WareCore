@@ -88,10 +88,10 @@ beforeAll(async () => {
   ids.user = await makeUser('admin', null)
   ids.bill = (await one(
     `INSERT INTO purchase_bills (supplier_id, company_id, warehouse_id, bill_number, bill_date, status)
-     VALUES ($1, $2, $3, 'QR-BILL-1', '2026-11-01', 'active') RETURNING id`, [ids.supplier, ids.company, ids.warehouse])).id
+     VALUES ($1, $2, $3, 'QR-BILL-1', (now() AT TIME ZONE 'Asia/Kolkata')::date, 'active') RETURNING id`, [ids.supplier, ids.company, ids.warehouse])).id
   ids.otherBill = (await one(
     `INSERT INTO purchase_bills (supplier_id, company_id, warehouse_id, bill_number, bill_date, status)
-     VALUES ($1, $2, $3, 'QR-BILL-2', '2026-11-01', 'active') RETURNING id`, [ids.supplier, ids.otherCompany, ids.otherWarehouse])).id
+     VALUES ($1, $2, $3, 'QR-BILL-2', (now() AT TIME ZONE 'Asia/Kolkata')::date, 'active') RETURNING id`, [ids.supplier, ids.otherCompany, ids.otherWarehouse])).id
   admin = actorFor('admin', null)
 }, 300_000)
 
@@ -195,7 +195,7 @@ describe('Creating units', () => {
   it('refuses a line on a cancelled bill', async () => {
     const bill = (await one(
       `INSERT INTO purchase_bills (supplier_id, company_id, warehouse_id, bill_number, bill_date, status)
-       VALUES ($1, $2, $3, 'QR-BILL-C', '2026-11-01', 'active') RETURNING id`, [ids.supplier, ids.company, ids.warehouse])).id
+       VALUES ($1, $2, $3, 'QR-BILL-C', (now() AT TIME ZONE 'Asia/Kolkata')::date, 'active') RETURNING id`, [ids.supplier, ids.company, ids.warehouse])).id
     const line = await newLine(1, null, bill)
     await client.query(`UPDATE purchase_bills SET status = 'cancelled' WHERE id = $1`, [bill])
     await expect(service.createUnits(admin, line, null)).rejects.toThrow(/not on an active bill/)
@@ -384,7 +384,7 @@ describe('Warehouse merge', () => {
     const source = (await one(`INSERT INTO warehouses (company_id, name) VALUES ($1, 'Merge me') RETURNING id`, [ids.company])).id
     const bill = (await one(
       `INSERT INTO purchase_bills (supplier_id, company_id, warehouse_id, bill_number, bill_date, status)
-       VALUES ($1, $2, $3, 'QR-BILL-M', '2026-11-01', 'active') RETURNING id`, [ids.supplier, ids.company, source])).id
+       VALUES ($1, $2, $3, 'QR-BILL-M', (now() AT TIME ZONE 'Asia/Kolkata')::date, 'active') RETURNING id`, [ids.supplier, ids.company, source])).id
     const [unit] = await service.createUnits(admin, await newLine(1, null, bill), null)
     await service.setFeatureFlag(admin, ids.company, source, true)
     await service.setFeatureFlag(admin, ids.company, ids.warehouse2, true)

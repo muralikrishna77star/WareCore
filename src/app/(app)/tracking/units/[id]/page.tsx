@@ -10,6 +10,8 @@ export default async function TrackedUnitPage({ params }: { params: Promise<{ id
       unitId={id}
       canPrint={TRACKING_ROLES.label.has(session.role)}
       canReprintOrVoid={TRACKING_ROLES.reprint_void.has(session.role)}
+      canOperate={TRACKING_ROLES.operate.has(session.role)}
+      canManage={TRACKING_ROLES.manage.has(session.role)}
     />
   )
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runReconciliation } from '@/lib/dataIntegrity/engine'
+import { purgeExpiredPositions } from '@/lib/tracking/floor'
 
 // Invoked by Vercel Cron (see vercel.json) — Vercel automatically sends
 // `Authorization: Bearer $CRON_SECRET` on cron-triggered requests once
@@ -14,6 +15,11 @@ export async function GET(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // A separate step: a clean-up failure must never affect the reconciliation scan.
+  await purgeExpiredPositions().catch((err) => {
+    console.error('[tracking] GPS clean-up failed:', err instanceof Error ? err.message : err)
+  })
 
   try {
     const result = await runReconciliation({

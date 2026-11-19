@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import type { TrackingUnit } from '@/lib/tracking/constants'
+import { LIFECYCLE_LABELS, type TrackingUnit } from '@/lib/tracking/constants'
 import { errorText, trackingApi } from './api'
+import { LifecycleBadge } from './StatusBadge'
 
 export function TrackedUnits() {
   const [search, setSearch] = useState('')
@@ -12,8 +13,9 @@ export function TrackedUnits() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const filter = status === 'VOIDED' ? 'status=VOIDED' : `lifecycle=${status}`
     const timer = setTimeout(() => {
-      trackingApi<{ units: TrackingUnit[] }>(`units?search=${encodeURIComponent(search)}&status=${status}`)
+      trackingApi<{ units: TrackingUnit[] }>(`units?search=${encodeURIComponent(search)}&${filter}`)
         .then((data) => { setUnits(data.units); setError('') })
         .catch((err) => setError(errorText(err)))
     }, 250)
@@ -31,7 +33,7 @@ export function TrackedUnits() {
         />
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
           <option value="">All labels</option>
-          <option value="ACTIVE">Active</option>
+          {Object.entries(LIFECYCLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           <option value="VOIDED">Voided</option>
         </select>
       </div>
@@ -49,6 +51,7 @@ export function TrackedUnits() {
                 <th className="px-4 py-3">Bundle</th>
                 <th className="px-4 py-3">Purchase line</th>
                 <th className="px-4 py-3">Warehouse</th>
+                <th className="px-4 py-3">Location</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
             </thead>
@@ -63,11 +66,8 @@ export function TrackedUnits() {
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">{unit.bundle_no} of {unit.bundle_count}</td>
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-700">{unit.purchase_line_id}</td>
                   <td className="px-4 py-3 text-gray-700">{unit.warehouse_name}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${unit.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {unit.status === 'ACTIVE' ? 'Active' : 'Voided'}
-                    </span>
-                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-mono text-gray-700">{unit.location_code}</td>
+                  <td className="px-4 py-3"><LifecycleBadge status={unit.lifecycle_status} voided={unit.status === 'VOIDED'} /></td>
                 </tr>
               ))}
             </tbody>

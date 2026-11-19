@@ -5,6 +5,7 @@ export const GET = trackingRoute('view', async ({ request, actor }) => ({
   units: await listUnits(actor, {
     search: request.nextUrl.searchParams.get('search') ?? '',
     status: request.nextUrl.searchParams.get('status') ?? '',
+    lifecycle: request.nextUrl.searchParams.get('lifecycle') ?? '',
   }),
 }))
 

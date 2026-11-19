@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fromThousandths, splitEqually, sumWeights, toThousandths } from '@/lib/tracking/bundles'
-import { buildLabelZpl, escapeZplField, formatLabelDate, labelFieldsForUnit, testLabelFields } from '@/lib/tracking/zpl'
+import { normalizePhone, pickupMessageText, whatsappUrl } from '@/lib/tracking/whatsapp'
+import { buildLabelZpl, escapeZplField, formatLabelDate, labelFieldsForLocation, labelFieldsForUnit, testLabelFields } from '@/lib/tracking/zpl'
 
 const template = {
   zpl_body: '^XA^PW{{LABEL_WIDTH}}^LL{{LABEL_HEIGHT}}^FO[[100]],[[50]]^FH\\^FD{{ITEM_NAME}}^FS^FDQA,{{QR}}^FS^XZ',
@@ -79,5 +80,42 @@ describe('Zebra label output', () => {
   it('formats label dates', () => {
     expect(formatLabelDate('2025-06-17')).toBe('17-Jun-2025')
     expect(formatLabelDate(null)).toBe('')
+  })
+
+  it('shows which part of a bundle a split label is', () => {
+    expect(labelFieldsForUnit({ ...unit, part_no: 2 }).BUNDLE).toBe('Bundle 2 of 3, part 2')
+  })
+
+  it('builds a location label with its own QR reference', () => {
+    const fields = labelFieldsForLocation({ location_ref: 'WL1-0123456789ABCDEF', code: 'A-03-2', name: 'Back ^wall', warehouse_name: 'Main' })
+    const zpl = buildLabelZpl({ ...template, zpl_body: '^FDQA,{{QR}}^FS^FD{{CODE}}^FS^FH\\^FD{{NAME}}^FS' }, printer, fields)
+    expect(zpl).toContain('WL1-0123456789ABCDEF')
+    expect(zpl).toContain('A-03-2')
+    expect(zpl).toContain('Back \\5Ewall')
+  })
+})
+
+describe('WhatsApp message', () => {
+  it('turns a typed number into international form', () => {
+    expect(normalizePhone('98765 43210')).toBe('919876543210')
+    expect(normalizePhone('098765-43210')).toBe('919876543210')
+    expect(normalizePhone('+91 98765 43210')).toBe('919876543210')
+    expect(normalizePhone('+971 50 123 4567')).toBe('971501234567')
+  })
+
+  it('refuses something that cannot be a phone number', () => {
+    for (const bad of ['', '12345', 'call me', '1234567890123456', null, 9876543210]) expect(normalizePhone(bad)).toBeNull()
+  })
+
+  it('writes the pickup details, and only says ready once it is', () => {
+    const pickup = { pickup_no: 'PU1126-0001', company_name: 'Sri Steel', warehouse_name: 'Main', customer_name: 'Acme', bundle_count: 1, total_quantity: '2.500', unit: 'MT', ready: false }
+    expect(pickupMessageText(pickup)).toContain('Material: 1 bundle, 2.500 MT')
+    expect(pickupMessageText(pickup)).toContain('Status: Being prepared')
+    expect(pickupMessageText({ ...pickup, bundle_count: 3, ready: true })).toContain('3 bundles')
+    expect(pickupMessageText({ ...pickup, ready: true })).toContain('Status: Ready for pickup')
+  })
+
+  it('encodes the message safely into the link', () => {
+    expect(whatsappUrl('919876543210', 'A & B\nC')).toBe('https://wa.me/919876543210?text=A%20%26%20B%0AC')
   })
 })

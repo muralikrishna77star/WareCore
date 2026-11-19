@@ -4,8 +4,8 @@
 import { getPool } from '@/lib/localdb/pool'
 import { actorCanAccess, actorScopeSql, type TrackingActor } from './access'
 import {
-  MAX_BUNDLES, QR_REFERENCE_RE, STOCK_TRACKING_ID_RE, TEST_LABEL_CODE, TRACKING_ROLES, UUID_RE,
-  type EligibleLine, type PrintStatus, type TrackingPrinter, type TrackingUnit,
+  LIFECYCLE_LABELS, MAX_BUNDLES, QR_REFERENCE_RE, STOCK_TRACKING_ID_RE, TEST_LABEL_CODE, TRACKING_ROLES, UUID_RE,
+  type EligibleLine, type LifecycleStatus, type PrintStatus, type TrackingPermission, type TrackingPrinter, type TrackingUnit,
 } from './constants'
 import { buildLabelZpl, labelFieldsForUnit, testLabelFields, type LabelTemplate, type UnitForLabel } from './zpl'
 
@@ -15,35 +15,47 @@ export class TrackingError extends Error {
   }
 }
 
-type Row = Record<string, string>
+export type Row = Record<string, string>
 
-async function query(sql: string, params: unknown[] = []): Promise<Row[]> {
+export async function query(sql: string, params: unknown[] = []): Promise<Row[]> {
   return (await getPool().query(sql, params)).rows as Row[]
 }
 
-function requireUuid(value: unknown, label: string): string {
+export function requireUuid(value: unknown, label: string): string {
   if (typeof value !== 'string' || !UUID_RE.test(value)) throw new TrackingError(`${label} is not valid`)
   return value
 }
 
-function likePattern(search: string): string {
+export function likePattern(search: string): string {
   return `%${search.replace(/[\\%_]/g, '\\$&')}%`
 }
 
-const UNIT_COLUMNS = `u.id::text, u.stock_tracking_id, u.qr_reference, u.company_id::text, u.warehouse_id::text,
-  c.name AS company_name, w.name AS warehouse_name, u.purchase_line_id, u.bill_number, u.receipt_date::text,
-  u.item_code, u.item_name, u.size_label, u.quantity::text, u.unit, u.bundle_no::int, u.bundle_count::int,
-  u.weight_basis, u.status, u.void_reason, u.created_at::text`
-
-const UNIT_FROM = `tracking_units u
-  LEFT JOIN companies c ON c.id = u.company_id
-  LEFT JOIN warehouses w ON w.id = u.warehouse_id`
-
-function toUnit(row: Row): TrackingUnit {
-  return { ...row, bundle_no: Number(row.bundle_no), bundle_count: Number(row.bundle_count) } as unknown as TrackingUnit
+/** Route permissions are the first gate. Service functions check again, so no caller can skip it. */
+export function assertCan(actor: TrackingActor, permission: TrackingPermission): void {
+  if (!TRACKING_ROLES[permission].has(actor.role)) throw new TrackingError('Insufficient permissions', 403)
 }
 
-async function unitInScope(actor: TrackingActor, unitId: string): Promise<TrackingUnit> {
+export const UNIT_COLUMNS = `u.id::text, u.stock_tracking_id, u.qr_reference, u.company_id::text, u.warehouse_id::text,
+  c.name AS company_name, w.name AS warehouse_name, u.purchase_line_id, u.bill_number, u.receipt_date::text,
+  u.item_code, u.item_name, u.size_label, u.quantity::text, u.unit, u.bundle_no::int, u.bundle_count::int,
+  u.weight_basis, u.status, u.void_reason, u.created_at::text, u.lifecycle_status, l.code AS location_code,
+  u.status_reason, u.source_type, u.parent_unit_id::text, u.part_no::int`
+
+export const UNIT_FROM = `tracking_units u
+  LEFT JOIN companies c ON c.id = u.company_id
+  LEFT JOIN warehouses w ON w.id = u.warehouse_id
+  LEFT JOIN tracking_locations l ON l.id = u.current_location_id`
+
+export function toUnit(row: Row): TrackingUnit {
+  return {
+    ...row,
+    bundle_no: Number(row.bundle_no),
+    bundle_count: Number(row.bundle_count),
+    part_no: row.part_no == null ? null : Number(row.part_no),
+  } as unknown as TrackingUnit
+}
+
+export async function unitInScope(actor: TrackingActor, unitId: string): Promise<TrackingUnit> {
   const rows = await query(`SELECT ${UNIT_COLUMNS} FROM ${UNIT_FROM} WHERE u.id = $1::uuid`, [requireUuid(unitId, 'Unit')])
   const unit = rows[0] ? toUnit(rows[0]) : null
   if (!unit || !actorCanAccess(actor, unit.company_id, unit.warehouse_id)) throw new TrackingError('Tracking unit not found', 404)
@@ -79,7 +91,7 @@ export async function listEligibleLines(actor: TrackingActor, search = ''): Prom
        LEFT JOIN item_master im ON im.id = i.item_master_id
       WHERE b.status = 'active'
         AND fn_tracking_is_enabled(b.company_id, b.warehouse_id)
-        AND i.created_at >= fn_tracking_start_at(b.company_id, b.warehouse_id)
+        AND fn_tracking_line_is_new(i.created_at, b.bill_date, b.company_id, b.warehouse_id)
         AND NOT EXISTS (SELECT 1 FROM tracking_units t WHERE t.purchase_line_id = i.purchase_line_id AND t.status = 'ACTIVE')
         AND ${scope} ${filter}
       ORDER BY i.created_at DESC
@@ -122,12 +134,19 @@ export async function createUnits(actor: TrackingActor, purchaseLineId: unknown,
 
 // ── Units ───────────────────────────────────────────────────────────────────
 
-export async function listUnits(actor: TrackingActor, options: { search?: string; status?: string } = {}): Promise<TrackingUnit[]> {
+export async function listUnits(
+  actor: TrackingActor,
+  options: { search?: string; status?: string; lifecycle?: string } = {},
+): Promise<TrackingUnit[]> {
   const params: unknown[] = []
   const conditions = [actorScopeSql(actor, 'u.company_id', 'u.warehouse_id', params)]
   if (options.status === 'ACTIVE' || options.status === 'VOIDED') {
     params.push(options.status)
     conditions.push(`u.status = $${params.length}`)
+  }
+  if (options.lifecycle && options.lifecycle in LIFECYCLE_LABELS) {
+    params.push(options.lifecycle as LifecycleStatus)
+    conditions.push(`u.lifecycle_status = $${params.length} AND u.status = 'ACTIVE'`)
   }
   if (options.search?.trim()) {
     params.push(likePattern(options.search.trim()))
@@ -146,21 +165,35 @@ export async function listUnits(actor: TrackingActor, options: { search?: string
 export async function sourceWarnings(unit: TrackingUnit): Promise<string[]> {
   const warnings: string[] = []
   if (unit.status === 'VOIDED') warnings.push(`Do not use. This label was voided: ${unit.void_reason ?? 'no reason recorded'}`)
+  if (unit.status === 'ACTIVE' && unit.lifecycle_status === 'SPLIT') {
+    warnings.push('Do not use. This bundle was split, so use the labels on its parts')
+  }
 
+  // A split original is replaced by its parts, so only the parts count towards the labelled total.
   const [source] = await query(
     `SELECT COALESCE(i.received_quantity, i.quantity)::text AS quantity, b.status,
             (SELECT COALESCE(SUM(t.quantity), 0)::text FROM tracking_units t
-              WHERE t.purchase_line_id = i.purchase_line_id AND t.status = 'ACTIVE') AS labelled
+              WHERE t.purchase_line_id = i.purchase_line_id AND t.status = 'ACTIVE' AND t.lifecycle_status <> 'SPLIT') AS labelled,
+            (SELECT t.source_verification_id IS NOT NULL FROM tracking_units t WHERE t.id = $2::uuid) AS verified,
+            (SELECT COALESCE(SUM(t.quantity), 0)::text FROM tracking_units t
+              WHERE t.purchase_line_id = i.purchase_line_id AND t.company_id = $3::uuid AND t.warehouse_id = $4::uuid
+                AND t.status = 'ACTIVE' AND t.lifecycle_status IN ('LABELLED', 'IN_STOCK', 'ON_PICKUP', 'READY', 'ON_HOLD')) AS on_hand,
+            (SELECT COALESCE(SUM(s.quantity), 0)::text FROM stock_ledger s
+              WHERE s.purchase_line_id = i.purchase_line_id AND s.company_id = $3::uuid AND s.warehouse_id = $4::uuid) AS book
        FROM purchase_bill_items i JOIN purchase_bills b ON b.id = i.bill_id
       WHERE i.purchase_line_id = $1`,
-    [unit.purchase_line_id],
+    [unit.purchase_line_id, unit.id, unit.company_id, unit.warehouse_id],
   )
   if (!source) {
     warnings.push(`Purchase line ${unit.purchase_line_id} no longer exists on its bill`)
   } else {
     if (source.status !== 'active') warnings.push(`The purchase bill for this label is ${source.status}`)
-    if (unit.status === 'ACTIVE' && Number(source.quantity) !== Number(source.labelled)) {
+    // Verified old stock is only part of its purchase line, so the labels are not expected to add up to it.
+    if (unit.status === 'ACTIVE' && source.verified !== 't' && Number(source.quantity) !== Number(source.labelled)) {
       warnings.push(`Purchase line quantity is now ${source.quantity} ${unit.unit}, but its labels total ${source.labelled} ${unit.unit}`)
+    }
+    if (unit.status === 'ACTIVE' && Number(source.on_hand) > Number(source.book)) {
+      warnings.push(`Bundles on hand for this purchase line total ${source.on_hand} ${unit.unit}, above its book stock of ${source.book} ${unit.unit}`)
     }
   }
   return warnings
@@ -229,16 +262,17 @@ export async function lookupCode(actor: TrackingActor, rawCode: unknown): Promis
 
 // ── Printing ────────────────────────────────────────────────────────────────
 
-async function activeTemplate(): Promise<LabelTemplate & { id: string }> {
+export async function activeTemplate(kind: 'BUNDLE' | 'LOCATION' = 'BUNDLE'): Promise<LabelTemplate & { id: string }> {
   const [row] = await query(
     `SELECT id::text, zpl_body, width_mm::text, height_mm::text, dpi::int
-       FROM tracking_label_templates WHERE is_active ORDER BY created_at DESC, version DESC LIMIT 1`,
+       FROM tracking_label_templates WHERE is_active AND template_kind = $1 ORDER BY created_at DESC, version DESC LIMIT 1`,
+    [kind],
   )
   if (!row) throw new TrackingError('No label template is active', 409)
   return row as unknown as LabelTemplate & { id: string }
 }
 
-async function printerInScope(actor: TrackingActor, printerId: unknown): Promise<TrackingPrinter> {
+export async function printerInScope(actor: TrackingActor, printerId: unknown): Promise<TrackingPrinter> {
   const [row] = await query(
     `SELECT id::text, company_id::text, warehouse_id::text, name, model, dpi::int, label_width_mm::text, label_height_mm::text, is_active
        FROM tracking_printers WHERE id = $1::uuid`,
@@ -308,10 +342,11 @@ export async function listPrinters(actor: TrackingActor): Promise<TrackingPrinte
 // ── Settings ────────────────────────────────────────────────────────────────
 
 export async function getSettings(actor: TrackingActor) {
-  const [companies, warehouses, flags, printers, templates] = await Promise.all([
+  const [companies, warehouses, flags, gpsFlags, printers, templates] = await Promise.all([
     query(`SELECT id::text, name FROM companies WHERE is_active ORDER BY name`),
     query(`SELECT id::text, company_id::text, name FROM warehouses WHERE is_active ORDER BY name`),
     query(`SELECT company_id::text, warehouse_id::text, enabled, tracking_start_at::text FROM tracking_feature_flags WHERE feature_key = 'qr_tracking'`),
+    query(`SELECT company_id::text FROM tracking_feature_flags WHERE feature_key = 'gps_capture' AND warehouse_id IS NULL AND enabled`),
     listPrinters(actor),
     query(`SELECT name, version::int, width_mm::text, height_mm::text, dpi::int FROM tracking_label_templates WHERE is_active ORDER BY created_at DESC`),
   ])
@@ -319,9 +354,30 @@ export async function getSettings(actor: TrackingActor) {
     companies,
     warehouses,
     flags: flags.map((flag) => ({ ...flag, enabled: flag.enabled === 't' })),
+    gpsCompanies: gpsFlags.map((flag) => flag.company_id),
     printers,
     templates,
   }
+}
+
+/** GPS is switched per company and is off until an admin turns it on. */
+export async function setGpsFlag(actor: TrackingActor, companyIdInput: unknown, enabled: unknown): Promise<void> {
+  assertCan(actor, 'settings')
+  const companyId = requireUuid(companyIdInput, 'Company')
+  if (typeof enabled !== 'boolean') throw new TrackingError('Choose on or off')
+  await query(
+    `INSERT INTO tracking_feature_flags (company_id, warehouse_id, feature_key, enabled, changed_by)
+     VALUES ($1::uuid, NULL, 'gps_capture', $2::boolean, $3::uuid)
+     ON CONFLICT (company_id, COALESCE(warehouse_id, '00000000-0000-0000-0000-000000000000'::uuid), feature_key)
+     DO UPDATE SET enabled = EXCLUDED.enabled, changed_by = EXCLUDED.changed_by, updated_at = now()`,
+    [companyId, enabled, actor.userId],
+  )
+}
+
+/** The companies whose scans should ask the device for a position. */
+export async function gpsCompanyIds(): Promise<string[]> {
+  const rows = await query(`SELECT company_id::text FROM tracking_feature_flags WHERE feature_key = 'gps_capture' AND warehouse_id IS NULL AND enabled`)
+  return rows.map((row) => row.company_id)
 }
 
 async function assertWarehouseInCompany(companyId: string, warehouseId: string): Promise<void> {

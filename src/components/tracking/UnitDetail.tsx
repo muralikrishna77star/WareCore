@@ -1,14 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import QRCode from 'qrcode'
 import { TriangleAlert } from 'lucide-react'
 import type { TrackingUnit } from '@/lib/tracking/constants'
-import { errorText, trackingApi } from './api'
+import { errorText, formatWhen, trackingApi } from './api'
 import { LabelPrintPanel } from './LabelPrintPanel'
+import { LifecycleBadge } from './StatusBadge'
+import { UnitActions } from './UnitActions'
 
 interface Detail {
   unit: TrackingUnit
+  parts: TrackingUnit[]
   warnings: string[]
   events: { id: string; event_type: string; occurred_at: string; actor_name: string | null }[]
   printJobs: { id: string; job_type: string; status: string; reason: string | null; created_at: string; printer_name: string | null; requested_by_name: string | null }[]
@@ -21,13 +25,27 @@ const EVENT_LABELS: Record<string, string> = {
   LABEL_PRINT_FAILED: 'Print failed',
   SCAN_LOOKUP: 'Scanned',
   UNIT_VOIDED: 'Label voided',
+  PUT_AWAY: 'Put away',
+  MOVED: 'Moved',
+  STATUS_CHANGED: 'Status changed',
+  UNIT_SPLIT: 'Bundle split',
+  ADDED_TO_PICKUP: 'Added to pickup',
+  REMOVED_FROM_PICKUP: 'Removed from pickup',
+  MARKED_READY: 'Marked ready',
+  PICKED_UP: 'Picked up',
+  CUSTOMER_RETURN: 'Customer return',
+  STOCK_VERIFIED: 'Old stock verified',
 }
 
 const WEIGHT_BASIS: Record<string, string> = { whole_line: 'Whole purchase line', weighed: 'Weighed', estimated: 'Estimated' }
 
-const when = (value: string) => new Date(value.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-
-export function UnitDetail({ unitId, canPrint, canReprintOrVoid }: { unitId: string; canPrint: boolean; canReprintOrVoid: boolean }) {
+export function UnitDetail({ unitId, canPrint, canReprintOrVoid, canOperate, canManage }: {
+  unitId: string
+  canPrint: boolean
+  canReprintOrVoid: boolean
+  canOperate: boolean
+  canManage: boolean
+}) {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [qr, setQr] = useState('')
   const [error, setError] = useState('')
@@ -76,7 +94,8 @@ export function UnitDetail({ unitId, canPrint, canReprintOrVoid }: { unitId: str
   const { unit } = detail
   const active = unit.status === 'ACTIVE'
   const printed = detail.printJobs.some((job) => job.status === 'sent' || job.status === 'confirmed')
-  const showPrint = active && (printed ? canReprintOrVoid : canPrint)
+  const showPrint = active && unit.lifecycle_status !== 'SPLIT' && (printed ? canReprintOrVoid : canPrint)
+  const canVoid = active && canReprintOrVoid && ['LABELLED', 'IN_STOCK', 'ON_HOLD', 'MISSING'].includes(unit.lifecycle_status)
 
   return (
     <div className="space-y-6">
@@ -98,14 +117,35 @@ export function UnitDetail({ unitId, canPrint, canReprintOrVoid }: { unitId: str
           <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
             <div><dt className="text-gray-500">Weight</dt><dd className="font-medium text-gray-900">{unit.quantity} {unit.unit}</dd></div>
             <div><dt className="text-gray-500">Weight basis</dt><dd className="text-gray-900">{WEIGHT_BASIS[unit.weight_basis]}</dd></div>
-            <div><dt className="text-gray-500">Bundle</dt><dd className="text-gray-900">{unit.bundle_no} of {unit.bundle_count}</dd></div>
+            <div><dt className="text-gray-500">Bundle</dt><dd className="text-gray-900">{unit.bundle_no} of {unit.bundle_count}{unit.part_no ? `, part ${unit.part_no}` : ''}</dd></div>
             <div><dt className="text-gray-500">Purchase line</dt><dd className="font-mono text-gray-900">{unit.purchase_line_id}</dd></div>
             <div><dt className="text-gray-500">Bill</dt><dd className="text-gray-900">{unit.bill_number}</dd></div>
             <div><dt className="text-gray-500">Warehouse</dt><dd className="text-gray-900">{unit.warehouse_name}</dd></div>
-            <div><dt className="text-gray-500">Status</dt><dd className="text-gray-900">{active ? 'Active' : 'Voided'}</dd></div>
+            <div><dt className="text-gray-500">Status</dt><dd className="mt-0.5"><LifecycleBadge status={unit.lifecycle_status} voided={!active} /></dd></div>
+            <div><dt className="text-gray-500">Location</dt><dd className="font-mono text-gray-900">{unit.location_code ?? 'None'}</dd></div>
+            {unit.status_reason && <div><dt className="text-gray-500">Reason</dt><dd className="text-gray-900">{unit.status_reason}</dd></div>}
+            {unit.source_type === 'VERIFIED_EXISTING' && <div><dt className="text-gray-500">Source</dt><dd className="text-gray-900">Verified old stock</dd></div>}
+            {unit.parent_unit_id && <div><dt className="text-gray-500">Split from</dt><dd><Link href={`/tracking/units/${unit.parent_unit_id}`} className="text-blue-600 hover:underline">Original bundle</Link></dd></div>}
           </dl>
         </div>
       </section>
+
+      {detail.parts.length > 0 && (
+        <section className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="font-semibold text-gray-900">Parts of this bundle</h3>
+          <ul className="divide-y divide-gray-100">
+            {detail.parts.map((part) => (
+              <li key={part.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <Link href={`/tracking/units/${part.id}`} className="font-mono text-blue-600 hover:underline">{part.stock_tracking_id}</Link>
+                <span className="text-gray-800">{part.quantity} {part.unit}</span>
+                <LifecycleBadge status={part.lifecycle_status} voided={part.status === 'VOIDED'} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <UnitActions unit={unit} canOperate={canOperate} canManage={canManage} onChanged={load} />
 
       {showPrint && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
@@ -115,7 +155,7 @@ export function UnitDetail({ unitId, canPrint, canReprintOrVoid }: { unitId: str
         </section>
       )}
 
-      {active && canReprintOrVoid && (
+      {canVoid && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="font-semibold text-gray-900">Void label</h3>
           <p className="text-sm text-gray-600">The label will scan as Do Not Use. This cannot be undone and does not change stock.</p>
@@ -147,7 +187,7 @@ export function UnitDetail({ unitId, canPrint, canReprintOrVoid }: { unitId: str
           <tbody className="divide-y divide-gray-100">
             {detail.events.map((event) => (
               <tr key={event.id}>
-                <td className="whitespace-nowrap px-4 py-2 text-gray-600">{when(event.occurred_at)}</td>
+                <td className="whitespace-nowrap px-4 py-2 text-gray-600">{formatWhen(event.occurred_at)}</td>
                 <td className="px-4 py-2 text-gray-900">{EVENT_LABELS[event.event_type] ?? event.event_type}</td>
                 <td className="px-4 py-2 text-gray-600">{event.actor_name}</td>
               </tr>

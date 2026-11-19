@@ -61,10 +61,12 @@ const nextConfig: NextConfig = {
         source: '/admin/tracking',
         headers: [{ key: 'Content-Security-Policy', value: contentSecurityPolicy(`'self' ${zebraBrowserPrint}`) }],
       },
-      {
-        source: '/tracking/scan',
-        headers: [{ key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' }],
-      },
+      // Only the screens that scan labels may use the camera and, where a company
+      // has switched GPS on, the device's location.
+      ...['/tracking/scan', '/tracking/stock', '/tracking/units/:id', '/tracking/pickups/:path*'].map((source) => ({
+        source,
+        headers: [{ key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(self)' }],
+      })),
     ]
   },
 

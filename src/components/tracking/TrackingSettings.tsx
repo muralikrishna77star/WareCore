@@ -9,6 +9,7 @@ interface Settings {
   companies: { id: string; name: string }[]
   warehouses: { id: string; company_id: string; name: string }[]
   flags: { company_id: string; warehouse_id: string | null; enabled: boolean }[]
+  gpsCompanies: string[]
   printers: TrackingPrinter[]
   templates: { name: string; version: string; width_mm: string; height_mm: string; dpi: string }[]
 }
@@ -137,6 +138,35 @@ export function TrackingSettings() {
                     </label>
                   )
                 })}
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+        <h2 className="text-lg font-semibold text-gray-900">GPS on scans</h2>
+        <p className="text-sm text-gray-600">
+          Off by default. When on, the device position is saved only at the moment of a put-away, move or handover scan, and is deleted after 90 days.
+          Each user&apos;s device asks for permission, and a scan still works if they refuse.
+        </p>
+        <ul className="divide-y divide-gray-100">
+          {settings.companies.map((company) => {
+            const on = settings.gpsCompanies.includes(company.id)
+            return (
+              <li key={company.id} className="py-2">
+                <label className="flex items-center justify-between gap-3 text-sm font-medium text-gray-900">
+                  {company.name}
+                  <span className="flex items-center gap-2 font-normal text-gray-600">
+                    {on ? 'On' : 'Off'}
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={(e) => post({ action: 'set_gps', company_id: company.id, enabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                  </span>
+                </label>
               </li>
             )
           })}

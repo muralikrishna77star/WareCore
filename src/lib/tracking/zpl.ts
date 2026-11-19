@@ -39,6 +39,14 @@ export interface UnitForLabel {
   weight_basis: string
   purchase_line_id: string
   receipt_date: string | null
+  part_no?: number | string | null
+}
+
+export interface LocationForLabel {
+  location_ref: string
+  code: string
+  name: string | null
+  warehouse_name?: string | null
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -66,6 +74,7 @@ export function labelFieldsForUnit(unit: UnitForLabel): LabelFields {
   const count = Number(unit.bundle_count)
   const estimated = unit.weight_basis === 'estimated' ? ' EST' : ''
   const date = formatLabelDate(unit.receipt_date)
+  const part = unit.part_no ? `, part ${unit.part_no}` : ''
   return {
     QR: unit.qr_reference,
     TRACKING_ID: unit.stock_tracking_id,
@@ -73,8 +82,17 @@ export function labelFieldsForUnit(unit: UnitForLabel): LabelFields {
     ITEM_NAME: unit.item_name ?? '',
     SIZE: unit.size_label ?? '',
     WEIGHT: `${unit.quantity} ${unit.unit}${estimated}`,
-    BUNDLE: unit.weight_basis === 'whole_line' ? 'Whole line' : `Bundle ${unit.bundle_no} of ${count}`,
+    BUNDLE: unit.weight_basis === 'whole_line' ? 'Whole line' : `Bundle ${unit.bundle_no} of ${count}${part}`,
     LINE_AND_DATE: date ? `${unit.purchase_line_id}  ${date}` : unit.purchase_line_id,
+  }
+}
+
+export function labelFieldsForLocation(location: LocationForLabel): Record<string, string> {
+  return {
+    QR: location.location_ref,
+    CODE: location.code,
+    NAME: location.name ?? '',
+    WAREHOUSE: location.warehouse_name ?? '',
   }
 }
 
@@ -92,7 +110,7 @@ export function testLabelFields(printerName: string): LabelFields {
 }
 
 /** Fills a template for one printer, scaling its dot sizes to that printer's resolution and label size. */
-export function buildLabelZpl(template: LabelTemplate, printer: LabelPrinterSetup, fields: LabelFields): string {
+export function buildLabelZpl(template: LabelTemplate, printer: LabelPrinterSetup, fields: LabelFields | Record<string, string>): string {
   const printerDpi = Number(printer.dpi)
   const widthDots = Math.round((Number(printer.label_width_mm) / 25.4) * printerDpi)
   const heightDots = Math.round((Number(printer.label_height_mm) / 25.4) * printerDpi)

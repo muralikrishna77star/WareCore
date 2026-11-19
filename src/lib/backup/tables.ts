@@ -64,10 +64,16 @@ export const BACKUP_TABLES: string[] = [
   'tracking_feature_flags',
   'tracking_printers',
   'tracking_label_templates',
+  'tracking_locations',
+  'tracking_verifications',
   'tracking_units',
   'tracking_unit_origins',
   'tracking_events',
+  'tracking_event_positions',
   'tracking_print_jobs',
+  'tracking_pickups',
+  'tracking_pickup_units',
+  'tracking_pickup_events',
 ]
 
 // A point-in-time export filters on created_at, so these tables can't take part in one.
@@ -85,5 +91,7 @@ export const TABLES_WITHOUT_CREATED_AT: string[] = [
   'reconciliation_settings',
   'stock_ledger_deletions',
   'stock_reconcile_fix_log',
+  'tracking_event_positions',
   'tracking_events',
+  'tracking_pickup_events',
 ]

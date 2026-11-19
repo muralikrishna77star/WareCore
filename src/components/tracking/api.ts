@@ -16,3 +16,7 @@ export async function trackingApi<T>(path: string, init?: { method?: string; bod
 }
 
 export const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong')
+
+/** Formats a Postgres timestamp for display in India. */
+export const formatWhen = (value: string) =>
+  new Date(value.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
