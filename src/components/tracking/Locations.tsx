@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Printer } from 'lucide-react'
 import { LOCATION_TYPE_LABELS, type LocationType, type TrackingLocation, type TrackingPrinter } from '@/lib/tracking/constants'
-import { downloadZpl, sendToZebra, SEND_FAILURE_MESSAGE } from '@/lib/tracking/browserPrint'
+import { downloadZpl } from '@/lib/tracking/browserPrint'
+import type { PrintMethod } from '@/lib/tracking/dialogPrint'
 import { errorText, trackingApi } from './api'
+import { deliverLabels, PrintMethodPicker, usePrintMethod, type LabelJob } from './PrintMethod'
 
 interface Warehouse {
   id: string
@@ -15,8 +17,8 @@ interface Warehouse {
 
 interface PrintState {
   location: TrackingLocation
-  jobId?: string
-  zpl?: string
+  job?: LabelJob
+  /** Set when the label could not be sent. */
   message?: string
 }
 
@@ -30,6 +32,7 @@ export function Locations({ canManage }: { canManage: boolean }) {
   const [form, setForm] = useState({ warehouse_id: '', code: '', name: '', location_type: 'STORAGE' as LocationType })
   const [printing, setPrinting] = useState<PrintState | null>(null)
   const [printerId, setPrinterId] = useState('')
+  const [method, setMethod] = usePrintMethod()
 
   const fetchAll = useCallback(() => trackingApi<{ locations: TrackingLocation[]; warehouses: Warehouse[] }>('locations'), [])
 
@@ -82,27 +85,41 @@ export function Locations({ canManage }: { canManage: boolean }) {
     setPrinterId(printers.find((p) => p.warehouse_id === location.warehouse_id)?.id ?? '')
   }
 
+  const send = async (location: TrackingLocation, job: LabelJob, via: PrintMethod) => {
+    const [result] = await deliverLabels(via, [job], `Location ${location.code}`)
+    if (result.ok) {
+      await trackingApi(`print/${job.jobId}`, { method: 'PATCH', body: { status: 'sent' } })
+      setPrinting({ location, job })
+    } else {
+      setPrinting({ location, job, message: result.message })
+    }
+  }
+
   const print = async () => {
     if (!printing) return
     setError('')
     try {
-      const job = await trackingApi<{ jobId: string; zpl: string }>(`locations/${printing.location.id}`, { method: 'POST', body: { printer_id: printerId } })
-      const sent = await sendToZebra(job.zpl)
-      if (sent.ok) {
-        await trackingApi(`print/${job.jobId}`, { method: 'PATCH', body: { status: 'sent' } })
-        setPrinting({ ...printing, jobId: job.jobId })
-      } else {
-        setPrinting({ ...printing, jobId: job.jobId, zpl: job.zpl, message: SEND_FAILURE_MESSAGE[sent.reason] })
-      }
+      const job = await trackingApi<LabelJob>(`locations/${printing.location.id}`, { method: 'POST', body: { printer_id: printerId } })
+      await send(printing.location, job, method)
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  const retryWithDialog = async () => {
+    if (!printing?.job) return
+    setError('')
+    try {
+      await send(printing.location, printing.job, 'dialog')
     } catch (err) {
       setError(errorText(err))
     }
   }
 
   const answer = async (status: 'confirmed' | 'failed') => {
-    if (!printing?.jobId) return
+    if (!printing?.job) return
     try {
-      await trackingApi(`print/${printing.jobId}`, { method: 'PATCH', body: { status } })
+      await trackingApi(`print/${printing.job.jobId}`, { method: 'PATCH', body: { status } })
       setPrinting(null)
     } catch (err) {
       setError(errorText(err))
@@ -146,20 +163,22 @@ export function Locations({ canManage }: { canManage: boolean }) {
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="text-lg font-semibold text-gray-900">Print label for {printing.location.code}</h2>
           {warehousePrinters.length === 0 && <p className="text-sm text-amber-800">No printer is set up for this warehouse.</p>}
-          {!printing.jobId && warehousePrinters.length > 0 && (
-            <div className="flex flex-wrap items-end gap-3">
+          {!printing.job && warehousePrinters.length > 0 && (
+            <div className="flex flex-wrap items-start gap-3">
               <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">Printer</span>
                 <select value={printerId} onChange={(e) => setPrinterId(e.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
-                  {warehousePrinters.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {warehousePrinters.map((p) => <option key={p.id} value={p.id}>{p.name} ({Number(p.label_width_mm)} × {Number(p.label_height_mm)} mm)</option>)}
                 </select>
               </label>
-              <button type="button" disabled={!printerId} onClick={print} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Print label</button>
+              <PrintMethodPicker method={method} onChange={setMethod} />
+              <button type="button" disabled={!printerId} onClick={print} className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Print label</button>
             </div>
           )}
-          {printing.jobId && (
+          {printing.job && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
               {printing.message && <span className="text-amber-700">{printing.message}</span>}
-              {printing.zpl && <button type="button" onClick={() => downloadZpl(printing.zpl ?? '', `${printing.location.code}.zpl`)} className="rounded border border-gray-300 px-2 py-1 text-gray-700">Label file</button>}
+              {printing.message && method === 'zebra' && <button type="button" onClick={retryWithDialog} className="rounded border border-gray-300 px-2 py-1 text-gray-700">Use print dialog</button>}
+              {printing.message && <button type="button" onClick={() => downloadZpl(printing.job?.zpl ?? '', `${printing.location.code}.zpl`)} className="rounded border border-gray-300 px-2 py-1 text-gray-700">Zebra label file</button>}
               <span className="text-gray-700">Did the label print correctly?</span>
               <button type="button" onClick={() => answer('confirmed')} className="rounded border border-green-300 bg-green-50 px-2 py-1 text-green-800">Yes</button>
               <button type="button" onClick={() => answer('failed')} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-red-800">No</button>

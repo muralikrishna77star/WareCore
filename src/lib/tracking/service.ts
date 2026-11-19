@@ -7,7 +7,8 @@ import {
   LIFECYCLE_LABELS, MAX_BUNDLES, QR_REFERENCE_RE, STOCK_TRACKING_ID_RE, TEST_LABEL_CODE, TRACKING_ROLES, UUID_RE,
   type EligibleLine, type LifecycleStatus, type PrintStatus, type TrackingPermission, type TrackingPrinter, type TrackingUnit,
 } from './constants'
-import { buildLabelZpl, labelFieldsForUnit, testLabelFields, type LabelTemplate, type UnitForLabel } from './zpl'
+import { buildLabelZpl, labelFieldsForUnit, testLabelFields, type LabelFields, type LabelPrinterSetup, type LabelTemplate, type UnitForLabel } from './zpl'
+import type { LabelLayout, PrintableLabel } from './htmlLabel'
 
 export class TrackingError extends Error {
   constructor(message: string, readonly status: number = 400) {
@@ -285,7 +286,20 @@ export async function printerInScope(actor: TrackingActor, printerId: unknown): 
 export interface PrintRequestResult {
   jobId: string
   jobType: string
+  /** For Zebra Browser Print. */
   zpl: string
+  /** The same label for the print dialog, so it can go to any printer. */
+  label: PrintableLabel
+}
+
+/** The label at the printer's label size, for printing through the browser's print dialog. */
+export function printableLabel(layout: LabelLayout, printer: LabelPrinterSetup, fields: LabelFields | Record<string, string>): PrintableLabel {
+  return {
+    layout,
+    fields: { ...fields },
+    width_mm: Number(printer.label_width_mm),
+    height_mm: Number(printer.label_height_mm),
+  }
 }
 
 /** Records the request and returns the label. It never creates a unit or moves stock. */
@@ -299,7 +313,8 @@ export async function requestPrint(actor: TrackingActor, unitId: string, printer
     `SELECT id::text, job_type FROM request_tracking_print($1::uuid, $2::uuid, $3::uuid, $4, $5::boolean, $6::uuid)`,
     [unit.id, printer.id, template.id, typeof reason === 'string' ? reason : null, TRACKING_ROLES.reprint_void.has(actor.role), actor.userId],
   )
-  return { jobId: job.id, jobType: job.job_type, zpl: buildLabelZpl(template, printer, labelFieldsForUnit(unit as unknown as UnitForLabel)) }
+  const fields = labelFieldsForUnit(unit as unknown as UnitForLabel)
+  return { jobId: job.id, jobType: job.job_type, zpl: buildLabelZpl(template, printer, fields), label: printableLabel('bundle', printer, fields) }
 }
 
 export async function requestTestPrint(actor: TrackingActor, printerId: unknown): Promise<PrintRequestResult> {
@@ -311,7 +326,8 @@ export async function requestTestPrint(actor: TrackingActor, printerId: unknown)
      VALUES ('TEST', $1::uuid, $2::uuid, $3::uuid) RETURNING id::text, job_type`,
     [printer.id, template.id, actor.userId],
   )
-  return { jobId: job.id, jobType: job.job_type, zpl: buildLabelZpl(template, printer, testLabelFields(printer.name)) }
+  const fields = testLabelFields(printer.name)
+  return { jobId: job.id, jobType: job.job_type, zpl: buildLabelZpl(template, printer, fields), label: printableLabel('bundle', printer, fields) }
 }
 
 export async function setPrintStatus(actor: TrackingActor, jobId: string, status: unknown): Promise<PrintStatus> {

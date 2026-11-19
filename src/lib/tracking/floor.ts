@@ -7,7 +7,7 @@ import {
   type LocationType, type ScanPosition, type TrackingLocation, type TrackingUnit, type VerifiableLine,
 } from './constants'
 import {
-  activeTemplate, assertCan, likePattern, printerInScope, query, requireUuid, toUnit, TrackingError,
+  activeTemplate, assertCan, likePattern, printableLabel, printerInScope, query, requireUuid, toUnit, TrackingError,
   UNIT_COLUMNS, UNIT_FROM, unitInScope, type PrintRequestResult, type Row,
 } from './service'
 import { buildLabelZpl, labelFieldsForLocation } from './zpl'
@@ -112,7 +112,8 @@ export async function requestLocationPrint(actor: TrackingActor, locationId: unk
     `SELECT id::text, job_type FROM request_tracking_location_print($1::uuid, $2::uuid, $3::uuid, $4::uuid)`,
     [location.id, printer.id, template.id, actor.userId],
   )
-  return { jobId: job.id, jobType: job.job_type, zpl: buildLabelZpl(template, printer, labelFieldsForLocation(location)) }
+  const fields = labelFieldsForLocation(location)
+  return { jobId: job.id, jobType: job.job_type, zpl: buildLabelZpl(template, printer, fields), label: printableLabel('location', printer, fields) }
 }
 
 /** Accepts a scanned location label, or a code typed by hand. */

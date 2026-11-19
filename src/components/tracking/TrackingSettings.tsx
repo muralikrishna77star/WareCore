@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { TrackingPrinter } from '@/lib/tracking/constants'
-import { downloadZpl, sendToZebra, SEND_FAILURE_MESSAGE } from '@/lib/tracking/browserPrint'
+import { downloadZpl } from '@/lib/tracking/browserPrint'
+import type { PrintMethod } from '@/lib/tracking/dialogPrint'
 import { errorText, trackingApi } from './api'
+import { deliverLabels, PrintMethodPicker, usePrintMethod, type LabelJob } from './PrintMethod'
 
 interface Settings {
   companies: { id: string; name: string }[]
@@ -21,7 +23,8 @@ export function TrackingSettings() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [printer, setPrinter] = useState(EMPTY_PRINTER)
-  const [testJob, setTestJob] = useState<{ jobId: string; zpl: string; sent: boolean } | null>(null)
+  const [testJob, setTestJob] = useState<{ job: LabelJob; sent: boolean } | null>(null)
+  const [method, setMethod] = usePrintMethod()
 
   const load = useCallback(async () => {
     try {
@@ -63,23 +66,32 @@ export function TrackingSettings() {
     }
   }
 
-  const testPrint = async (printerId: string) => {
-    const job = await post({ action: 'test_print', printer_id: printerId }) as { jobId: string; zpl: string } | null
-    if (!job) return
-    const sent = await sendToZebra(job.zpl)
-    if (sent.ok) {
-      await trackingApi(`print/${job.jobId}`, { method: 'PATCH', body: { status: 'sent' } })
-      setNotice('Test label sent. Check the printer, then confirm the result.')
-    } else {
-      setError(SEND_FAILURE_MESSAGE[sent.reason])
+  const sendTest = async (job: LabelJob, via: PrintMethod) => {
+    setError('')
+    setNotice('')
+    const [result] = await deliverLabels(via, [job], 'Test label')
+    try {
+      if (result.ok) {
+        await trackingApi(`print/${job.jobId}`, { method: 'PATCH', body: { status: 'sent' } })
+        setNotice('Test label sent. Check the printer, then confirm the result.')
+      } else {
+        setError(result.message)
+      }
+    } catch (err) {
+      setError(errorText(err))
     }
-    setTestJob({ jobId: job.jobId, zpl: job.zpl, sent: sent.ok })
+    setTestJob({ job, sent: result.ok })
+  }
+
+  const testPrint = async (printerId: string) => {
+    const job = await post({ action: 'test_print', printer_id: printerId }) as LabelJob | null
+    if (job) await sendTest(job, method)
   }
 
   const answerTest = async (status: 'confirmed' | 'failed') => {
     if (!testJob) return
     try {
-      await trackingApi(`print/${testJob.jobId}`, { method: 'PATCH', body: { status } })
+      await trackingApi(`print/${testJob.job.jobId}`, { method: 'PATCH', body: { status } })
       setNotice(status === 'confirmed' ? 'Test print confirmed.' : 'Test print marked as failed.')
       setTestJob(null)
     } catch (err) {
@@ -175,6 +187,22 @@ export function TrackingSettings() {
 
       <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-gray-900">Printers</h2>
+        <p className="text-sm text-gray-600">
+          A printer here records the label size used at a warehouse. Labels can reach the printer two ways, chosen on each computer:
+        </p>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-gray-600">
+          <li>
+            <span className="font-medium text-gray-800">Print dialog (any printer).</span> Works with any label or office printer
+            installed on the computer, by USB or network. Install the printer&apos;s own driver and set its paper size to the label
+            size below. For a Zebra, use the ZDesigner driver and set the label size under Printing Preferences.
+          </li>
+          <li>
+            <span className="font-medium text-gray-800">Zebra Browser Print (direct).</span> For Zebra printers only. Install Zebra
+            Browser Print on the computer the printer is connected to and pick the printer as its default. Then open{' '}
+            <span className="font-mono">https://127.0.0.1:9101/ssl_support</span> once and accept the certificate.
+          </li>
+        </ul>
+        <PrintMethodPicker method={method} onChange={setMethod} showHint={false} />
         {settings.printers.length === 0 && <p className="text-sm text-gray-600">No printers yet.</p>}
         <ul className="divide-y divide-gray-100">
           {settings.printers.map((p) => (
@@ -193,8 +221,11 @@ export function TrackingSettings() {
             <span className="text-gray-700">Did the test label print correctly?</span>
             <button type="button" onClick={() => answerTest('confirmed')} className="rounded border border-green-300 bg-green-50 px-2 py-1 text-green-800">Yes</button>
             <button type="button" onClick={() => answerTest('failed')} className="rounded border border-red-300 bg-red-50 px-2 py-1 text-red-800">No</button>
+            {!testJob.sent && method === 'zebra' && (
+              <button type="button" onClick={() => sendTest(testJob.job, 'dialog')} className="rounded border border-gray-300 px-2 py-1 text-gray-700">Use print dialog</button>
+            )}
             {!testJob.sent && (
-              <button type="button" onClick={() => downloadZpl(testJob.zpl, 'test-label.zpl')} className="rounded border border-gray-300 px-2 py-1 text-gray-700">Download label file</button>
+              <button type="button" onClick={() => downloadZpl(testJob.job.zpl, 'test-label.zpl')} className="rounded border border-gray-300 px-2 py-1 text-gray-700">Download Zebra label file</button>
             )}
           </div>
         )}
