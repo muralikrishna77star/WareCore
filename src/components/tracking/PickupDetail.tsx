@@ -27,6 +27,18 @@ interface Sale {
 
 type AddResult = { needsReason: true; message: string } | { needsReason: false }
 
+interface Candidate {
+  unit_id: string
+  stock_tracking_id: string
+  item_code: string | null
+  item_name: string | null
+  size_label: string | null
+  purchase_line_id: string | null
+  quantity: string
+  unit: string
+  at_vendor_since: string | null
+}
+
 const EVENT_LABELS: Record<string, string> = {
   PICKUP_CREATED: 'Pickup started',
   UNIT_ADDED: 'Bundle added',
@@ -55,7 +67,8 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
-  const [pending, setPending] = useState<{ code: string; message: string } | null>(null)
+  const [pending, setPending] = useState<{ code?: string; unitId?: string; message: string } | null>(null)
+  const [candidates, setCandidates] = useState<Candidate[]>([])
   const [mismatchReason, setMismatchReason] = useState('')
   const [removing, setRemoving] = useState<string | null>(null)
   const [removeReason, setRemoveReason] = useState('')
@@ -68,21 +81,34 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
 
   const fetchDetail = useCallback(() => trackingApi<Detail>(`pickups/${pickupId}`), [pickupId])
 
+  const fetchCandidates = useCallback(
+    () => trackingApi<{ candidates: Candidate[] }>(`pickups/${pickupId}?candidates=1`).then((data) => data.candidates),
+    [pickupId],
+  )
+
   const load = useCallback(async () => {
     try {
-      setDetail(await fetchDetail())
+      const data = await fetchDetail()
+      setDetail(data)
+      if (data.pickup.vendor_id && data.pickup.status === 'OPEN') setCandidates(await fetchCandidates())
     } catch (err) {
       setError(errorText(err))
     }
-  }, [fetchDetail])
+  }, [fetchDetail, fetchCandidates])
 
   useEffect(() => {
     let current = true
     fetchDetail()
-      .then((data) => {
+      .then(async (data) => {
         if (!current) return
         setDetail(data)
         setPhone(data.pickup.customer_phone ?? '')
+        if (data.pickup.vendor_id) {
+          // Nobody scans at a vendor, so the bundles that vendor holds are listed to pick from.
+          const list = data.pickup.status === 'OPEN' ? await fetchCandidates() : []
+          if (current) setCandidates(list)
+          return null
+        }
         return trackingApi<{ locations: TrackingLocation[] }>(`locations?warehouse_id=${data.pickup.warehouse_id}`)
       })
       .then((data) => {
@@ -90,7 +116,7 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
       })
       .catch((err) => { if (current) setError(errorText(err)) })
     return () => { current = false }
-  }, [fetchDetail])
+  }, [fetchDetail, fetchCandidates])
 
   const act = async (body: Record<string, unknown>, done: string) => {
     setBusy(true)
@@ -109,14 +135,16 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
     }
   }
 
-  const addUnit = async (code: string, reason?: string) => {
+  const addUnit = async (target: { code?: string; unitId?: string }, reason?: string) => {
     setBusy(true)
     setError('')
     setNotice('')
     try {
-      const result = await trackingApi<AddResult>(`pickups/${pickupId}`, { method: 'POST', body: { action: 'add_unit', code, reason } })
+      const result = await trackingApi<AddResult>(`pickups/${pickupId}`, {
+        method: 'POST', body: { action: 'add_unit', code: target.code, unit_id: target.unitId, reason },
+      })
       if (result.needsReason) {
-        setPending({ code, message: result.message })
+        setPending({ ...target, message: result.message })
       } else {
         setPending(null)
         setMismatchReason('')
@@ -151,6 +179,20 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
   const ready = pickup.status === 'READY'
   const beforeHandover = open || ready
   const whatsappNumber = normalizePhone(phone)
+  const atVendor = !!pickup.vendor_id
+  // A vendor pickup is filled in the office, so anyone who can make pickups can work it.
+  const canStep = atVendor ? canShare : canOperate
+  const canHandOver = canStep && (atVendor ? open && lines.length > 0 : ready)
+  const reasonPrompt = pending && (
+    <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+      <p className="text-sm font-medium text-amber-900">{pending.message}</p>
+      <input value={mismatchReason} onChange={(e) => setMismatchReason(e.target.value)} placeholder="Reason" className={field} />
+      <div className="flex gap-2">
+        <button type="button" disabled={busy || !mismatchReason.trim()} onClick={() => addUnit(pending, mismatchReason)} className={primary}>Add anyway</button>
+        <button type="button" onClick={() => { setPending(null); setMismatchReason('') }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Do not add</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -171,7 +213,9 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
           <div><dt className="text-gray-500">Customer</dt><dd className="font-medium text-gray-900">{pickup.customer_name}</dd></div>
-          <div><dt className="text-gray-500">Warehouse</dt><dd className="text-gray-900">{pickup.warehouse_name}</dd></div>
+          {atVendor
+            ? <div><dt className="text-gray-500">Collected at vendor</dt><dd className="font-medium text-gray-900">{pickup.vendor_name}</dd></div>
+            : <div><dt className="text-gray-500">Warehouse</dt><dd className="text-gray-900">{pickup.warehouse_name}</dd></div>}
           <div><dt className="text-gray-500">Total</dt><dd className="font-medium text-gray-900">{pickup.bundle_count} {pickup.bundle_count === 1 ? 'bundle' : 'bundles'}, {pickup.total_quantity} {pickup.unit}</dd></div>
           <div><dt className="text-gray-500">Sale</dt><dd className="text-gray-900">{pickup.invoice_number ?? 'Not linked'}</dd></div>
           {pickup.collector_name && <div><dt className="text-gray-500">Collector</dt><dd className="text-gray-900">{pickup.collector_name}{pickup.collector_phone ? `, ${pickup.collector_phone}` : ''}</dd></div>}
@@ -181,25 +225,39 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
         </dl>
       </section>
 
-      {open && canOperate && (
+      {open && !atVendor && canOperate && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
-          <ScanInput id="pickup-bundle" label="Scan a bundle onto this pickup" placeholder="ST2611-000001" buttonLabel="Add" busy={busy} autoFocus onScan={(code) => addUnit(code)} />
-          {pending && (
-            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm font-medium text-amber-900">{pending.message}</p>
-              <input value={mismatchReason} onChange={(e) => setMismatchReason(e.target.value)} placeholder="Reason" className={field} />
-              <div className="flex gap-2">
-                <button type="button" disabled={busy || !mismatchReason.trim()} onClick={() => addUnit(pending.code, mismatchReason)} className={primary}>Add anyway</button>
-                <button type="button" onClick={() => { setPending(null); setMismatchReason('') }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Do not add</button>
-              </div>
-            </div>
+          <ScanInput id="pickup-bundle" label="Scan a bundle onto this pickup" placeholder="ST2611-000001" buttonLabel="Add" busy={busy} autoFocus onScan={(code) => addUnit({ code })} />
+          {reasonPrompt}
+        </section>
+      )}
+
+      {open && atVendor && canStep && (
+        <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="font-semibold text-gray-900">Bundles at {pickup.vendor_name}</h3>
+          <p className="text-sm text-gray-600">Choose the bundles the customer is taking. If they take part of a bundle, split it on its bundle page first.</p>
+          {reasonPrompt}
+          {candidates.length === 0 && <p className="text-sm text-gray-600">No other bundles from this warehouse are at this vendor.</p>}
+          {candidates.length > 0 && (
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+              {candidates.map((c) => (
+                <li key={c.unit_id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <Link href={`/tracking/units/${c.unit_id}`} className="font-mono text-blue-600 hover:underline">{c.stock_tracking_id}</Link>
+                    <span className="ml-2 text-gray-700">{c.item_code} {c.item_name} {c.size_label}</span>
+                    <span className="ml-2 font-medium text-gray-900">{c.quantity} {c.unit}</span>
+                  </span>
+                  <button type="button" disabled={busy} onClick={() => addUnit({ unitId: c.unit_id })} className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-50 disabled:opacity-50">Add</button>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
       )}
 
       <section className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <h3 className="px-4 pt-4 font-semibold text-gray-900">Bundles</h3>
-        {lines.length === 0 && <p className="px-4 py-3 text-sm text-gray-600">No bundles scanned yet.</p>}
+        {lines.length === 0 && <p className="px-4 py-3 text-sm text-gray-600">{atVendor ? 'No bundles added yet.' : 'No bundles scanned yet.'}</p>}
         {lines.length > 0 && (
           <table className="mt-2 min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -209,7 +267,7 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
                 <th className="px-4 py-2 text-right">Weight</th>
                 <th className="px-4 py-2">Location</th>
                 <th className="px-4 py-2">Status</th>
-                {beforeHandover && canOperate && <th className="px-4 py-2"><span className="sr-only">Remove</span></th>}
+                {beforeHandover && canStep && <th className="px-4 py-2"><span className="sr-only">Remove</span></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -223,7 +281,7 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
                   <td className="whitespace-nowrap px-4 py-2 text-right text-gray-900">{line.quantity} {line.unit}</td>
                   <td className="whitespace-nowrap px-4 py-2 font-mono text-gray-700">{line.location_code}</td>
                   <td className="px-4 py-2">{line.returned_at ? <span className="text-xs font-medium text-amber-700">Returned</span> : <LifecycleBadge status={line.lifecycle_status} />}</td>
-                  {beforeHandover && canOperate && (
+                  {beforeHandover && canStep && (
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       {removing === line.unit_id ? (
                         <span className="flex items-center justify-end gap-2">
@@ -254,7 +312,7 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
         )}
       </section>
 
-      {open && canOperate && lines.length > 0 && (
+      {open && !atVendor && canOperate && lines.length > 0 && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="font-semibold text-gray-900">Mark ready</h3>
           <div className="flex flex-wrap items-end gap-3">
@@ -298,9 +356,10 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
         </section>
       )}
 
-      {ready && canOperate && (
+      {canHandOver && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="font-semibold text-gray-900">Hand over</h3>
+          {atVendor && <p className="text-sm text-gray-600">Record who collected the material from {pickup.vendor_name}.</p>}
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">Collector&apos;s name</span>
               <input value={collector.name} onChange={(e) => setCollector({ ...collector, name: e.target.value })} className={field} />
@@ -330,7 +389,11 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
                 <input value={saleSearch} onChange={(e) => setSaleSearch(e.target.value)} placeholder="Search invoice number" className={field} />
                 <button type="button" onClick={findSales} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Find</button>
               </div>
-              {sales?.length === 0 && <p className="text-sm text-gray-600">No active sales were found for this customer in this warehouse.</p>}
+              {sales?.length === 0 && (
+                <p className="text-sm text-gray-600">
+                  {atVendor ? 'No active vendor direct sales were found for this customer.' : 'No active sales were found for this customer in this warehouse.'}
+                </p>
+              )}
               {!!sales?.length && (
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                   {sales.map((sale) => (
@@ -349,7 +412,7 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
       {beforeHandover && canManage && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="font-semibold text-gray-900">Cancel pickup</h3>
-          <p className="text-sm text-gray-600">Every bundle on this pickup goes back to In stock.</p>
+          <p className="text-sm text-gray-600">{atVendor ? 'Every bundle on this pickup stays at the vendor.' : 'Every bundle on this pickup goes back to In stock.'}</p>
           <div className="flex max-w-lg gap-2">
             <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Reason" className={field} />
             <button type="button" disabled={busy || !cancelReason.trim()} onClick={() => act({ action: 'cancel', reason: cancelReason }, 'Pickup cancelled')} className="whitespace-nowrap rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">Cancel pickup</button>

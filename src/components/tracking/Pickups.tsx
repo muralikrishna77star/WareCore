@@ -10,6 +10,7 @@ import { PickupBadge } from './StatusBadge'
 interface Options {
   customers: { id: string; name: string }[]
   warehouses: { id: string; name: string; company_id: string; company_name: string }[]
+  vendors: { id: string; name: string; bundle_count: number }[]
 }
 
 const field = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm'
@@ -19,10 +20,12 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [pickups, setPickups] = useState<PickupSummary[] | null>(null)
-  const [options, setOptions] = useState<Options>({ customers: [], warehouses: [] })
+  const [options, setOptions] = useState<Options>({ customers: [], warehouses: [], vendors: [] })
   const [error, setError] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
+  const [atVendor, setAtVendor] = useState(false)
+  const [vendorId, setVendorId] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
       trackingApi<{ pickups: PickupSummary[] } & Options>(`pickups?search=${encodeURIComponent(search)}&status=${status}`)
         .then((data) => {
           setPickups(data.pickups)
-          setOptions({ customers: data.customers, warehouses: data.warehouses })
+          setOptions({ customers: data.customers, warehouses: data.warehouses, vendors: data.vendors ?? [] })
           setError('')
         })
         .catch((err) => setError(errorText(err)))
@@ -46,7 +49,7 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
     try {
       const { pickup } = await trackingApi<{ pickup: PickupSummary }>('pickups', {
         method: 'POST',
-        body: { company_id: warehouse.company_id, warehouse_id: warehouse.id, customer_id: customerId },
+        body: { company_id: warehouse.company_id, warehouse_id: warehouse.id, customer_id: customerId, vendor_id: atVendor ? vendorId : undefined },
       })
       router.push(`/tracking/pickups/${pickup.id}`)
     } catch (err) {
@@ -63,8 +66,23 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="text-lg font-semibold text-gray-900">Start a pickup</h2>
           <p className="text-sm text-gray-600">The sale can be linked now or after it has been entered.</p>
+          <fieldset className="flex flex-wrap gap-4 text-sm text-gray-700">
+            <legend className="sr-only">Where the customer collects</legend>
+            <label className="flex items-center gap-2"><input type="radio" checked={!atVendor} onChange={() => setAtVendor(false)} /> From our yard</label>
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={atVendor} disabled={options.vendors.length === 0} onChange={() => setAtVendor(true)} /> Straight from a job work vendor
+            </label>
+          </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">Warehouse</span>
+            {atVendor && (
+              <label className="text-sm text-gray-700 sm:col-span-2"><span className="mb-1 block font-medium">Vendor</span>
+                <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className={field}>
+                  <option value="">Choose</option>
+                  {options.vendors.map((v) => <option key={v.id} value={v.id}>{v.name} · {v.bundle_count} {v.bundle_count === 1 ? 'bundle' : 'bundles'}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">{atVendor ? 'Warehouse the bundles belong to' : 'Warehouse'}</span>
               <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} className={field}>
                 <option value="">Choose</option>
                 {options.warehouses.map((w) => <option key={w.id} value={w.id}>{w.company_name} · {w.name}</option>)}
@@ -77,7 +95,7 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
               </select>
             </label>
           </div>
-          <button type="button" disabled={saving || !warehouseId || !customerId} onClick={create} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="button" disabled={saving || !warehouseId || !customerId || (atVendor && !vendorId)} onClick={create} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
             {saving ? 'Starting…' : 'Start pickup'}
           </button>
         </section>
@@ -103,7 +121,7 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
                 <th className="px-4 py-3 text-right">Bundles</th>
                 <th className="px-4 py-3 text-right">Weight</th>
                 <th className="px-4 py-3">Sale</th>
-                <th className="px-4 py-3">Warehouse</th>
+                <th className="px-4 py-3">Collected from</th>
                 <th className="px-4 py-3">Started</th>
                 <th className="px-4 py-3">Status</th>
               </tr>
@@ -116,7 +134,7 @@ export function Pickups({ canCreate }: { canCreate: boolean }) {
                   <td className="px-4 py-3 text-right text-gray-900">{pickup.bundle_count}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-gray-900">{pickup.total_quantity} {pickup.unit}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-700">{pickup.invoice_number ?? 'Not linked'}</td>
-                  <td className="px-4 py-3 text-gray-700">{pickup.warehouse_name}</td>
+                  <td className="px-4 py-3 text-gray-700">{pickup.vendor_name ? `At ${pickup.vendor_name}` : pickup.warehouse_name}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">{formatWhen(pickup.created_at)}</td>
                   <td className="px-4 py-3"><PickupBadge status={pickup.status} /></td>
                 </tr>

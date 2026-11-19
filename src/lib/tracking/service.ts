@@ -40,12 +40,15 @@ export const UNIT_COLUMNS = `u.id::text, u.stock_tracking_id, u.qr_reference, u.
   c.name AS company_name, w.name AS warehouse_name, u.purchase_line_id, u.bill_number, u.receipt_date::text,
   u.item_code, u.item_name, u.size_label, u.quantity::text, u.unit, u.bundle_no::int, u.bundle_count::int,
   u.weight_basis, u.status, u.void_reason, u.created_at::text, u.lifecycle_status, l.code AS location_code,
-  u.status_reason, u.source_type, u.parent_unit_id::text, u.part_no::int`
+  u.status_reason, u.source_type, u.parent_unit_id::text, u.part_no::int, u.item_master_id::text,
+  u.material_type_id::text, u.current_vendor_id::text, u.current_vendor_name, u.at_vendor_since::text,
+  u.output_receipt_id::text, r.receipt_no, u.job_work_output_item_id::text`
 
 export const UNIT_FROM = `tracking_units u
   LEFT JOIN companies c ON c.id = u.company_id
   LEFT JOIN warehouses w ON w.id = u.warehouse_id
-  LEFT JOIN tracking_locations l ON l.id = u.current_location_id`
+  LEFT JOIN tracking_locations l ON l.id = u.current_location_id
+  LEFT JOIN tracking_output_receipts r ON r.id = u.output_receipt_id`
 
 export function toUnit(row: Row): TrackingUnit {
   return {
@@ -152,8 +155,11 @@ export async function listUnits(
   if (options.search?.trim()) {
     params.push(likePattern(options.search.trim()))
     const p = `$${params.length}`
+    // A purchase line also finds every output and remainder that descends from it.
     conditions.push(`(u.stock_tracking_id ILIKE ${p} OR u.purchase_line_id ILIKE ${p} OR u.bill_number ILIKE ${p}
-                      OR u.item_code ILIKE ${p} OR u.item_name ILIKE ${p})`)
+                      OR u.item_code ILIKE ${p} OR u.item_name ILIKE ${p} OR u.current_vendor_name ILIKE ${p}
+                      OR r.receipt_no ILIKE ${p}
+                      OR EXISTS (SELECT 1 FROM tracking_unit_origins o WHERE o.tracking_unit_id = u.id AND o.purchase_line_id ILIKE ${p}))`)
   }
   const rows = await query(
     `SELECT ${UNIT_COLUMNS} FROM ${UNIT_FROM} WHERE ${conditions.join(' AND ')} ORDER BY u.created_at DESC, u.bundle_no LIMIT 300`,
@@ -169,12 +175,19 @@ export async function sourceWarnings(unit: TrackingUnit): Promise<string[]> {
   if (unit.status === 'ACTIVE' && unit.lifecycle_status === 'SPLIT') {
     warnings.push('Do not use. This bundle was split, so use the labels on its parts')
   }
+  if (unit.status === 'ACTIVE' && unit.lifecycle_status === 'PROCESSED') {
+    warnings.push('Do not use. This bundle was used up in job work, so use the labels on its outputs')
+  }
+  // An output made from several purchase lines has no single line to compare with.
+  if (!unit.purchase_line_id) return warnings
 
   // A split original is replaced by its parts, so only the parts count towards the labelled total.
+  // Outputs and remainders are made later from those bundles, so they never count towards it.
   const [source] = await query(
     `SELECT COALESCE(i.received_quantity, i.quantity)::text AS quantity, b.status,
             (SELECT COALESCE(SUM(t.quantity), 0)::text FROM tracking_units t
-              WHERE t.purchase_line_id = i.purchase_line_id AND t.status = 'ACTIVE' AND t.lifecycle_status <> 'SPLIT') AS labelled,
+              WHERE t.purchase_line_id = i.purchase_line_id AND t.status = 'ACTIVE' AND t.lifecycle_status <> 'SPLIT'
+                AND t.source_type IN ('NEW_PURCHASE', 'VERIFIED_EXISTING', 'SPLIT_PART') AND t.output_receipt_id IS NULL) AS labelled,
             (SELECT t.source_verification_id IS NOT NULL FROM tracking_units t WHERE t.id = $2::uuid) AS verified,
             (SELECT COALESCE(SUM(t.quantity), 0)::text FROM tracking_units t
               WHERE t.purchase_line_id = i.purchase_line_id AND t.company_id = $3::uuid AND t.warehouse_id = $4::uuid
@@ -190,7 +203,8 @@ export async function sourceWarnings(unit: TrackingUnit): Promise<string[]> {
   } else {
     if (source.status !== 'active') warnings.push(`The purchase bill for this label is ${source.status}`)
     // Verified old stock is only part of its purchase line, so the labels are not expected to add up to it.
-    if (unit.status === 'ACTIVE' && source.verified !== 't' && Number(source.quantity) !== Number(source.labelled)) {
+    const fromPurchase = unit.source_type === 'NEW_PURCHASE' || unit.source_type === 'SPLIT_PART'
+    if (unit.status === 'ACTIVE' && fromPurchase && source.verified !== 't' && Number(source.quantity) !== Number(source.labelled)) {
       warnings.push(`Purchase line quantity is now ${source.quantity} ${unit.unit}, but its labels total ${source.labelled} ${unit.unit}`)
     }
     if (unit.status === 'ACTIVE' && Number(source.on_hand) > Number(source.book)) {

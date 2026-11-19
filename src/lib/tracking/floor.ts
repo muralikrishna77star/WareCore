@@ -117,7 +117,7 @@ export async function requestLocationPrint(actor: TrackingActor, locationId: unk
 }
 
 /** Accepts a scanned location label, or a code typed by hand. */
-async function resolveLocationId(actor: TrackingActor, unit: { company_id: string; warehouse_id: string }, raw: unknown): Promise<string> {
+export async function resolveLocationId(actor: TrackingActor, unit: { company_id: string; warehouse_id: string }, raw: unknown): Promise<string> {
   const text = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
   if (!text) throw new TrackingError('Scan a location')
   const byRef = LOCATION_REF_RE.test(text)

@@ -1,13 +1,14 @@
 import { readJson, trackingRoute } from '@/lib/tracking/http'
 import {
-  addPickupUnit, cancelPickup, getPickupDetail, handOverPickup, linkPickupSale, listLinkableSales,
-  markPickupReady, recordPickupShare, removePickupUnit,
+  addPickupUnit, addPickupUnitById, cancelPickup, getPickupDetail, handOverPickup, linkPickupSale, listLinkableSales,
+  markPickupReady, recordPickupShare, removePickupUnit, vendorPickupCandidates,
 } from '@/lib/tracking/pickups'
 import { TrackingError } from '@/lib/tracking/service'
 
 export const GET = trackingRoute<{ id: string }>('view', async ({ request, actor, params }) => {
   const salesSearch = request.nextUrl.searchParams.get('sales')
   if (salesSearch !== null) return { sales: await listLinkableSales(actor, params.id, salesSearch) }
+  if (request.nextUrl.searchParams.get('candidates') !== null) return { candidates: await vendorPickupCandidates(actor, params.id) }
   return getPickupDetail(actor, params.id)
 })
 
@@ -16,7 +17,9 @@ export const POST = trackingRoute<{ id: string }>('pickup', async ({ request, ac
   const body = await readJson(request)
   switch (body.action) {
     case 'add_unit':
-      return addPickupUnit(actor, params.id, body.code, body.reason)
+      return body.unit_id
+        ? addPickupUnitById(actor, params.id, body.unit_id, body.reason)
+        : addPickupUnit(actor, params.id, body.code, body.reason)
     case 'remove_unit':
       return { pickup: await removePickupUnit(actor, params.id, body.unit_id, body.reason) }
     case 'mark_ready':

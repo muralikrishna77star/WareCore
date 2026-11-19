@@ -37,9 +37,12 @@ export interface UnitForLabel {
   bundle_no: number | string
   bundle_count: number | string
   weight_basis: string
-  purchase_line_id: string
+  /** Empty for an output made from several purchase lines. */
+  purchase_line_id: string | null
   receipt_date: string | null
   part_no?: number | string | null
+  source_type?: string | null
+  receipt_no?: string | null
 }
 
 export interface LocationForLabel {
@@ -75,6 +78,12 @@ export function labelFieldsForUnit(unit: UnitForLabel): LabelFields {
   const estimated = unit.weight_basis === 'estimated' ? ' EST' : ''
   const date = formatLabelDate(unit.receipt_date)
   const part = unit.part_no ? `, part ${unit.part_no}` : ''
+  // An output names its receipt when it has no single purchase line.
+  const line = unit.purchase_line_id ?? unit.receipt_no ?? ''
+  const bundle = unit.weight_basis === 'whole_line' ? 'Whole line'
+    : unit.source_type === 'JOB_WORK_OUTPUT' ? `Output ${unit.bundle_no} of ${count}${part}`
+    : unit.source_type === 'JOB_WORK_REMAINDER' ? `Remainder of bundle ${unit.bundle_no}${part}`
+    : `Bundle ${unit.bundle_no} of ${count}${part}`
   return {
     QR: unit.qr_reference,
     TRACKING_ID: unit.stock_tracking_id,
@@ -82,8 +91,8 @@ export function labelFieldsForUnit(unit: UnitForLabel): LabelFields {
     ITEM_NAME: unit.item_name ?? '',
     SIZE: unit.size_label ?? '',
     WEIGHT: `${unit.quantity} ${unit.unit}${estimated}`,
-    BUNDLE: unit.weight_basis === 'whole_line' ? 'Whole line' : `Bundle ${unit.bundle_no} of ${count}${part}`,
-    LINE_AND_DATE: date ? `${unit.purchase_line_id}  ${date}` : unit.purchase_line_id,
+    BUNDLE: bundle,
+    LINE_AND_DATE: date && line ? `${line}  ${date}` : line || date,
   }
 }
 

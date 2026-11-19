@@ -68,6 +68,10 @@ export async function POST(request: NextRequest) {
           UPDATE tracking_pickups SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
           -- tracking_verifications is a permanent record of where stock was checked, so it stays as written.
         END IF;
+        IF to_regclass('public.tracking_vendor_dispatches') IS NOT NULL THEN
+          UPDATE tracking_vendor_dispatches SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+          UPDATE tracking_output_receipts SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+        END IF;
       END
       $tracking$;
 

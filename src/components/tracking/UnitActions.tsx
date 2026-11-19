@@ -103,9 +103,16 @@ export function UnitActions({ unit, canOperate, canManage, onChanged }: {
     return `Split into ${units.length} parts. Print their labels now.`
   })
 
+  const backFromVendor = (code: string) => run(async () => {
+    const position = await capturePosition(unit.company_id)
+    const { unit: back } = await trackingApi<{ unit: TrackingUnit }>(`units/${unit.id}/return`, { method: 'POST', body: { location: code, position } })
+    return `Back from ${unit.current_vendor_name}, now at ${back.location_code}`
+  })
+
+  const atVendor = unit.lifecycle_status === 'AT_VENDOR'
   const canPlace = canOperate && ['LABELLED', 'IN_STOCK', 'ON_HOLD'].includes(unit.lifecycle_status)
   const statusActions = canManage ? STATUS_ACTIONS[unit.lifecycle_status] ?? [] : []
-  const canSplit = canManage && ['IN_STOCK', 'ON_PICKUP'].includes(unit.lifecycle_status)
+  const canSplit = canManage && ['IN_STOCK', 'ON_PICKUP', 'AT_VENDOR'].includes(unit.lifecycle_status)
   const needsReason = !!action?.reason && !reason.trim()
   const needsLocation = !!action?.location && !location.trim()
 
@@ -117,7 +124,18 @@ export function UnitActions({ unit, canOperate, canManage, onChanged }: {
       {newParts && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="font-semibold text-gray-900">New part labels</h3>
+          {newParts[0]?.lifecycle_status === 'AT_VENDOR' && (
+            <p className="text-sm text-gray-600">These parts are still at the vendor. A part that comes back can be labelled then, from its bundle page.</p>
+          )}
           <LabelPrintPanel units={newParts} />
+        </section>
+      )}
+
+      {atVendor && canOperate && (
+        <section className="space-y-2 rounded-lg border border-gray-200 bg-white p-4">
+          <h3 className="font-semibold text-gray-900">Back from {unit.current_vendor_name}, unprocessed</h3>
+          <p className="text-sm text-gray-600">For a bundle that comes back whole and unchanged. It keeps this label. Processed material and lighter remainders are received from Outputs.</p>
+          <ScanInput id={`return-${unit.id}`} label="Scan the location it is going to" placeholder="A-03-2" buttonLabel="Bring back" busy={busy} onScan={backFromVendor} />
         </section>
       )}
 
@@ -179,7 +197,10 @@ export function UnitActions({ unit, canOperate, canManage, onChanged }: {
       {canSplit && (
         <section className="space-y-3 rounded-lg border border-gray-200 bg-white p-4">
           <h3 className="font-semibold text-gray-900">Split bundle</h3>
-          <p className="text-sm text-gray-600">Use this when a customer takes part of a bundle. Each part gets a new label, and this label stops being valid.</p>
+          <p className="text-sm text-gray-600">
+            Use this when a customer takes part of a bundle. Each part gets a new label, and this label stops being valid.
+            {atVendor && ' The parts stay at the vendor, so the part being sold can go on a vendor pickup.'}
+          </p>
           <label className="block text-sm text-gray-700">
             <span className="mb-1 block font-medium">Number of parts</span>
             <input inputMode="numeric" value={partCount} onChange={(e) => changePartCount(e.target.value)} placeholder="2 to 20" className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm" />

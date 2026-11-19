@@ -1,4 +1,6 @@
-import { LIFECYCLE_LABELS, PICKUP_STATUS_LABELS, type LifecycleStatus, type PickupStatus } from '@/lib/tracking/constants'
+import {
+  DISPATCH_STATUS_LABELS, LIFECYCLE_LABELS, PICKUP_STATUS_LABELS, type DispatchStatus, type LifecycleStatus, type PickupStatus,
+} from '@/lib/tracking/constants'
 
 const LIFECYCLE_STYLES: Record<LifecycleStatus, string> = {
   LABELLED: 'bg-gray-100 text-gray-800',
@@ -10,6 +12,8 @@ const LIFECYCLE_STYLES: Record<LifecycleStatus, string> = {
   MISSING: 'bg-red-100 text-red-800',
   LEFT_WAREHOUSE: 'bg-amber-100 text-amber-800',
   SPLIT: 'bg-gray-100 text-gray-800',
+  AT_VENDOR: 'bg-violet-100 text-violet-800',
+  PROCESSED: 'bg-gray-100 text-gray-800',
 }
 
 const PICKUP_STYLES: Record<PickupStatus, string> = {
@@ -26,4 +30,14 @@ export function LifecycleBadge({ status, voided = false }: { status: LifecycleSt
 
 export function PickupBadge({ status }: { status: PickupStatus }) {
   return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PICKUP_STYLES[status]}`}>{PICKUP_STATUS_LABELS[status]}</span>
+}
+
+const DISPATCH_STYLES: Record<DispatchStatus, string> = {
+  OPEN: 'bg-gray-100 text-gray-800',
+  SENT: 'bg-violet-100 text-violet-800',
+  CANCELLED: 'bg-red-100 text-red-800',
+}
+
+export function DispatchBadge({ status }: { status: DispatchStatus }) {
+  return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${DISPATCH_STYLES[status]}`}>{DISPATCH_STATUS_LABELS[status]}</span>
 }

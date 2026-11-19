@@ -11,7 +11,7 @@ const LIVE_LINE = `pl.removed_at IS NULL AND pl.returned_at IS NULL`
 
 const PICKUP_COLUMNS = `p.id::text, p.pickup_no, p.company_id::text, p.warehouse_id::text, c.name AS company_name,
   w.name AS warehouse_name, p.status, p.customer_id::text, p.customer_name, p.customer_phone,
-  p.dispatch_order_id::text, p.invoice_number, p.collector_name, p.collector_phone, p.vehicle_number,
+  p.dispatch_order_id::text, p.invoice_number, p.vendor_id::text, p.vendor_name, p.collector_name, p.collector_phone, p.vehicle_number,
   p.handed_over_at::text, p.cancel_reason, p.created_at::text,
   (SELECT count(*)::int FROM tracking_pickup_units pl WHERE pl.pickup_id = p.id AND ${LIVE_LINE}) AS bundle_count,
   (SELECT COALESCE(SUM(pl.quantity), 0)::text FROM tracking_pickup_units pl WHERE pl.pickup_id = p.id AND ${LIVE_LINE}) AS total_quantity,
@@ -43,17 +43,20 @@ export async function listPickups(actor: TrackingActor, options: { search?: stri
   if (options.search?.trim()) {
     params.push(likePattern(options.search.trim()))
     const p = `$${params.length}`
-    conditions.push(`(p.pickup_no ILIKE ${p} OR p.customer_name ILIKE ${p} OR p.invoice_number ILIKE ${p} OR p.vehicle_number ILIKE ${p})`)
+    conditions.push(`(p.pickup_no ILIKE ${p} OR p.customer_name ILIKE ${p} OR p.invoice_number ILIKE ${p} OR p.vehicle_number ILIKE ${p}
+                      OR p.vendor_name ILIKE ${p})`)
   }
   const rows = await query(`SELECT ${PICKUP_COLUMNS} FROM ${PICKUP_FROM} WHERE ${conditions.join(' AND ')} ORDER BY p.created_at DESC LIMIT 200`, params)
   return rows.map(toPickup)
 }
 
-/** Customers and the warehouses this person can start a pickup in. */
+/** Customers, the warehouses this person can start a pickup in, and vendors holding bundles. */
 export async function pickupOptions(actor: TrackingActor) {
   const params: unknown[] = []
   const scope = actorScopeSql(actor, 'w.company_id', 'w.id', params)
-  const [customers, warehouses] = await Promise.all([
+  const vendorParams: unknown[] = []
+  const vendorScope = actorScopeSql(actor, 'u.company_id', 'u.warehouse_id', vendorParams)
+  const [customers, warehouses, vendors] = await Promise.all([
     query(`SELECT id::text, name FROM customers WHERE is_active ORDER BY name LIMIT 2000`),
     query(
       `SELECT w.id::text, w.name, w.company_id::text, c.name AS company_name
@@ -62,19 +65,51 @@ export async function pickupOptions(actor: TrackingActor) {
         ORDER BY c.name, w.name`,
       params,
     ),
+    query(
+      `SELECT u.current_vendor_id::text AS id, MIN(u.current_vendor_name) AS name, count(*)::int AS bundle_count
+         FROM tracking_units u
+        WHERE u.status = 'ACTIVE' AND u.lifecycle_status = 'AT_VENDOR' AND ${vendorScope}
+        GROUP BY u.current_vendor_id
+        ORDER BY name`,
+      vendorParams,
+    ),
   ])
-  return { customers, warehouses }
+  return { customers, warehouses, vendors: vendors.map((v) => ({ ...v, bundle_count: Number(v.bundle_count) })) }
 }
 
-export async function createPickup(actor: TrackingActor, input: { company_id?: unknown; warehouse_id?: unknown; customer_id?: unknown }): Promise<PickupSummary> {
+export async function createPickup(
+  actor: TrackingActor, input: { company_id?: unknown; warehouse_id?: unknown; customer_id?: unknown; vendor_id?: unknown },
+): Promise<PickupSummary> {
   assertCan(actor, 'pickup')
   const companyId = requireUuid(input.company_id, 'Company')
   const warehouseId = requireUuid(input.warehouse_id, 'Warehouse')
   const customerId = requireUuid(input.customer_id, 'Customer')
   if (!actorCanAccess(actor, companyId, warehouseId)) throw new TrackingError('Warehouse not found', 404)
-  const [row] = await query(`SELECT id::text FROM create_tracking_pickup($1::uuid, $2::uuid, $3::uuid, $4::uuid)`, [companyId, warehouseId, customerId, actor.userId])
+  const vendorId = input.vendor_id ? requireUuid(input.vendor_id, 'Vendor') : null
+  const [row] = vendorId
+    ? await query(`SELECT id::text FROM create_tracking_vendor_pickup($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid)`, [companyId, warehouseId, vendorId, customerId, actor.userId])
+    : await query(`SELECT id::text FROM create_tracking_pickup($1::uuid, $2::uuid, $3::uuid, $4::uuid)`, [companyId, warehouseId, customerId, actor.userId])
   return pickupInScope(actor, row.id)
 }
+
+/** Bundles a vendor pickup can take: at that vendor, from this warehouse, on no other pickup. */
+export async function vendorPickupCandidates(actor: TrackingActor, pickupId: string) {
+  const pickup = await pickupInScope(actor, pickupId)
+  if (!pickup.vendor_id) return []
+  return query(
+    `SELECT u.id::text AS unit_id, u.stock_tracking_id, u.item_code, u.item_name, u.size_label, u.purchase_line_id,
+            u.quantity::text, u.unit, u.at_vendor_since::text
+       FROM tracking_units u
+      WHERE u.status = 'ACTIVE' AND u.lifecycle_status = 'AT_VENDOR' AND u.current_vendor_id = $1::uuid
+        AND u.company_id = $2::uuid AND u.warehouse_id = $3::uuid
+        AND NOT EXISTS (SELECT 1 FROM tracking_pickup_units pl WHERE pl.tracking_unit_id = u.id AND pl.removed_at IS NULL AND pl.returned_at IS NULL)
+      ORDER BY u.at_vendor_since, u.stock_tracking_id`,
+    [pickup.vendor_id, pickup.company_id, pickup.warehouse_id],
+  )
+}
+
+/** Vendor pickups are filled in the office, so these steps need only pickup rights. */
+const stepPermission = (pickup: PickupSummary) => (pickup.vendor_id ? 'pickup' : 'operate') as 'pickup' | 'operate'
 
 async function pickupLines(pickupId: string): Promise<PickupLine[]> {
   const rows = await query(
@@ -138,12 +173,13 @@ export async function getPickupDetail(actor: TrackingActor, pickupId: string) {
   const message = pickupMessageText({
     pickup_no: pickup.pickup_no,
     company_name: pickup.company_name ?? '',
-    warehouse_name: pickup.warehouse_name ?? '',
+    // Material sold at a vendor is collected from the vendor.
+    warehouse_name: pickup.vendor_name ?? pickup.warehouse_name ?? '',
     customer_name: pickup.customer_name,
     bundle_count: pickup.bundle_count,
     total_quantity: pickup.total_quantity,
     unit: pickup.unit,
-    ready: pickup.status === 'READY',
+    ready: pickup.status === 'READY' || (!!pickup.vendor_id && pickup.status === 'OPEN' && pickup.bundle_count > 0),
   })
   return { pickup, lines, events, warnings: await pickupWarnings(pickup, lines), message }
 }
@@ -157,11 +193,15 @@ export async function listLinkableSales(actor: TrackingActor, pickupId: string, 
     params.push(likePattern(search.trim()))
     filter = `AND o.invoice_number ILIKE $${params.length}`
   }
+  // A vendor pickup links to a vendor direct sale, which can sit under any warehouse of the company.
+  const place = pickup.vendor_id
+    ? `COALESCE(o.is_vendor_direct, false) AND $2::uuid IS NOT NULL`
+    : `o.warehouse_id = $2::uuid`
   return query(
     `SELECT o.id::text, o.invoice_number, o.dispatch_date::text,
             (SELECT COALESCE(SUM(d.quantity), 0)::text FROM dispatch_items d WHERE d.dispatch_order_id = o.id) AS quantity
        FROM dispatch_orders o
-      WHERE o.status = 'active' AND o.company_id = $1::uuid AND o.warehouse_id = $2::uuid AND o.customer_id = $3::uuid ${filter}
+      WHERE o.status = 'active' AND o.company_id = $1::uuid AND ${place} AND o.customer_id = $3::uuid ${filter}
       ORDER BY o.dispatch_date DESC, o.invoice_number DESC
       LIMIT 30`,
     params,
@@ -171,15 +211,11 @@ export async function listLinkableSales(actor: TrackingActor, pickupId: string, 
 export type PickupAddResult = { needsReason: true; message: string } | { needsReason: false; pickup: PickupSummary }
 
 /** Adds a scanned bundle. A bundle that doesn't match the linked sale needs a reason first. */
-export async function addPickupUnit(actor: TrackingActor, pickupId: string, code: unknown, reason: unknown): Promise<PickupAddResult> {
-  assertCan(actor, 'operate')
-  const pickup = await pickupInScope(actor, pickupId)
-  const unit = await findUnitByCode(actor, code)
-  if (!unit) throw new TrackingError('No bundle has this code', 404)
+async function addUnitToPickup(actor: TrackingActor, pickup: PickupSummary, unitId: string, reason: unknown): Promise<PickupAddResult> {
   try {
     await query(
       `SELECT id FROM add_tracking_pickup_unit($1::uuid, $2::uuid, $3, $4::uuid)`,
-      [pickup.id, unit.id, typeof reason === 'string' ? reason : null, actor.userId],
+      [pickup.id, unitId, typeof reason === 'string' ? reason : null, actor.userId],
     )
   } catch (err) {
     if ((err as { code?: string }).code === 'WC003') return { needsReason: true, message: (err as Error).message }
@@ -188,9 +224,25 @@ export async function addPickupUnit(actor: TrackingActor, pickupId: string, code
   return { needsReason: false, pickup: await pickupInScope(actor, pickup.id) }
 }
 
-export async function removePickupUnit(actor: TrackingActor, pickupId: string, unitId: unknown, reason: unknown): Promise<PickupSummary> {
-  assertCan(actor, 'operate')
+export async function addPickupUnit(actor: TrackingActor, pickupId: string, code: unknown, reason: unknown): Promise<PickupAddResult> {
   const pickup = await pickupInScope(actor, pickupId)
+  assertCan(actor, stepPermission(pickup))
+  const unit = await findUnitByCode(actor, code)
+  if (!unit) throw new TrackingError('No bundle has this code', 404)
+  return addUnitToPickup(actor, pickup, unit.id, reason)
+}
+
+/** Adds a bundle picked from a list, for a pickup at a vendor where nobody scans. */
+export async function addPickupUnitById(actor: TrackingActor, pickupId: string, unitId: unknown, reason: unknown): Promise<PickupAddResult> {
+  const pickup = await pickupInScope(actor, pickupId)
+  assertCan(actor, stepPermission(pickup))
+  if (!pickup.vendor_id) throw new TrackingError('Scan bundles onto a yard pickup')
+  return addUnitToPickup(actor, pickup, requireUuid(unitId, 'Bundle'), reason)
+}
+
+export async function removePickupUnit(actor: TrackingActor, pickupId: string, unitId: unknown, reason: unknown): Promise<PickupSummary> {
+  const pickup = await pickupInScope(actor, pickupId)
+  assertCan(actor, stepPermission(pickup))
   await query(
     `SELECT id FROM remove_tracking_pickup_unit($1::uuid, $2::uuid, $3, $4::uuid)`,
     [pickup.id, requireUuid(unitId, 'Bundle'), typeof reason === 'string' ? reason : null, actor.userId],
@@ -219,8 +271,8 @@ export async function handOverPickup(
   actor: TrackingActor, pickupId: string,
   input: { collector_name?: unknown; collector_phone?: unknown; vehicle_number?: unknown; position?: unknown },
 ): Promise<PickupSummary> {
-  assertCan(actor, 'operate')
   const pickup = await pickupInScope(actor, pickupId)
+  assertCan(actor, stepPermission(pickup))
   const rawPhone = typeof input.collector_phone === 'string' ? input.collector_phone.trim() : ''
   const phone = rawPhone ? normalizePhone(rawPhone) : null
   if (rawPhone && !phone) throw new TrackingError('Enter a valid phone number for the collector')

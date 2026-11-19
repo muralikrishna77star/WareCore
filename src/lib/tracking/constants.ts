@@ -43,7 +43,7 @@ export type PrintStatus = 'requested' | 'sent' | 'confirmed' | 'failed'
 
 export type LifecycleStatus =
   | 'LABELLED' | 'IN_STOCK' | 'ON_PICKUP' | 'READY' | 'PICKED_UP'
-  | 'ON_HOLD' | 'MISSING' | 'LEFT_WAREHOUSE' | 'SPLIT'
+  | 'ON_HOLD' | 'MISSING' | 'LEFT_WAREHOUSE' | 'SPLIT' | 'AT_VENDOR' | 'PROCESSED'
 
 export const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
   LABELLED: 'Labelled',
@@ -55,6 +55,113 @@ export const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
   MISSING: 'Missing',
   LEFT_WAREHOUSE: 'Left warehouse',
   SPLIT: 'Split',
+  AT_VENDOR: 'At vendor',
+  PROCESSED: 'Processed',
+}
+
+export type SourceType = 'NEW_PURCHASE' | 'VERIFIED_EXISTING' | 'SPLIT_PART' | 'JOB_WORK_OUTPUT' | 'JOB_WORK_REMAINDER'
+
+export type DispatchStatus = 'OPEN' | 'SENT' | 'CANCELLED'
+
+export const DISPATCH_STATUS_LABELS: Record<DispatchStatus, string> = {
+  OPEN: 'Open',
+  SENT: 'Sent',
+  CANCELLED: 'Cancelled',
+}
+
+export interface VendorDispatch {
+  id: string
+  dispatch_no: string
+  company_id: string
+  warehouse_id: string
+  company_name?: string
+  warehouse_name?: string
+  vendor_id: string
+  vendor_name: string
+  vehicle_number: string | null
+  note: string | null
+  status: DispatchStatus
+  sent_at: string | null
+  job_work_order_id: string | null
+  job_work_reference: string | null
+  cancel_reason: string | null
+  created_at: string
+  bundle_count: number
+  total_quantity: string
+  unit: string | null
+}
+
+export interface DispatchLine {
+  unit_id: string
+  stock_tracking_id: string
+  item_code: string | null
+  item_name: string | null
+  size_label: string | null
+  purchase_line_id: string | null
+  quantity: string
+  unit: string
+  lifecycle_status: LifecycleStatus
+  current_vendor_name: string | null
+  job_work_item_id: string | null
+  job_line_id: string | null
+  closed_at: string | null
+  closed_reason: string | null
+}
+
+export interface OutputReceipt {
+  id: string
+  receipt_no: string
+  company_id: string
+  warehouse_id: string
+  company_name?: string
+  warehouse_name?: string
+  vendor_id: string
+  vendor_name: string
+  dispatch_id: string | null
+  dispatch_no: string | null
+  received_on: string
+  job_work_order_id: string | null
+  job_work_reference: string | null
+  note: string | null
+  created_at: string
+  output_count: number
+  remainder_count: number
+}
+
+export interface VendorMove {
+  id: string
+  tracking_unit_id: string
+  stock_tracking_id?: string
+  from_vendor_name: string
+  to_vendor_name: string
+  moved_on: string
+  reason: string | null
+  job_work_transfer_id: string | null
+  transfer_number: string | null
+  created_at: string
+}
+
+/** One step of a bundle's family tree, before or after it. */
+export interface LineageNode {
+  unit_id: string
+  stock_tracking_id: string
+  item_code: string | null
+  item_name: string | null
+  size_label: string | null
+  quantity: string
+  unit: string
+  lifecycle_status: LifecycleStatus
+  status: 'ACTIVE' | 'VOIDED'
+  source_type: SourceType
+  place: string | null
+  related_id: string
+  relation: 'MADE_FROM' | 'REMAINDER_OF' | 'SPLIT_PART'
+  depth: number
+}
+
+export interface UnitOrigin {
+  purchase_line_id: string
+  quantity: string
 }
 
 export type LocationType = 'STORAGE' | 'PICKUP_BAY' | 'HOLD'
@@ -107,6 +214,9 @@ export interface PickupSummary {
   customer_phone: string | null
   dispatch_order_id: string | null
   invoice_number: string | null
+  /** Set on a pickup made at a vendor, for material sold straight from there. */
+  vendor_id: string | null
+  vendor_name: string | null
   collector_name: string | null
   collector_phone: string | null
   vehicle_number: string | null
@@ -124,7 +234,7 @@ export interface PickupLine {
   item_code: string | null
   item_name: string | null
   size_label: string | null
-  purchase_line_id: string
+  purchase_line_id: string | null
   quantity: string
   unit: string
   lifecycle_status: LifecycleStatus
@@ -159,7 +269,8 @@ export interface TrackingUnit {
   warehouse_id: string
   warehouse_name?: string
   company_name?: string
-  purchase_line_id: string
+  /** Empty for an output made from more than one purchase line. Its lines are its origins. */
+  purchase_line_id: string | null
   bill_number: string | null
   receipt_date: string | null
   item_code: string | null
@@ -176,9 +287,17 @@ export interface TrackingUnit {
   lifecycle_status: LifecycleStatus
   location_code: string | null
   status_reason: string | null
-  source_type: 'NEW_PURCHASE' | 'VERIFIED_EXISTING' | 'SPLIT_PART'
+  source_type: SourceType
   parent_unit_id: string | null
   part_no: number | null
+  item_master_id: string | null
+  material_type_id: string | null
+  current_vendor_id: string | null
+  current_vendor_name: string | null
+  at_vendor_since: string | null
+  output_receipt_id: string | null
+  receipt_no: string | null
+  job_work_output_item_id: string | null
 }
 
 export interface TrackingPrinter {

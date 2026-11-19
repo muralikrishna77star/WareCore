@@ -57,7 +57,7 @@ async function stockedUnit(quantity = 5, place = true): Promise<TrackingUnit> {
 const status = async (id: string) => (await one(`SELECT lifecycle_status FROM tracking_units WHERE id = $1`, [id])).lifecycle_status
 const newPickup = (customer = ids.customer) => pickups.createPickup(admin, { company_id: ids.company, warehouse_id: ids.warehouse, customer_id: customer })
 
-async function saleFor(customer: string, lines: { line: string; quantity: number }[], invoice = `INV-${randomUUID().slice(0, 8)}`) {
+async function saleFor(customer: string, lines: { line: string | null; quantity: number }[], invoice = `INV-${randomUUID().slice(0, 8)}`) {
   const order = await one(
     `INSERT INTO dispatch_orders (invoice_number, customer_id, company_id, warehouse_id, dispatch_date, status)
      VALUES ($1, $2, $3, $4, ${today}, 'draft') RETURNING id`,
@@ -612,7 +612,8 @@ describe('Nothing in Phase 3 touches existing data', () => {
 
   it('a full backup restored over itself keeps every tracking record', async () => {
     const tracked = (await q(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'tracking\\_%' ORDER BY 1`)).map((r) => r.tablename as string)
-    expect(tracked).toHaveLength(13)
+    // 13 from Phases 2 and 3, and 5 from Phase 4 (migration 180).
+    expect(tracked).toHaveLength(18)
     const read = async () => Object.fromEntries(await Promise.all(tracked.map(async (t) => [t, (await q(`SELECT t::text AS v FROM "${t}" t ORDER BY 1`)).map((r) => r.v)])))
     const before = await read()
     const data = await backup.getAllTableData()
