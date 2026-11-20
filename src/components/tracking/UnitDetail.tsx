@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import QRCode from 'qrcode'
 import { TriangleAlert } from 'lucide-react'
-import type { LineageNode, TrackingUnit, UnitOrigin, VendorMove } from '@/lib/tracking/constants'
+import { TRACKING_EVENT_LABELS, type LineageNode, type TrackingUnit, type UnitOrigin, type VendorMove } from '@/lib/tracking/constants'
 import { errorText, formatWhen, trackingApi } from './api'
 import { LabelPrintPanel } from './LabelPrintPanel'
 import { LifecycleBadge } from './StatusBadge'
@@ -23,7 +23,7 @@ interface Detail {
   parts: TrackingUnit[]
   genealogy: Genealogy
   warnings: string[]
-  events: { id: string; event_type: string; occurred_at: string; actor_name: string | null }[]
+  events: { id: string; event_type: string; occurred_at: string; actor_name: string | null; offline_action_id: string | null; synced_at: string | null }[]
   printJobs: { id: string; job_type: string; status: string; reason: string | null; created_at: string; printer_name: string | null; requested_by_name: string | null }[]
 }
 
@@ -56,31 +56,6 @@ function LineageList({ nodes, empty }: { nodes: LineageNode[]; empty: string }) 
       ))}
     </ul>
   )
-}
-
-const EVENT_LABELS: Record<string, string> = {
-  UNIT_CREATED: 'Label created',
-  LABEL_PRINT_SENT: 'Sent to printer',
-  LABEL_PRINT_CONFIRMED: 'Print confirmed',
-  LABEL_PRINT_FAILED: 'Print failed',
-  SCAN_LOOKUP: 'Scanned',
-  UNIT_VOIDED: 'Label voided',
-  PUT_AWAY: 'Put away',
-  MOVED: 'Moved',
-  STATUS_CHANGED: 'Status changed',
-  UNIT_SPLIT: 'Bundle split',
-  ADDED_TO_PICKUP: 'Added to pickup',
-  REMOVED_FROM_PICKUP: 'Removed from pickup',
-  MARKED_READY: 'Marked ready',
-  PICKED_UP: 'Picked up',
-  CUSTOMER_RETURN: 'Customer return',
-  STOCK_VERIFIED: 'Old stock verified',
-  ADDED_TO_DISPATCH: 'Scanned onto a vendor dispatch',
-  REMOVED_FROM_DISPATCH: 'Removed from a vendor dispatch',
-  SENT_TO_VENDOR: 'Sent to vendor',
-  RETURNED_FROM_VENDOR: 'Back from vendor, unprocessed',
-  VENDOR_CHANGED: 'Moved to another vendor',
-  PROCESSED: 'Used up in job work',
 }
 
 const WEIGHT_BASIS: Record<string, string> = { whole_line: 'Whole purchase line', weighed: 'Weighed', estimated: 'Estimated' }
@@ -301,7 +276,14 @@ export function UnitDetail({ unitId, canPrint, canReprintOrVoid, canOperate, can
             {detail.events.map((event) => (
               <tr key={event.id}>
                 <td className="whitespace-nowrap px-4 py-2 text-gray-600">{formatWhen(event.occurred_at)}</td>
-                <td className="px-4 py-2 text-gray-900">{EVENT_LABELS[event.event_type] ?? event.event_type}</td>
+                <td className="px-4 py-2 text-gray-900">
+                  {TRACKING_EVENT_LABELS[event.event_type] ?? event.event_type}
+                  {event.offline_action_id && (
+                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800" title={event.synced_at ? `Reached the server ${formatWhen(event.synced_at)}` : undefined}>
+                      Offline{event.synced_at ? `, sent ${formatWhen(event.synced_at)}` : ''}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-gray-600">{event.actor_name}</td>
               </tr>
             ))}

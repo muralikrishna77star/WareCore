@@ -6,9 +6,9 @@ import { LIFECYCLE_LABELS, type TrackingUnit } from '@/lib/tracking/constants'
 import { errorText, trackingApi } from './api'
 import { LifecycleBadge } from './StatusBadge'
 
-export function TrackedUnits() {
+export function TrackedUnits({ initialStatus = '' }: { initialStatus?: string }) {
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState(initialStatus)
   const [units, setUnits] = useState<TrackingUnit[] | null>(null)
   const [error, setError] = useState('')
 

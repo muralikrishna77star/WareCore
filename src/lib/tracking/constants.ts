@@ -59,6 +59,33 @@ export const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
   PROCESSED: 'Processed',
 }
 
+/** Words for each kind of history row, shared by the bundle page and the Movement History report. */
+export const TRACKING_EVENT_LABELS: Record<string, string> = {
+  UNIT_CREATED: 'Label created',
+  LABEL_PRINT_SENT: 'Sent to printer',
+  LABEL_PRINT_CONFIRMED: 'Print confirmed',
+  LABEL_PRINT_FAILED: 'Print failed',
+  SCAN_LOOKUP: 'Scanned',
+  UNIT_VOIDED: 'Label voided',
+  PUT_AWAY: 'Put away',
+  MOVED: 'Moved',
+  STATUS_CHANGED: 'Status changed',
+  UNIT_SPLIT: 'Bundle split',
+  ADDED_TO_PICKUP: 'Added to pickup',
+  REMOVED_FROM_PICKUP: 'Removed from pickup',
+  MARKED_READY: 'Marked ready',
+  PICKED_UP: 'Picked up',
+  CUSTOMER_RETURN: 'Customer return',
+  STOCK_VERIFIED: 'Old stock verified',
+  ADDED_TO_DISPATCH: 'Scanned onto a vendor dispatch',
+  REMOVED_FROM_DISPATCH: 'Removed from a vendor dispatch',
+  SENT_TO_VENDOR: 'Sent to vendor',
+  RETURNED_FROM_VENDOR: 'Back from vendor, unprocessed',
+  VENDOR_CHANGED: 'Moved to another vendor',
+  PROCESSED: 'Used up in job work',
+  COUNTED: 'Seen on a stock count',
+}
+
 export type SourceType = 'NEW_PURCHASE' | 'VERIFIED_EXISTING' | 'SPLIT_PART' | 'JOB_WORK_OUTPUT' | 'JOB_WORK_REMAINDER'
 
 export type DispatchStatus = 'OPEN' | 'SENT' | 'CANCELLED'

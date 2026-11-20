@@ -147,6 +147,15 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
   const handleSignOut = async () => {
+    if (isTrackingMasterEnabled()) {
+      // Offline scans belong to the person who made them, so they never outlive the sign-in.
+      const { clearOfflineData, unsentCount } = await import('@/lib/tracking/offlineStore')
+      const unsent = await unsentCount()
+      if (unsent > 0 && !window.confirm(`${unsent} offline ${unsent === 1 ? 'scan has' : 'scans have'} not been sent from this phone. Signing out deletes ${unsent === 1 ? 'it' : 'them'}. Sign out anyway?`)) {
+        return
+      }
+      await clearOfflineData()
+    }
     await fetch('/api/auth/login', { method: 'DELETE' })
     router.push('/login')
     router.refresh()

@@ -63,7 +63,7 @@ const nextConfig: NextConfig = {
       },
       // Only the screens that scan labels may use the camera and, where a company
       // has switched GPS on, the device's location.
-      ...['/tracking/scan', '/tracking/stock', '/tracking/units/:id', '/tracking/pickups/:path*', '/tracking/dispatches/:path*'].map((source) => ({
+      ...['/tracking/scan', '/tracking/stock', '/tracking/units/:id', '/tracking/pickups/:path*', '/tracking/dispatches/:path*', '/offline-scan'].map((source) => ({
         source,
         headers: [{ key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(self)' }],
       })),

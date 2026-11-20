@@ -612,8 +612,8 @@ describe('Nothing in Phase 3 touches existing data', () => {
 
   it('a full backup restored over itself keeps every tracking record', async () => {
     const tracked = (await q(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'tracking\\_%' ORDER BY 1`)).map((r) => r.tablename as string)
-    // 13 from Phases 2 and 3, and 5 from Phase 4 (migration 180).
-    expect(tracked).toHaveLength(18)
+    // 13 from Phases 2 and 3, 5 from Phase 4 (migration 180) and 3 from Phase 5 (migration 181).
+    expect(tracked).toHaveLength(21)
     const read = async () => Object.fromEntries(await Promise.all(tracked.map(async (t) => [t, (await q(`SELECT t::text AS v FROM "${t}" t ORDER BY 1`)).map((r) => r.v)])))
     const before = await read()
     const data = await backup.getAllTableData()

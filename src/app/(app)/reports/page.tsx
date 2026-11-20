@@ -5,8 +5,9 @@ import { REPORTS_QUERY } from '@/lib/hasura/queries'
 import Link from 'next/link'
 import {
   ChartColumn, Calendar, Receipt, ArrowLeftRight, RefreshCw, Factory, Truck,
-  BookOpen, Compass, HardHat, CalendarRange, Route, type LucideIcon,
+  BookOpen, Compass, HardHat, CalendarRange, Route, QrCode, type LucideIcon,
 } from 'lucide-react'
+import { isTrackingMasterEnabled } from '@/lib/tracking/constants'
 import { InventoryByCompanyRows, StockAtVendorsRows } from './ReportsIndexTables'
 
 interface CurrentStockRow {
@@ -63,6 +64,9 @@ const REPORT_LINKS: {
   { href: '/reports/purchase-line-ledger', icon: Compass, iconBg: 'bg-pink-100', iconColor: 'text-pink-600', hoverBorder: 'hover:border-pink-300', hoverText: 'group-hover:text-pink-700', accentBorder: 'border-l-pink-500', tintBg: 'bg-pink-50/40', title: 'Purchase Line Movements', description: 'Trace the full lifecycle of a purchase line: dispatch, job work, transfers and returns' },
   { href: '/reports/fy-traceability', icon: Route, iconBg: 'bg-rose-100', iconColor: 'text-rose-600', hoverBorder: 'hover:border-rose-300', hoverText: 'group-hover:text-rose-700', accentBorder: 'border-l-rose-500', tintBg: 'bg-rose-50/40', title: 'FY Purchase & Sales Traceability', description: 'Each purchase line of the financial year with its sales, job work, balance and stock value' },
   { href: '/reports/vendor-movements', icon: HardHat, iconBg: 'bg-amber-100', iconColor: 'text-amber-600', hoverBorder: 'hover:border-amber-300', hoverText: 'group-hover:text-amber-700', accentBorder: 'border-l-amber-500', tintBg: 'bg-amber-50/40', title: 'Vendorwise Stock Movement', description: 'Job work out, direct sales, returns and pending balance, by vendor' },
+  ...(isTrackingMasterEnabled()
+    ? [{ href: '/reports/tracking', icon: QrCode, iconBg: 'bg-cyan-100', iconColor: 'text-cyan-700', hoverBorder: 'hover:border-cyan-300', hoverText: 'group-hover:text-cyan-800', accentBorder: 'border-l-cyan-500', tintBg: 'bg-cyan-50/40', title: 'QR Tracking', description: 'Tracked stock by location, tracked vs book, ageing, movements, pickups and exceptions' }]
+    : []),
 ]
 
 export default async function ReportsPage() {

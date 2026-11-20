@@ -72,6 +72,11 @@ export async function POST(request: NextRequest) {
           UPDATE tracking_vendor_dispatches SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
           UPDATE tracking_output_receipts SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
         END IF;
+        IF to_regclass('public.tracking_stock_counts') IS NOT NULL THEN
+          -- Counts follow their location, which moved above. Offline scan records follow their warehouse.
+          UPDATE tracking_stock_counts SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+          UPDATE tracking_offline_actions SET warehouse_id = '${targetId}' WHERE warehouse_id = '${sourceId}';
+        END IF;
       END
       $tracking$;
 

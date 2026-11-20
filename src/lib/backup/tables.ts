@@ -79,6 +79,9 @@ export const BACKUP_TABLES: string[] = [
   'tracking_vendor_moves',
   'tracking_output_receipts',
   'tracking_unit_lineage',
+  'tracking_offline_actions',
+  'tracking_stock_counts',
+  'tracking_stock_count_lines',
 ]
 
 // A point-in-time export filters on created_at, so these tables can't take part in one.

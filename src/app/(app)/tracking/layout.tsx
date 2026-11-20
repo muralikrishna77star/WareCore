@@ -8,6 +8,7 @@ export default async function TrackingLayout({ children }: { children: React.Rea
   const session = await requirePageRole(TRACKING_ROLES.view)
 
   const tabs = [
+    { href: '/tracking/dashboard', label: 'Dashboard' },
     ...(TRACKING_ROLES.label.has(session.role) ? [{ href: '/tracking/receive', label: 'Receive & Label' }] : []),
     ...(TRACKING_ROLES.operate.has(session.role) ? [{ href: '/tracking/stock', label: 'Put Away & Move' }] : []),
     { href: '/tracking/pickups', label: 'Pickups' },
@@ -17,17 +18,26 @@ export default async function TrackingLayout({ children }: { children: React.Rea
     { href: '/tracking/scan', label: 'Scan' },
     { href: '/tracking/units', label: 'Tracked Units' },
     { href: '/tracking/locations', label: 'Locations' },
+    { href: '/tracking/counts', label: 'Stock Counts' },
+    { href: '/tracking/sync-problems', label: 'Sync Problems' },
     ...(TRACKING_ROLES.manage.has(session.role) ? [{ href: '/tracking/verify', label: 'Old Stock' }] : []),
     ...(TRACKING_ROLES.settings.has(session.role) ? [{ href: '/admin/tracking', label: 'Settings' }] : []),
   ]
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">QR Tracking</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Label, place and hand over physical bundles. Nothing on these screens changes stock figures.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">QR Tracking</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Label, place and hand over physical bundles. Nothing on these screens changes stock figures.
+          </p>
+        </div>
+        {TRACKING_ROLES.operate.has(session.role) && (
+          <Link href="/offline-scan" className="rounded-lg border border-blue-600 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+            Offline Scan
+          </Link>
+        )}
       </div>
       <div className="border-b border-gray-200">
         <nav className="flex gap-6 -mb-px overflow-x-auto">

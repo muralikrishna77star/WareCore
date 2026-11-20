@@ -218,8 +218,11 @@ export async function getUnitDetail(actor: TrackingActor, unitId: string) {
   const unit = await unitInScope(actor, unitId)
   const [events, printJobs, warnings] = await Promise.all([
     query(
-      `SELECT e.id::text, e.event_type, e.details::text, e.occurred_at::text, p.full_name AS actor_name
-         FROM tracking_events e LEFT JOIN user_profiles p ON p.id = e.actor_id
+      `SELECT e.id::text, e.event_type, e.details::text, e.occurred_at::text, p.full_name AS actor_name,
+              e.offline_action_id::text, oa.received_at::text AS synced_at
+         FROM tracking_events e
+         LEFT JOIN user_profiles p ON p.id = e.actor_id
+         LEFT JOIN tracking_offline_actions oa ON oa.id = e.offline_action_id
         WHERE e.tracking_unit_id = $1::uuid ORDER BY e.occurred_at DESC LIMIT 200`,
       [unit.id],
     ),

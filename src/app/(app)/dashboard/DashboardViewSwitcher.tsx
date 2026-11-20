@@ -2,6 +2,8 @@
 
 import dynamic from 'next/dynamic'
 import { useDashboardView } from '@/components/DashboardViewProvider'
+import { TrackingDashboardCard } from '@/components/tracking/TrackingDashboardCard'
+import { isTrackingMasterEnabled } from '@/lib/tracking/constants'
 
 const ClassicDashboard = dynamic(() => import('./ClassicDashboard').then((m) => m.ClassicDashboard), {
   ssr: false,
@@ -31,5 +33,10 @@ function DashboardViewLoading() {
 export function DashboardViewSwitcher() {
   const { view } = useDashboardView()
 
-  return view === 'classic' ? <ClassicDashboard /> : <ModernDashboard />
+  return (
+    <>
+      {isTrackingMasterEnabled() && <TrackingDashboardCard />}
+      {view === 'classic' ? <ClassicDashboard /> : <ModernDashboard />}
+    </>
+  )
 }
