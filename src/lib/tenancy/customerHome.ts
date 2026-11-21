@@ -7,7 +7,7 @@
 // These pictures are public: anyone who opens the address can see them.
 
 export interface CustomerHomeImage {
-  /** Path under public/, e.g. /assets/customers/saisteels/yard.jpg */
+  /** Path under public/, e.g. /assets/customers/bsm/yard.jpg */
   src: string
   /** Short description for screen readers, e.g. "Coils stacked in the yard". */
   alt: string
@@ -16,7 +16,7 @@ export interface CustomerHomeImage {
 }
 
 const IMAGES: Record<string, CustomerHomeImage[]> = {
-  saisteels: [],
+  bsm: [],
 }
 
 export function customerHomeImages(slug: string): CustomerHomeImage[] {

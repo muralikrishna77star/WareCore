@@ -74,7 +74,7 @@ export default function NewCustomerPage() {
           <legend className="text-sm font-semibold text-gray-900">Customer</legend>
           <label className="block text-sm font-medium text-gray-700">
             Customer name (shown on their screens)
-            <input className={input} value={displayName} required maxLength={80} placeholder="Sai Steels"
+            <input className={input} value={displayName} required maxLength={80} placeholder="BSM"
               onChange={(e) => { setDisplayName(e.target.value); if (!slugEdited) setSlug(suggestSlug(e.target.value)) }} />
           </label>
           <label className="block text-sm font-medium text-gray-700">

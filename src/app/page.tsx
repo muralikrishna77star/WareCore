@@ -15,7 +15,7 @@ export default async function RootPage() {
 
   if (session) redirect('/dashboard')
 
-  // A customer's own address (saisteels.warecore.space) opens on that
+  // A customer's own address (bsm.warecore.space) opens on that
   // customer's page; WareCore's website stays on www.warecore.space.
   const slug = isMultiTenant() ? await currentTenantSlug().catch(() => null) : null
   if (slug) return <CustomerHome brand={await getBrand()} images={customerHomeImages(slug)} />

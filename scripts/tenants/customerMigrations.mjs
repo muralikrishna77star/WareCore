@@ -2,11 +2,11 @@
 //
 // Every migration in supabase/migrations runs in every customer's database,
 // except one-off repairs of one customer's own rows. Those:
-//  - start with the line   -- warecore-customer: <slug>   (e.g. saisteels), and
+//  - start with the line   -- warecore-customer: <slug>   (e.g. bsm), and
 //  - are also listed in scripts/desktop/productionDataMigrations.mjs, so a
 //    fresh desktop install and the test harness skip them as well.
-// The repairs written before multi-customer mode (all Sai Steels') have no
-// marker: they are recorded as done in Sai Steels' database and skipped for
+// The repairs written before multi-customer mode (all BSM's) have no
+// marker: they are recorded as done in BSM's database and skipped for
 // every new customer.
 
 import { readFileSync, readdirSync } from 'node:fs'

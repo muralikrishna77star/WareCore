@@ -1,4 +1,4 @@
-// The customer's own start page (saisteels.warecore.space): their name and a
+// The customer's own start page (bsm.warecore.space): their name and a
 // way to sign in, with pictures only when some are listed.
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
@@ -8,7 +8,7 @@ import { customerHomeImages } from '@/lib/tenancy/customerHome'
 import { DEFAULT_LOGO_URL, type Brand } from '@/lib/tenancy/brandShared'
 
 const brand: Brand = {
-  displayName: 'Sai Steels',
+  displayName: 'BSM',
   isCustomer: true,
   logoUrl: DEFAULT_LOGO_URL,
   color: null,
@@ -22,7 +22,7 @@ describe('customer start page', () => {
   it('shows the company name and sign-in, and nothing of the WareCore sales site', () => {
     const html = render([])
     expect(html).toContain('<h1')
-    expect(html).toContain('Sai Steels')
+    expect(html).toContain('BSM')
     expect(html).toContain('href="/login"')
     expect(html).not.toContain('Product Tour')
     expect(html).not.toContain('<figure')
@@ -30,17 +30,17 @@ describe('customer start page', () => {
 
   it('shows listed pictures, first one large', () => {
     const html = render([
-      { src: '/assets/customers/saisteels/yard.jpg', alt: 'Yard', caption: 'Our yard' },
-      { src: '/assets/customers/saisteels/coils.jpg', alt: 'Coils' },
+      { src: '/assets/customers/bsm/yard.jpg', alt: 'Yard', caption: 'Our yard' },
+      { src: '/assets/customers/bsm/coils.jpg', alt: 'Coils' },
     ])
     expect(html.match(/<figure/g)).toHaveLength(2)
-    expect(html).toContain('src="/assets/customers/saisteels/yard.jpg"')
+    expect(html).toContain('src="/assets/customers/bsm/yard.jpg"')
     expect(html).toContain('Our yard')
     expect(html).toContain('aspect-[16/7]')
   })
 
-  it('Sai Steels has no pictures yet; unknown customers get none', () => {
-    expect(customerHomeImages('saisteels')).toEqual([])
+  it('BSM has no pictures yet; unknown customers get none', () => {
+    expect(customerHomeImages('bsm')).toEqual([])
     expect(customerHomeImages('nobody')).toEqual([])
   })
 })

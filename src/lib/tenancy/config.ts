@@ -1,5 +1,5 @@
 // Multi-customer mode: one WareCore deployment serves several customers, each
-// with its own database, picked by the web address (saisteels.warecore.space).
+// with its own database, picked by the web address (bsm.warecore.space).
 //
 // Off unless MULTI_TENANT=true. Off, everything works exactly as before: one
 // database (DATABASE_URL), no customer registry, no owner console. The desktop

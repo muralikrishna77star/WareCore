@@ -3,7 +3,7 @@
 //
 //   node --env-file=.env.local scripts/tenants/migrate-all.mjs            # apply
 //   node --env-file=.env.local scripts/tenants/migrate-all.mjs --dry-run  # list what's pending
-//   node --env-file=.env.local scripts/tenants/migrate-all.mjs --only saisteels
+//   node --env-file=.env.local scripts/tenants/migrate-all.mjs --only bsm
 //
 // Customers are migrated one at a time; the first failure stops the run, so
 // the remaining customers stay on the previous migration rather than being

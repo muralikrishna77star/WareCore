@@ -77,7 +77,7 @@ export type Service = {
 export const SERVICES: Service[] = [
   {
     name: 'Vercel',
-    usedFor: 'Hosts every customer’s WareCore (saisteels.warecore.space and the other *.warecore.space addresses) — every page, report and API call, plus the nightly reconciliation scan',
+    usedFor: 'Hosts every customer’s WareCore (bsm.warecore.space and the other *.warecore.space addresses) — every page, report and API call, plus the nightly reconciliation scan',
     plan: 'Hobby (free)',
     status: 'attention',
     monthlyCost: '$0',

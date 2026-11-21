@@ -1,6 +1,6 @@
 // Multi-customer mode: one deployment, one database per customer, picked by
 // the web address. Runs against a throwaway Postgres: the harness database
-// plays Sai Steels' existing database, and a second customer is set up from
+// plays BSM's existing database, and a second customer is set up from
 // scratch through the owner console's own API route.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
@@ -37,8 +37,8 @@ async function query(dbName: string, text: string, params: unknown[] = []) {
 function setupControl(extra: string[] = []) {
   return execFileSync(process.execPath, [
     'scripts/tenants/setup-control.mjs', '--database-url', db.connectionString,
-    '--slug', 'saisteels', '--name', 'Sai Steels', '--db', saiDb,
-    '--host', 'saisteels.warecore.space', '--extra-host', 'warecore.vercel.app', '--google',
+    '--slug', 'bsm', '--name', 'BSM', '--db', saiDb,
+    '--host', 'bsm.warecore.space', '--extra-host', 'warecore.vercel.app', '--google',
     '--baseline', '--owner-email', OWNER_EMAIL, '--owner-name', 'Owner', ...extra,
   ], { env: { ...process.env, OWNER_PASSWORD }, encoding: 'utf-8' })
 }
@@ -88,9 +88,9 @@ describe('switch-over script', () => {
     expect(out).not.toContain(OWNER_PASSWORD) // a given password is never echoed
 
     const [t] = await query('warecore_control', `SELECT slug, display_name, db_name, status, google_sign_in FROM tenants`)
-    expect(t).toMatchObject({ slug: 'saisteels', display_name: 'Sai Steels', db_name: saiDb, status: 'active', google_sign_in: true })
+    expect(t).toMatchObject({ slug: 'bsm', display_name: 'BSM', db_name: saiDb, status: 'active', google_sign_in: true })
     const hosts = await query('warecore_control', `SELECT host, is_primary FROM tenant_domains ORDER BY host`)
-    expect(hosts).toEqual([{ host: 'saisteels.warecore.space', is_primary: true }, { host: 'warecore.vercel.app', is_primary: false }])
+    expect(hosts).toEqual([{ host: 'bsm.warecore.space', is_primary: true }, { host: 'warecore.vercel.app', is_primary: false }])
     const [{ n }] = await query(saiDb, 'SELECT count(*)::int AS n FROM schema_migrations')
     expect(n).toBe(MIGRATION_FILES.length)
   }, 60_000)
@@ -104,7 +104,7 @@ describe('switch-over script', () => {
 
   it('migrate-all finds nothing pending for the switched-over database', () => {
     const out = execFileSync(process.execPath, ['scripts/tenants/migrate-all.mjs', '--dry-run'], { encoding: 'utf-8' })
-    expect(out).toContain(`saisteels (${saiDb}): up to date`)
+    expect(out).toContain(`bsm (${saiDb}): up to date`)
   }, 60_000)
 })
 
@@ -112,7 +112,7 @@ describe('owner console', () => {
   it('signs in the owner on the console address only', async () => {
     const login = await import('@/app/api/owner/login/route')
     const body = JSON.stringify({ email: OWNER_EMAIL, password: OWNER_PASSWORD })
-    const onCustomer = await login.POST(req('https://saisteels.warecore.space/api/owner/login', { method: 'POST', body }))
+    const onCustomer = await login.POST(req('https://bsm.warecore.space/api/owner/login', { method: 'POST', body }))
     expect(onCustomer.status).toBe(404)
     const wrong = await login.POST(req('https://console.warecore.space/api/owner/login', { method: 'POST', body: JSON.stringify({ email: OWNER_EMAIL, password: 'nope-nope-nope' }) }))
     expect(wrong.status).toBe(401)
@@ -131,7 +131,7 @@ describe('owner console', () => {
     expect((await post('console')).status).toBe(400) // reserved
     expect((await post('Bad_Name')).status).toBe(400)
     expect((await post('a')).status).toBe(400)
-    expect((await post('saisteels')).status).toBe(409)
+    expect((await post('bsm')).status).toBe(409)
     const noCookie = await route.POST(req('https://console.warecore.space/api/owner/customers', { method: 'POST', body: '{}' }))
     expect(noCookie.status).toBe(401)
   })
@@ -153,7 +153,7 @@ describe('owner console', () => {
     const [{ n }] = await query('wc_acme_steel', 'SELECT count(*)::int AS n FROM schema_migrations')
     const { PRODUCTION_DATA_DEPENDENT_MIGRATIONS } = await import('../../scripts/desktop/productionDataMigrations.mjs')
     expect(n).toBe(MIGRATION_FILES.length - [...PRODUCTION_DATA_DEPENDENT_MIGRATIONS].filter((f) => MIGRATION_FILES.includes(f)).length)
-    // A new customer starts empty: none of Sai Steels' companies.
+    // A new customer starts empty: none of BSM's companies.
     const [{ c }] = await query('wc_acme_steel', 'SELECT count(*)::int AS c FROM companies')
     expect(c).toBe(0)
   }, 240_000)
@@ -204,14 +204,14 @@ describe('owner console', () => {
 describe('each address opens its own customer only', () => {
   it('finds customers by address, ignoring case and port', async () => {
     control.forgetTenantCache()
-    expect((await control.findTenantByHost('SAISTEELS.warecore.space:443'))?.slug).toBe('saisteels')
-    expect((await control.findTenantByHost('warecore.vercel.app'))?.slug).toBe('saisteels')
+    expect((await control.findTenantByHost('BSM.warecore.space:443'))?.slug).toBe('bsm')
+    expect((await control.findTenantByHost('warecore.vercel.app'))?.slug).toBe('bsm')
     expect((await control.findTenantByHost('acme-steel.warecore.space'))?.slug).toBe('acme-steel')
     expect(await control.findTenantByHost('nobody.warecore.space')).toBeNull()
   })
 
   it('reads and writes the right database, and never a default one', async () => {
-    const sai = { slug: 'saisteels', dbName: saiDb }
+    const sai = { slug: 'bsm', dbName: saiDb }
     const acme = { slug: 'acme-steel', dbName: 'wc_acme_steel' }
     await context.runWithTenant(sai, () => sql.runSqlLocal(`INSERT INTO companies (name, code) VALUES ('Sai Only Co', 'SAIONLY')`))
     const inSai = await context.runWithTenant(sai, () => sql.runSqlLocal(`SELECT count(*) FROM companies WHERE code = 'SAIONLY'`))
@@ -225,7 +225,7 @@ describe('each address opens its own customer only', () => {
   it('proxy: picks the customer from the address and overwrites any spoofed choice', async () => {
     const token = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A', tenant: 'acme-steel' })
     const res = await proxyMod.proxy(req('https://acme-steel.warecore.space/dashboard', {
-      headers: { cookie: `wc_session=${token}`, 'x-warecore-tenant': 'saisteels', 'x-warecore-tenant-db': saiDb },
+      headers: { cookie: `wc_session=${token}`, 'x-warecore-tenant': 'bsm', 'x-warecore-tenant-db': saiDb },
     }))
     expect(res.headers.get('x-middleware-next')).toBe('1')
     expect(forwardedHeader(res, 'x-warecore-tenant')).toBe('acme-steel')
@@ -233,7 +233,7 @@ describe('each address opens its own customer only', () => {
   })
 
   it('proxy: another customer\'s sign-in is dropped and never reaches the app', async () => {
-    const saiToken = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A', tenant: 'saisteels' })
+    const saiToken = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A', tenant: 'bsm' })
     const page = await proxyMod.proxy(req('https://acme-steel.warecore.space/dashboard', { headers: { cookie: `wc_session=${saiToken}` } }))
     expect(page.status).toBe(307)
     expect(new URL(page.headers.get('location')!).pathname).toBe('/login')
@@ -245,7 +245,7 @@ describe('each address opens its own customer only', () => {
 
     // A session from before multi-customer mode (no customer in it) is dropped too.
     const legacy = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A' })
-    const old = await proxyMod.proxy(req('https://saisteels.warecore.space/dashboard', { headers: { cookie: `wc_session=${legacy}` } }))
+    const old = await proxyMod.proxy(req('https://bsm.warecore.space/dashboard', { headers: { cookie: `wc_session=${legacy}` } }))
     expect(new URL(old.headers.get('location')!).pathname).toBe('/login')
   })
 
@@ -274,7 +274,7 @@ describe('each address opens its own customer only', () => {
 
   it('an owner token is never a customer session, and the reverse', () => {
     expect(session.verifySession(ownerToken)).toBeNull()
-    const customer = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A', tenant: 'saisteels' })
+    const customer = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A', tenant: 'bsm' })
     expect(ownerSession.verifyOwnerToken(customer)).toBeNull()
   })
 })
@@ -300,7 +300,7 @@ describe('single-customer mode is unchanged', () => {
 
 describe('helpers', () => {
   it('address names', () => {
-    for (const ok of ['saisteels', 'acme-steel', 'ds2']) expect(config.isValidSlug(ok)).toBe(true)
+    for (const ok of ['bsm', 'acme-steel', 'ds2']) expect(config.isValidSlug(ok)).toBe(true)
     for (const bad of ['www', 'console', 'a', '1abc', 'ab-', 'a--b', 'Abc', 'a_b', 'x'.repeat(31)]) expect(config.isValidSlug(bad)).toBe(false)
     expect(config.dbNameForSlug('acme-steel')).toBe('wc_acme_steel')
     expect(() => config.databaseUrlFor('postgres://u:p@h/db', 'x"; DROP')).toThrow()
@@ -322,9 +322,9 @@ describe('helpers', () => {
     const dir = mkdtempSync(join(tmpdir(), 'wc-mig-'))
     try {
       writeFileSync(join(dir, '900_schema.sql'), 'SELECT 1;\n')
-      writeFileSync(join(dir, '901_fix_sai_rows.sql'), '-- warecore-customer: saisteels\nSELECT 1;\n')
+      writeFileSync(join(dir, '901_fix_sai_rows.sql'), '-- warecore-customer: bsm\nSELECT 1;\n')
       writeFileSync(join(dir, '902_fix_acme_rows.sql'), '-- warecore-customer: acme-steel\r\nSELECT 1;\r\n')
-      const sai = skipFilenamesFor('saisteels', dir)
+      const sai = skipFilenamesFor('bsm', dir)
       const acme = skipFilenamesFor('acme-steel', dir)
       expect([sai.has('900_schema.sql'), sai.has('901_fix_sai_rows.sql'), sai.has('902_fix_acme_rows.sql')]).toEqual([false, false, true])
       expect([acme.has('900_schema.sql'), acme.has('901_fix_sai_rows.sql'), acme.has('902_fix_acme_rows.sql')]).toEqual([false, true, false])

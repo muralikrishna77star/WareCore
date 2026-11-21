@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import type { Brand } from '@/lib/tenancy/brandShared'
 import type { CustomerHomeImage } from '@/lib/tenancy/customerHome'
 
-// A customer's own start page (e.g. saisteels.warecore.space): their name,
+// A customer's own start page (e.g. bsm.warecore.space): their name,
 // logo and colour, a way to sign in, and their pictures when they have some.
 // WareCore's sales website stays on www.warecore.space.
 export default function CustomerHome({ brand, images }: { brand: Brand; images: CustomerHomeImage[] }) {

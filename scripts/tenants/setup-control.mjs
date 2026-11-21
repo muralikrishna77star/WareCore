@@ -1,8 +1,8 @@
 // One-off switch-over to multi-customer mode, and safe to run again.
 //
 //   node --env-file=.env.local scripts/tenants/setup-control.mjs \
-//     --slug saisteels --name "Sai Steels" --db neondb \
-//     --host saisteels.warecore.space --extra-host warecore.vercel.app --google \
+//     --slug bsm --name "BSM" --db neondb \
+//     --host bsm.warecore.space --extra-host warecore.vercel.app --google \
 //     --baseline --owner-email you@example.com --owner-name "Your Name"
 //
 // 1. Creates the customer registry database (warecore_control) on the same
