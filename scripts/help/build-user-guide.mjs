@@ -24,7 +24,8 @@ const React = require('react')
 const { renderToStaticMarkup } = require('react-dom/server')
 const sharp = require('sharp')
 const lucide = require('lucide-react')
-const { HELP_ARTICLES, HELP_CATEGORIES, HELP_BY_SLUG } = await import(pathToFileURL(join(ROOT, 'src', 'lib', 'help', 'articles.ts')).href)
+// The deck always carries every guide, QR Tracking included, whether or not tracking is switched on in the app.
+const { ALL_HELP_ARTICLES: HELP_ARTICLES, HELP_CATEGORIES, ALL_HELP_BY_SLUG: HELP_BY_SLUG } = await import(pathToFileURL(join(ROOT, 'src', 'lib', 'help', 'articles.ts')).href)
 
 // ── Theme ────────────────────────────────────────────────────────────────
 const THEME = {
@@ -52,7 +53,7 @@ const SW = 13.333, SH = 7.5, M = 0.5
 const CATEGORY_ICON = {
   'Getting Started': 'Rocket', 'Master Data': 'Database', 'Purchases': 'ClipboardList', 'Stock & Transfers': 'Package',
   'Job Work': 'Factory', 'Sales': 'Receipt', 'Accounts': 'Wallet', 'Reports': 'ChartColumn',
-  'Data Integrity': 'ShieldCheck', 'Administration': 'Settings',
+  'Data Integrity': 'ShieldCheck', 'QR Tracking': 'QrCode', 'Administration': 'Settings',
 }
 const iconCache = new Map()
 async function icon(name, color) {
@@ -150,14 +151,17 @@ async function contentsSlide(sectionsPlan) {
   s.addText('Each section starts with a divider. Every activity has its own slide: a screenshot, numbered steps and tips. The alphabetical index is at the end.', {
     x: M, y: 1.15, w: 12.3, h: 0.5, fontSize: 15, color: HEX.muted, margin: 0, isTextBox: true,
   })
-  const cols = 2, cardW = 6.0, cardH = 0.84, gapX = 0.33, gapY = 0.14, top = 1.85
+  const cols = 2, cardW = 6.0, gapX = 0.33, gapY = 0.14, top = 1.85
+  // Cards shrink when there are more sections than fit above the footer at full height.
+  const rows = Math.ceil(sectionsPlan.length / cols)
+  const cardH = Math.min(0.84, (SH - 0.55 - top - (rows - 1) * gapY) / rows)
   for (let i = 0; i < sectionsPlan.length; i++) {
     const p = sectionsPlan[i]
     const col = i % cols, row = Math.floor(i / cols)
     const x = M + col * (cardW + gapX), y = top + row * (cardH + gapY)
     s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w: cardW, h: cardH, rectRadius: 0.1, fill: { color: HEX.pale }, line: { color: HEX.pale }, objectName: `${p.name} card` })
-    s.addShape(pres.shapes.OVAL, { x: x + 0.18, y: y + 0.15, w: 0.54, h: 0.54, fill: { color: HEX.blue }, line: { color: HEX.blue }, objectName: `${p.name} icon circle` })
-    s.addImage({ data: await icon(CATEGORY_ICON[p.name], 'FFFFFF'), x: x + 0.3, y: y + 0.27, w: 0.3, h: 0.3, altText: '' })
+    s.addShape(pres.shapes.OVAL, { x: x + 0.18, y: y + (cardH - 0.54) / 2, w: 0.54, h: 0.54, fill: { color: HEX.blue }, line: { color: HEX.blue }, objectName: `${p.name} icon circle` })
+    s.addImage({ data: await icon(CATEGORY_ICON[p.name], 'FFFFFF'), x: x + 0.3, y: y + (cardH - 0.3) / 2, w: 0.3, h: 0.3, altText: '' })
     s.addText([
       { text: p.name, options: { bold: true, fontSize: 16, color: HEX.navy, breakLine: true } },
       { text: `${p.count} guide${p.count === 1 ? '' : 's'}`, options: { fontSize: 12, color: HEX.muted } },

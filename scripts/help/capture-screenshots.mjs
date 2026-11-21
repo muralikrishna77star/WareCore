@@ -14,6 +14,7 @@ import sharp from 'sharp'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -76,6 +77,111 @@ if (!only.length) {
   }
   if (ID.jwCancel) await api(`/api/jobwork/${ID.jwCancel}/delete`, { notes: 'Sent to the wrong vendor' })
   await api('/api/data-integrity/runs', { runType: 'MANUAL', scopeType: 'FULL' })
+}
+
+// ── QR Tracking demo ─────────────────────────────────────────────────────
+// Only when the app was built with NEXT_PUBLIC_TRACKING_ENABLED=true (otherwise
+// every tracking route answers 404 and the qr-* shots are skipped). Builds one
+// story through the app's own APIs: Sunrise Steels switched on with a Live Date
+// of 1 Sep 2026, so the August bills are "old stock".
+const tapi = async (path, method = 'GET', body) => {
+  const r = await fetch(`${BASE}/api/tracking/${path}`, { method, headers: { 'Content-Type': 'application/json', Cookie: cookieHeader }, body: body ? JSON.stringify(body) : undefined })
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(`tracking ${path}: ${r.status} ${data.error ?? ''}`)
+  return data
+}
+const trackingOn = (await fetch(`${BASE}/api/tracking/context`, { headers: { Cookie: cookieHeader } })).status !== 404
+const QR = trackingOn ? await prepareTracking() : null
+if (!trackingOn) console.log('QR tracking is off in this build: qr-* shots skipped (build with NEXT_PUBLIC_TRACKING_ENABLED=true).')
+
+async function prepareTracking() {
+  const tdb = new pg.Client({ connectionString: CS })
+  await tdb.connect()
+  const one = async (sql, p = []) => (await tdb.query(sql, p)).rows[0]
+  const yard = (await one(`SELECT id::text FROM warehouses WHERE name = 'Main Yard'`)).id
+  const unitBy = async (where, p = []) => one(`SELECT id::text, stock_tracking_id, qr_reference FROM tracking_units WHERE ${where} ORDER BY stock_tracking_id LIMIT 1`, p)
+  if (Number((await one(`SELECT count(*)::int AS n FROM tracking_units`)).n) === 0) {
+    console.log('Preparing QR tracking demo:')
+    await tapi('settings', 'POST', { action: 'set_flag', company_id: ID.sun, warehouse_id: null, enabled: true })
+    await tdb.query(`UPDATE tracking_feature_flags SET tracking_start_at = '2026-09-01 00:00+05:30' WHERE company_id = $1 AND warehouse_id IS NULL`, [ID.sun])
+    await tapi('settings', 'POST', { action: 'save_printer', company_id: ID.sun, warehouse_id: yard, name: 'Dispatch dock', model: 'Zebra ZD230', dpi: 203, label_width_mm: 100, label_height_mm: 50 })
+    for (const [code, name, location_type] of [['A-01', 'Bay A, row 1', 'STORAGE'], ['A-02', 'Bay A, row 2', 'STORAGE'], ['B-01', 'Bay B, coil racks', 'STORAGE'], ['BAY-1', 'Loading bay', 'PICKUP_BAY'], ['HOLD-1', 'Quality hold', 'HOLD']]) {
+      await tapi('locations', 'POST', { company_id: ID.sun, warehouse_id: yard, code, name, location_type })
+    }
+    // New purchases: GA in 4 weighed bundles, CR in 3; the newest HR line is left waiting for labels.
+    const { lines } = await tapi('eligible-lines?search=')
+    const yardLines = lines.filter((l) => l.warehouse_id === yard)
+    // The biggest line of each material, so a small duplicate bill never gets the labels.
+    const line = (code) => yardLines.filter((l) => l.item_name?.startsWith(code)).sort((x, y) => Number(y.quantity) - Number(x.quantity))[0]
+    const split = (qty, parts) => {
+      const total = Math.round(Number(qty) * 1000)
+      const offsets = [-50, 20, 110, -80, 0, 0].slice(0, parts)
+      const rows = offsets.map((o) => Math.floor(total / parts) + o)
+      rows[parts - 1] += total - rows.reduce((a, b) => a + b, 0)
+      return rows.map((g) => ({ quantity: (g / 1000).toFixed(3), weight_basis: 'weighed' }))
+    }
+    const ga = (await tapi('units', 'POST', { purchase_line_id: line('GA').purchase_line_id, bundles: split(line('GA').quantity, 4) })).units
+    const cr = (await tapi('units', 'POST', { purchase_line_id: line('CR').purchase_line_id, bundles: split(line('CR').quantity, 3) })).units
+    // Old stock: the August HR line, found and weighed as two bundles.
+    const old = await one(`SELECT i.purchase_line_id FROM purchase_bill_items i JOIN purchase_bills b ON b.id = i.bill_id
+      JOIN item_master im ON im.id = i.item_master_id WHERE b.warehouse_id = $1 AND b.bill_date < '2026-09-01' AND im.item_name LIKE 'HR%' ORDER BY b.bill_date LIMIT 1`, [yard])
+    const hr = await tapi('verify', 'POST', { purchase_line_id: old.purchase_line_id, company_id: ID.sun, warehouse_id: yard,
+      bundles: [{ quantity: '3.900', weight_basis: 'weighed' }, { quantity: '3.880', weight_basis: 'weighed' }], note: 'Found behind Bay A during the September check' })
+    const place = (u, location) => tapi(`units/${u.id}/place`, 'POST', { location })
+    // ga[1] is left "not put away" (the CR line was partly sent to job work, so its bundles show a book-stock warning).
+    await place(ga[0], 'A-01'); await place(ga[2], 'A-02'); await place(ga[3], 'A-02')
+    await place(cr[0], 'B-01'); await place(cr[1], 'B-01'); await place(cr[2], 'A-01')
+    await place(hr.units[0], 'A-02'); await place(hr.units[1], 'HOLD-1')
+    await tapi(`units/${hr.units[1].id}/status`, 'POST', { to: 'ON_HOLD', reason: 'Edge damage, check before sale' })
+    // Customer pickup, ready in the loading bay.
+    const nova = await one(`SELECT id::text FROM customers WHERE name = 'Nova Fabricators'`)
+    const { pickup } = await tapi('pickups', 'POST', { company_id: ID.sun, warehouse_id: yard, customer_id: nova.id })
+    await tapi(`pickups/${pickup.id}`, 'POST', { action: 'add_unit', code: cr[0].qr_reference })
+    await tapi(`pickups/${pickup.id}`, 'POST', { action: 'add_unit', code: cr[1].stock_tracking_id })
+    await tapi(`pickups/${pickup.id}`, 'POST', { action: 'mark_ready', bay: 'BAY-1' })
+    // Job work: two GA bundles sent to the slitter; one goes on to the galvanizer; one slit into two coils.
+    const vendor = async (name) => (await one(`SELECT id::text FROM suppliers WHERE name = $1`, [name])).id
+    const slit = await vendor('Precision Slitters')
+    const sent = (await tapi('dispatches', 'POST', { company_id: ID.sun, warehouse_id: yard, vendor_id: slit, vehicle_number: 'TN-09-BX-4471' })).dispatch
+    await tapi(`dispatches/${sent.id}`, 'POST', { action: 'add_unit', code: ga[2].stock_tracking_id })
+    await tapi(`dispatches/${sent.id}`, 'POST', { action: 'add_unit', code: ga[3].stock_tracking_id })
+    await tapi(`dispatches/${sent.id}`, 'POST', { action: 'send', vehicle_number: 'TN-09-BX-4471' })
+    const outItem = await one(`SELECT id::text, size_label FROM item_master WHERE item_name = 'GA 0.80 X 164'`)
+    const parentWeight = Math.round(Number(ga[2].quantity) * 1000)
+    const a = Math.round((parentWeight - 120) / 2)
+    await tapi('outputs', 'POST', {
+      company_id: ID.sun, warehouse_id: yard, vendor_id: slit, dispatch_id: sent.id, received_on: new Date().toISOString().slice(0, 10),
+      outputs: [a, parentWeight - 120 - a].map((g) => ({ item_master_id: outItem.id, size_label: outItem.size_label, quantity: (g / 1000).toFixed(3), weight_basis: 'weighed', parents: [ga[2].id] })),
+      remainders: [{ parent: ga[2].id, quantity: '0.120', weight_basis: 'weighed' }], used_up: [ga[2].id], note: 'Slit to 164 mm',
+    })
+    // An open dispatch being loaded (for the Job Work Dispatch shot).
+    const loading = (await tapi('dispatches', 'POST', { company_id: ID.sun, warehouse_id: yard, vendor_id: await vendor('Kiran Cutting Works') })).dispatch
+    await tapi(`dispatches/${loading.id}`, 'POST', { action: 'add_unit', code: hr.units[0].stock_tracking_id })
+    // A phone's stock count of A-01: CR bundle 3 not scanned (Not found), an A-02 bundle scanned there (Found elsewhere).
+    const user = await one(`SELECT id::text FROM user_profiles WHERE email = 'testuser'`)
+    const now = Date.now(), at = (s) => new Date(now + s * 1000).toISOString()
+    const countId = randomUUID()
+    const act = (action, payload, s) => ({ id: randomUUID(), action, warehouse_id: yard, actor_id: user.id, scanned_at: at(s), payload })
+    await tapi('offline/sync', 'POST', { device_id: 'demo-phone-01', actions: [
+      act('COUNT_START', { count_id: countId, location: 'A-01' }, 0),
+      act('COUNT_SCAN', { count_id: countId, code: ga[0].qr_reference }, 2),
+      act('COUNT_SCAN', { count_id: countId, code: hr.units[0].stock_tracking_id }, 4),
+      act('COUNT_SUBMIT', { count_id: countId }, 6),
+      // Scanned 90 minutes ago without a signal, but the bundle was moved online since: refused.
+      act('PLACE', { code: cr[1].stock_tracking_id, location: 'A-02' }, -90 * 60),
+    ] })
+  }
+  const ids = {
+    yard,
+    pickup: (await one(`SELECT id::text FROM tracking_pickups ORDER BY pickup_no LIMIT 1`))?.id,
+    dispatchOpen: (await one(`SELECT id::text FROM tracking_vendor_dispatches WHERE status = 'OPEN' ORDER BY dispatch_no LIMIT 1`))?.id,
+    receipt: (await one(`SELECT id::text FROM tracking_output_receipts ORDER BY receipt_no LIMIT 1`))?.id,
+    count: (await one(`SELECT id::text FROM tracking_stock_counts ORDER BY count_no LIMIT 1`))?.id,
+    inStock: (await unitBy(`lifecycle_status = 'IN_STOCK' AND source_type = 'NEW_PURCHASE' AND current_location_id IS NOT NULL`))?.id,
+    notPutAway: (await unitBy(`lifecycle_status = 'LABELLED' AND source_type = 'NEW_PURCHASE'`))?.stock_tracking_id,
+  }
+  await tdb.end()
+  return ids
 }
 
 // ── Browser ──────────────────────────────────────────────────────────────
@@ -214,6 +320,76 @@ const SHOTS = {
   'ledger-deletions': { path: '/ledger-deletions' },
   'backup-restore': { path: '/admin/backups' },
   'about': { path: '/admin/about' },
+  ...(QR ? qrShots(QR) : {}),
+}
+
+// ── QR Tracking shots (need the demo from prepareTracking) ───────────────
+// Type a code into a scan box and submit it, as a handheld scanner would.
+async function scanInto(id, code) {
+  await typeInto(`#${id}`, code)
+  await evaluate(`document.getElementById(${JSON.stringify(id)}).form.requestSubmit()`)
+  await sleep(1500)
+}
+const chooseOption = (selector, value) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('change', { bubbles: true })); return true })()`)
+const scrollToText = (text, offset = 120) => evaluate(`(() => { const el = [...document.querySelectorAll('h2, h3')].find((h) => h.innerText.trim().startsWith(${JSON.stringify(text)})); if (el) window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - ${offset}) })()`)
+
+function qrShots(q) {
+  return {
+    'qr-tracking-setup': { path: '/admin/tracking' },
+    'qr-locations': { path: '/tracking/locations' },
+    'qr-receive-label': { path: '/tracking/receive', before: async () => {
+      await evaluate(`[...document.querySelectorAll('ul button')].find((b) => /HR/.test(b.innerText))?.click()`); await sleep(500)
+      await typeInto('input[placeholder="Leave blank for one label"]', '3'); await sleep(400)
+    } },
+    'qr-put-away': { path: '/tracking/stock', before: () => scanInto('stock-bundle', q.notPutAway) },
+    'qr-find-bundle': { path: '/tracking/units' },
+    'qr-bundle-actions': { path: `/tracking/units/${q.inStock}`, before: async () => { await scrollToText('Change status', 260); await sleep(300) } },
+    'qr-customer-pickup': { path: `/tracking/pickups/${q.pickup}`, before: async () => {
+      await evaluate(`(() => { const label = [...document.querySelectorAll('label')].find((l) => l.innerText.startsWith("Customer's WhatsApp number")); const el = label && label.querySelector('input'); if (!el) return
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '98400 12345'); el.dispatchEvent(new Event('input', { bubbles: true })) })()`)
+      await scrollToText('Bundles', 300); await sleep(300)
+    } },
+    'qr-vendor-dispatch': { path: `/tracking/dispatches/${q.dispatchOpen}` },
+    'qr-vendor-stock': { path: '/tracking/vendors', before: async () => { await evaluate(`document.querySelectorAll('details').forEach((d) => { d.open = true })`); await sleep(400) } },
+    'qr-job-work-outputs': { path: `/tracking/outputs/${q.receipt}` },
+    'qr-old-stock': { path: '/tracking/verify', before: async () => {
+      await evaluate(`[...document.querySelectorAll('ul button')].find((b) => /CR/.test(b.innerText))?.click()`); await sleep(500)
+      const label = 'Number of bundles found'
+      await evaluate(`(() => { const l = [...document.querySelectorAll('label')].find((x) => x.innerText.startsWith(${JSON.stringify(label)})); const el = l && l.querySelector('input'); if (!el) return
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '2'); el.dispatchEvent(new Event('input', { bubbles: true })) })()`)
+      await sleep(400)
+      await evaluate(`(() => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; const boxes = [...document.querySelectorAll('label')].filter((l) => /^Bundle [0-9]/.test(l.innerText.trim())).map((l) => l.querySelector('input'))
+        ;['0.760', '0.735'].forEach((v, i) => { if (boxes[i]) { set.call(boxes[i], v); boxes[i].dispatchEvent(new Event('input', { bubbles: true })) } }) })()`)
+      await sleep(400)
+    } },
+    'qr-tracking-dashboard': { path: '/tracking/dashboard' },
+    'qr-stock-counts': { path: `/tracking/counts/${q.count}` },
+    'qr-sync-problems': { path: '/tracking/sync-problems' },
+    'qr-tracking-reports': { path: `/reports/tracking/stock-by-location?warehouse_id=${q.yard}` },
+    // Two phone screens side by side: scanning with a signal, then a scan saved with no signal.
+    'qr-offline-scan': { path: '/offline-scan', capture: async () => {
+      const PW = 412, PH = 860
+      await send('Emulation.setDeviceMetricsOverride', { width: PW, height: PH, deviceScaleFactor: 1, mobile: true })
+      await go('/offline-scan')
+      await chooseOption('select[aria-label="Warehouse"]', q.yard); await sleep(2500)
+      await scanInto('offline-place', q.notPutAway)
+      const online = (await send('Page.captureScreenshot', { format: 'png' })).data
+      await send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
+      await sleep(1500)
+      await scanInto('offline-place', 'B-01')
+      const offline = (await send('Page.captureScreenshot', { format: 'png' })).data
+      // Leave while still offline so the saved scan is never sent from this throwaway profile.
+      await send('Page.navigate', { url: 'about:blank' }); await sleep(500)
+      await send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
+      await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false })
+      const gap = 56, pad = 20
+      const phone = async (b64) => sharp(Buffer.from(b64, 'base64')).extend({ top: 2, bottom: 2, left: 2, right: 2, background: '#cbd5e1' }).png().toBuffer()
+      return sharp({ create: { width: 2 * (PW + 4) + gap + 2 * pad, height: PH + 4 + 2 * pad, channels: 3, background: '#eef3fb' } })
+        .composite([{ input: await phone(online), left: pad, top: pad }, { input: await phone(offline), left: pad + PW + 4 + gap, top: pad }])
+        .png().toBuffer()
+    } },
+  }
 }
 
 async function setSignedIn(on) {
@@ -227,12 +403,16 @@ for (const [slug, shot] of todo) {
   const want = !shot.signedOut
   if (signedIn !== want) { await setSignedIn(want); signedIn = want }
   try {
-    await go(shot.path)
-    if (shot.before) await shot.before()
-    await sleep(500)
-    const { data } = await send('Page.captureScreenshot', { format: 'png' })
+    let png
+    if (shot.capture) png = await shot.capture()
+    else {
+      await go(shot.path)
+      if (shot.before) await shot.before()
+      await sleep(500)
+      png = Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64')
+    }
     const file = join(OUT, `${slug}.jpg`)
-    await sharp(Buffer.from(data, 'base64')).jpeg({ quality: 80, mozjpeg: true }).toFile(file)
+    await sharp(png).jpeg({ quality: 80, mozjpeg: true }).toFile(file)
     const title = await evaluate('document.querySelector("main h1, h1")?.innerText ?? document.title')
     console.log(`✓ ${slug.padEnd(26)} ${shot.path}  [${String(title).slice(0, 60)}]`)
   } catch (err) {
