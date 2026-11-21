@@ -20,6 +20,8 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
           </Link>
           {owner && (
             <div className="flex items-center gap-3 text-sm text-gray-600">
+              <Link href="/owner" className="hover:text-gray-900">Customers</Link>
+              <Link href="/owner/services" className="hover:text-gray-900">Services &amp; costs</Link>
               <span className="hidden sm:inline">{owner.fullName}</span>
               <OwnerSignOut />
             </div>

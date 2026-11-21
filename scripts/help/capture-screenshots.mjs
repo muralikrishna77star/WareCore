@@ -53,7 +53,8 @@ await db.end()
 // ── Sign in and prepare (via the app's own APIs) ─────────────────────────
 const login = await fetch(`${BASE}/api/auth/login`, {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: 'TestUser', password: 'TestPassword' }), redirect: 'manual',
+  // HELP_LOGIN_* lets a demo copy with a changed password be used (e.g. the Android test site).
+  body: JSON.stringify({ email: process.env.HELP_LOGIN_EMAIL || 'TestUser', password: process.env.HELP_LOGIN_PASSWORD || 'TestPassword' }), redirect: 'manual',
 })
 const setCookie = login.headers.getSetCookie()
 if (!login.ok || !setCookie.length) throw new Error(`Sign-in failed: ${login.status} ${await login.text()}`)
