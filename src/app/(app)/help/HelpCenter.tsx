@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { BookOpen, ChevronRight, LifeBuoy, ListOrdered, MapPin, Search, X } from 'lucide-react'
+import { BookOpen, ChevronRight, LifeBuoy, ListOrdered, MapPin, PlayCircle, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   HELP_ARTICLES, HELP_CATEGORIES, helpForPath, helpIndex, searchHelp, type HelpArticle,
 } from '@/lib/help/articles'
+import { customerTourSlides } from '@/lib/marketing/productTour'
+
+const TOUR_SLIDE_COUNT = customerTourSlides(process.env.NEXT_PUBLIC_TRACKING_ENABLED === 'true').length
 
 function ArticleRow({ a, showCategory = false }: { a: HelpArticle; showCategory?: boolean }) {
   return (
@@ -110,6 +113,20 @@ export function HelpCenter({ initialQuery, from, initialTab }: { initialQuery: s
         </section>
       ) : (
         <>
+          <Link
+            href="/help/tour"
+            className="group mb-6 flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-blue-300 hover:bg-blue-50/40"
+          >
+            <PlayCircle className="h-9 w-9 shrink-0 text-blue-600" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-gray-900">Product Tour</p>
+              <p className="text-sm text-gray-600">
+                A guided walk through WareCore&apos;s main screens, from purchase bill to vendor balance · {TOUR_SLIDE_COUNT} slides, about 3 minutes
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 group-hover:text-blue-600" aria-hidden="true" />
+          </Link>
+
           {forScreen.length > 0 && (
             <section className="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 p-3 shadow-sm">
               <p className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-blue-700">

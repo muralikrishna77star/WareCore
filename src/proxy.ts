@@ -156,6 +156,13 @@ export async function proxy(request: NextRequest) {
   if (tenant.status === 'suspended') return unavailable(request, 'suspended', 403)
   if (tenant.status !== 'active') return unavailable(request, 'setup', 503)
   if (isOwnerPath(pathname)) return notFound(request)
+  // A customer's users get the in-app tour (no sales slide); the public one
+  // with "Book a demo" stays on www.warecore.space/tour.
+  if (pathname === '/tour') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/help/tour'
+    return NextResponse.redirect(url)
+  }
 
   forwarded.set(TENANT_HEADER, tenant.slug)
   forwarded.set(TENANT_DB_HEADER, tenant.dbName)

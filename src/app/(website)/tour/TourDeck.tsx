@@ -26,7 +26,13 @@ function subscribeToSlide(onChange: () => void) {
   }
 }
 
-export default function TourDeck({ slides, contact }: { slides: TourSlide[]; contact: Contact }) {
+/**
+ * contact: the sales contact for the public tour (shows "Book a demo").
+ * Leave it out for the in-app tour that signed-in customers see (/help/tour).
+ */
+export default function TourDeck({
+  slides, contact, endHref = '/', endLabel = 'Back to home',
+}: { slides: TourSlide[]; contact?: Contact; endHref?: string; endLabel?: string }) {
   const total = slides.length
   const index = useSyncExternalStore(subscribeToSlide, () => slideFromHash(total), () => 0)
   const touchStartX = useRef<number | null>(null)
@@ -89,16 +95,18 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
             >
               <Printer className="h-4 w-4" /> Save as PDF
             </button>
-            <a
-              href="#contact-us"
-              onClick={(e) => {
-                e.preventDefault()
-                go(total - 1)
-              }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Book a demo
-            </a>
+            {contact && (
+              <a
+                href="#contact-us"
+                onClick={(e) => {
+                  e.preventDefault()
+                  go(total - 1)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Book a demo
+              </a>
+            )}
           </div>
         </div>
         {/* Progress */}
@@ -165,10 +173,10 @@ export default function TourDeck({ slides, contact }: { slides: TourSlide[]; con
 
           {isLast ? (
             <Link
-              href="/"
+              href={endHref}
               className="inline-flex items-center gap-1.5 rounded-xl border bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
-              Back to home
+              {endLabel}
             </Link>
           ) : (
             <button
@@ -201,7 +209,7 @@ function Screenshot({ src, alt, cropTop }: { src: string; alt: string; cropTop?:
   )
 }
 
-function SlideBody({ slide, contact }: { slide: TourSlide; contact: Contact }) {
+function SlideBody({ slide, contact }: { slide: TourSlide; contact?: Contact }) {
   switch (slide.kind) {
     case 'cover':
       return (
@@ -279,6 +287,7 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact: Contact }) {
         </div>
       )
     case 'contact':
+      if (!contact) return null
       return (
         <div className="grid lg:grid-cols-2 gap-8 p-6 sm:p-10 lg:p-12 items-center lg:min-h-[560px]">
           <div>

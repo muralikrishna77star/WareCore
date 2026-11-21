@@ -270,6 +270,9 @@ describe('each address opens its own customer only', () => {
     expect(consoleOwner.headers.get('x-middleware-next')).toBe('1')
     expect((await proxyMod.proxy(req('https://warecore.space/tour'))).headers.get('x-middleware-next')).toBe('1')
     expect((await proxyMod.proxy(req('https://warecore.space/dashboard'))).status).toBe(404)
+    // A customer's address sends the tour to the in-app one (no sales slide).
+    const customerTour = await proxyMod.proxy(req('https://bsm.warecore.space/tour'))
+    expect(new URL(customerTour.headers.get('location')!).pathname).toBe('/help/tour')
   })
 
   it('an owner token is never a customer session, and the reverse', () => {

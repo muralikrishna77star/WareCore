@@ -319,3 +319,16 @@ export const TOUR_SLIDES: TourSlide[] = [
     ],
   },
 ]
+
+/**
+ * The tour as signed-in customers see it (Help → Product Tour, /help/tour):
+ * no sales "Book a demo" slide, and the QR slides only when QR tracking is
+ * switched on in this build.
+ */
+export function customerTourSlides(trackingEnabled: boolean): TourSlide[] {
+  return TOUR_SLIDES.filter((s) => {
+    if (s.kind === 'contact') return false
+    if (!trackingEnabled && 'image' in s && s.image.startsWith('/assets/tour/qr-')) return false
+    return true
+  })
+}
