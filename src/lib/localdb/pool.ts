@@ -1,4 +1,6 @@
 import { Pool, types } from 'pg'
+import { currentTenant } from '@/lib/tenancy/context'
+import { databaseUrlFor } from '@/lib/tenancy/config'
 
 // Postgres type oids whose default pg parsing differs from what the hosted
 // app (Hasura) returns.
@@ -37,8 +39,10 @@ const rawTextTypes = {
   getTypeParser: () => (v: string) => v,
 }
 
-let pool: Pool | null = null
-let graphqlPool: Pool | null = null
+// One pair of pools per database: in multi-customer mode each customer's
+// database gets its own (see src/lib/tenancy). In single-customer mode there
+// is only the DATABASE_URL pair, keyed ''.
+const pools = new Map<string, { raw: Pool | null; graphql: Pool | null }>()
 
 function connectionString() {
   const url = process.env.DATABASE_URL
@@ -54,8 +58,8 @@ function poolOptions() {
   return serverless ? { max: 5, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 15_000 } : {}
 }
 
-function newPool(typeParsers: object): Pool {
-  const p = new Pool({ connectionString: connectionString(), types: typeParsers as never, ...poolOptions() })
+function newPool(url: string, typeParsers: object): Pool {
+  const p = new Pool({ connectionString: url, types: typeParsers as never, ...poolOptions() })
   // An idle connection dropped by the server (Neon suspends idle compute,
   // its pooler closes idle clients) emits 'error' on the pool. Unhandled,
   // that crashes the whole process; pg replaces the client on next use.
@@ -63,28 +67,42 @@ function newPool(typeParsers: object): Pool {
   return p
 }
 
-/** Singleton pg.Pool for raw SQL (the direct stand-in for Hasura's run_sql). */
-export function getPool(): Pool {
-  if (!pool) pool = newPool(rawTextTypes)
-  return pool
+/** The database this request or job is for: DATABASE_URL, or the current customer's. */
+async function poolSlot() {
+  const tenant = await currentTenant()
+  const key = tenant?.dbName ?? ''
+  let slot = pools.get(key)
+  if (!slot) {
+    slot = { raw: null, graphql: null }
+    pools.set(key, slot)
+  }
+  const url = tenant ? databaseUrlFor(connectionString(), tenant.dbName) : connectionString()
+  return { slot, url }
+}
+
+/** pg.Pool for raw SQL (the direct stand-in for Hasura's run_sql), for the current customer. */
+export async function getPool(): Promise<Pool> {
+  const { slot, url } = await poolSlot()
+  if (!slot.raw) slot.raw = newPool(url, rawTextTypes)
+  return slot.raw
 }
 
 /** Pool for the direct GraphQL engine — values typed the way Hasura's GraphQL API returns them. */
-export function getGraphqlPool(): Pool {
-  if (!graphqlPool) graphqlPool = newPool(graphqlTypes)
-  return graphqlPool
+export async function getGraphqlPool(): Promise<Pool> {
+  const { slot, url } = await poolSlot()
+  if (!slot.graphql) slot.graphql = newPool(url, graphqlTypes)
+  return slot.graphql
 }
 
 /**
- * Closes the singleton pools and clears them, so a later getPool() call opens
- * a fresh one against whatever DATABASE_URL is set at that point. Needed by
- * tests that spin up a new throwaway Postgres instance per file (engine.test.ts)
+ * Closes every pool and forgets them, so a later getPool() call opens a fresh
+ * one against whatever DATABASE_URL is set at that point. Needed by tests
+ * that spin up a new throwaway Postgres instance per file (engine.test.ts)
  * — without this, the pool's connections dangle when that instance shuts
  * down and surface as an unhandled ECONNRESET.
  */
 export async function closePool(): Promise<void> {
-  const open = [pool, graphqlPool].filter((p): p is Pool => p !== null)
-  pool = null
-  graphqlPool = null
+  const open = [...pools.values()].flatMap((s) => [s.raw, s.graphql]).filter((p): p is Pool => p !== null)
+  pools.clear()
   await Promise.all(open.map((p) => p.end()))
 }

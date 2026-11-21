@@ -58,7 +58,7 @@ function formatScalar(value: unknown): unknown {
 export async function shapeRows(table: string, rows: Row[], field: FieldNode, variables: Record<string, unknown>): Promise<Row[]> {
   const out: Row[] = rows.map(() => ({}))
   if (rows.length === 0) return out
-  const pool = getGraphqlPool()
+  const pool = await getGraphqlPool()
 
   for (const sub of fieldSelections(field.selectionSet)) {
     const key = sub.name.value
@@ -136,7 +136,7 @@ export async function selectMany(table: string, args: Record<string, unknown>, f
   const limitSql = args.limit != null ? ` LIMIT ${Number(args.limit)}` : ''
   const offsetSql = args.offset != null ? ` OFFSET ${Number(args.offset)}` : ''
 
-  const pool = getGraphqlPool()
+  const pool = await getGraphqlPool()
   const res = await pool.query(
     `SELECT ${distinctSql}* FROM "${table}" WHERE ${whereSql}${orderSql}${limitSql}${offsetSql}`,
     params
@@ -145,7 +145,7 @@ export async function selectMany(table: string, args: Record<string, unknown>, f
 }
 
 export async function selectByPk(table: string, args: Record<string, unknown>, field: FieldNode, variables: Record<string, unknown>) {
-  const pool = getGraphqlPool()
+  const pool = await getGraphqlPool()
   const res = await pool.query(`SELECT * FROM "${table}" WHERE id = $1 LIMIT 1`, [args.id])
   return res.rows[0] ? shapeRow(table, res.rows[0], field, variables) : null
 }
@@ -170,7 +170,7 @@ export async function selectAggregate(table: string, args: Record<string, unknow
 
   const params: unknown[] = []
   const whereSql = buildWhere(table, args.where, params)
-  const pool = getGraphqlPool()
+  const pool = await getGraphqlPool()
   const res = await pool.query(`SELECT ${selectParts.join(', ')} FROM "${table}" WHERE ${whereSql}`, params)
   const row = res.rows[0] ?? {}
 

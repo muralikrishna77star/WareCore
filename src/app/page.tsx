@@ -2,6 +2,11 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import WebsiteHomePage from './(website)/page'
+import CustomerHome from '@/components/CustomerHome'
+import { currentTenantSlug } from '@/lib/tenancy/context'
+import { isMultiTenant } from '@/lib/tenancy/config'
+import { getBrand } from '@/lib/tenancy/brand'
+import { customerHomeImages } from '@/lib/tenancy/customerHome'
 
 export default async function RootPage() {
   const cookieStore = await cookies()
@@ -10,7 +15,10 @@ export default async function RootPage() {
 
   if (session) redirect('/dashboard')
 
+  // A customer's own address (saisteels.warecore.space) opens on that
+  // customer's page; WareCore's website stays on www.warecore.space.
+  const slug = isMultiTenant() ? await currentTenantSlug().catch(() => null) : null
+  if (slug) return <CustomerHome brand={await getBrand()} images={customerHomeImages(slug)} />
+
   return <WebsiteHomePage />
 }
-
-

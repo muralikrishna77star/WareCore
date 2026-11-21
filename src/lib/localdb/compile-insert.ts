@@ -24,7 +24,7 @@ export async function insertOne(table: string, args: Record<string, unknown>, fi
   const placeholders = values.map((_, i) => `$${i + 1}`)
   const onConflictSql = buildOnConflict(args.on_conflict as OnConflict | undefined)
 
-  const pool = getGraphqlPool()
+  const pool = await getGraphqlPool()
   const res = await pool.query(
     `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${placeholders.join(', ')})${onConflictSql} RETURNING *`,
     values
@@ -51,7 +51,7 @@ export async function insertMany(table: string, args: Record<string, unknown>, f
   })
   const onConflictSql = buildOnConflict(args.on_conflict as OnConflict | undefined)
 
-  const pool = getGraphqlPool()
+  const pool = await getGraphqlPool()
   const res = await pool.query(
     `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES ${rowsSql.join(', ')}${onConflictSql} RETURNING *`,
     params

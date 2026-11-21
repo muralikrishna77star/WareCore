@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { useBrand } from '@/components/BrandProvider'
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
   google_denied: 'Google sign-in was cancelled.',
@@ -17,6 +18,7 @@ const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const brand = useBrand()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -71,13 +73,13 @@ function LoginForm() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
-          <img src="/assets/brand/logo-mark.svg" alt="WareCore" className="h-12 w-12" />
+          <img src={brand.logoUrl} alt={brand.displayName} className="h-12 max-w-[12rem] object-contain" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          WareCore
+          {brand.displayName}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Warehouse Management System
+          {brand.isCustomer ? 'Warehouse Management by WareCore' : 'Warehouse Management System'}
         </p>
       </div>
 
@@ -145,7 +147,7 @@ function LoginForm() {
             </div>
           </form>
 
-          {(isDesktop ? desktopGoogleAvailable : process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true') && (
+          {(isDesktop ? desktopGoogleAvailable : process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true' && brand.googleSignIn) && (
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

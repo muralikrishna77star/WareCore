@@ -15,7 +15,7 @@ export interface TrackingActor {
  * the session cookie, so a deactivated or reassigned user loses access at once.
  */
 export async function loadTrackingActor(session: SessionPayload): Promise<TrackingActor | null> {
-  const { rows } = await getPool().query(
+  const { rows } = await (await getPool()).query(
     `SELECT role, company_id::text AS company_id, warehouse_id::text AS warehouse_id, is_active
        FROM user_profiles WHERE id = $1`,
     [session.userId],

@@ -9,6 +9,12 @@ export interface SessionPayload {
   email: string
   role: string
   fullName: string
+  /**
+   * The customer this sign-in belongs to (multi-customer mode only). The proxy
+   * drops a session whose customer isn't the one the address opens, so a
+   * cookie or token from one customer never opens another's data.
+   */
+  tenant?: string
 }
 
 export function signSession(payload: SessionPayload): string {
@@ -19,7 +25,10 @@ export function signSession(payload: SessionPayload): string {
 export function verifySession(token: string): SessionPayload | null {
   if (!JWT_SECRET) return null
   try {
-    return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as SessionPayload
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as SessionPayload & { aud?: unknown }
+    // Owner console tokens carry an audience (src/lib/tenancy/ownerSession.ts); never a customer session.
+    if (payload.aud !== undefined) return null
+    return payload
   } catch {
     return null
   }

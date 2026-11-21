@@ -131,7 +131,7 @@ describe('Backup restore and the stock ledger (migration 174)', () => {
 
   it('the restore switch does not leak: a sale entered afterwards on the same pool still posts its stock', async () => {
     const { getPool } = pool
-    const p = getPool()
+    const p = await getPool()
     // Use every pooled connection once, so a leaked setting would show up.
     await Promise.all(Array.from({ length: 5 }, () => p.query('SELECT 1')))
     const { rows: [order] } = await p.query(

@@ -15,6 +15,7 @@ import { RecordPreviewProvider } from '@/components/RecordPreviewProvider'
 import { Copilot } from '@/components/ai/Copilot'
 import { DashboardViewProvider, useDashboardView } from '@/components/DashboardViewProvider'
 import { DashboardViewToggle } from '@/components/DashboardViewToggle'
+import { useBrand } from '@/components/BrandProvider'
 import type { DashboardView } from '@/lib/dashboardViewPreference'
 
 // Chrome styling per dashboard view — same links, hrefs, labels, icons and
@@ -107,6 +108,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 function AppLayoutShell({ children }: { children: React.ReactNode }) {
   const { view } = useDashboardView()
   const chrome = CHROME[view]
+  const brand = useBrand()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [userEmail, setUserEmail] = useState('')
@@ -212,8 +214,8 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         <div className="flex h-16 items-center justify-between px-6 border-b border-gray-800">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
-            <img src="/assets/brand/logo-mark.svg" alt="WareCore" className="h-8 w-8" />
-            <span className="text-white font-bold text-lg">WareCore</span>
+            <img src={brand.logoUrl} alt={brand.displayName} className="h-8 max-w-[5rem] shrink-0 object-contain" />
+            <span className="text-white font-bold text-lg leading-tight line-clamp-2" title={brand.displayName}>{brand.displayName}</span>
           </div>
           <button
             className="text-gray-400 hover:text-white lg:hidden"
@@ -258,7 +260,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         {/* Version footer */}
         <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t border-gray-800 bg-gray-900">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">WareCore WMS</span>
+            <span className="text-xs text-gray-500">{brand.isCustomer ? 'Powered by WareCore' : 'WareCore WMS'}</span>
             <span className="inline-flex items-center rounded bg-gray-800 border border-gray-700 px-2 py-0.5 text-[10px] font-mono text-gray-400">
               v{APP_VERSION}
             </span>

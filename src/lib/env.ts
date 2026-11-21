@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { isMultiTenant } from '@/lib/tenancy/config'
 
 const trim = (value?: string) => value?.trim() || ''
 
@@ -38,6 +39,14 @@ export function getAppUrl(request?: NextRequest) {
     }
   }
 
+  // Several customers on one deployment: every link (password reset, Google
+  // sign-in) goes back to the address the request came in on. The proxy has
+  // already checked that address belongs to a customer.
+  if (isMultiTenant() && request) {
+    const host = (request.headers.get('host') || '').split(',')[0].trim()
+    if (/^[a-z0-9.-]+(:\d+)?$/i.test(host)) return `${request.nextUrl.protocol}//${host}`.toLowerCase()
+  }
+
   const explicitUrl = trim(process.env.NEXT_PUBLIC_APP_URL)
   if (explicitUrl) return explicitUrl
 
@@ -55,7 +64,7 @@ export function getAppUrl(request?: NextRequest) {
 export function getGoogleRedirectUri(request?: NextRequest) {
   // Same reasoning as getAppUrl(): a pinned GOOGLE_OAUTH_REDIRECT_URI is a
   // web-deploy concern and would be wrong for a desktop instance's own port.
-  if (process.env.LOCAL_MODE === 'true') return `${getAppUrl(request)}/api/auth/google/callback`
+  if (process.env.LOCAL_MODE === 'true' || isMultiTenant()) return `${getAppUrl(request)}/api/auth/google/callback`
   return trim(process.env.GOOGLE_OAUTH_REDIRECT_URI) || `${getAppUrl(request)}/api/auth/google/callback`
 }
 

@@ -32,6 +32,14 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  // A second build next to a running one (local checks only); normally .next.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+
+  // Setting up a customer runs every migration file from the owner console,
+  // so the files must ship with those functions (src/lib/tenancy/provision.ts).
+  outputFileTracingIncludes: {
+    '/api/owner/**': ['./supabase/migrations/*.sql'],
+  },
 
   // For Capacitor static export, uncomment when building for mobile:
   // output: 'export',

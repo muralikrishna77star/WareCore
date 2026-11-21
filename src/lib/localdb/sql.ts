@@ -15,7 +15,7 @@ import { getPool } from './pool'
  * faithful silently breaks those screens.
  */
 export async function runSqlLocal(sql: string): Promise<{ result_type: string; result: unknown[][] | null }> {
-  const pool = getPool()
+  const pool = await getPool()
   // rowMode 'array' keeps duplicate column names (two "id"s in a join) as
   // separate cells, the way run_sql does — keyed rows would collapse them.
   const queryResult = await pool.query({ text: sql, rowMode: 'array' })

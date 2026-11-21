@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { signSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import { TENANT_HEADER } from '@/lib/tenancy/config'
 import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
 
 const FIND_USER_QUERY = `
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
     email: email.toLowerCase().trim(),
     role: user.role,
     fullName: user.full_name,
+    tenant: request.headers.get(TENANT_HEADER) ?? undefined,
   })
 
   const response = NextResponse.json({ ok: true })

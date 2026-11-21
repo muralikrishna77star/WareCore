@@ -77,7 +77,7 @@ export type Service = {
 export const SERVICES: Service[] = [
   {
     name: 'Vercel',
-    usedFor: 'Hosts warecore.vercel.app — every page, report and API call, plus the nightly reconciliation scan',
+    usedFor: 'Hosts every customer’s WareCore (saisteels.warecore.space and the other *.warecore.space addresses) — every page, report and API call, plus the nightly reconciliation scan',
     plan: 'Hobby (free)',
     status: 'attention',
     monthlyCost: '$0',
@@ -115,7 +115,7 @@ export const SERVICES: Service[] = [
   },
   {
     name: 'Neon',
-    usedFor: 'Managed PostgreSQL database (AWS Singapore)',
+    usedFor: 'Managed PostgreSQL databases (AWS Singapore): one per customer, plus the customer registry',
     plan: 'Launch (paid, usage-based)',
     status: 'paid',
     monthlyCost: 'Pay per use, no minimum',

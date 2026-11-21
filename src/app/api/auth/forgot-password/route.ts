@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import nodemailer from 'nodemailer'
 import { getAppUrl } from '@/lib/env'
+import { getBrand } from '@/lib/tenancy/brand'
 import { hasuraFetchEnvelope } from '@/lib/hasura/transport'
-
-const APP_URL = getAppUrl()
 
 const TOKEN_EXPIRY_HOURS = 1
 
@@ -31,7 +30,9 @@ const SET_RESET_TOKEN = `
 
 const hasuraRequest = hasuraFetchEnvelope
 
-async function sendResetEmail(to: string, name: string, resetUrl: string): Promise<boolean> {
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+async function sendResetEmail(to: string, name: string, resetUrl: string, appName: string): Promise<boolean> {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '587', 10)
   const user = process.env.SMTP_USER
@@ -50,12 +51,12 @@ async function sendResetEmail(to: string, name: string, resetUrl: string): Promi
   })
 
   await transporter.sendMail({
-    from: `"WareCore" <${from}>`,
+    from: `"${appName.replace(/["\\\r\n]/g, '')}" <${from}>`,
     to,
-    subject: 'Reset your WareCore password',
+    subject: `Reset your ${appName} password`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#1d4ed8">WareCore — Password Reset</h2>
+        <h2 style="color:#1d4ed8">${escapeHtml(appName)} — Password Reset</h2>
         <p>Hi ${name},</p>
         <p>We received a request to reset your password. Click the button below to choose a new one.
            This link expires in ${TOKEN_EXPIRY_HOURS} hour.</p>
@@ -104,9 +105,9 @@ export async function POST(request: NextRequest) {
     expires_at: expiresAt,
   })
 
-  const resetUrl = `${APP_URL}/login/reset-password?token=${token}`
+  const resetUrl = `${getAppUrl(request)}/login/reset-password?token=${token}`
 
-  const emailSent = await sendResetEmail(user.email, user.full_name, resetUrl)
+  const emailSent = await sendResetEmail(user.email, user.full_name, resetUrl, (await getBrand()).displayName)
 
   // If SMTP is not configured, return the reset URL directly.
   // This is acceptable for internal tools — configure SMTP to send it by email instead.

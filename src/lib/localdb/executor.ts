@@ -1,3 +1,4 @@
+import { unstable_rethrow } from 'next/navigation'
 import { DocumentNode, FieldNode, OperationDefinitionNode, parse, valueFromASTUntyped } from 'graphql'
 import { evalArgs, fieldSelections, resultKey } from './ast'
 import { selectMany, selectByPk, selectAggregate } from './compile-select'
@@ -41,6 +42,9 @@ export async function executeGraphQL<T = unknown>(
 
     return { data: data as T }
   } catch (err) {
+    // Next's "render this page per request" signal (raised while picking the
+    // customer's database) is not a query error: let Next handle it.
+    unstable_rethrow(err)
     return { data: null, errors: [{ message: err instanceof Error ? err.message : String(err) }] }
   }
 }

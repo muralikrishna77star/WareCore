@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { getAppUrl, getGoogleRedirectUri, GOOGLE_CLIENT_ID, GOOGLE_DESKTOP_CLIENT_ID } from '@/lib/env'
+import { getBrand } from '@/lib/tenancy/brand'
 
 export async function GET(request: NextRequest) {
   const isDesktop = process.env.LOCAL_MODE === 'true'
@@ -18,6 +19,11 @@ export async function GET(request: NextRequest) {
 
   const appUrl = getAppUrl(request)
   const redirectUri = getGoogleRedirectUri(request)
+  // Each customer address must be registered with Google separately, so it's
+  // switched on per customer in the owner console.
+  if (!(await getBrand()).googleSignIn) {
+    return NextResponse.redirect(`${appUrl}/login?error=google_not_configured`)
+  }
   const clientId = isDesktop ? GOOGLE_DESKTOP_CLIENT_ID : GOOGLE_CLIENT_ID
   if (!clientId) {
     return NextResponse.redirect(`${appUrl}/login?error=google_not_configured`)

@@ -19,7 +19,7 @@ export class TrackingError extends Error {
 export type Row = Record<string, string>
 
 export async function query(sql: string, params: unknown[] = []): Promise<Row[]> {
-  return (await getPool().query(sql, params)).rows as Row[]
+  return (await (await getPool()).query(sql, params)).rows as Row[]
 }
 
 export function requireUuid(value: unknown, label: string): string {

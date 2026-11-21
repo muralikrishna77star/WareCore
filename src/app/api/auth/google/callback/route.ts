@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { signSession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
+import { TENANT_HEADER } from '@/lib/tenancy/config'
 import {
   getAppRedirectUrl,
   getGoogleRedirectUri,
@@ -146,6 +147,7 @@ export async function GET(request: NextRequest) {
     email: user.email,
     role: user.role,
     fullName: user.full_name,
+    tenant: request.headers.get(TENANT_HEADER) ?? undefined,
   })
 
   const response = NextResponse.redirect(getAppRedirectUrl('/dashboard', request))

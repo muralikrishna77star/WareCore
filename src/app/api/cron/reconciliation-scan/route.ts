@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runReconciliation } from '@/lib/dataIntegrity/engine'
 import { purgeExpiredPositions } from '@/lib/tracking/floor'
+import { isMultiTenant } from '@/lib/tenancy/config'
+import { listActiveTenants } from '@/lib/tenancy/control'
+import { runWithTenant } from '@/lib/tenancy/context'
 
 // Invoked by Vercel Cron (see vercel.json) — Vercel automatically sends
 // `Authorization: Bearer $CRON_SECRET` on cron-triggered requests once
@@ -16,13 +19,31 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  if (!isMultiTenant()) {
+    const result = await nightlyScan()
+    return NextResponse.json(result, { status: 'error' in result || result.status === 'FAILED' ? 500 : 200 })
+  }
+
+  // One deployment, several customers: scan each customer's own database in
+  // turn. One customer's failure never stops the others' scans.
+  const results: Record<string, unknown> = {}
+  let failed = false
+  for (const t of await listActiveTenants()) {
+    const result = await runWithTenant({ slug: t.slug, dbName: t.dbName }, nightlyScan)
+    results[t.slug] = result
+    if ('error' in result || result.status === 'FAILED') failed = true
+  }
+  return NextResponse.json({ customers: results }, { status: failed ? 500 : 200 })
+}
+
+async function nightlyScan() {
   // A separate step: a clean-up failure must never affect the reconciliation scan.
   await purgeExpiredPositions().catch((err) => {
     console.error('[tracking] GPS clean-up failed:', err instanceof Error ? err.message : err)
   })
 
   try {
-    const result = await runReconciliation({
+    return await runReconciliation({
       runType: 'NIGHTLY_FULL',
       scopeType: 'FULL',
       companyId: null,
@@ -30,8 +51,7 @@ export async function GET(request: NextRequest) {
       toDate: new Date().toISOString().slice(0, 10),
       startedBy: null,
     })
-    return NextResponse.json(result, { status: result.status === 'FAILED' ? 500 : 200 })
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Reconciliation run failed' }, { status: 500 })
+    return { error: err instanceof Error ? err.message : 'Reconciliation run failed' }
   }
 }
