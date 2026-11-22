@@ -71,7 +71,7 @@ beforeAll(async () => {
   await c.connect()
   await c.query('ALTER TABLE schema_migrations RENAME TO schema_migrations_harness')
   await c.end()
-}, 120_000)
+}, 300_000) // one test database + 150-odd migrations took ~108s on a busy Windows machine (2026-11-22)
 
 afterAll(async () => {
   await pool?.closePool()

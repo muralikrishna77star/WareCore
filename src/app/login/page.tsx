@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { PlayCircle } from 'lucide-react'
 import { useBrand } from '@/components/BrandProvider'
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
@@ -187,6 +188,17 @@ function LoginForm() {
             </div>
           )}
         </div>
+
+        {/* On a customer's address (bsm.warecore.space) /tour is that
+            customer's tour, open without signing in. */}
+        {brand.isCustomer && (
+          <Link
+            href="/tour"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white py-2.5 px-4 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
+          >
+            <PlayCircle className="h-5 w-5" aria-hidden="true" /> Take the Product Tour
+          </Link>
+        )}
       </div>
     </div>
   )
