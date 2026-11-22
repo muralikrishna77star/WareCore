@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, PlayCircle } from 'lucide-react'
 import type { Brand } from '@/lib/tenancy/brandShared'
 import type { CustomerHomeImage } from '@/lib/tenancy/customerHome'
 
@@ -17,12 +17,17 @@ export default function CustomerHome({ brand, images }: { brand: Brand; images: 
             <img src={brand.logoUrl} alt="" className="h-9 max-w-[8rem] object-contain" />
             <span className="truncate text-lg font-bold text-gray-900">{brand.displayName}</span>
           </div>
-          <Link
-            href="/login"
-            className="inline-flex shrink-0 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-          >
-            Staff Login
-          </Link>
+          <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+            <Link href="/tour" className="text-sm font-medium text-blue-700 hover:text-blue-900">
+              Product Tour
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              Staff Login
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -37,12 +42,20 @@ export default function CustomerHome({ brand, images }: { brand: Brand; images: 
             />
             <h1 className="break-words text-4xl font-bold sm:text-6xl">{brand.displayName}</h1>
             <p className="mt-4 text-lg text-blue-100">Warehouse Management</p>
-            <Link
-              href="/login"
-              className="mt-10 inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-3 font-semibold text-blue-700 transition-colors hover:bg-blue-50"
-            >
-              Sign in <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-3 font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+              >
+                Sign in <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/tour"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/60 px-8 py-3 font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                <PlayCircle className="h-5 w-5" /> Product Tour
+              </Link>
+            </div>
           </div>
         </section>
 

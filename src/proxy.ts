@@ -156,13 +156,6 @@ export async function proxy(request: NextRequest) {
   if (tenant.status === 'suspended') return unavailable(request, 'suspended', 403)
   if (tenant.status !== 'active') return unavailable(request, 'setup', 503)
   if (isOwnerPath(pathname)) return notFound(request)
-  // A customer's users get the in-app tour (no sales slide); the public one
-  // with "Book a demo" stays on www.warecore.space/tour.
-  if (pathname === '/tour') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/help/tour'
-    return NextResponse.redirect(url)
-  }
 
   forwarded.set(TENANT_HEADER, tenant.slug)
   forwarded.set(TENANT_DB_HEADER, tenant.dbName)
@@ -175,7 +168,25 @@ export async function proxy(request: NextRequest) {
     dropSession = true
     withoutSessionCookie(forwarded)
   }
+  if (pathname === '/tour') return customerTour(request, session, forwarded, dropSession)
   return appGate(request, session, forwarded, dropSession)
+}
+
+// A customer's address never shows the sales tour ("Book a demo" stays on
+// www.warecore.space/tour). Signed-in staff get Help → Product Tour; anyone
+// else gets the same slides on a page that ends at Sign in.
+function customerTour(request: NextRequest, session: SessionPayload | null, forwarded: Headers, dropSession: boolean) {
+  const url = request.nextUrl.clone()
+  let response: NextResponse
+  if (session) {
+    url.pathname = '/help/tour'
+    response = NextResponse.redirect(url)
+  } else {
+    url.pathname = '/customer-tour'
+    response = NextResponse.rewrite(url, { request: { headers: forwarded } })
+  }
+  if (dropSession) response.cookies.delete(SESSION_COOKIE_NAME)
+  return response
 }
 
 export const config = {

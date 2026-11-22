@@ -270,9 +270,17 @@ describe('each address opens its own customer only', () => {
     expect(consoleOwner.headers.get('x-middleware-next')).toBe('1')
     expect((await proxyMod.proxy(req('https://warecore.space/tour'))).headers.get('x-middleware-next')).toBe('1')
     expect((await proxyMod.proxy(req('https://warecore.space/dashboard'))).status).toBe(404)
-    // A customer's address sends the tour to the in-app one (no sales slide).
-    const customerTour = await proxyMod.proxy(req('https://bsm.warecore.space/tour'))
-    expect(new URL(customerTour.headers.get('location')!).pathname).toBe('/help/tour')
+    // A customer's address never shows the sales tour: visitors get the
+    // customer tour page (no sign-in), signed-in staff the in-app one.
+    const visitorTour = await proxyMod.proxy(req('https://bsm.warecore.space/tour'))
+    expect(visitorTour.headers.get('x-middleware-rewrite')).toContain('/customer-tour')
+    expect(forwardedHeader(visitorTour, 'x-warecore-tenant')).toBe('bsm')
+    const staff = session.signSession({ userId: 'u1', email: 'a', role: 'admin', fullName: 'A', tenant: 'bsm' })
+    const staffTour = await proxyMod.proxy(req('https://bsm.warecore.space/tour', { headers: { cookie: `wc_session=${staff}` } }))
+    expect(new URL(staffTour.headers.get('location')!).pathname).toBe('/help/tour')
+    // The page behind the rewrite is not itself an open address.
+    expect(new URL((await proxyMod.proxy(req('https://bsm.warecore.space/customer-tour'))).headers.get('location')!).pathname).toBe('/login')
+    expect((await proxyMod.proxy(req('https://warecore.space/customer-tour'))).status).toBe(404)
   })
 
   it('an owner token is never a customer session, and the reverse', () => {

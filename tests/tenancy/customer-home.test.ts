@@ -19,12 +19,15 @@ const render = (images: Parameters<typeof CustomerHome>[0]['images']) =>
   renderToStaticMarkup(createElement(CustomerHome, { brand, images }))
 
 describe('customer start page', () => {
-  it('shows the company name and sign-in, and nothing of the WareCore sales site', () => {
+  it('shows the company name, sign-in and the Product Tour, and nothing of the WareCore sales site', () => {
     const html = render([])
     expect(html).toContain('<h1')
     expect(html).toContain('BSM')
     expect(html).toContain('href="/login"')
-    expect(html).not.toContain('Product Tour')
+    // /tour on a customer address is the customer tour (the proxy decides), never the sales one.
+    expect(html).toContain('href="/tour"')
+    expect(html).toContain('Product Tour')
+    expect(html).not.toContain('Book a demo')
     expect(html).not.toContain('<figure')
   })
 

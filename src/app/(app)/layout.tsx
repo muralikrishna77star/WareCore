@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Settings, DatabaseBackup, ShieldCheck, ClipboardList, Undo2,
   Wallet, Package, RefreshCw, ArrowLeftRight, Factory, Shuffle, Receipt,
-  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, PackageOpen, LifeBuoy, CircleQuestionMark, QrCode, type LucideIcon,
+  ChartColumn, Truck, KeyRound, LogOut, Search, X, Info, Trash2, PackageOpen, LifeBuoy, CircleQuestionMark, QrCode, PlayCircle, type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
@@ -87,6 +87,7 @@ const navItems: NavItem[] = [
   { title: 'Deleted Ledger Rows', href: '/ledger-deletions', icon: Trash2 },
   { title: 'Reports', href: '/reports', icon: ChartColumn },
   { title: 'Help & How-To', href: '/help', icon: LifeBuoy },
+  { title: 'Product Tour', href: '/help/tour', icon: PlayCircle },
 ]
 
 const MOBILE_NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
@@ -234,7 +235,9 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100vh-10rem)]">
           {navItems.map((item, index) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            // Only the closest match lights up (Product Tour, not also Help).
+            const matches = (href: string) => pathname === href || pathname.startsWith(href + '/')
+            const isActive = matches(item.href) && !navItems.some((o) => o.href.length > item.href.length && o.href.startsWith(item.href + '/') && matches(o.href))
             const Icon = item.icon
             return (
               <Fragment key={item.href}>
