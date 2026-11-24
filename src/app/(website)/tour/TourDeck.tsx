@@ -104,9 +104,9 @@ export default function TourDeck({
   const isLast = index === total - 1
 
   return (
-    <main className="bg-slate-50 print:bg-white">
+    <main className="bg-gradient-to-b from-blue-50/80 via-slate-50 to-indigo-50/60 print:bg-white">
       {/* Toolbar */}
-      <div className="border-b bg-white print:hidden">
+      <div className="border-b border-white/70 bg-white/75 backdrop-blur-xl print:hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Product Tour</p>
@@ -127,16 +127,16 @@ export default function TourDeck({
                   e.preventDefault()
                   go(total - 1)
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="wc-shine wc-gloss inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-blue-500 to-blue-700 px-3 py-2 text-sm font-medium text-white"
               >
-                Book a demo
+                <span className="relative">Book a demo</span>
               </a>
             )}
           </div>
         </div>
         {/* Progress */}
         <div className="h-1 bg-gray-100" aria-hidden="true">
-          <div className="h-1 bg-blue-600 transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%` }} />
+          <div className="h-1 bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-600 shadow-[0_0_10px_rgb(56_189_248/0.7)] transition-all duration-300" style={{ width: `${((index + 1) / total) * 100}%` }} />
         </div>
       </div>
 
@@ -158,7 +158,7 @@ export default function TourDeck({
             aria-hidden={i !== index}
             className={`${i === index ? 'block' : 'hidden'} print:block print:break-after-page print:[break-inside:avoid]`}
           >
-            <div className="rounded-2xl border bg-white shadow-sm overflow-hidden lg:min-h-[560px] print:shadow-none print:border-0 print:rounded-none">
+            <div className="rounded-2xl border border-white bg-white shadow-[inset_0_1px_0_white,0_24px_60px_-24px_rgb(30_64_175/0.35)] overflow-hidden lg:min-h-[560px] print:shadow-none print:border-0 print:rounded-none">
               <SlideBody slide={slide} contact={contact} onZoom={openZoom} />
             </div>
             <p className="hidden print:block text-right text-xs text-gray-400 mt-2">
@@ -188,7 +188,7 @@ export default function TourDeck({
                 aria-label={`Slide ${i + 1}: ${s.title}`}
                 title={s.eyebrow}
                 onClick={() => go(i)}
-                className={`h-2.5 rounded-full transition-all ${i === index ? 'w-6 bg-blue-600' : 'w-2.5 bg-gray-300 hover:bg-gray-400'}`}
+                className={`h-2.5 rounded-full transition-all ${i === index ? 'w-6 bg-gradient-to-r from-sky-400 to-blue-600 shadow-[0_0_8px_rgb(56_189_248/0.7)]' : 'w-2.5 bg-gray-300 hover:bg-gray-400'}`}
               />
             ))}
           </div>
@@ -207,9 +207,9 @@ export default function TourDeck({
             <button
               type="button"
               onClick={() => go(index + 1)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+              className="wc-shine wc-gloss inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-b from-blue-500 to-blue-700 px-4 py-2.5 text-sm font-medium text-white"
             >
-              Next <ArrowRight className="h-4 w-4" />
+              <span className="relative inline-flex items-center gap-1.5">Next <ArrowRight className="h-4 w-4" /></span>
             </button>
           )}
         </nav>

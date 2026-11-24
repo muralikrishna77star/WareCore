@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import WebsiteHomePage from './(website)/page'
+import { WebsiteHeader, WebsiteFooter } from '@/components/website/WebsiteChrome'
 import CustomerHome from '@/components/CustomerHome'
 import { currentTenantSlug } from '@/lib/tenancy/context'
 import { isMultiTenant } from '@/lib/tenancy/config'
@@ -20,5 +21,11 @@ export default async function RootPage() {
   const slug = isMultiTenant() ? await currentTenantSlug().catch(() => null) : null
   if (slug) return <CustomerHome brand={await getBrand()} images={customerHomeImages(slug)} />
 
-  return <WebsiteHomePage />
+  return (
+    <div className="min-h-screen bg-white">
+      <WebsiteHeader />
+      <WebsiteHomePage />
+      <WebsiteFooter />
+    </div>
+  )
 }
