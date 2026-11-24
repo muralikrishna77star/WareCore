@@ -1,11 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, Check, Mail, Phone, Printer, LogIn } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Mail, Phone, Printer, LogIn, Maximize2 } from 'lucide-react'
 import type { TourSlide } from '@/lib/marketing/productTour'
 
 type Contact = { email: string; phone: string; phoneHref: string }
+type Zoom = { src: string; alt: string; cropTop?: number }
+type OnZoom = (z: Zoom) => void
 
 // Slide number lives in the URL hash (#3) so a link can open the tour at a
 // given slide, and Back/Forward don't pile up one history entry per click.
@@ -36,6 +39,21 @@ export default function TourDeck({
   const total = slides.length
   const index = useSyncExternalStore(subscribeToSlide, () => slideFromHash(total), () => 0)
   const touchStartX = useRef<number | null>(null)
+  const [zoom, setZoom] = useState<Zoom | null>(null)
+
+  // Opening a screenshot full screen adds a history entry, so the browser's
+  // Back button (or Android's) shrinks it back instead of leaving the tour.
+  // The viewer's own Back button and Esc go through history.back() too.
+  const openZoom = useCallback((z: Zoom) => {
+    window.history.pushState({ warecoreTourZoom: true }, '', window.location.href)
+    setZoom(z)
+  }, [])
+  const closeZoom = useCallback(() => window.history.back(), [])
+  useEffect(() => {
+    const onPop = () => setZoom(null)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   const go = useCallback(
     (next: number) => {
@@ -50,6 +68,13 @@ export default function TourDeck({
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (zoom) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          closeZoom()
+        }
+        return
+      }
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault()
         go(index + 1)
@@ -64,7 +89,7 @@ export default function TourDeck({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [go, index, total])
+  }, [go, index, total, zoom, closeZoom])
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? null
@@ -134,7 +159,7 @@ export default function TourDeck({
             className={`${i === index ? 'block' : 'hidden'} print:block print:break-after-page print:[break-inside:avoid]`}
           >
             <div className="rounded-2xl border bg-white shadow-sm overflow-hidden lg:min-h-[560px] print:shadow-none print:border-0 print:rounded-none">
-              <SlideBody slide={slide} contact={contact} />
+              <SlideBody slide={slide} contact={contact} onZoom={openZoom} />
             </div>
             <p className="hidden print:block text-right text-xs text-gray-400 mt-2">
               WareCore Product Tour · {i + 1} / {total}
@@ -189,13 +214,79 @@ export default function TourDeck({
           )}
         </nav>
       </section>
+      {zoom && <ScreenshotViewer zoom={zoom} onClose={closeZoom} />}
     </main>
   )
 }
 
-function Screenshot({ src, alt, cropTop }: { src: string; alt: string; cropTop?: number }) {
+// Full-screen view of one screenshot. Back (button, Esc, browser Back or a
+// click outside the picture) returns to the slide.
+function ScreenshotViewer({ zoom, onClose }: { zoom: Zoom; onClose: () => void }) {
+  const backRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    backRef.current?.focus()
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [])
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Screenshot: ${zoom.alt}`}
+      className="fixed inset-0 z-[100] flex flex-col bg-slate-950 print:hidden"
+    >
+      <div className="flex items-center gap-3 px-3 sm:px-5 py-3 border-b border-white/10">
+        <button
+          ref={backRef}
+          type="button"
+          onClick={onClose}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+        <p className="min-w-0 truncate text-sm text-slate-300">{zoom.alt}</p>
+      </div>
+      <div
+        className="flex flex-1 min-h-0 items-center justify-center p-2 sm:p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose()
+        }}
+      >
+        {/* Same crop as the slide (cropTop hides part of some shots), scaled
+            to fit the screen in both directions. */}
+        <div
+          className="relative max-h-full max-w-full overflow-hidden rounded-md shadow-2xl"
+          style={{
+            aspectRatio: `1440 / ${Math.round(900 * (zoom.cropTop ?? 1))}`,
+            width: `min(100%, calc((100dvh - 5.5rem) * 1440 / ${Math.round(900 * (zoom.cropTop ?? 1))}))`,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={zoom.src} alt={zoom.alt} width={1440} height={900} className="absolute inset-x-0 top-0 w-full h-auto" />
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+function Screenshot({ src, alt, cropTop, onZoom }: { src: string; alt: string; cropTop?: number; onZoom: OnZoom }) {
   return (
-    <figure className="rounded-xl border border-slate-200 bg-slate-100 shadow-lg overflow-hidden">
+    <figure className="group relative rounded-xl border border-slate-200 bg-slate-100 shadow-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onZoom({ src, alt, cropTop })}
+        aria-label={`View full screen: ${alt}`}
+        className="absolute inset-0 z-10 cursor-zoom-in focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-400 print:hidden"
+      >
+        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-lg bg-slate-900/75 px-2.5 py-1.5 text-xs font-medium text-white opacity-90 group-hover:opacity-100 group-hover:bg-slate-900/90 transition">
+          <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /> Full screen
+        </span>
+      </button>
       <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-200/70 border-b border-slate-200" aria-hidden="true">
         <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
@@ -209,7 +300,7 @@ function Screenshot({ src, alt, cropTop }: { src: string; alt: string; cropTop?:
   )
 }
 
-function SlideBody({ slide, contact }: { slide: TourSlide; contact?: Contact }) {
+function SlideBody({ slide, contact, onZoom }: { slide: TourSlide; contact?: Contact; onZoom: OnZoom }) {
   switch (slide.kind) {
     case 'cover':
       return (
@@ -219,7 +310,7 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact?: Contact }) 
             <h1 className="text-3xl sm:text-4xl font-bold leading-tight mb-5">{slide.title}</h1>
             <p className="text-lg text-blue-100">{slide.subtitle}</p>
           </div>
-          <Screenshot src={slide.image} alt={slide.imageAlt} />
+          <Screenshot src={slide.image} alt={slide.imageAlt} onZoom={onZoom} />
         </div>
       )
     case 'points':
@@ -282,7 +373,7 @@ function SlideBody({ slide, contact }: { slide: TourSlide; contact?: Contact }) 
             </ul>
           </div>
           <div className="lg:col-span-3">
-            <Screenshot src={slide.image} alt={slide.imageAlt} cropTop={slide.cropTop} />
+            <Screenshot src={slide.image} alt={slide.imageAlt} cropTop={slide.cropTop} onZoom={onZoom} />
           </div>
         </div>
       )
