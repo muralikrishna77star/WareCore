@@ -10,6 +10,7 @@ import {
 } from '@/lib/tracking/offlineShared'
 import * as store from '@/lib/tracking/offlineStore'
 import { ScanInput } from './ScanInput'
+import { formatDateTime } from '@/lib/dates'
 
 type Mode = 'place' | 'pickup' | 'dispatch' | 'count' | 'lookup'
 type SendState = 'idle' | 'sending' | 'offline' | 'signin' | 'other' | 'off' | 'error'
@@ -56,7 +57,7 @@ const subscribeOnline = (callback: () => void) => {
 const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
 
 const parseServerTime = (value: string) => Date.parse(value.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'))
-const clock = (iso: string) => new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+const clock = (iso: string) => formatDateTime(iso)
 
 function findUnit(snapshot: OfflineSnapshot, raw: string): SnapshotUnit | undefined {
   const code = raw.trim().toUpperCase()

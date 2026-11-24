@@ -13,6 +13,7 @@ import {
   SALE_RETURN_BY_ID_QUERY,
 } from '@/lib/hasura/queries'
 import { isReferenceType, REFERENCE_ROUTE, REFERENCE_LABEL } from '@/lib/reference'
+import { formatDate } from '@/lib/dates'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -55,7 +56,7 @@ interface TransferItemRow {
 
 const fmtQ = (n: unknown) => Number(n || 0).toFixed(3)
 const fmtAmt = (n: unknown) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('en-IN') : '—')
+const fmtDate = (d: string | null | undefined) => formatDate(d, '—')
 
 async function loadPurchaseBill(id: string) {
   const [billRes, itemsRes] = await Promise.all([

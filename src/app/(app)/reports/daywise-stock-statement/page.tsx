@@ -29,6 +29,7 @@ import { ArrowLeft } from 'lucide-react'
 import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow } from '@/lib/stockLedger'
 import { fetchCountedOutputAndCancelIds, fetchCrossItemVendorRows } from '@/lib/vendorMovementRows'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { formatDate } from '@/lib/dates'
 
 // Stock Movement classification for the Transaction Details export — same
 // four buckets used elsewhere in the app (INWARD/OUTWARD/TRANSFER/ADJUSTMENT).
@@ -541,7 +542,7 @@ export default async function DaywiseStockStatementPage({
     toDate,
     filterLine: [
       `Period: ${period.label}${period.mode === 'month' ? ' (selected month)' : ' (custom range)'}`,
-      `Effective: ${fromDate} to ${toDate}`,
+      `Effective: ${formatDate(fromDate)} to ${formatDate(toDate)}`,
       `Warehouse: ${warehouses.find((w) => w.id === params.warehouse)?.name || 'All Warehouses'}`,
       `Item: ${selectedItem?.label || 'All Items'}`,
       `Supplier: ${suppliers.find((s) => s.id === params.vendor)?.name || 'All Suppliers'}`,
@@ -698,7 +699,7 @@ export default async function DaywiseStockStatementPage({
               {period.mode === 'month' ? 'Selected month' : 'Custom date range'}
             </span>
             <span className="ml-2 text-xs text-gray-400">
-              {fromDate} to {toDate}
+              {formatDate(fromDate)} to {formatDate(toDate)}
             </span>
           </p>
         </div>
@@ -719,7 +720,7 @@ export default async function DaywiseStockStatementPage({
 
       <div className="hidden print:block text-center mb-4">
         <h1 className="text-xl font-bold">Daywise Stock Statement — {period.label}</h1>
-        <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
+        <p className="text-sm text-gray-600">{formatDate(fromDate)} to {formatDate(toDate)}</p>
       </div>
 
       {/* Filters */}
@@ -821,7 +822,7 @@ export default async function DaywiseStockStatementPage({
       {/* Table */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
-          <span className="font-semibold text-gray-700 text-sm">{fromDate} → {toDate}</span>
+          <span className="font-semibold text-gray-700 text-sm">{formatDate(fromDate)} → {formatDate(toDate)}</span>
           <span className="text-xs text-gray-500">{totals.entries} entr{totals.entries !== 1 ? 'ies' : 'y'}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">

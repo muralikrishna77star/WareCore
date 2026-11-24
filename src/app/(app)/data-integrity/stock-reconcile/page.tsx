@@ -8,6 +8,7 @@ import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProf
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 import type { ReconcileFix, ReconcileFixRequest } from '@/lib/reconcileFix'
+import { formatDate } from '@/lib/dates'
 
 type TotalRow = {
   category: string
@@ -266,7 +267,7 @@ export default function StockReconcilePage() {
     } else {
       const newDate = fixDates[key] ?? fix.proposedDate
       request = { kind: fix.kind, itemId, outputItemId: fix.outputItemId, newDate }
-      question = `Change this output's received date from ${fix.currentDate} to ${newDate} on ${itemCode}?`
+      question = `Change this output's received date from ${formatDate(fix.currentDate)} to ${formatDate(newDate)} on ${itemCode}?`
     }
     if (!window.confirm(`${question}\n\nThis changes saved data and is recorded in the fix log.`)) return
     setFixStates((prev) => ({ ...prev, [key]: { status: 'applying', message: '' } }))
@@ -606,7 +607,7 @@ export default function StockReconcilePage() {
                       <td className="px-4 py-2">{categoryLabels[r.category] || r.category}</td>
                       <td className="px-4 py-2 font-mono text-xs">{r.referenceNumber || '—'}</td>
                       <td className="px-4 py-2 text-right">{fmt(r.qty)}</td>
-                      <td className="px-4 py-2 whitespace-nowrap">{r.cancelledDate}</td>
+                      <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.cancelledDate)}</td>
                       <td className="px-4 py-2 text-right">
                         <Link href={r.url} className="inline-flex items-center gap-1 text-blue-600 hover:underline whitespace-nowrap">
                           View cancellation <ArrowRight className="h-4 w-4" />
@@ -680,7 +681,7 @@ export default function StockReconcilePage() {
                     <tbody className="divide-y divide-gray-100">
                       {staleSort.sortedRows.map((r) => (
                         <tr key={r.id}>
-                          <td className="px-4 py-2 whitespace-nowrap">{r.entryDate}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.entryDate)}</td>
                           <td className="px-4 py-2">{r.entryType}</td>
                           <td className="px-4 py-2 font-mono text-xs">{r.referenceNumber || '—'}</td>
                           <td className="px-4 py-2">{r.materialCode}{r.sizeLabel ? ` (${r.sizeLabel})` : ''}</td>
@@ -772,7 +773,7 @@ export default function StockReconcilePage() {
                           <td className="px-4 py-2 text-right">{g.rowCount}</td>
                           <td className="px-4 py-2 text-right font-semibold text-orange-700">{fmt(g.netQty)}</td>
                           <td className="px-4 py-2 text-right">{fmt(g.orderQty)}</td>
-                          <td className="px-4 py-2 whitespace-nowrap">{g.latestEntryDate}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">{formatDate(g.latestEntryDate)}</td>
                         </tr>
                       ))}
                     </tbody>

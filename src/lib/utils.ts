@@ -5,24 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: string | Date) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(date))
-}
-
-export function formatDateTime(date: string | Date) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  }).format(new Date(date))
-}
+// Dates and times: dd-Mmm-yyyy in India time. See src/lib/dates.ts.
+export { formatDate, formatDateTime, formatTime, todayInIndia, APP_TIME_ZONE } from './dates'
 
 export function formatNumber(num: number, decimals = 3) {
   return new Intl.NumberFormat('en-IN', {

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { currentOwner } from '@/lib/tenancy/ownerAuth'
 import { listTenants } from '@/lib/tenancy/control'
 import { StatusBadge } from './StatusBadge'
+import { formatDate } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +46,7 @@ export default async function OwnerHome() {
                   {c.hosts.map((h) => <div key={h}>{h}</div>)}
                 </td>
                 <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
-                <td className="px-4 py-3 text-gray-600">{new Date(c.createdAt).toLocaleDateString('en-IN')}</td>
+                <td className="px-4 py-3 text-gray-600">{formatDate(c.createdAt)}</td>
               </tr>
             ))}
             {!customers.length && (

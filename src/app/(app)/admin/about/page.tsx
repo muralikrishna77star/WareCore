@@ -8,6 +8,7 @@ import { TECH_STACK, PRICING_CHECKED_ON, type Service } from '@/lib/aboutService
 import { ServiceSections } from '@/components/about/ServiceSections'
 import { isMultiTenant } from '@/lib/tenancy/config'
 import { RefreshUsageButton } from './RefreshUsageButton'
+import { formatDate } from '@/lib/dates'
 
 type LiveStats = {
   databaseBytes: number
@@ -107,7 +108,7 @@ export default async function AboutPage() {
           <div className="rounded-xl border bg-white p-4">
             <div className="flex items-center gap-2 text-xs text-gray-500"><Clock className="h-4 w-4" /> Prices last checked</div>
             <p className="mt-1 text-xl font-bold text-gray-900">
-              {new Date(PRICING_CHECKED_ON).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              {formatDate(PRICING_CHECKED_ON)}
             </p>
             <p className="text-xs text-gray-500">Providers change plans — use each Source link to re-check</p>
           </div>

@@ -7,6 +7,7 @@ import type { VendorMove } from '@/lib/tracking/constants'
 import type { VendorStockEntry } from '@/lib/tracking/jobwork'
 import { errorText, formatWhen, trackingApi } from './api'
 import { VendorSelect, type JobWorkOptions } from './Dispatches'
+import { formatDate } from '@/lib/dates'
 
 interface Data {
   stock: VendorStockEntry[]
@@ -279,7 +280,7 @@ export function VendorStock({ canOperate }: { canOperate: boolean }) {
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
                   {linking.transfers.map((t) => (
                     <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="text-gray-800">{t.transfer_number} · {t.transfer_date} · {t.quantity}</span>
+                      <span className="text-gray-800">{t.transfer_number} · {formatDate(t.transfer_date)} · {t.quantity}</span>
                       <button
                         type="button"
                         disabled={busy}

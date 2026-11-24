@@ -26,7 +26,7 @@ function LedgerTable({ ledger }: { ledger: LedgerBlock }) {
       <div className="flex items-center justify-between bg-gray-50 px-3 py-2 text-xs">
         <span className="font-medium text-gray-700">{ledger.itemLabel}</span>
         <span className="text-gray-500">
-          {ledger.fromDate} → {ledger.toDate}
+          {formatDate(ledger.fromDate)} → {formatDate(ledger.toDate)}
         </span>
       </div>
       <div className="max-h-64 overflow-auto">

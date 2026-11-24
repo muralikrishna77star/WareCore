@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { JobWorkReportRows } from './JobWorkReportRows'
 import { UUID_RE } from '@/lib/reportLinks'
+import { formatDate } from '@/lib/dates'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -281,7 +282,7 @@ export default async function JobWorkReportPage({
 
       <div className="hidden print:block text-center mb-4">
         <h1 className="text-xl font-bold">Job Work Report</h1>
-        <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
+        <p className="text-sm text-gray-600">{formatDate(fromDate)} to {formatDate(toDate)}</p>
       </div>
 
       {orderFilter && (
@@ -353,7 +354,7 @@ export default async function JobWorkReportPage({
       {/* Table */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
-          <span className="font-semibold text-gray-700 text-sm">{orderFilter ? `Order ${orders[0]?.reference_number ?? ''}` : `${fromDate} → ${toDate}`}</span>
+          <span className="font-semibold text-gray-700 text-sm">{orderFilter ? `Order ${orders[0]?.reference_number ?? ''}` : `${formatDate(fromDate)} → ${formatDate(toDate)}`}</span>
           <span className="text-xs text-gray-500">{orders.length} order{orders.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">

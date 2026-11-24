@@ -4,13 +4,14 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 import { CAN_VIEW, UUID_RE } from '@/lib/dataIntegrity/auth'
 import { jobWorkReportHref, purchaseLineHref } from '@/lib/reportLinks'
 import type { ExceptionReview, ReviewFinding } from '@/lib/dataIntegrity/review'
+import { formatDate } from '@/lib/dates'
 
 function rowsToObjects(result: { result: string[][] }): Record<string, string>[] {
   const [columns, ...rows] = result.result
   return rows.map((row) => Object.fromEntries(columns.map((col, i) => [col, row[i]])))
 }
 const qty = (v: string) => Number(v).toFixed(3)
-const day = (v: string) => new Date(`${v}T00:00:00Z`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const day = (v: string) => formatDate(v)
 
 // Review & Fix for one open exception (migration 165). Read-only: it lists
 // what the database's own proposal functions would change, so the page can

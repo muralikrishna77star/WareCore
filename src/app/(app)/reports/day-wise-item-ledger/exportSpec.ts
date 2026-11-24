@@ -6,6 +6,7 @@ import {
 } from '@/lib/exportProfessionalExcel'
 import { ENTRY_TYPE_META, type EntryType, type LedgerReport } from '@/lib/dayWiseItemLedger'
 import type { DayWiseFilters, StockPosition } from '@/lib/dayWiseItemLedgerData'
+import { formatDateTime } from '@/lib/dates'
 
 export type CriteriaLine = { label: string; value: string }
 
@@ -136,13 +137,7 @@ const CRITERIA_COLUMNS: ProfessionalColumn[] = [
 
 /** Formats a timestamp for the export, keeping it a string so Excel shows it verbatim. */
 function formatCreatedAt(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getDate())}-${d.toLocaleString('en-IN', { month: 'short' })}-${d.getFullYear()} ${pad(
-    d.getHours()
-  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  return formatDateTime(iso)
 }
 
 /**

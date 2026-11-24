@@ -27,6 +27,7 @@ import type {
 } from '@/types'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { formatDate } from '@/lib/dates'
 
 const paymentModes = ['Cash', 'Bank', 'UPI', 'Other'] as const
 const defaultDate = new Date().toISOString().split('T')[0]
@@ -359,7 +360,7 @@ export default function AccountsPage() {
           </p>
           <p className="mt-1 text-xs text-gray-400">
             {financialEntries[0]
-              ? `Last: ${new Date(financialEntries[0].entry_date).toLocaleDateString('en-IN')}`
+              ? `Last: ${formatDate(financialEntries[0].entry_date)}`
               : 'No entries yet'}
           </p>
         </div>
@@ -442,7 +443,7 @@ export default function AccountsPage() {
                   return (
                     <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3 text-gray-600 whitespace-nowrap">
-                        {new Date(entry.entry_date).toLocaleDateString('en-IN')}
+                        {formatDate(entry.entry_date)}
                       </td>
                       <td className="px-5 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${isReceipt ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>

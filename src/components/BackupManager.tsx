@@ -13,6 +13,7 @@ import {
 } from '@/lib/backup/backup.client'
 import type { BackupData } from '@/lib/backup/backup.service'
 import { BACKUP_TABLES as TABLES, TABLES_WITHOUT_CREATED_AT } from '@/lib/backup/tables'
+import { formatDate, formatDateTime } from '@/lib/dates'
 
 // Shape of an uploaded backup JSON file (same envelope backup.client.ts's
 // createAndDownloadBackup() writes: { backup: <metadata>, data: <tables> }).
@@ -110,7 +111,7 @@ export function BackupManager() {
         setRestoreFileData(parsed)
         const tablesInFile = Object.keys(parsed.data)
         setRestoreTables(tablesInFile)
-        showMsg(`Backup loaded: ${tablesInFile.length} tables, created ${new Date(parsed.backup?.timestamp ?? Date.now()).toLocaleString()}`, 'success')
+        showMsg(`Backup loaded: ${tablesInFile.length} tables, created ${formatDateTime(parsed.backup?.timestamp ?? Date.now())}`, 'success')
       } catch {
         showMsg('Could not parse file — make sure it is a valid WareCore JSON backup.', 'error')
       }
@@ -313,7 +314,7 @@ export function BackupManager() {
                   <div className="mb-3 flex flex-wrap gap-3">
                     <StatCard icon={DatabaseBackup} iconBg="bg-blue-100" iconColor="text-blue-600"
                       value={String(backups.length)} label={backups.length === 1 ? 'backup on record' : 'backups on record'}
-                      caption={`Last: ${new Date(backups[0].timestamp).toLocaleDateString('en-IN')}`} />
+                      caption={`Last: ${formatDate(backups[0].timestamp)}`} />
                   </div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Backups</h3>
                   <div className="space-y-2">
@@ -321,7 +322,7 @@ export function BackupManager() {
                       <div key={b.id} className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm">
                         <div>
                           <span className="font-medium text-gray-900">{b.name || 'Unnamed backup'}</span>
-                          <span className="ml-3 text-gray-400">{new Date(b.timestamp).toLocaleString('en-IN')}</span>
+                          <span className="ml-3 text-gray-400">{formatDateTime(b.timestamp)}</span>
                           <span className="ml-3 text-gray-400">{b.tables?.length ?? 0} tables · {b.totalRows?.toLocaleString() ?? 0} rows</span>
                           {b.notes && <span className="ml-3 text-gray-400 italic">&quot;{b.notes}&quot;</span>}
                         </div>
@@ -454,7 +455,7 @@ export function BackupManager() {
                       <div key={b.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm bg-white">
                         <div>
                           <span className="font-medium text-gray-900">{b.name || 'Unnamed backup'}</span>
-                          <span className="ml-3 text-gray-400">{new Date(b.timestamp).toLocaleString('en-IN')}</span>
+                          <span className="ml-3 text-gray-400">{formatDateTime(b.timestamp)}</span>
                           <span className="ml-3 text-gray-400">{b.tables?.length ?? 0} tables · {b.totalRows?.toLocaleString() ?? 0} rows</span>
                           <span className="ml-3 text-gray-400">by {b.createdBy}</span>
                         </div>

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { use, useCallback, useEffect, useState } from 'react'
 import { StatusBadge } from '../../StatusBadge'
+import { formatDateTime } from '@/lib/dates'
 
 interface Customer {
   id: string
@@ -203,7 +204,7 @@ export default function CustomerPage({ params }: { params: Promise<{ slug: strin
             <li key={i} className="py-2">
               <span className="font-medium text-gray-900">{ev.action.replace(/_/g, ' ')}</span>
               {ev.detail && <span className="text-gray-600"> · {ev.detail}</span>}
-              <span className="block text-xs text-gray-500">{new Date(ev.created_at).toLocaleString('en-IN')}{ev.owner_email ? ` · ${ev.owner_email}` : ''}</span>
+              <span className="block text-xs text-gray-500">{formatDateTime(ev.created_at)}{ev.owner_email ? ` · ${ev.owner_email}` : ''}</span>
             </li>
           ))}
           {!events.length && <li className="py-2 text-gray-500">Nothing yet.</li>}

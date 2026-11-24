@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { formatDate } from '@/lib/dates'
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: 'bg-red-100 text-red-800',
@@ -54,7 +55,7 @@ export function ExceptionWorkbenchRows({ exceptions }: { exceptions: Record<stri
             <td className="px-4 py-3 text-gray-700 max-w-md truncate" title={e.summary}>{e.summary}</td>
             <td className="px-4 py-3 text-right text-gray-600">{e.difference ?? '—'}</td>
             <td className="px-4 py-3 text-gray-600">{e.status}{Number(e.occurrence_count) > 1 && <span className="ml-1 text-xs text-gray-400">×{e.occurrence_count}</span>}</td>
-            <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{new Date(e.last_detected_at).toLocaleDateString()}</td>
+            <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(e.last_detected_at)}</td>
           </tr>
         ))}
       </tbody>

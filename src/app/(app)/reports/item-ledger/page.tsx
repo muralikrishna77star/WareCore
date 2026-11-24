@@ -28,6 +28,7 @@ import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
 import { ArrowLeft, BookOpen } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { formatDate } from '@/lib/dates'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
 // /api/stock/ledger-entries.
@@ -947,7 +948,7 @@ export default async function ItemStockLedgerPage({
       <div className="hidden print:block text-center mb-4">
         <h1 className="text-xl font-bold">Item Stock Ledger</h1>
         {itemTitle && <p className="text-sm text-gray-700 font-medium">{itemTitle}</p>}
-        <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
+        <p className="text-sm text-gray-600">{formatDate(fromDate)} to {formatDate(toDate)}</p>
       </div>
 
       {/* Filters */}
@@ -1047,7 +1048,7 @@ export default async function ItemStockLedgerPage({
               <p className="font-semibold text-gray-900">{itemTitle}</p>
               <p className="text-sm text-gray-500">Unit: {unit}</p>
             </div>
-            <p className="text-sm text-gray-500">{fromDate} → {toDate}</p>
+            <p className="text-sm text-gray-500">{formatDate(fromDate)} → {formatDate(toDate)}</p>
           </div>
 
           {attributeToItem && (
@@ -1126,7 +1127,7 @@ export default async function ItemStockLedgerPage({
               <table className="min-w-full text-sm">
                 <tbody className="divide-y divide-gray-100">
                   <tr className="bg-blue-50/50 font-medium">
-                    <td className="px-4 py-3 text-gray-600" colSpan={canManage ? 8 : 7}>Opening Balance as of {fromDate}</td>
+                    <td className="px-4 py-3 text-gray-600" colSpan={canManage ? 8 : 7}>Opening Balance as of {formatDate(fromDate)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${openingBalance < 0 ? 'text-red-600' : 'text-blue-800'}`}>
                       {fmtQ(openingBalance)}
                     </td>
@@ -1150,7 +1151,7 @@ export default async function ItemStockLedgerPage({
                 <ItemLedgerRows rows={displayRows} canManage={canManage} />
                 <tfoot>
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                    <td className="px-4 py-3 text-gray-700" colSpan={canManage ? 6 : 5}>Closing Balance as of {toDate}</td>
+                    <td className="px-4 py-3 text-gray-700" colSpan={canManage ? 6 : 5}>Closing Balance as of {formatDate(toDate)}</td>
                     <td className="px-4 py-3 text-right text-green-800">+{fmtQ(totalIn)}</td>
                     <td className="px-4 py-3 text-right text-red-800">-{fmtQ(totalOut)}</td>
                     <td className={`px-4 py-3 text-right font-bold ${closingBalance < 0 ? 'text-red-700' : 'text-gray-900'}`}>

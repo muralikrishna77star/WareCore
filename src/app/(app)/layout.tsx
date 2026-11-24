@@ -17,6 +17,7 @@ import { DashboardViewProvider, useDashboardView } from '@/components/DashboardV
 import { DashboardViewToggle } from '@/components/DashboardViewToggle'
 import { useBrand } from '@/components/BrandProvider'
 import type { DashboardView } from '@/lib/dashboardViewPreference'
+import { formatDate } from '@/lib/dates'
 
 // Chrome styling per dashboard view — same links, hrefs, labels, icons and
 // active-route logic everywhere; only these class strings change.
@@ -147,7 +148,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
     navSearchRef.current?.blur()
   }
 
-  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const today = formatDate(new Date())
 
   const handleSignOut = async () => {
     if (isTrackingMasterEnabled()) {

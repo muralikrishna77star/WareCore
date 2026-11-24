@@ -8,6 +8,7 @@ import { ReferenceLink } from '@/components/ReferenceLink'
 import { DashboardStatCard } from '@/components/DashboardStatCard'
 import { useDashboardData } from './useDashboardData'
 import { DashboardAsyncSection } from './DashboardAsyncSection'
+import { formatDate } from '@/lib/dates'
 
 const ENTRY_TYPE_COLORS: Record<string, string> = {
   PURCHASE_IN: 'bg-green-100 text-green-800',
@@ -194,7 +195,7 @@ export function ModernDashboard() {
                 {data?.movements.map((entry) => (
                   <tr key={entry.id} className="hover:bg-gray-50">
                     <td className="whitespace-nowrap px-6 py-3 text-gray-700">
-                      {new Date(entry.entry_date).toLocaleDateString('en-IN')}
+                      {formatDate(entry.entry_date)}
                     </td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${ENTRY_TYPE_COLORS[entry.entry_type] || 'bg-gray-100 text-gray-800'}`}>

@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { BillingReportRows } from './BillingReportRows'
+import { formatDate } from '@/lib/dates'
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   PURCHASE_IN: 'Purchase In',
@@ -229,7 +230,7 @@ export default async function BillingReportPage({
       {/* Print-only title */}
       <div className="hidden print:block text-center mb-4">
         <h1 className="text-xl font-bold">Billing / Purchase Report</h1>
-        <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
+        <p className="text-sm text-gray-600">{formatDate(fromDate)} to {formatDate(toDate)}</p>
       </div>
 
       {/* Filters */}
@@ -280,7 +281,7 @@ export default async function BillingReportPage({
       {/* Table */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
-          <span className="font-semibold text-gray-700 text-sm">{fromDate} → {toDate}</span>
+          <span className="font-semibold text-gray-700 text-sm">{formatDate(fromDate)} → {formatDate(toDate)}</span>
           <span className="text-xs text-gray-500">{bills.length} bill{bills.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">

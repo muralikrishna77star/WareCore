@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from 'react'
 import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
+import { formatDate } from '@/lib/dates'
 
 export type Transaction = {
   id: string
@@ -64,10 +65,6 @@ const typeColors: Record<Transaction['type'], string> = {
   'Transfer In': 'bg-indigo-100 text-indigo-800',
 }
 
-function formatDate(d: string) {
-  const dt = new Date(d + 'T00:00:00')
-  return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-}
 
 const NOT_AVAILABLE = 'Not Available'
 const readableName = (v: string | null | undefined) => (v && v !== '—' ? v : NOT_AVAILABLE)

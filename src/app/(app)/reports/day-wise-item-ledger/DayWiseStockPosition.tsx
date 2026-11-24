@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Info, Package } from 'lucide-react'
 import type { StockPosition } from '@/lib/dayWiseItemLedgerData'
 import { ItemLedgerLink } from '@/components/ReportLinks'
+import { formatDate } from '@/lib/dates'
 
 const qty = (n: number) => n.toFixed(3)
 
@@ -59,10 +60,10 @@ export function DayWiseStockPosition({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-3">
-        <StatCard label={`Opening Stock (${fromDate})`} value={qty(totals.opening)} />
+        <StatCard label={`Opening Stock (${formatDate(fromDate)})`} value={qty(totals.opening)} />
         <StatCard label="Inward this period" value={qty(totals.periodInward)} tone="in" />
         <StatCard label="Outward this period" value={qty(totals.periodOutward)} tone="out" />
-        <StatCard label={`Closing Stock (${toDate})`} value={qty(totals.closing)} tone="strong" />
+        <StatCard label={`Closing Stock (${formatDate(toDate)})`} value={qty(totals.closing)} tone="strong" />
       </div>
 
       {scopeBroaderThanList && (

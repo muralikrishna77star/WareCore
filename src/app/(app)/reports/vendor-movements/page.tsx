@@ -21,6 +21,7 @@ import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
+import { formatDate } from '@/lib/dates'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -912,7 +913,7 @@ export default async function VendorMovementsPage({
       { header: 'Company', key: 'company', width: 18, align: 'left' },
       { header: 'Item', key: 'item', width: 26, align: 'left' },
       { header: 'Size', key: 'size', width: 12, align: 'left' },
-      { header: `Opening Balance (${fromDate})`, key: 'openingBalance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
+      { header: `Opening Balance (${formatDate(fromDate)})`, key: 'openingBalance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Job Work Out', key: 'jobWorkOut', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Direct Sales', key: 'directSales', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Returns', key: 'returns', width: 14, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
@@ -920,7 +921,7 @@ export default async function VendorMovementsPage({
       { header: 'Transferred Out To', key: 'transferOutTo', width: 24, align: 'left' },
       { header: 'Transferred In', key: 'transferInQty', width: 16, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum' },
       { header: 'Transferred In From', key: 'transferInFrom', width: 24, align: 'left' },
-      { header: `Closing Balance (${toDate})`, key: 'balance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
+      { header: `Closing Balance (${formatDate(toDate)})`, key: 'balance', width: 18, align: 'right', numFmt: QTY_FMT, totalsFn: 'sum', negativeWarning: true },
       { header: 'Purchase Date', key: 'purchaseDate', width: 16, align: 'center', isDate: true },
       { header: 'Rate (₹)', key: 'rate', width: 12, align: 'right', numFmt: MONEY_FMT },
       { header: 'Valuation (₹)', key: 'valuation', width: 18, align: 'right', numFmt: MONEY_FMT, totalsFn: 'sum' },
@@ -1012,7 +1013,7 @@ export default async function VendorMovementsPage({
 
       <div className="hidden print:block text-center mb-4">
         <h1 className="text-xl font-bold">Vendorwise Stock Movement</h1>
-        <p className="text-sm text-gray-600">{fromDate} to {toDate}</p>
+        <p className="text-sm text-gray-600">{formatDate(fromDate)} to {formatDate(toDate)}</p>
       </div>
 
       {/* Filters */}
@@ -1065,7 +1066,7 @@ export default async function VendorMovementsPage({
       {/* Summary */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border bg-slate-50 p-4">
-          <p className="text-xs text-gray-500">Opening Balance ({fromDate})</p>
+          <p className="text-xs text-gray-500">Opening Balance ({formatDate(fromDate)})</p>
           <p className="text-xl font-bold text-slate-800">{totals.openingBalance.toFixed(3)}</p>
         </div>
         <div className="rounded-xl border bg-purple-50 p-4">
@@ -1089,7 +1090,7 @@ export default async function VendorMovementsPage({
           <p className="text-xl font-bold text-red-700">{totals.directSales.toFixed(3)}</p>
         </div>
         <div className="rounded-xl border bg-blue-50 p-4">
-          <p className="text-xs text-gray-500">Closing Balance ({toDate})</p>
+          <p className="text-xs text-gray-500">Closing Balance ({formatDate(toDate)})</p>
           <p className="text-xl font-bold text-blue-800">{totals.balance.toFixed(3)}</p>
         </div>
         <div className="rounded-xl border bg-amber-50 p-4">
@@ -1114,7 +1115,7 @@ export default async function VendorMovementsPage({
       {/* Table */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
-          <span className="font-semibold text-gray-700 text-sm">{fromDate} → {toDate}</span>
+          <span className="font-semibold text-gray-700 text-sm">{formatDate(fromDate)} → {formatDate(toDate)}</span>
           <span className="text-xs text-gray-500">{rows.length} row{rows.length !== 1 ? 's' : ''}</span>
         </div>
         <div className="overflow-auto max-h-[70vh]">

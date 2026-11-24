@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatDateTime } from '@/lib/dates'
 
 interface BatchSummary {
   id: string
@@ -161,7 +162,7 @@ export default function BillsImportPage() {
               {duplicates.map((d) => (
                 <li key={d.id}>
                   <Link href={`/bills/import/${d.id}`} className="underline hover:no-underline">{d.batchNumber}</Link>
-                  {' '}— {d.status}, uploaded {new Date(d.createdAt).toLocaleString()}
+                  {' '}— {d.status}, uploaded {formatDateTime(d.createdAt)}
                 </li>
               ))}
             </ul>
@@ -222,7 +223,7 @@ export default function BillsImportPage() {
                     {Number(b.skipped_rows || 0) > 0 && <span className="block text-[11px] text-gray-400">{b.skipped_rows} skipped</span>}
                   </td>
                   <td className="px-4 py-2 text-right text-gray-600">{b.reviewed_rows}/{Number(b.row_count) - Number(b.skipped_rows || 0)}</td>
-                  <td className="px-4 py-2 text-gray-500">{new Date(b.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-gray-500">{formatDateTime(b.created_at)}</td>
                   <td className="px-4 py-2 text-right">
                     {b.status !== 'IMPORTED' && (
                       <button

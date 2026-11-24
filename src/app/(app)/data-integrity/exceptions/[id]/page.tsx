@@ -10,6 +10,7 @@ import StatusForm from './StatusForm'
 import ProposeRepairForm from './ProposeRepairForm'
 import { JobWorkLink, PurchaseLineLink } from '@/components/ReportLinks'
 import { ExceptionReviewPanel } from '../../ExceptionReviewPanel'
+import { formatDate, formatDateTime } from '@/lib/dates'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -188,7 +189,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
             <p className="text-sm text-gray-500 mt-1">{exception.rule_code} — {exception.rule_name}</p>
           </div>
           <p className="text-xs text-gray-400">
-            First detected {new Date(exception.first_detected_at).toLocaleString()} · last {new Date(exception.last_detected_at).toLocaleString()} · seen {exception.occurrence_count}×
+            First detected {formatDateTime(exception.first_detected_at)} · last {formatDateTime(exception.last_detected_at)} · seen {exception.occurrence_count}×
           </p>
         </div>
         <p className="mt-3 font-medium text-gray-900">{exception.summary}</p>
@@ -322,7 +323,7 @@ export default async function ExceptionDetailPage({ params }: { params: Promise<
               <tbody className="divide-y divide-gray-100">
                 {movementHistory.map((m) => (
                   <tr key={m.id} className={Number(m.running_balance) < 0 ? 'bg-red-50' : undefined}>
-                    <td className="px-4 py-2 whitespace-nowrap">{m.entry_date}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{formatDate(m.entry_date)}</td>
                     <td className="px-4 py-2 font-mono text-xs">{m.entry_type}</td>
                     <td className="px-4 py-2">
                       <JobWorkLink orderId={m.reference_type === 'job_work' ? present(m.reference_id) : null}>{m.reference_number ?? '—'}</JobWorkLink>

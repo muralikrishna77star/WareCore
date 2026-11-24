@@ -8,6 +8,7 @@ import { errorText, formatWhen, trackingApi } from './api'
 import { ScanInput } from './ScanInput'
 import { DispatchBadge, LifecycleBadge } from './StatusBadge'
 import { useGpsCapture } from './useGpsCapture'
+import { formatDate } from '@/lib/dates'
 
 interface Detail {
   dispatch: VendorDispatch
@@ -225,7 +226,7 @@ export function DispatchDetail({ dispatchId, canOperate, canManage }: { dispatch
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                   {orders.map((order) => (
                     <li key={order.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="text-gray-800">{order.reference_number} · {order.dispatch_date} · {order.quantity} sent</span>
+                      <span className="text-gray-800">{order.reference_number} · {formatDate(order.dispatch_date)} · {order.quantity} sent</span>
                       <button type="button" disabled={busy} onClick={() => act({ action: 'link_order', order_id: order.id }, 'Job work order linked')} className={quiet}>Link</button>
                     </li>
                   ))}

@@ -8,6 +8,7 @@ import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import { StatCard } from '@/components/StatCard'
 import { OpenByRuleRows } from './OpenByRuleRows'
 import { OpenExceptionCards, type OpenExceptionCard } from './OpenExceptionCards'
+import { formatDateTime } from '@/lib/dates'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -158,7 +159,7 @@ export default async function DataIntegrityDashboardPage() {
           {lastFull ? (
             <>
               <p className="font-semibold text-gray-900">{lastFull.run_number}</p>
-              <p className="text-sm text-gray-500">{new Date(lastFull.completed_at).toLocaleString()} — {lastFull.exceptions_found} exceptions found</p>
+              <p className="text-sm text-gray-500">{formatDateTime(lastFull.completed_at)} — {lastFull.exceptions_found} exceptions found</p>
             </>
           ) : (
             <p className="text-sm text-gray-400 mt-1">No full scan has run yet — nightly scheduling is a Phase 2 item (see docs/data-integrity/ROLLOUT_PLAN.md). Start one manually from Reconciliation Runs.</p>
@@ -169,7 +170,7 @@ export default async function DataIntegrityDashboardPage() {
           {lastIncremental ? (
             <>
               <p className="font-semibold text-gray-900">{lastIncremental.run_number}</p>
-              <p className="text-sm text-gray-500">{new Date(lastIncremental.completed_at).toLocaleString()} — {lastIncremental.exceptions_found} exceptions found</p>
+              <p className="text-sm text-gray-500">{formatDateTime(lastIncremental.completed_at)} — {lastIncremental.exceptions_found} exceptions found</p>
             </>
           ) : (
             <p className="text-sm text-gray-400 mt-1">No incremental scan has run yet.</p>

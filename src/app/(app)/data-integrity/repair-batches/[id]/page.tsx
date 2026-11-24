@@ -7,6 +7,7 @@ import { verifySession, SESSION_COOKIE_NAME } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
 import { UUID_RE, CAN_PROPOSE_REPAIR, CAN_APPROVE_REPAIR } from '@/lib/dataIntegrity/auth'
 import RepairBatchActions from './RepairBatchActions'
+import { formatDateTime } from '@/lib/dates'
 
 type Row = string[]
 function rowsToObjects(result: { result: Row[] }): Record<string, string>[] {
@@ -80,11 +81,11 @@ export default async function RepairBatchDetailPage({ params }: { params: Promis
         <p className="text-sm font-semibold text-gray-700 mb-2">Lifecycle</p>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
           <dt className="text-gray-500">Requested</dt>
-          <dd className="text-gray-900 col-span-2">{batch.requested_at ? new Date(batch.requested_at).toLocaleString() : '—'}</dd>
+          <dd className="text-gray-900 col-span-2">{batch.requested_at ? formatDateTime(batch.requested_at) : '—'}</dd>
           <dt className="text-gray-500">Approved</dt>
-          <dd className="text-gray-900 col-span-2">{batch.approved_at ? new Date(batch.approved_at).toLocaleString() : '—'}</dd>
+          <dd className="text-gray-900 col-span-2">{batch.approved_at ? formatDateTime(batch.approved_at) : '—'}</dd>
           <dt className="text-gray-500">Executed</dt>
-          <dd className="text-gray-900 col-span-2">{batch.executed_at ? new Date(batch.executed_at).toLocaleString() : '—'}</dd>
+          <dd className="text-gray-900 col-span-2">{batch.executed_at ? formatDateTime(batch.executed_at) : '—'}</dd>
         </dl>
         {batch.error_message && (
           <p className="mt-3 text-sm text-red-700"><span className="font-medium">Error: </span>{batch.error_message}</p>

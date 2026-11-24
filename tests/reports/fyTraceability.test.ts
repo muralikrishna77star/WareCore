@@ -292,7 +292,7 @@ describe('Monthly Summary export sheet', () => {
     const levels = spec.rowOutlineLevels!
     expect(levels).toHaveLength(spec.rows.length)
     expect(spec.rows.filter((_, i) => levels[i] === 0).map((r) => r.month)).toEqual([
-      'Opening Stock b/f (01-04-2024)', 'April 2024', 'May 2024', 'June 2024', 'July 2024', 'Financial year to date',
+      'Opening Stock b/f (01-Apr-2024)', 'April 2024', 'May 2024', 'June 2024', 'July 2024', 'Financial year to date',
     ])
     for (let i = 0; i < spec.rows.length; i++) {
       if (levels[i] !== 0 || spec.rows[i].month === 'Financial year to date') continue

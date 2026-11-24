@@ -3,6 +3,7 @@
 import { TriangleAlert } from 'lucide-react'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import { formatDateTime } from '@/lib/dates'
 
 const STATUS_COLOR: Record<string, string> = {
   QUEUED: 'bg-gray-100 text-gray-700',
@@ -54,7 +55,7 @@ export function ReconciliationRunsRows({ runs }: { runs: Record<string, string>[
               </span>
               {r.error_message && <span className="ml-1 text-red-600" title={r.error_message}><TriangleAlert className="inline h-3.5 w-3.5" /></span>}
             </td>
-            <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.started_at ? new Date(r.started_at).toLocaleString() : '—'}</td>
+            <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.started_at ? formatDateTime(r.started_at) : '—'}</td>
             <td className="px-4 py-3 text-right text-gray-500">{r.execution_time_ms ? `${(Number(r.execution_time_ms) / 1000).toFixed(1)}s` : '—'}</td>
             <td className="px-4 py-3 text-right text-gray-500">{r.records_scanned ?? '—'}</td>
             <td className="px-4 py-3 text-right">

@@ -9,6 +9,7 @@ import { errorText, formatWhen, trackingApi } from './api'
 import { ScanInput } from './ScanInput'
 import { LifecycleBadge, PickupBadge } from './StatusBadge'
 import { useGpsCapture } from './useGpsCapture'
+import { formatDate } from '@/lib/dates'
 
 interface Detail {
   pickup: PickupSummary
@@ -398,7 +399,7 @@ export function PickupDetail({ pickupId, canShare, canOperate, canManage }: {
                 <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
                   {sales.map((sale) => (
                     <li key={sale.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="text-gray-800">{sale.invoice_number} · {sale.dispatch_date} · {sale.quantity}</span>
+                      <span className="text-gray-800">{sale.invoice_number} · {formatDate(sale.dispatch_date)} · {sale.quantity}</span>
                       <button type="button" disabled={busy} onClick={() => act({ action: 'link_sale', sale_id: sale.id }, 'Sale linked')} className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-50">Link</button>
                     </li>
                   ))}

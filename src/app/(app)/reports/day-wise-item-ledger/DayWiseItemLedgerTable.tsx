@@ -5,25 +5,13 @@ import Link from 'next/link'
 import { ChevronDown, ChevronRight, TriangleAlert } from 'lucide-react'
 import type { DetailRow, LedgerReport, SummaryGroup, Totals } from '@/lib/dayWiseItemLedger'
 import { ItemLedgerLink, VendorLink } from '@/components/ReportLinks'
+import { formatDate } from '@/lib/dates'
 
 const qty = (n: number | null | undefined) => (n == null ? '' : n.toFixed(3))
 const money = (n: number | null | undefined) =>
   n == null ? '' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const pct = (n: number | null | undefined) => (n == null ? '' : `${n.toFixed(2)}%`)
 
-function formatDate(iso: string): string {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-    .format(dt)
-    .replace(/ /g, '-')
-}
 
 /** Inward green, outward red — the same colour language as the Excel export. */
 function QtyCell({ inward, outward }: { inward: number; outward: number }) {

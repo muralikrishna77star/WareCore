@@ -6,6 +6,7 @@ import { isReferenceType } from '@/lib/reference'
 import { ReferenceLink } from '@/components/ReferenceLink'
 import { useDashboardData } from './useDashboardData'
 import { DashboardAsyncSection } from './DashboardAsyncSection'
+import { formatDate } from '@/lib/dates'
 
 const ENTRY_TYPE_LABELS: Record<string, string> = {
   PURCHASE_IN: 'Purchase In',
@@ -132,7 +133,7 @@ export function ClassicDashboard() {
                 {data?.movements.map((entry) => (
                   <tr key={entry.id} className="hover:bg-gray-50">
                     <td className="whitespace-nowrap px-3 py-1.5 text-gray-600">
-                      {new Date(entry.entry_date).toLocaleDateString('en-IN')}
+                      {formatDate(entry.entry_date)}
                     </td>
                     <td className="px-3 py-1.5 text-gray-700">{ENTRY_TYPE_LABELS[entry.entry_type] || entry.entry_type}</td>
                     <td className="px-3 py-1.5 text-gray-700">

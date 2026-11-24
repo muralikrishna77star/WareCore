@@ -6,11 +6,11 @@ import type { TransactionDetailRow } from '@/lib/exportStockStatementExcel'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
+import { formatDate } from '@/lib/dates'
 
 const fmtQ = (n: number) => n.toFixed(3)
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
-const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${iso}T00:00:00`))
+const fmtDate = (iso: string) => formatDate(iso)
 
 const MOVEMENT_STYLE: Record<string, string> = {
   INWARD: 'bg-green-100 text-green-800',

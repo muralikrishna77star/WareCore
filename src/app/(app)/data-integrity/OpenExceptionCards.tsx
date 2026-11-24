@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Check, ChevronDown, Search } from 'lucide-react'
 import { ItemLedgerLink } from '@/components/ReportLinks'
 import { ExceptionReviewPanel } from './ExceptionReviewPanel'
+import { formatDate } from '@/lib/dates'
 
 export interface OpenExceptionCard {
   id: string
@@ -110,7 +111,7 @@ export function OpenExceptionCards({ exceptions, canFix }: { exceptions: OpenExc
                 </>
               )}
               <dt className="text-gray-500">Seen</dt>
-              <dd className="text-gray-600">since {new Date(e.firstDetected).toLocaleDateString()} · {e.occurrences} scan{e.occurrences !== 1 ? 's' : ''}</dd>
+              <dd className="text-gray-600">since {formatDate(e.firstDetected)} · {e.occurrences} scan{e.occurrences !== 1 ? 's' : ''}</dd>
             </dl>
 
             <div className="mt-3 flex flex-wrap gap-2">

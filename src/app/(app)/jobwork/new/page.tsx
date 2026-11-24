@@ -16,6 +16,7 @@ import {
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
 import type { Company, Supplier, Warehouse, MaterialType, MaterialSize, ItemMaster } from '@/types'
+import { formatDate } from '@/lib/dates'
 
 const UNITS = ['MT', 'KG', 'Nos', 'Sheets', 'Meters']
 
@@ -249,7 +250,7 @@ function InputLineRow({
                 return (
                   <option key={opt.purchase_line_id} value={opt.purchase_line_id} disabled={tooLate}>
                     {opt.purchase_line_id} ({opt.available_qty.toFixed(3)})
-                    {tooLate ? ` — invoiced ${opt.bill_date}` : ''}
+                    {tooLate ? ` — invoiced ${formatDate(opt.bill_date)}` : ''}
                   </option>
                 )
               })}
@@ -263,7 +264,7 @@ function InputLineRow({
           if (!opts.length || !opts.every(o => isInvoicedAfter(o, dispatchDate))) return null
           return (
             <p className="text-[10px] text-red-600 mt-0.5">
-              All stock of this item was invoiced after {dispatchDate} — move the dispatch date forward.
+              All stock of this item was invoiced after {formatDate(dispatchDate)} — move the dispatch date forward.
             </p>
           )
         })()}

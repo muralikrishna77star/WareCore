@@ -5,6 +5,7 @@ import { currentOwner } from '@/lib/tenancy/ownerAuth'
 import { getControlPool } from '@/lib/tenancy/control'
 import { PRICING_CHECKED_ON, type Service } from '@/lib/aboutServices'
 import { ServiceSections } from '@/components/about/ServiceSections'
+import { formatDate } from '@/lib/dates'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,7 +56,7 @@ export default async function OwnerServicesPage() {
           <p className="mt-1 text-sm text-gray-600">
             WareCore&apos;s own outside services, shared by all customers. Customers&apos; admins don&apos;t see this page.
             Prices last checked{' '}
-            {new Date(PRICING_CHECKED_ON).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}.
+            {formatDate(PRICING_CHECKED_ON)}.
           </p>
         </div>
         <Link href="/owner" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">

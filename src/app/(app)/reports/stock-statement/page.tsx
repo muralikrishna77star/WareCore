@@ -30,6 +30,7 @@ import { type StatementRow } from './StockStatementTable'
 import StockStatementTabs from './StockStatementTabs'
 import Link from 'next/link'
 import { ArrowLeft, ChartColumn } from 'lucide-react'
+import { formatDate } from '@/lib/dates'
 
 type LedgerRow = {
   id: string
@@ -994,7 +995,7 @@ export default async function StockStatementPage({
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-6 py-4 border-b flex items-center justify-between flex-wrap gap-2">
           <h2 className="font-semibold text-gray-900">
-            {fromDate} &rarr; {toDate}
+            {formatDate(fromDate)} &rarr; {formatDate(toDate)}
           </h2>
           <div className="flex items-center gap-4 flex-wrap">
             {sorted.length > 0 && (

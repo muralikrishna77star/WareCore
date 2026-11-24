@@ -3,6 +3,7 @@
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
+import { formatDateTime } from '@/lib/dates'
 
 /** Re-runs the About page's server render, so the live usage figures are read
  * from the database again. */
@@ -12,7 +13,7 @@ export function RefreshUsageButton({ fetchedAt }: { fetchedAt: string }) {
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs text-gray-500">
-        Usage as of {new Date(fetchedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+        Usage as of {formatDateTime(fetchedAt)}
       </span>
       <button
         type="button"
