@@ -4,6 +4,7 @@ import { purgeExpiredPositions } from '@/lib/tracking/floor'
 import { isMultiTenant } from '@/lib/tenancy/config'
 import { listActiveTenants } from '@/lib/tenancy/control'
 import { runWithTenant } from '@/lib/tenancy/context'
+import { todayInIndia } from '@/lib/dates'
 
 // Invoked by Vercel Cron (see vercel.json) — Vercel automatically sends
 // `Authorization: Bearer $CRON_SECRET` on cron-triggered requests once
@@ -48,7 +49,7 @@ async function nightlyScan() {
       scopeType: 'FULL',
       companyId: null,
       fromDate: '2000-01-01',
-      toDate: new Date().toISOString().slice(0, 10),
+      toDate: todayInIndia(),
       startedBy: null,
     })
   } catch (err) {

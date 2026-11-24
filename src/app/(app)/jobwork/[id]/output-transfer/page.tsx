@@ -11,6 +11,8 @@ import {
   ALL_JOB_WORK_LINE_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 // ─── Job Line ID generation (format JW-DDMM-NNNN) — same convention as jobwork/new ──
 
@@ -78,7 +80,7 @@ export default function JobWorkSendOutputPage() {
   const [error, setError] = useState('')
 
   const [targetVendorId, setTargetVendorId] = useState('')
-  const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
+  const [dispatchDate, setDispatchDate] = useState(todayInIndia())
   const [expectedReturnDate, setExpectedReturnDate] = useState('')
   const [workDescription, setWorkDescription] = useState('')
   const [notes, setNotes] = useState('')
@@ -214,11 +216,11 @@ export default function JobWorkSendOutputPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
-              <input type="date" value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className={fieldCls} />
+              <DateInput value={dispatchDate} onChange={e => setDispatchDate(e.target.value)} className={fieldCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Expected Return</label>
-              <input type="date" value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)} className={fieldCls} />
+              <DateInput value={expectedReturnDate} onChange={e => setExpectedReturnDate(e.target.value)} className={fieldCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Work Description</label>

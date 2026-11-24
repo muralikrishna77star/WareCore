@@ -12,6 +12,7 @@ import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { MonthYearFilter } from '@/components/MonthYearFilter'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
+import DateInput from '@/components/DateInput'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -221,15 +222,13 @@ export default function JobWorkTable({
         <tr className="border-b bg-white">
           <th className="px-6 py-2 align-top">
             <div className="flex flex-col gap-1">
-              <input
-                type="date"
+              <DateInput
                 value={pendingFrom}
                 onChange={(e) => setPendingFrom(e.target.value)}
                 aria-label="Transaction date from"
                 className="w-full rounded border border-gray-200 px-1.5 py-1 text-xs font-normal normal-case text-gray-700 focus:border-blue-400 focus:outline-none"
               />
-              <input
-                type="date"
+              <DateInput
                 value={pendingTo}
                 onChange={(e) => setPendingTo(e.target.value)}
                 aria-label="Transaction date to"

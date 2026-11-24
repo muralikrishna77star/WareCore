@@ -20,6 +20,8 @@ import { fetchPurchaseLineRateMap } from '@/lib/purchaseLineRates'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { ItemLedgerLink, JobWorkLink, VendorLink } from '@/components/ReportLinks'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 const entryTypeOptions = [
   'PURCHASE_IN',
@@ -162,7 +164,7 @@ export default async function MovementsPage({
   }>
 }) {
   const params = await searchParams
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayInIndia()
   const fromDate = params.from || today
   const toDate = params.to || today
 
@@ -535,8 +537,7 @@ export default async function MovementsPage({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-            <input
-              type="date"
+            <DateInput
               name="from"
               defaultValue={fromDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -544,8 +545,7 @@ export default async function MovementsPage({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-            <input
-              type="date"
+            <DateInput
               name="to"
               defaultValue={toDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 export interface ReturnableLine {
   id: string
@@ -20,11 +22,7 @@ export interface ReturnableLine {
 
 const REASONS = ['Damaged', 'Wrong size', 'Wrong item', 'Quality issue', 'Excess supply', 'Rejected by customer']
 
-function localToday() {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
+const localToday = todayInIndia
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000
 
@@ -110,8 +108,7 @@ export default function SaleReturnForm({ orderId, saleDate, lines }: { orderId: 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs text-gray-500 uppercase tracking-wide mb-1">Return Date *</label>
-            <input
-              type="date"
+            <DateInput
               value={returnDate}
               min={saleDate}
               onChange={(e) => setReturnDate(e.target.value)}

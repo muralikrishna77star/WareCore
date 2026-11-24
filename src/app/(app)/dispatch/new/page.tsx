@@ -21,6 +21,8 @@ import {
   JOB_WORK_OUTPUT_ITEMS_FOR_DISPATCH_QUERY,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 type AvailablePurchaseLine = {
   _key: string
@@ -312,7 +314,7 @@ export default function NewDispatchPage() {
   const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [saleId, setSaleId] = useState('')
-  const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
+  const [dispatchDate, setDispatchDate] = useState(todayInIndia())
   const [vehicleNumber, setVehicleNumber] = useState('')
   const [driverName, setDriverName] = useState('')
   const [saleRefId] = useState('')
@@ -764,7 +766,7 @@ export default function NewDispatchPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
-              <input type="date" value={dispatchDate} onChange={(e) => {
+              <DateInput value={dispatchDate} onChange={(e) => {
                 const newDate = e.target.value
                 setDispatchDate(newDate)
                 if (newDate) setSaleId(generateSaleId(existingInvoiceNumbers, newDate))

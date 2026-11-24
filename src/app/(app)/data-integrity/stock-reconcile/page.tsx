@@ -8,7 +8,8 @@ import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProf
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 import type { ReconcileFix, ReconcileFixRequest } from '@/lib/reconcileFix'
-import { formatDate } from '@/lib/dates'
+import { formatDate, todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 type TotalRow = {
   category: string
@@ -101,7 +102,7 @@ const categoryLabels: Record<string, string> = {
 const cancellationCategories = new Set(['purchase_cancellations', 'sale_cancellations', 'job_work_cancellations'])
 
 function todayStr() {
-  return new Date().toISOString().split('T')[0]
+  return todayInIndia()
 }
 
 export default function StockReconcilePage() {
@@ -462,8 +463,7 @@ export default function StockReconcilePage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-            <input
-              type="date"
+            <DateInput
               value={from}
               onChange={(e) => { setFrom(e.target.value); setYear('') }}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -471,8 +471,7 @@ export default function StockReconcilePage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-            <input
-              type="date"
+            <DateInput
               value={to}
               onChange={(e) => { setTo(e.target.value); setYear('') }}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -808,8 +807,7 @@ export default function StockReconcilePage() {
         <div className="flex flex-wrap items-end gap-3 border-t pt-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-            <input
-              type="date"
+            <DateInput
               value={itemFrom}
               onChange={(e) => setItemFrom(e.target.value)}
               disabled={itemRunning}
@@ -818,8 +816,7 @@ export default function StockReconcilePage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-            <input
-              type="date"
+            <DateInput
               value={itemTo}
               onChange={(e) => setItemTo(e.target.value)}
               disabled={itemRunning}
@@ -1037,8 +1034,7 @@ export default function StockReconcilePage() {
                                       {f.fix.kind === 'output_received_date' && (
                                         <label className="inline-flex items-center gap-1.5 text-xs text-amber-900">
                                           Correct received date
-                                          <input
-                                            type="date"
+                                          <DateInput
                                             value={fixDates[fixKey] ?? f.fix.proposedDate}
                                             min={f.fix.minDate}
                                             max={todayStr()}

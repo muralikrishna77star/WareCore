@@ -15,6 +15,8 @@ import {
   CREATE_MATERIAL_TYPE_MUTATION, CREATE_MATERIAL_SIZE_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, MaterialType, MaterialSize } from '@/types'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 interface ItemMasterRow {
   id: string
@@ -82,7 +84,7 @@ export default function NewTransferPage() {
   const [toCompanyId, setToCompanyId] = useState('')
   const [fromWarehouseId, setFromWarehouseId] = useState('')
   const [toWarehouseId, setToWarehouseId] = useState('')
-  const [transferDate, setTransferDate] = useState(new Date().toISOString().split('T')[0])
+  const [transferDate, setTransferDate] = useState(todayInIndia())
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<TransferLine[]>([emptyLine()])
   const [loading, setLoading] = useState(false)
@@ -316,7 +318,7 @@ export default function NewTransferPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Transfer Date</label>
-              <input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)} required className={fieldCls} />
+              <DateInput value={transferDate} onChange={e => setTransferDate(e.target.value)} required className={fieldCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">To Company</label>

@@ -7,6 +7,7 @@ import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
 import { ItemLedgerLink, VendorLink } from '@/components/ReportLinks'
+import DateInput from '@/components/DateInput'
 
 type JobWorkItem = {
   id: string
@@ -149,8 +150,7 @@ export default function VendorDirectSaleBrowseTable({
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-          <input
-            type="date"
+          <DateInput
             value={fromDate}
             onChange={(e) => setFromDate(e.target.value)}
             className="block w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -159,8 +159,7 @@ export default function VendorDirectSaleBrowseTable({
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
           <div className="flex gap-1">
-            <input
-              type="date"
+            <DateInput
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               className="block w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"

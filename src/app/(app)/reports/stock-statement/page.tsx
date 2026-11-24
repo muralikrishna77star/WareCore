@@ -30,7 +30,8 @@ import { type StatementRow } from './StockStatementTable'
 import StockStatementTabs from './StockStatementTabs'
 import Link from 'next/link'
 import { ArrowLeft, ChartColumn } from 'lucide-react'
-import { formatDate } from '@/lib/dates'
+import { firstOfMonthInIndia, formatDate, todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 type LedgerRow = {
   id: string
@@ -160,10 +161,8 @@ export default async function StockStatementPage({
   const sessionToken = cookieStore.get('wc_session')?.value
   const session = sessionToken ? verifySession(sessionToken) : null
 
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
-  const toDate = params.to || today.toISOString().split('T')[0]
+  const fromDate = params.from || firstOfMonthInIndia()
+  const toDate = params.to || todayInIndia()
 
   const [compResult, whResult, itemResult, matTypeResult, matSizeResult, supResult, userResult] = await Promise.all([
     hasuraQuery(ACTIVE_COMPANIES_QUERY),
@@ -953,8 +952,7 @@ export default async function StockStatementPage({
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-            <input
-              type="date"
+            <DateInput
               name="from"
               defaultValue={fromDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -963,8 +961,7 @@ export default async function StockStatementPage({
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-            <input
-              type="date"
+            <DateInput
               name="to"
               defaultValue={toDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"

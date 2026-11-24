@@ -7,6 +7,7 @@ import { exportRowsToExcel } from '@/lib/exportExcel'
 import { TRACKING_REPORTS, type ReportCell, type ReportColumn, type TrackingReportKey, type TrackingReportResult } from '@/lib/tracking/reportDefs'
 import { errorText, formatWhen, trackingApi } from './api'
 import { WarehouseFilter } from './WarehouseFilter'
+import DateInput from '@/components/DateInput'
 
 const istDate = (offsetDays = 0) => new Date(Date.now() + 5.5 * 3600_000 + offsetDays * 86_400_000).toISOString().slice(0, 10)
 
@@ -72,8 +73,8 @@ export function TrackingReport({ reportKey, initialWarehouse }: { reportKey: Tra
         <WarehouseFilter value={warehouseId} onChange={setWarehouseId} />
         {def.dates && (
           <>
-            <label className="text-sm text-gray-700">From <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5" /></label>
-            <label className="text-sm text-gray-700">To <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5" /></label>
+            <label className="text-sm text-gray-700">From <DateInput value={from} onChange={(e) => setFrom(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5" /></label>
+            <label className="text-sm text-gray-700">To <DateInput value={to} onChange={(e) => setTo(e.target.value)} className="ml-1 rounded-lg border border-gray-300 px-2 py-1.5" /></label>
           </>
         )}
         {reportKey === 'ageing' && (

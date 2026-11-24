@@ -17,6 +17,8 @@ import {
 } from '@/lib/hasura/queries'
 import type { Company, Supplier, Warehouse, MaterialType, MaterialSize, ItemMaster } from '@/types'
 import { DropdownPortal } from '@/components/DropdownPortal'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 const UNITS = ['MT', 'KG', 'Nos', 'Sheets', 'Meters']
 
@@ -548,7 +550,7 @@ function OutputLineRow({
 
       {/* Received Date */}
       <td className="px-2 py-2">
-        <input type="date" value={line.received_date}
+        <DateInput value={line.received_date}
           onChange={e => updateOutputLine(index, 'received_date', e.target.value)}
           className={inputFieldCls} />
       </td>
@@ -634,7 +636,7 @@ export default function EditJobWorkPage() {
   const [companyId, setCompanyId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [vendorId, setVendorId] = useState('')
-  const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
+  const [dispatchDate, setDispatchDate] = useState(todayInIndia())
   const [expectedReturnDate, setExpectedReturnDate] = useState('')
   const [workDescription, setWorkDescription] = useState('')
   const [notes, setNotes] = useState('')
@@ -758,7 +760,7 @@ export default function EditJobWorkPage() {
       setCompanyId(order.company_id ?? '')
       setWarehouseId(order.warehouse_id ?? '')
       setVendorId(order.vendor_id ?? '')
-      setDispatchDate(order.dispatch_date ?? new Date().toISOString().split('T')[0])
+      setDispatchDate(order.dispatch_date ?? todayInIndia())
       setExpectedReturnDate(order.expected_return_date ?? '')
       setWorkDescription(order.work_description ?? '')
       setNotes(order.notes ?? '')
@@ -1467,11 +1469,11 @@ export default function EditJobWorkPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Dispatch Date</label>
-                <input type="date" value={dispatchDate} disabled={returnsOnly} onChange={e => setDispatchDate(e.target.value)} required className={inputFieldCls} />
+                <DateInput value={dispatchDate} disabled={returnsOnly} onChange={e => setDispatchDate(e.target.value)} required className={inputFieldCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Expected Return</label>
-                <input type="date" value={expectedReturnDate} disabled={returnsOnly} onChange={e => setExpectedReturnDate(e.target.value)} className={inputFieldCls} />
+                <DateInput value={expectedReturnDate} disabled={returnsOnly} onChange={e => setExpectedReturnDate(e.target.value)} className={inputFieldCls} />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Process / Work Description</label>

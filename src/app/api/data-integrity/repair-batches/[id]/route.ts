@@ -4,6 +4,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 import { CAN_VIEW, CAN_PROPOSE_REPAIR, CAN_APPROVE_REPAIR, UUID_RE } from '@/lib/dataIntegrity/auth'
 import { sqlText, sqlTextOrNull } from '@/lib/dataIntegrity/sqlSafe'
 import { runReconciliation } from '@/lib/dataIntegrity/engine'
+import { todayInIndia } from '@/lib/dates'
 
 function rowsToObjects(result: { result: string[][] }): Record<string, string>[] {
   const [columns, ...rows] = result.result
@@ -132,7 +133,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         // work left running after the response is sent is not guaranteed to
         // finish (see src/app/api/data-integrity/runs/route.ts, which
         // already awaits the identical call shape for a manual scan).
-        const today = new Date().toISOString().slice(0, 10)
+        const today = todayInIndia()
         await runReconciliation({
           runType: 'POST_REPAIR',
           scopeType: 'FULL',

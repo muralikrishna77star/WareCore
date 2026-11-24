@@ -1,3 +1,4 @@
+import { splitInIndia } from '@/lib/dates'
 /**
  * Day-Wise Item Ledger — domain logic.
  *
@@ -346,14 +347,8 @@ export function deriveFinancials(
 
 /** Splits a timestamptz into the date and HH:MM:SS the report shows. */
 export function splitTimestamp(ts: string | null | undefined): { date: string; time: string } {
-  if (!ts) return { date: '', time: '' }
-  const d = new Date(ts)
-  if (Number.isNaN(d.getTime())) return { date: '', time: '' }
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return {
-    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
-  }
+  // India time, wherever this runs (Vercel's servers are on UTC).
+  return splitInIndia(ts)
 }
 
 /** Builds one detail row from a ledger row plus its resolved context. */

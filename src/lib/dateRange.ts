@@ -1,3 +1,4 @@
+import { dateInIndia } from '@/lib/dates'
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Default {from, to} window: `days` back from the anchor (latest created_at
@@ -6,7 +7,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export function defaultCreatedRange(maxCreatedAt: string | null | undefined, days = 15): { from: string; to: string } {
   const anchor = maxCreatedAt ? new Date(maxCreatedAt) : new Date()
   const start = new Date(anchor.getTime() - days * DAY_MS)
-  return { from: start.toISOString().split('T')[0], to: anchor.toISOString().split('T')[0] }
+  // India calendar days: a record created at 2 am IST belongs to that day.
+  return { from: dateInIndia(start), to: dateInIndia(anchor) }
 }
 
 /** Exclusive upper bound (start of the next day) so a date-only "to" filter
@@ -143,9 +145,6 @@ export type StatementPeriod = {
   label: string
 }
 
-const isoDate = (d: Date): string =>
-  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-
 /**
  * Resolves the Daywise Stock Statement's reporting period.
  *
@@ -166,9 +165,10 @@ export function resolveStatementPeriod(
   params: ListingRangeParams,
   today: Date = new Date()
 ): StatementPeriod {
-  const todayIso = isoDate(today)
-  const currentMonth = today.getMonth() + 1
-  const currentYear = today.getFullYear()
+  // "Today" is India's date, wherever this runs (Vercel's servers are on UTC).
+  const todayIso = dateInIndia(today)
+  const currentMonth = Number(todayIso.slice(5, 7))
+  const currentYear = Number(todayIso.slice(0, 4))
 
   const monthNum = Number(params.month)
   const yearNum = Number(params.year)

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { ItemComboBox, type ComboOption } from '@/components/ItemComboBox'
 import { MonthYearFilter } from '@/components/MonthYearFilter'
+import DateInput from '@/components/DateInput'
 
 type PartyOption = { id: string; name: string }
 type ItemOption = { id: string; item_code: string; item_name: string }
@@ -86,8 +87,7 @@ export function ListingFilters({
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{dateLabel} From</label>
-          <input
-            type="date"
+          <DateInput
             name="from"
             defaultValue={fromDate}
             className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -96,8 +96,7 @@ export function ListingFilters({
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{dateLabel} To</label>
-          <input
-            type="date"
+          <DateInput
             name="to"
             defaultValue={toDate}
             className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"

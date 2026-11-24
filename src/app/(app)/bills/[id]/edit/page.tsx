@@ -21,6 +21,8 @@ import {
   CREATE_ITEM_MASTER_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 type LineItem = {
   rowId: string
@@ -262,7 +264,7 @@ export default function EditBillPage() {
   const [warehouseId, setWarehouseId] = useState('')
   const [supplierId, setSupplierId] = useState('')
   const [billNumber, setBillNumber] = useState('')
-  const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0])
+  const [billDate, setBillDate] = useState(todayInIndia())
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineItem[]>([emptyLine(), emptyLine(), emptyLine()])
   const [loading, setLoading] = useState(false)
@@ -917,7 +919,7 @@ export default function EditBillPage() {
             {/* Bill Date */}
             <div>
               <label className="block text-[0.9375rem] font-medium text-gray-700 mb-1">Bill Date</label>
-              <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)}
+              <DateInput value={billDate} onChange={(e) => setBillDate(e.target.value)}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-[0.9375rem] focus:border-blue-500 focus:outline-none" />
             </div>
 

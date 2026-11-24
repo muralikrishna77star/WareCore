@@ -17,6 +17,8 @@ import {
   ALL_SALE_LINE_IDS_QUERY,
 } from '@/lib/hasura/queries'
 import type { Customer, TaxRate } from '@/types'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 interface JobWorkItemForVendorSale {
   id: string
@@ -125,7 +127,7 @@ function VendorDirectSaleForm() {
   const [selectedJwId, setSelectedJwId] = useState(preselectedJwId ?? '')
   const [customerId, setCustomerId] = useState('')
   const [saleId, setSaleId] = useState('')
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
+  const [saleDate, setSaleDate] = useState(todayInIndia())
   const [vehicleNumber, setVehicleNumber] = useState('')
   const [driverName, setDriverName] = useState('')
   const [notes, setNotes] = useState('')
@@ -345,7 +347,7 @@ function VendorDirectSaleForm() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Sale Date</label>
-              <input type="date" value={saleDate} onChange={e => {
+              <DateInput value={saleDate} onChange={e => {
                 const newDate = e.target.value
                 setSaleDate(newDate)
                 if (newDate) setSaleId(generateSaleId(existingInvoiceNumbers, newDate))

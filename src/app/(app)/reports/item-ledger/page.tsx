@@ -28,7 +28,8 @@ import { ItemLedgerRows } from '@/components/ItemLedgerRows'
 import Link from 'next/link'
 import { ArrowLeft, BookOpen } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
-import { formatDate } from '@/lib/dates'
+import { firstOfMonthInIndia, formatDate, todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 // Direct ledger row deletion is raw data surgery — same role gate as
 // /api/stock/ledger-entries.
@@ -256,10 +257,8 @@ export default async function ItemStockLedgerPage({
   const session = token ? verifySession(token) : null
   const canManage = !!session && LEDGER_MANAGE_ROLES.has(session.role)
 
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
-  const toDate = params.to || today.toISOString().split('T')[0]
+  const fromDate = params.from || firstOfMonthInIndia()
+  const toDate = params.to || todayInIndia()
 
   const [itemResult, compResult, whResult, sizeResult] = await Promise.all([
     hasuraQuery(ACTIVE_ITEM_MASTER_QUERY),
@@ -998,8 +997,7 @@ export default async function ItemStockLedgerPage({
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-            <input
-              type="date"
+            <DateInput
               name="from"
               defaultValue={fromDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
@@ -1008,8 +1006,7 @@ export default async function ItemStockLedgerPage({
 
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-            <input
-              type="date"
+            <DateInput
               name="to"
               defaultValue={toDate}
               className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"

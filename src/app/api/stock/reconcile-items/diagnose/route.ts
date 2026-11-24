@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
 import { proposeReceivedDate, type ReconcileFix } from '@/lib/reconcileFix'
+import { todayInIndia } from '@/lib/dates'
 
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -290,7 +291,7 @@ export async function GET(request: NextRequest) {
     // (a mis-timed pair is exactly what makes the warehouse "overdraw").
     for (const r of parseRows(outputDateRes)) {
       const [outputItemId, refNumber, receivedDate, dispatchDate, qty, size, sourceLine] = r
-      const today = new Date().toISOString().slice(0, 10)
+      const today = todayInIndia()
       const proposedDate = proposeReceivedDate(receivedDate, dispatchDate, today)
       findings.push({
         pattern: 'output_dated_before_dispatch',

@@ -19,6 +19,8 @@ import {
 import type { Company, Warehouse, Supplier, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
 import { getMMYY, generatePurchaseId, generatePurchaseLineId } from '@/lib/purchaseIds'
 import { calculateLineTax } from '@/lib/purchaseTax'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 type LineItem = {
   rowId: string
@@ -229,7 +231,7 @@ export default function NewBillPage() {
   const [warehouseId, setWarehouseId] = useState('')
   const [supplierId, setSupplierId] = useState('')
   const [billNumber, setBillNumber] = useState('')
-  const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0])
+  const [billDate, setBillDate] = useState(todayInIndia())
   const [notes, setNotes] = useState('')
   const [lines, setLines] = useState<LineItem[]>([emptyLine(), emptyLine(), emptyLine()])
   const [loading, setLoading] = useState(false)
@@ -336,7 +338,7 @@ export default function NewBillPage() {
 
       setExistingBillNumbers(bills)
       setExistingLineIds(lineIds)
-      setBillNumber(generatePurchaseId(bills, new Date().toISOString().split('T')[0]))
+      setBillNumber(generatePurchaseId(bills, todayInIndia()))
       setMasterDataLoading(false)
     }
     load()
@@ -855,7 +857,7 @@ export default function NewBillPage() {
               {/* Bill Date */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Bill Date</label>
-                <input type="date" value={billDate} onChange={(e) => {
+                <DateInput value={billDate} onChange={(e) => {
                   const newDate = e.target.value
                   setBillDate(newDate)
                   if (newDate) {

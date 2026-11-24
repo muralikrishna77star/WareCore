@@ -12,6 +12,8 @@ import {
   ALL_JOB_WORK_TRANSFER_NUMBERS_QUERY,
 } from '@/lib/hasura/queries'
 import { generateReferenceNumber } from '@/lib/utils'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 // ─── Job Line ID generation (format JW-DDMM-NNNN) — same convention as jobwork/new ──
 
@@ -109,7 +111,7 @@ export default function JobWorkTransferPage() {
   const [error, setError] = useState('')
 
   const [targetVendorId, setTargetVendorId] = useState('')
-  const [transferDate, setTransferDate] = useState(new Date().toISOString().split('T')[0])
+  const [transferDate, setTransferDate] = useState(todayInIndia())
   const [reason, setReason] = useState('')
   const [notes, setNotes] = useState('')
 
@@ -253,7 +255,7 @@ export default function JobWorkTransferPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Transfer Date</label>
-              <input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)} className={fieldCls} />
+              <DateInput value={transferDate} onChange={e => setTransferDate(e.target.value)} className={fieldCls} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Reason</label>

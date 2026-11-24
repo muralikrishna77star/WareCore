@@ -9,7 +9,8 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { TransfersReportRows } from './TransfersReportRows'
-import { formatDate } from '@/lib/dates'
+import { firstOfMonthInIndia, formatDate, todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   TRANSFER_OUT: 'Transfer Out',
@@ -62,10 +63,8 @@ export default async function TransfersReportPage({
   searchParams: Promise<{ company?: string; status?: string; from?: string; to?: string }>
 }) {
   const params = await searchParams
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const fromDate = params.from || firstOfMonth.toISOString().split('T')[0]
-  const toDate = params.to || today.toISOString().split('T')[0]
+  const fromDate = params.from || firstOfMonthInIndia()
+  const toDate = params.to || todayInIndia()
 
   const conditions: Record<string, unknown>[] = [
     { transfer_date: { _gte: fromDate } },
@@ -236,11 +235,11 @@ export default async function TransfersReportPage({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-            <input type="date" name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DateInput name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-            <input type="date" name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DateInput name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <button type="submit" className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Apply</button>
         </div>

@@ -21,7 +21,8 @@ import VendorMovementsTable, { type Transaction } from './VendorMovementsTable'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
-import { formatDate } from '@/lib/dates'
+import { formatDate, todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 const fmtC = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
 
@@ -202,7 +203,7 @@ export default async function VendorMovementsPage({
   }>
 }) {
   const params = await searchParams
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayInIndia()
   const fromDate = params.from || today
   const toDate = params.to || today
   const typeFilter: TransactionTypeFilter | null =
@@ -1052,11 +1053,11 @@ export default async function VendorMovementsPage({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-            <input type="date" name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+            <DateInput name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-            <input type="date" name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+            <DateInput name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
           </div>
           <button type="submit" className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Apply</button>
           <a href="/reports/vendor-movements" className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-50">Clear</a>

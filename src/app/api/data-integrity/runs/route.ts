@@ -4,6 +4,7 @@ import { hasuraRunSql } from '@/lib/hasura/server'
 import { CAN_RUN_SCAN, CAN_VIEW, DATE_RE, UUID_RE } from '@/lib/dataIntegrity/auth'
 import { runReconciliation, type RunScope } from '@/lib/dataIntegrity/engine'
 import { isImplementedRuleCode } from '@/lib/dataIntegrity/rules'
+import { todayInIndia } from '@/lib/dates'
 
 const RUN_TYPES = new Set(['MANUAL', 'INCREMENTAL', 'NIGHTLY_FULL', 'POST_TRANSACTION', 'POST_REPAIR'])
 const SCOPE_TYPES = new Set(['FULL', 'COMPANY', 'WAREHOUSE', 'ITEM', 'DOCUMENT', 'DATE_RANGE', 'INCREMENTAL_SINCE_LAST'])
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
   const scopeType = typeof body.scopeType === 'string' ? body.scopeType : 'FULL'
   const companyId = typeof body.companyId === 'string' ? body.companyId : null
   const fromDate = typeof body.fromDate === 'string' ? body.fromDate : '2000-01-01'
-  const toDate = typeof body.toDate === 'string' ? body.toDate : new Date().toISOString().slice(0, 10)
+  const toDate = typeof body.toDate === 'string' ? body.toDate : todayInIndia()
   const ruleCodesInput: unknown = body.ruleCodes
 
   if (!RUN_TYPES.has(runType)) return NextResponse.json({ error: 'Invalid runType' }, { status: 400 })

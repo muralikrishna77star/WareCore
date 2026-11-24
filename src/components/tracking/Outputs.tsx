@@ -7,6 +7,7 @@ import type { OutputReceipt, TrackingUnit } from '@/lib/tracking/constants'
 import { errorText, formatWhen, trackingApi } from './api'
 import { VendorSelect, type JobWorkOptions } from './Dispatches'
 import { LabelPrintPanel } from './LabelPrintPanel'
+import DateInput from '@/components/DateInput'
 
 type Source = TrackingUnit & { dispatch_id: string | null }
 
@@ -221,7 +222,7 @@ export function Outputs({ canReceive }: { canReceive: boolean }) {
               <VendorSelect vendors={options.vendors} value={vendorId} onChange={setVendorId} />
             </label>
             <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">Received on</span>
-              <input type="date" value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} className={field} />
+              <DateInput value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} className={field} />
             </label>
           </div>
 

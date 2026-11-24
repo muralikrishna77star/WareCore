@@ -22,6 +22,7 @@ import { FyTraceabilityTable } from './FyTraceabilityTable'
 import { FyTraceabilityExport } from './FyTraceabilityExport'
 import { fmtDate, fmtM, fmtQ } from './format'
 import { FyTraceabilitySummary, FyUnlinkedSales } from './FyTraceabilitySummary'
+import { todayInIndia } from '@/lib/dates'
 
 type SearchParams = Record<string, string | string[] | undefined>
 
@@ -62,7 +63,7 @@ export default async function FyTraceabilityPage({ searchParams }: { searchParam
       : warehouses
 
   // Defaults to the month of the ledger's latest entry, so the first view lands on real data.
-  const latest = String(bounds?.max?.entry_date ?? new Date().toISOString().slice(0, 10))
+  const latest = String(bounds?.max?.entry_date ?? todayInIndia())
   const reqMonth = Number(asString(params.month))
   const reqYear = Number(asString(params.year))
   const month = Number.isInteger(reqMonth) && reqMonth >= 1 && reqMonth <= 12 ? reqMonth : Number(latest.slice(5, 7))

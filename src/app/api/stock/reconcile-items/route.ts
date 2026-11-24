@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySessionCookie } from '@/lib/auth/session'
 import { hasuraRunSql } from '@/lib/hasura/server'
+import { todayInIndia } from '@/lib/dates'
 
 const ALLOWED_ROLES = new Set(['admin', 'developer', 'company_manager', 'billing_staff'])
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     // A "today" `to` date value is the only case where the vendor cross-check
     // (against v_stock_at_vendors, a live/current job_work_items aggregate)
     // is meaningful — see the CTE comment below.
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = todayInIndia()
     const vendorCheckApplies = to >= todayStr
 
     const sql = `

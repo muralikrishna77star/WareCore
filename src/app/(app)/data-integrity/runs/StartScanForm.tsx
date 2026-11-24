@@ -2,13 +2,15 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 export default function StartScanForm({ canRun }: { canRun: boolean }) {
   const router = useRouter()
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
   const [fromDate, setFromDate] = useState('2000-01-01')
-  const [toDate, setToDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [toDate, setToDate] = useState(() => todayInIndia())
 
   if (!canRun) return null
 
@@ -45,12 +47,12 @@ export default function StartScanForm({ canRun }: { canRun: boolean }) {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">From Date</label>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+          <DateInput value={fromDate} onChange={(e) => setFromDate(e.target.value)}
             className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">To Date</label>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+          <DateInput value={toDate} onChange={(e) => setToDate(e.target.value)}
             className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
         </div>
         <button

@@ -74,3 +74,21 @@ export function todayInIndia(): string {
   const p = toParts(new Date())!
   return `${p.y}-${pad(p.m)}-${pad(p.d)}`
 }
+
+/** The India calendar day (YYYY-MM-DD) of a timestamp, e.g. a created_at. */
+export function dateInIndia(value: DateValue): string {
+  const p = toParts(value)
+  return p ? `${p.y}-${pad(p.m)}-${pad(p.d)}` : ''
+}
+
+/** The 1st of the current month in India as YYYY-MM-DD. */
+export function firstOfMonthInIndia(): string {
+  return `${todayInIndia().slice(0, 8)}01`
+}
+
+/** A timestamp split into its India date (YYYY-MM-DD) and 24-hour time (HH:MM:SS). */
+export function splitInIndia(value: DateValue): { date: string; time: string } {
+  const p = toParts(value)
+  if (!p || !p.hasTime) return { date: p ? `${p.y}-${pad(p.m)}-${pad(p.d)}` : '', time: '' }
+  return { date: `${p.y}-${pad(p.m)}-${pad(p.d)}`, time: `${pad(p.hh)}:${pad(p.mm)}:${pad(p.ss)}` }
+}

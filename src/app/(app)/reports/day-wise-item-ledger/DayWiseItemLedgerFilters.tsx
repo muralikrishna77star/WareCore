@@ -5,6 +5,7 @@ import { MultiSelectFilter, type MultiSelectOption } from '@/components/MultiSel
 import { MonthYearFilter } from '@/components/MonthYearFilter'
 import { ENTRY_TYPES, ENTRY_TYPE_META } from '@/lib/dayWiseItemLedger'
 import type { DayWiseFilters } from '@/lib/dayWiseItemLedgerData'
+import DateInput from '@/components/DateInput'
 
 type Named = { id: string; name: string }
 type ItemOption = { id: string; item_code: string; item_name: string; size_label: string | null }
@@ -100,8 +101,7 @@ export function DayWiseItemLedgerFilters({
 
         <div>
           <label className="block text-[0.6875rem] font-medium text-gray-500 mb-1 uppercase">From Date</label>
-          <input
-            type="date"
+          <DateInput
             name="from"
             defaultValue={fromDate}
             className="rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none"
@@ -109,8 +109,7 @@ export function DayWiseItemLedgerFilters({
         </div>
         <div>
           <label className="block text-[0.6875rem] font-medium text-gray-500 mb-1 uppercase">To Date</label>
-          <input
-            type="date"
+          <DateInput
             name="to"
             defaultValue={toDate}
             className="rounded border border-gray-300 px-2 py-1.5 text-[0.9375rem] focus:border-blue-500 focus:outline-none"

@@ -14,6 +14,7 @@ import DeleteJobWorkButton from './DeleteJobWorkButton'
 import ReverseJobWorkTransferButton from '@/components/ReverseJobWorkTransferButton'
 import { ItemLedgerLink, JobWorkLink, PurchaseLineLink, VendorLink } from '@/components/ReportLinks'
 import JobWorkActivitySection from './JobWorkActivitySection'
+import { todayInIndia } from '@/lib/dates'
 
 interface JobWorkOrderDetail {
   id: string
@@ -208,8 +209,8 @@ export default async function JobWorkDetailPage({ params }: { params: Promise<{ 
   // today — its own default is the current month, which would show nothing
   // for an order keyed in for an earlier year.
   const ledgerRange = {
-    from: order.dispatch_date ?? new Date().toISOString().split('T')[0],
-    to: new Date().toISOString().split('T')[0],
+    from: order.dispatch_date ?? todayInIndia(),
+    to: todayInIndia(),
   }
   const itemLedgerHref = (itemMasterId: string | null) =>
     itemMasterId ? `/reports/item-ledger?item=${itemMasterId}&from=${ledgerRange.from}&to=${ledgerRange.to}` : null

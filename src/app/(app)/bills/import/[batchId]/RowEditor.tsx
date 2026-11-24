@@ -11,6 +11,7 @@ import {
 import type { ParsedRow, RowError } from '@/lib/purchaseImport/types'
 import type { RowResolutionResult } from '@/lib/purchaseImport/resolve'
 import type { MasterData } from './masterData'
+import DateInput from '@/components/DateInput'
 
 export interface StagingRow {
   id: string
@@ -310,8 +311,7 @@ export default function RowEditor({
 
       <div>
         <label className="block text-xs font-medium text-gray-500 mb-1">Bill Date</label>
-        <input
-          type="date"
+        <DateInput
           defaultValue={d.billDate || undefined}
           onBlur={(e) => e.target.value !== d.billDate && saveField('billDate', e.target.value)}
           disabled={saving === 'billDate'}

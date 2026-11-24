@@ -27,10 +27,11 @@ import type {
 } from '@/types'
 import { useTableSort } from '@/lib/useTableSort'
 import { SortableTh } from '@/components/table/SortableTh'
-import { formatDate } from '@/lib/dates'
+import { formatDate, todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 const paymentModes = ['Cash', 'Bank', 'UPI', 'Other'] as const
-const defaultDate = new Date().toISOString().split('T')[0]
+const defaultDate = todayInIndia()
 
 export default function AccountsPage() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -300,7 +301,7 @@ export default function AccountsPage() {
 
           <div>
             <label className={labelCls}>Entry Date</label>
-            <input type="date" className={inputCls} value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+            <DateInput className={inputCls} value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
           </div>
 
           <div>
@@ -382,8 +383,7 @@ export default function AccountsPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-gray-500 whitespace-nowrap">From</label>
-              <input
-                type="date"
+              <DateInput
                 value={filterFrom}
                 onChange={(e) => setFilterFrom(e.target.value)}
                 className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -391,8 +391,7 @@ export default function AccountsPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <label className="text-xs text-gray-500 whitespace-nowrap">To</label>
-              <input
-                type="date"
+              <DateInput
                 value={filterTo}
                 onChange={(e) => setFilterTo(e.target.value)}
                 className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"

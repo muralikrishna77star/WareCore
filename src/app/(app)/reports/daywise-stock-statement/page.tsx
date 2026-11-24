@@ -30,6 +30,7 @@ import { VENDOR_MOVEMENT_TYPES, isVendorMovementRow } from '@/lib/stockLedger'
 import { fetchCountedOutputAndCancelIds, fetchCrossItemVendorRows } from '@/lib/vendorMovementRows'
 import { QTY_FMT, MONEY_FMT, type ProfessionalSheetSpec } from '@/lib/exportProfessionalExcel'
 import { formatDate } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 // Stock Movement classification for the Transaction Details export — same
 // four buckets used elsewhere in the app (INWARD/OUTWARD/TRANSFER/ADJUSTMENT).
@@ -734,11 +735,11 @@ export default async function DaywiseStockStatementPage({
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
-            <input type="date" name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DateInput name="from" defaultValue={fromDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
-            <input type="date" name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
+            <DateInput name="to" defaultValue={toDate} className="rounded border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Company</label>

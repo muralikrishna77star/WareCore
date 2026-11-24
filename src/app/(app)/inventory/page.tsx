@@ -6,6 +6,7 @@ import { CURRENT_STOCK_QUERY } from '@/lib/hasura/queries'
 import { ExportExcelButton } from '@/components/ExportExcelButton'
 import { StatCard } from '@/components/StatCard'
 import { InventoryCompanyRows } from './InventoryCompanyRows'
+import { todayInIndia } from '@/lib/dates'
 
 export default async function InventoryPage() {
   const result = await hasuraQuery(CURRENT_STOCK_QUERY)
@@ -43,7 +44,7 @@ export default async function InventoryPage() {
   }
   const companyCount = Object.keys(grouped).length
 
-  const asOfDate = new Date().toISOString().split('T')[0]
+  const asOfDate = todayInIndia()
   const exportRows = (stock as StockRow[])
     .filter((row) => Number(row.current_stock) !== 0)
     .map((row) => ({
@@ -66,7 +67,7 @@ export default async function InventoryPage() {
         {exportRows.length > 0 && (
           <ExportExcelButton
             rows={exportRows}
-            filename={`current-inventory_${new Date().toISOString().split('T')[0]}`}
+            filename={`current-inventory_${todayInIndia()}`}
             sheetName="Inventory"
           />
         )}

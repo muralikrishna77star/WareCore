@@ -8,6 +8,7 @@ import type { VendorStockEntry } from '@/lib/tracking/jobwork'
 import { errorText, formatWhen, trackingApi } from './api'
 import { VendorSelect, type JobWorkOptions } from './Dispatches'
 import { formatDate } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 interface Data {
   stock: VendorStockEntry[]
@@ -205,7 +206,7 @@ export function VendorStock({ canOperate }: { canOperate: boolean }) {
                           <VendorSelect vendors={data.vendors} value={moveForm.to} exclude={entry.vendor_id} onChange={(to) => setMoveForm({ ...moveForm, to })} />
                         </label>
                         <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">Moved on</span>
-                          <input type="date" value={moveForm.on} onChange={(e) => setMoveForm({ ...moveForm, on: e.target.value })} className={field} />
+                          <DateInput value={moveForm.on} onChange={(e) => setMoveForm({ ...moveForm, on: e.target.value })} className={field} />
                         </label>
                         <label className="text-sm text-gray-700"><span className="mb-1 block font-medium">Reason (optional)</span>
                           <input value={moveForm.reason} onChange={(e) => setMoveForm({ ...moveForm, reason: e.target.value })} className={field} />

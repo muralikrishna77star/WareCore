@@ -21,6 +21,8 @@ import {
   CREATE_DISPATCH_ITEMS_MUTATION,
 } from '@/lib/hasura/queries'
 import type { Company, Warehouse, Customer, MaterialType, MaterialSize, ItemMaster, TaxRate } from '@/types'
+import { todayInIndia } from '@/lib/dates'
+import DateInput from '@/components/DateInput'
 
 type AvailablePurchaseLine = {
   _key: string
@@ -245,7 +247,7 @@ export default function EditDispatchPage() {
   const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [saleId, setSaleId] = useState('')
-  const [dispatchDate, setDispatchDate] = useState(new Date().toISOString().split('T')[0])
+  const [dispatchDate, setDispatchDate] = useState(todayInIndia())
   const [vehicleNumber, setVehicleNumber] = useState('')
   const [driverName, setDriverName] = useState('')
   const [saleRefId, setSaleRefId] = useState('')
@@ -279,7 +281,7 @@ export default function EditDispatchPage() {
       setWarehouseId(order.warehouse_id ?? '')
       setCustomerId(order.customer_id ?? '')
       setSaleId(order.invoice_number ?? '')
-      setDispatchDate(order.dispatch_date ?? new Date().toISOString().split('T')[0])
+      setDispatchDate(order.dispatch_date ?? todayInIndia())
       setVehicleNumber(order.vehicle_number ?? '')
       setDriverName(order.driver_name ?? '')
       setSaleRefId(order.sale_ref_id ?? '')
@@ -775,7 +777,7 @@ export default function EditDispatchPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Dispatch Date</label>
-              <input type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)}
+              <DateInput value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
             </div>
             <div>
