@@ -13,18 +13,18 @@ export default async function CustomerTourPage() {
   const slides = customerTourSlides(process.env.NEXT_PUBLIC_TRACKING_ENABLED === 'true')
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b print:hidden">
+      <header className="sticky top-0 z-40 border-b border-white/60 bg-white/70 backdrop-blur-xl backdrop-saturate-150 shadow-[0_1px_0_rgb(255_255_255/0.8)_inset,0_6px_24px_-12px_rgb(30_64_175/0.25)] print:hidden">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex min-w-0 items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- logo comes from the customer registry */}
             <img src={brand.logoUrl} alt="" className="h-9 max-w-[8rem] object-contain" />
-            <span className="truncate text-lg font-bold text-gray-900">{brand.displayName}</span>
+            <span className="truncate text-lg font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent">{brand.displayName}</span>
           </Link>
           <Link
             href="/login"
-            className="inline-flex shrink-0 items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="wc-shine wc-gloss inline-flex items-center rounded-lg bg-gradient-to-b from-blue-500 to-blue-700 px-4 py-2 text-sm font-medium text-white shrink-0"
           >
-            Staff Login
+            <span className="relative">Staff Login</span>
           </Link>
         </div>
       </header>

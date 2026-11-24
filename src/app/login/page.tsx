@@ -70,22 +70,28 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-blue-900 to-indigo-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            <div className="wc-float absolute -top-32 -left-24 h-[28rem] w-[28rem] rounded-full bg-sky-500/30 blur-3xl" />
+            <div className="wc-float absolute -bottom-40 -right-24 h-[30rem] w-[30rem] rounded-full bg-indigo-500/30 blur-3xl [animation-delay:-4s]" />
+            <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgb(255_255_255)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
+            <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.07] to-transparent" />
+          </div>
+      <div className="relative sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
-          <img src={brand.logoUrl} alt={brand.displayName} className="h-12 max-w-[12rem] object-contain" />
+          <img src={brand.logoUrl} alt={brand.displayName} className="h-16 max-w-[13rem] rounded-2xl p-2.5 bg-gradient-to-b from-white to-blue-50 object-contain ring-1 ring-white/70 shadow-[inset_0_1px_0_white,0_12px_40px_-8px_rgb(56_189_248/0.6)]" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          {brand.displayName}
+        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight">
+          <span className="wc-gloss-text">{brand.displayName}</span>
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="mt-2 text-center text-sm text-blue-100">
           {brand.isCustomer ? 'Warehouse Management by WareCore' : 'Warehouse Management System'}
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+      <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="wc-glass py-8 px-4 sm:rounded-2xl sm:px-10">
           <form className="space-y-6" onSubmit={handleLogin}>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -141,9 +147,9 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                className="wc-shine wc-gloss flex w-full justify-center rounded-lg border border-transparent bg-gradient-to-b from-blue-500 to-blue-700 py-2.5 px-4 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
-                {loading ? 'Signing in...' : 'Sign in'}
+                <span className="relative">{loading ? 'Signing in...' : 'Sign in'}</span>
               </button>
             </div>
           </form>
@@ -155,7 +161,7 @@ function LoginForm() {
                   <div className="w-full border-t border-gray-300" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="bg-white px-2 text-gray-500">Or continue with</span>
+                  <span className="rounded bg-white px-2 text-gray-500">Or continue with</span>
                 </div>
               </div>
 
@@ -194,7 +200,7 @@ function LoginForm() {
         {brand.isCustomer && (
           <Link
             href="/tour"
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white py-2.5 px-4 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
+            className="wc-shine mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/25 bg-white/10 py-2.5 px-4 text-sm font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)] backdrop-blur-md hover:bg-white/20"
           >
             <PlayCircle className="h-5 w-5" aria-hidden="true" /> Take the Product Tour
           </Link>

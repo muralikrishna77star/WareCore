@@ -204,3 +204,64 @@ body {
 @media print {
   .wc-shine::after, .wc-gloss::before { display: none; }
 }
+
+/* ── Signed-in app gloss (wc-app is set on the app shell in (app)/layout) ──
+   Pages style their own buttons and cards with plain Tailwind classes, so
+   these rules add the glossy finish to every page at once:
+   - solid coloured buttons (bg-*-600/700 as their own class, not hover:)
+     get a glass highlight that sits over the colour, so their hover colour
+     still shows, plus a hover-only shine (no automatic sweeps in the app);
+   - white bordered cards get a soft inner light and a blue-tinted shadow.
+   Menus, pop-ups and dialogs (absolute/fixed or shadow-lg/xl) keep their
+   own shadows. Screen only: printed reports look exactly as before. */
+@media screen {
+  .wc-app :is(button, a):is(.bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-red-600, .bg-red-700,
+      .bg-green-600, .bg-green-700, .bg-emerald-600, .bg-emerald-700, .bg-amber-600, .bg-amber-700,
+      .bg-purple-600, .bg-purple-700, .bg-orange-600, .bg-teal-600) {
+    overflow: hidden;
+    background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.04) 50%, rgb(0 0 0 / 0.08));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 4px 14px -6px rgb(30 64 175 / 0.55);
+  }
+  .wc-app :is(button, a):is(.bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-red-600, .bg-red-700,
+      .bg-green-600, .bg-green-700, .bg-emerald-600, .bg-emerald-700, .bg-amber-600, .bg-amber-700,
+      .bg-purple-600, .bg-purple-700, .bg-orange-600, .bg-teal-600):not(:disabled)::after {
+    content: "";
+    position: absolute;
+    inset: -20% auto -20% -60%;
+    width: 45%;
+    transform: skewX(-20deg);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.45), transparent);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .wc-app :is(button, a):is(.bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-red-600, .bg-red-700,
+      .bg-green-600, .bg-green-700, .bg-emerald-600, .bg-emerald-700, .bg-amber-600, .bg-amber-700,
+      .bg-purple-600, .bg-purple-700, .bg-orange-600, .bg-teal-600):not(:disabled):hover::after {
+    animation: wc-shine-sweep 0.9s ease-out;
+  }
+
+  /* Anchor the shine band; floating (fixed/absolute/sticky) buttons already are. */
+  .wc-app :is(button, a):is(.bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-red-600, .bg-red-700,
+      .bg-green-600, .bg-green-700, .bg-emerald-600, .bg-emerald-700, .bg-amber-600, .bg-amber-700,
+      .bg-purple-600, .bg-purple-700, .bg-orange-600, .bg-teal-600):not(.fixed, .absolute, .sticky) {
+    position: relative;
+  }
+
+  .wc-app main :is(div, section, article, form).bg-white.border:is(.rounded-lg, .rounded-xl, .rounded-2xl):not(.absolute, .fixed, .shadow-lg, .shadow-xl, .shadow-2xl) {
+    border-color: rgb(255 255 255 / 0.9);
+    box-shadow:
+      inset 0 1px 0 #fff,
+      0 0 0 1px rgb(148 163 184 / 0.28),
+      0 1px 2px rgb(15 23 42 / 0.04),
+      0 10px 28px -14px rgb(30 64 175 / 0.22);
+  }
+
+  /* Sidebar: a faint sheen down the left edge and a glossy active item. */
+  .wc-sidebar { box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.06); }
+  .wc-nav-active {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 6px 18px -8px rgb(56 130 246 / 0.7);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wc-app :is(button, a)::after { animation: none !important; opacity: 0 !important; }
+}

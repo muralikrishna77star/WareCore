@@ -37,9 +37,9 @@ const CHROME: Record<
     sidebarBg: 'bg-slate-800',
     navItemBase:
       'flex items-center gap-3 px-3 py-2 rounded-sm text-sm font-medium transition-colors border-l-4 border-transparent',
-    navItemActive: 'border-blue-400 bg-slate-700/70 text-white',
+    navItemActive: 'wc-nav-active border-blue-400 bg-gradient-to-r from-slate-600/80 to-slate-700/40 text-white',
     navItemInactive: 'text-gray-300 hover:bg-slate-700/40 hover:text-white',
-    headerClass: 'h-14 bg-white shadow-none border-b-2 border-slate-300',
+    headerClass: 'h-14 bg-white/75 backdrop-blur-xl backdrop-saturate-150 shadow-none border-b-2 border-slate-300/80',
     mobileNavBg: 'bg-slate-50 border-t-2 border-slate-300',
     mobileNavActive: 'text-blue-700 font-semibold',
     mobileNavInactive: 'text-slate-500 hover:text-slate-800',
@@ -48,12 +48,12 @@ const CHROME: Record<
     // Exact values pulled from the reference site's own computed styles
     // (see project memory / commit message for the extraction method) —
     // #102239 sidebar background, #265AD6 active item, #9FB0C2 inactive text.
-    sidebarBg: 'bg-[#102239]',
+    sidebarBg: 'wc-sidebar bg-[#102239] bg-gradient-to-b from-[#16304f] via-[#102239] to-[#0b1829]',
     navItemBase: 'flex h-10 items-center gap-3 px-[11px] rounded-[7px] text-[13px] font-[550] transition-colors',
-    navItemActive: 'bg-[#265AD6] text-white',
+    navItemActive: 'wc-nav-active bg-[#265AD6] bg-gradient-to-b from-[#3b74ee] to-[#1f4fc4] text-white',
     navItemInactive: 'text-[#9FB0C2] hover:bg-white/10 hover:text-white',
-    headerClass: 'h-16 bg-white shadow-md border-b border-blue-100',
-    mobileNavBg: 'bg-white shadow-[0_-4px_16px_rgba(15,23,42,0.08)]',
+    headerClass: 'h-16 bg-white/75 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_1px_0_white,0_6px_24px_-12px_rgb(30_64_175/0.3)] border-b border-white/70',
+    mobileNavBg: 'bg-white/80 backdrop-blur-xl shadow-[inset_0_1px_0_white,0_-4px_16px_rgba(15,23,42,0.08)]',
     mobileNavActive: 'text-blue-700',
     mobileNavInactive: 'text-gray-500 hover:text-gray-900',
   },
@@ -193,7 +193,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
     // so this shell's "fill the viewport, scroll only inside <main>" sizing
     // doesn't overflow the window by the title bar's height on desktop.
     <RecordPreviewProvider>
-    <div className={cn('flex overflow-hidden bg-gray-100', isDesktop ? 'h-[calc(100vh-2.5rem)]' : 'h-screen')}>
+    <div className={cn('wc-app flex overflow-hidden bg-gray-100 bg-gradient-to-br from-slate-100 via-blue-50/70 to-indigo-50/80', isDesktop ? 'h-[calc(100vh-2.5rem)]' : 'h-screen')}>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -216,7 +216,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, no next/image optimization needed */}
             <img src={brand.logoUrl} alt={brand.displayName} className="h-8 max-w-[5rem] shrink-0 object-contain" />
-            <span className="text-white font-bold text-lg leading-tight line-clamp-2" title={brand.displayName}>{brand.displayName}</span>
+            <span className="font-bold text-lg leading-tight line-clamp-2 bg-gradient-to-b from-white to-blue-200 bg-clip-text text-transparent" title={brand.displayName}>{brand.displayName}</span>
           </div>
           <button
             className="text-gray-400 hover:text-white lg:hidden"
@@ -261,7 +261,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Version footer */}
-        <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t border-gray-800 bg-gray-900">
+        <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t border-white/10 bg-black/30 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500">{brand.isCustomer ? 'Powered by WareCore' : 'WareCore WMS'}</span>
             <span className="inline-flex items-center rounded bg-gray-800 border border-gray-700 px-2 py-0.5 text-[10px] font-mono text-gray-400">
@@ -376,7 +376,7 @@ function AppLayoutShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setProfileOpen((prev) => !prev)}
                 className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 hover:bg-gray-50 transition-colors"
               >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white text-sm font-semibold">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 via-blue-600 to-indigo-700 text-white text-sm font-semibold shadow-[inset_0_1px_0_rgb(255_255_255/0.5),0_4px_12px_-4px_rgb(37_99_235/0.6)]">
                   {(userFullName || userEmail) ? (userFullName || userEmail).charAt(0).toUpperCase() : 'U'}
                 </span>
                 <span className="hidden sm:flex flex-col items-start leading-tight">
